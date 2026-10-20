@@ -39,6 +39,7 @@ interface ClassesProps {
 }
 
 const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVersion, triggerRefresh, readOnly, profile }) => {
+  const effectiveInstitutionId = madrasah?.id;
   const [classes, setClasses] = useState<(Class & { student_count?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -53,7 +54,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   useEffect(() => { 
     if (madrasah?.id) {
       // Force clear cache once to satisfy user request for fresh start
-      requestManager.invalidatePattern(`classes:${madrasah.id}`);
+      requestManager.invalidatePattern(`classes:${effectiveInstitutionId}`);
       fetchClasses(); 
     }
   }, [dataVersion, madrasah?.id]);
@@ -62,7 +63,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     if (!madrasah?.id) return;
     setLoading(true);
     
-    const cacheKey = madrasah?.id ? `classes_${madrasah.id}` : 'classes';
+    const cacheKey = madrasah?.id ? `classes_${effectiveInstitutionId}` : 'classes';
     const cached = offlineApi.getCache(cacheKey);
     if (cached) setClasses(sortMadrasahClasses(cached));
 
@@ -70,8 +71,8 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       // 1. Fetch Classes (Cached)
       const { data: classesData, error } = await requestManager.cachedFetch(
         'classes',
-        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
-        `classes:${madrasah.id}`,
+        (q) => q.select('*').eq('institution_id', effectiveInstitutionId).order('sort_order', { ascending: true }),
+        `classes:${effectiveInstitutionId}`,
         30 * 60 * 1000
       );
       if (error) throw error;
@@ -86,8 +87,8 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         // Cache this for 1 minute as it's just for display counts
         const { data: studentData } = await requestManager.cachedFetch(
           'students',
-          (q) => q.select('class_id').eq('institution_id', madrasah.id),
-          `student_counts:${madrasah.id}`,
+          (q) => q.select('class_id').eq('institution_id', effectiveInstitutionId),
+          `student_counts:${effectiveInstitutionId}`,
           30 * 60 * 1000 // 30 mins
         );
         
@@ -131,7 +132,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     
     // Invalidate RequestManager cache immediately
     if (madrasah?.id) {
-      await requestManager.invalidatePattern(`classes:${madrasah.id}`);
+      await requestManager.invalidatePattern(`classes:${effectiveInstitutionId}`);
       await requestManager.invalidatePattern(`classes`);
     }
 
@@ -142,7 +143,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         const sorted = sortMadrasahClasses(updatedClasses);
         setClasses(sorted);
         if (madrasah?.id) {
-          offlineApi.setCache(`classes_${madrasah.id}`, sorted);
+          offlineApi.setCache(`classes_${effectiveInstitutionId}`, sorted);
         }
         
         if (navigator.onLine) {
@@ -163,7 +164,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         const payload = { 
           id: tempId,
           class_name: newClassName.trim(), 
-          institution_id: madrasah.id,
+          institution_id: effectiveInstitutionId,
           sort_order: order
         };
         
@@ -171,7 +172,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         const updatedClasses = sortMadrasahClasses([...classes, { ...payload, student_count: 0 }]);
         setClasses(updatedClasses);
         if (madrasah?.id) {
-          offlineApi.setCache(`classes_${madrasah.id}`, updatedClasses);
+          offlineApi.setCache(`classes_${effectiveInstitutionId}`, updatedClasses);
         }
 
         if (navigator.onLine) {
@@ -211,7 +212,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     setModalLoading(true);
     
     // Invalidate
-    requestManager.invalidatePattern(`classes:${madrasah.id}`);
+    requestManager.invalidatePattern(`classes:${effectiveInstitutionId}`);
 
     try {
       // Optimistic Delete

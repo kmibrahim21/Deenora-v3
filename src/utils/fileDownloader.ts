@@ -81,8 +81,8 @@ export async function downloadBlob(blob: Blob, fileName: string, mimeType: strin
   }
 
   // 2. Android WebView without custom JS interface, route through /api/download
-  // Android WebView's DownloadListener triggers natively on HTTP attachment headers!
-  if (isAndroidWebView() || isAndroid()) {
+  // Only for actual embedded WebViews where Blob URLs cannot be intercepted by DownloadListener
+  if (isAndroidWebView()) {
     try {
       const base64Content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -103,7 +103,7 @@ export async function downloadBlob(blob: Blob, fileName: string, mimeType: strin
       if (res.ok) {
         const data = await res.json();
         if (data.downloadUrl) {
-          // Trigger download in same frame without target="_blank"
+          // Trigger single download in same frame
           // This allows Android WebView's DownloadListener to intercept the Content-Disposition attachment
           const a = document.createElement('a');
           a.style.display = 'none';
@@ -111,26 +111,14 @@ export async function downloadBlob(blob: Blob, fileName: string, mimeType: strin
           a.download = fileName;
           document.body.appendChild(a);
           a.click();
-
-          // Use hidden iframe as fallback in case anchor click doesn't trigger WebView listener
           setTimeout(() => {
-            try {
-              document.body.removeChild(a);
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = data.downloadUrl;
-              document.body.appendChild(iframe);
-              setTimeout(() => {
-                try { document.body.removeChild(iframe); } catch {}
-              }, 4000);
-            } catch {}
-          }, 300);
-
+            try { document.body.removeChild(a); } catch {}
+          }, 1000);
           return;
         }
       }
     } catch (webViewErr) {
-      console.warn('[FileDownloader] /api/download fallback error:', webViewErr);
+      console.warn('[FileDownloader] /api/download fallback error, falling back to standard download:', webViewErr);
     }
   }
 
@@ -147,11 +135,12 @@ export async function downloadBlob(blob: Blob, fileName: string, mimeType: strin
   setTimeout(() => {
     try {
       document.body.removeChild(a);
+      // Increased timeout to 30s to ensure large files have time to initiate download before revocation
       window.URL.revokeObjectURL(blobUrl);
     } catch (e) {
       // Ignore cleanup error
     }
-  }, 2000);
+  }, 30000);
 }
 
 /**
@@ -211,8 +200,8 @@ export async function downloadFromUrl(url: string, fileName: string, mimeType: s
     console.warn('[FileDownloader] Direct anchor download failed:', err);
   }
 
-  // 4. In case of Android WebView or cross-origin restrictions, also fetch blob and stage via /api/download
-  if (isAndroidWebView() || isAndroid()) {
+  // 4. In case of embedded Android WebView without bridge, fetch blob and stage via /api/download
+  if (isAndroidWebView()) {
     try {
       const res = await fetch(url);
       if (res.ok) {

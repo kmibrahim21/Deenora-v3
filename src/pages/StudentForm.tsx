@@ -10,6 +10,7 @@ import { Student, Class, Language, Institution } from 'types';
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { extractStudentExtraFields, packStudentNotesWithExtra } from 'utils/studentExtraFields';
+import { DobPicker } from '../components/common/DobPicker';
 
 interface StudentFormProps {
   student?: Student | null;
@@ -20,9 +21,10 @@ interface StudentFormProps {
   onCancel: () => void;
   lang: Language;
   title?: string;
+  activeYear?: any;
 }
 
-const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title }) => {
+const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title, activeYear }) => {
   const initialExtra = extractStudentExtraFields(student);
 
   const [name, setName] = useState(student?.student_name || '');
@@ -134,7 +136,17 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         }
       }
 
-      const activeYearId = madrasah.config_json?.active_academic_year_id;
+      const studentFormParsedConfig = typeof madrasah.config_json === 'string' ? JSON.parse(madrasah.config_json) : (madrasah.config_json || {});
+      let activeYearId = activeYear?.id || studentFormParsedConfig?.active_academic_year_id;
+
+      if (!activeYearId && madrasah?.id) {
+        try {
+          const { data: dbYear } = await supabase.from('academic_years').select('id').eq('institution_id', madrasah.id).eq('status', 'active').maybeSingle();
+          if (dbYear?.id) activeYearId = dbYear.id;
+        } catch (e) {
+          console.warn('Could not fetch active year in StudentForm:', e);
+        }
+      }
       
       // Validate UUID format for academic_year_id
       const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -400,18 +412,13 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
-                  <AlertCircle size={11} className="text-[#2563EB]" /> 
-                  {t('dob', lang, madrasah?.institution_type)}
-                </label>
-                <input 
-                  type="date" 
-                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
-                  value={dob} 
-                  onChange={(e) => setDob(e.target.value)} 
-                />
-              </div>
+              <DobPicker
+                label={t('dob', lang, madrasah?.institution_type)}
+                value={dob}
+                onChange={setDob}
+                lang={lang}
+                isDark={isDark}
+              />
 
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>

@@ -122,7 +122,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
 
   return (
     <div className="space-y-4 px-1">
-      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[1.8rem] border shadow-bubble space-y-4`}>
+      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[1.8rem] border shadow-bubble space-y-3 md:space-y-0 md:grid md:grid-cols-4 md:gap-3 md:items-center`}>
         <div className="relative">
           <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-12 px-4 rounded-xl border-2 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} flex items-center justify-between group active:scale-[0.99] transition-all`}>
             <span className="font-black font-noto truncate text-sm">{selectedClass?.class_name || (lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)')}</span>
@@ -142,18 +142,18 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
           )}
         </div>
 
-        <div className="flex gap-2">
-            <button onClick={() => setReportType('monthly')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reportType === 'monthly' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'মাসিক' : 'Monthly'}</button>
-            <button onClick={() => setReportType('yearly')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reportType === 'yearly' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'বাৎসরিক' : 'Yearly'}</button>
+        <div className="flex gap-2 h-12 items-center">
+            <button onClick={() => setReportType('monthly')} className={`flex-1 h-full rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${reportType === 'monthly' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'মাসিক' : 'Monthly'}</button>
+            <button onClick={() => setReportType('yearly')} className={`flex-1 h-full rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${reportType === 'yearly' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'বাৎসরিক' : 'Yearly'}</button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-            <button onClick={() => setSelectedSession('all')} className={`flex-1 min-w-[60px] py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedSession === 'all' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'সব' : 'All'}</button>
+        <div className="flex flex-wrap gap-1.5 h-12 items-center">
+            <button onClick={() => setSelectedSession('all')} className={`flex-1 min-w-[50px] h-full rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${selectedSession === 'all' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'সব' : 'All'}</button>
             {madrasah?.config_json?.attendance_settings?.sessions?.map(s => (
-              <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[60px] py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{s.name}</button>
+              <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[50px] h-full rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${selectedSession === s.id ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{s.name}</button>
             ))}
             {(!madrasah?.config_json?.attendance_settings?.sessions || madrasah.config_json.attendance_settings.sessions.length === 0) && (
-              <button onClick={() => setSelectedSession('daily')} className={`flex-1 min-w-[60px] py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
+              <button onClick={() => setSelectedSession('daily')} className={`flex-1 min-w-[50px] h-full rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${selectedSession === 'daily' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
             )}
         </div>
         
@@ -187,7 +187,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'লোড হচ্ছে...' : 'Loading...'}</span>
         </div>
       ) : reportData.length > 0 ? (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble`}>
             <h3 className={`text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-800'}`}>
               <BarChart3 className="text-[#2563EB]" size={16} />

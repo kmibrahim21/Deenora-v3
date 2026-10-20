@@ -3,6 +3,7 @@ import React from 'react';
 import { ADMISSION_T } from './constants';
 import { AdmissionFormData, AdmissionFormLang } from './types';
 import { Save, Eye, Camera } from 'lucide-react';
+import { DobPicker } from '../common/DobPicker';
 
 interface Props {
   formData: AdmissionFormData;
@@ -100,7 +101,12 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <Input label={t.studentName} name="studentName" />
           <Input label={t.studentNameEn} name="studentNameEn" />
-          <Input label={t.dateOfBirth} name="date_of_birth" type="date" />
+          <DobPicker
+            label={t.dateOfBirth}
+            value={formData.date_of_birth || ''}
+            onChange={(val) => setFormData(prev => ({ ...prev, date_of_birth: val }))}
+            lang={lang === 'bn' ? 'bn' : 'en'}
+          />
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300 font-noto">{t.gender}</label>
             <select

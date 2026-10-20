@@ -11,6 +11,7 @@ import { SeatAssignment, ExamRoom } from 'types';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import FinalResults from './FinalResults';
 import ExamSettingsModal from '../../ExamSettingsModal';
+import { SmartDatePicker } from '../../../../components/common/SmartDatePicker';
 
 interface BefaqResultEngineProps {
   lang: Language;
@@ -2186,12 +2187,13 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                            <Calendar size={12} className="text-emerald-600" />
                            {lang === 'bn' ? 'পরীক্ষা শুরুর তারিখ' : 'Exam Start Date'}
                         </label>
-                        <input 
-                          type="date" 
-                          value={routineStartDate} 
-                          onChange={e => setRoutineStartDate(e.target.value)} 
-                          className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none focus:border-emerald-500 transition-all`}
-                        />
+                        <SmartDatePicker
+    label={lang === 'bn' ? 'পরীক্ষা শুরুর তারিখ' : 'Exam Start Date'}
+    value={routineStartDate}
+    onChange={setRoutineStartDate}
+    lang={lang}
+    isDark={madrasah?.theme === 'dark'}
+  />
                       </div>
 
                       {/* Morning Shift */}
@@ -2227,7 +2229,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                         <div className="flex justify-between items-center">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                              <Clock size={12} className="text-blue-600" />
-                             {lang === 'bn' ? '稳কালের সময়সূচি' : 'Afternoon Shift'}
+                             {lang === 'bn' ? 'বিকালের সময়সূচি' : 'Afternoon Shift'}
                           </label>
                           <button 
                             onClick={() => setShowRoutineAfternoon(!showRoutineAfternoon)}

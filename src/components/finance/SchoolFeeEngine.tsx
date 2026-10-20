@@ -1,12 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, UserRole, Profile } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone, Check, Printer } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone, Check, Printer, Layers, Sparkles, GraduationCap } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { OfflineService } from '../../services/OfflineService';
 import { ThermalReceiptPreviewModal } from './ThermalReceiptPreviewModal';
+import { FeeCategory, FeeStructure } from 'types';
+import {
+  getInstitutionFeeCategories,
+  getCategoryForStructure,
+  batchSaveFeeStructureCategories,
+  FREQUENCY_LABELS,
+  MONTH_DEFINITIONS,
+  formatMonthLabel,
+  getLastDayOfMonth,
+  saveStructureExamMonths,
+  getStructureExamMonths,
+  isStructureApplicableForMonth
+} from '../../utils/feeCategoryHelper';
+import { FeeCategoryManagerModal } from './FeeCategoryManagerModal';
+import { FeeCategoryMigrationModal } from './FeeCategoryMigrationModal';
+import { CompactMonthPicker } from './CompactMonthPicker';
 
 interface SchoolFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -110,7 +126,20 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   } | null>(null);
   const [structureSelectedClass, setStructureSelectedClass] = useState<string>('');
   const [showStructureClassDropdown, setShowStructureClassDropdown] = useState(false);
+  const [showStructureCategoryDropdown, setShowStructureCategoryDropdown] = useState(false);
+  const currentCalendarYear = new Date().getFullYear();
+  const [startMonth, setStartMonth] = useState(`${currentCalendarYear}-01`);
+  const [endMonth, setEndMonth] = useState(`${currentCalendarYear}-12`);
+  const [hasDateRange, setHasDateRange] = useState<boolean>(true);
+  const [examFeeMode, setExamFeeMode] = useState<'same_all_year' | 'different_per_exam'>('same_all_year');
+  const [selectedExamMonths, setSelectedExamMonths] = useState<string[]>(['04', '08', '11']);
+  const [specificExamTitle, setSpecificExamTitle] = useState<string>('১ম সাময়িক পরীক্ষা ফি');
+  const [singleExamMonth, setSingleExamMonth] = useState<string>(`${currentCalendarYear}-04`);
   const [editingStructureId, setEditingStructureId] = useState<string | null>(null);
+  const [structureCategoryId, setStructureCategoryId] = useState<string>('monthly_tuition');
+  const [feeCategories, setFeeCategories] = useState<FeeCategory[]>(() => getInstitutionFeeCategories(madrasah));
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -122,6 +151,10 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    setFeeCategories(getInstitutionFeeCategories(madrasah));
+  }, [madrasah]);
 
   useEffect(() => {
     fetchData();
@@ -158,7 +191,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       }
 
       if (activeTab === 'fees') {
-        if (!selectedClass) {
+        if (!selectedClass && selectedClass !== 'all') {
           setFeesReport([]);
           setLoading(false);
           return;
@@ -229,9 +262,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           (q) => {
             let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone, is_active, notes')
               .eq('institution_id', madrasah.id);
-            if (classId) {
+            
+            // If classId is 'all' or empty, we skip the class_id filter to fetch all students
+            if (classId && classId !== 'all' && classId !== '') {
               query = query.eq('class_id', classId);
             }
+            
             if (activeYearId) {
               query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
             }
@@ -240,7 +276,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             }
             return query;
           },
-          `students_report:${madrasah.id}_${selectedClass}_${activeYearId || 'current'}`,
+          `students_report:${madrasah.id}_${selectedClass || 'all'}_${activeYearId || 'current'}`,
           CACHE_TTLS.LONG
         );
         
@@ -281,14 +317,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     
                     const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
                     const isEnabled = setting ? setting.is_enabled : true;
-                    const isMonthExpired = fs.due_date && m > fs.due_date.slice(0, 7);
-                    const isMonthNotStarted = fs.start_date && m < fs.start_date.slice(0, 7);
+                    const isApplicable = isStructureApplicableForMonth(fs, m, madrasah);
                     const isBeforeYearStart = yearStart && m < yearStart.slice(0, 7);
                     
                     // Respect student individual accounting start date
                     const isBeforeAccStart = accStartDate && m < accStartDate.slice(0, 7);
 
-                    return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
+                    return isEnabled && isApplicable && !isBeforeYearStart && !isBeforeAccStart;
                 }) || [];
                 
                 const monthPayable = studentFeeStructuresForMonth.reduce((sum, fs) => {
@@ -313,8 +348,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 
                 const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
                 const isEnabled = setting ? setting.is_enabled : true;
-                const isMonthExpired = fs.due_date && selectedMonth > fs.due_date.slice(0, 7);
-                const isMonthNotStarted = fs.start_date && selectedMonth < fs.start_date.slice(0, 7);
+                const isApplicable = isStructureApplicableForMonth(fs, selectedMonth, madrasah);
 
                 // If yearStart exists, ensure selectedMonth >= yearStart
                 const isBeforeYearStart = yearStart && selectedMonth < yearStart.slice(0, 7);
@@ -322,7 +356,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 // Respect student individual accounting start date
                 const isBeforeAccStart = accStartDate && selectedMonth < accStartDate.slice(0, 7);
 
-                return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
+                return isEnabled && isApplicable && !isBeforeYearStart && !isBeforeAccStart;
             }) || [];
             
             const totalPayable = studentFeeStructures.reduce((sum, fs) => {
@@ -449,13 +483,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         const setting = settings?.find(set => set.fee_structure_id === s.id);
         const isEnabled = setting ? setting.is_enabled : true;
         
-        // Also check if the selected month is after the due date's month
-        const isMonthExpired = s.due_date && selectedMonth > s.due_date.slice(0, 7);
-        
-        // Check if the selected month is before the start date's month
-        const isMonthNotStarted = s.start_date && selectedMonth < s.start_date.slice(0, 7);
-        
-        return isEnabled && !isMonthExpired && !isMonthNotStarted;
+        const isApplicable = isStructureApplicableForMonth(s, selectedMonth, madrasah);
+        return isEnabled && isApplicable;
     }).map(s => {
         const setting = settings?.find(set => set.fee_structure_id === s.id);
         if (setting?.custom_amount !== undefined && setting?.custom_amount !== null) {
@@ -571,7 +600,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         await OfflineService.safeInsert('fees', { ...feeData, discount: totalDiscount });
       }
 
-      // Add to Ledger
+      // Add to Ledger asynchronously alongside cache invalidations
       const feeDescription = selectedFeeCategories.length > 0 ? selectedFeeCategories.join(', ') : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
       const className = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
       const roll = currentStudent.roll || '-';
@@ -581,16 +610,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           finalDescription += ` || FEE_ID: ${feeIdToSave}`;
       }
 
-      await OfflineService.safeInsert('ledger', {
-        institution_id: madrasah.id,
-        type: 'income',
-        amount: totalAmt,
-        category: 'Student Fee',
-        description: finalDescription,
-        transaction_date: new Date().toISOString().split('T')[0],
-        academic_year_id: activeYearId
-      });
-
+      // Close modal and reset fields immediately for instant UI feedback
       setShowFeeCollection(false);
       setCollectAmount('');
       setDiscount('');
@@ -624,57 +644,70 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           feeItems: feeCategories,
         }
       });
-      // setShowThermalModal(true);
-      
-      await requestManager.invalidatePattern(`fees:${madrasah.id}`);
-      await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
-      await requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`);
-      await requestManager.invalidatePattern(`stats:${madrasah.id}`);
-      await requestManager.invalidatePattern(`dashboard_`);
-      const sId = typeof feeData !== 'undefined' ? feeData.student_id : (typeof selectedStudent !== 'undefined' ? selectedStudent?.student_id : null);
-      if (sId) {
-          await requestManager.invalidatePattern(`accounting-fees-${sId}`);
-          await requestManager.invalidatePattern(`accounting-history-${sId}`);
-      }
-      await requestManager.invalidatePattern(`fetch:ledger:`);
-      
+
+      const sId = currentStudent.student_id;
+
+      // Parallelize Ledger Insert & Cache Invalidations
+      const ledgerPromise = OfflineService.safeInsert('ledger', {
+        institution_id: madrasah.id,
+        type: 'income',
+        amount: totalAmt,
+        category: 'Student Fee',
+        description: finalDescription,
+        transaction_date: new Date().toISOString().split('T')[0],
+        academic_year_id: activeYearId
+      });
+
+      const cachePromise = Promise.all([
+        requestManager.invalidatePattern(`fees:${madrasah.id}`),
+        requestManager.invalidatePattern(`all_fees:${madrasah.id}`),
+        requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`),
+        requestManager.invalidatePattern(`stats:${madrasah.id}`),
+        requestManager.invalidatePattern(`dashboard_`),
+        sId ? requestManager.invalidatePattern(`accounting-fees-${sId}`) : Promise.resolve(),
+        sId ? requestManager.invalidatePattern(`accounting-history-${sId}`) : Promise.resolve(),
+        requestManager.invalidatePattern(`fetch:ledger:`)
+      ]);
+
       clearGlobalSchoolFeeCache();
 
-      // Auto Send SMS
+      // Auto Send SMS in background without blocking UI
       if (config?.features?.fee_collection_sms) {
-        try {
-          const { smsApi: smsApiModule } = await import('../../supabase');
-          
-          const templates = config?.features?.sms_templates || {};
-          let template = templates.fee_collection || (lang === 'bn' 
-            ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
-            : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
-          
-          const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
-          const date = new Date(selectedMonth + '-01');
-          const formattedMonth = lang === 'bn' ? bnMonths[date.getMonth()] : date.toLocaleString('en-US', { month: 'long' });
-          const stName = currentStudent.student_name || '';
-          const fatherName = currentStudent.father_name || '';
-          const stRoll = currentStudent.roll || '';
-          const stClass = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
-          const currentDue = Math.max(0, Number(currentStudent.balance_due || 0) - totalAmt - totalDiscount);
-
-          let collectMsg = template
-             .replace(/\{student_name\}/g, stName)
-             .replace(/\{father_name\}/g, fatherName)
-             .replace(/\{class\}/g, stClass)
-             .replace(/\{roll\}/g, stRoll)
-             .replace(/\{month\}/g, formattedMonth)
-             .replace(/\{paid_amount\}/g, totalAmt.toString())
-             .replace(/\{amount\}/g, totalAmt.toString())
-             .replace(/\{due_amount\}/g, currentDue.toString());
+        (async () => {
+          try {
+            const { smsApi: smsApiModule } = await import('../../supabase');
             
-          await smsApiModule.sendBulk(madrasah.id, [currentStudent], collectMsg);
-        } catch (smsError: any) {
-          console.error("Fee SMS error: ", smsError);
-          alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${smsError.message}` : `Auto SMS failed: ${smsError.message}`);
-        }
+            const templates = config?.features?.sms_templates || {};
+            let template = templates.fee_collection || (lang === 'bn' 
+              ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
+              : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
+            
+            const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+            const date = new Date(selectedMonth + '-01');
+            const formattedMonth = lang === 'bn' ? bnMonths[date.getMonth()] : date.toLocaleString('en-US', { month: 'long' });
+            const stName = currentStudent.student_name || '';
+            const fatherName = currentStudent.father_name || '';
+            const stRoll = currentStudent.roll || '';
+            const stClass = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
+
+            let collectMsg = template
+               .replace(/\{student_name\}/g, stName)
+               .replace(/\{father_name\}/g, fatherName)
+               .replace(/\{class\}/g, stClass)
+               .replace(/\{roll\}/g, stRoll)
+               .replace(/\{month\}/g, formattedMonth)
+               .replace(/\{paid_amount\}/g, totalAmt.toString())
+               .replace(/\{amount\}/g, totalAmt.toString())
+               .replace(/\{due_amount\}/g, currentDue.toString());
+              
+            await smsApiModule.sendBulk(madrasah.id, [currentStudent], collectMsg);
+          } catch (smsError: any) {
+            console.error("Fee SMS background error: ", smsError);
+          }
+        })();
       }
+
+      await Promise.all([ledgerPromise, cachePromise]);
       
       if (triggerRefresh) triggerRefresh();
       fetchData();
@@ -846,11 +879,26 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                {/* Class Selector */}
                <div className="relative flex-1 min-w-[140px]">
                   <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-11 px-4 rounded-xl border flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                     <span className={`text-[11px] font-black truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{classes.find(c => c.id === selectedClass)?.class_name || 'শ্রেণি নির্বাচন করুন'}</span>
+                     <span className={`text-[11px] font-black truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                        {selectedClass === 'all' 
+                          ? (lang === 'bn' ? 'সব ক্লাস' : 'All Classes') 
+                          : (classes.find(c => c.id === selectedClass)?.class_name || (lang === 'bn' ? 'শ্রেণি নির্বাচন করুন' : 'Select Class'))}
+                      </span>
                      <ChevronDown size={16} className={`transition-colors ${isDark ? 'text-slate-500 group-hover:text-blue-400' : 'text-slate-400 group-hover:text-[#2563EB]'}`} />
                   </button>
                   {showClassDropdown && (
                       <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl border z-50 p-1 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                          <button 
+                            onClick={() => { setSelectedClass('all'); setShowClassDropdown(false); }} 
+                            className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors flex items-center justify-between border-b ${isDark ? 'border-slate-700' : 'border-slate-50'} ${
+                              selectedClass === 'all'
+                                ? (isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600')
+                                : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50')
+                            }`}
+                          >
+                            {lang === 'bn' ? 'সব ক্লাস' : 'All Classes'}
+                            {selectedClass === 'all' && <Check size={14} />}
+                          </button>
                           {classes.map(c => (
                               <button 
                                 key={c.id} 
@@ -1022,7 +1070,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         </button>
                       )}
                        <button 
-                          onClick={() => { setSelectedStudent(item); setCollectAmount(''); setShowFeeCollection(true); }} 
+                          onClick={() => { setSelectedStudent(item); initializeFeeCollection(item); setShowFeeCollection(true); }} 
                           disabled={isFullyPaid || isNoFeeSet} 
                           className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all shadow-sm ${
                             isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : 
@@ -1119,8 +1167,9 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       )}
 
       {showFeeCollection && selectedStudent && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-                <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 overflow-y-auto max-h-[80vh] shadow-2xl ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-4 sm:p-6">
+                <div className={`w-full max-w-sm rounded-[2.5rem] shadow-2xl border overflow-hidden animate-in zoom-in-95 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                    <div className="p-6 sm:p-8 space-y-6 overflow-y-auto max-h-[80vh]">
                     <div className="flex items-center justify-between">
                         <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>ফি সংগ্রহ করুন</h3>
                         <button onClick={() => setShowFeeCollection(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
@@ -1145,50 +1194,56 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     </div>
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">ফি-র ধরণ (Fee Type)</label>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">ফি-র বিবরণ ও ধরণ (Fee Names)</label>
                             <div className={`rounded-2xl p-4 border max-h-40 overflow-y-auto ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                                 <div className="space-y-2">
-                                    {availableFeeItems.length > 0 ? (
-                                        availableFeeItems.map(item => {
-              const isPaid = (paidFeeCategories || []).includes(item.fee_name);
-              const isSelected = (selectedFeeCategories || []).includes(item.fee_name);
-                                            
-                                            return (
-                                                <div key={item.id} className={`flex flex-col gap-2 p-3 rounded-xl transition-colors ${isPaid ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50') : (isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-100')}`}>
-                                                    <label className={`flex items-center gap-3 cursor-pointer`}>
-                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected || isPaid ? 'bg-[#2563EB] border-[#2563EB]' : (isDark ? 'border-slate-600' : 'border-slate-300')} ${isPaid ? 'opacity-50' : ''}`}>
-                                                            {(isSelected || isPaid) && <CheckCircle2 size={14} className="text-white" />}
-                                                        </div>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="hidden"
-                                                            checked={isSelected || isPaid}
-                                                            disabled={isPaid}
-                                                            onChange={(e) => {
-                                                                if (isPaid) return;
-                                                                let newCategories = [];
-                                                                if (e.target.checked) {
-                                                                    newCategories = [...selectedFeeCategories, item.fee_name];
-                                                                } else {
-                                                                    newCategories = selectedFeeCategories.filter(c => c !== item.fee_name);
-                                                                }
-                                                                setSelectedFeeCategories(newCategories);
-                                                                setCollectAmount(calculateTotal(newCategories, discount, availableFeeItems));
-                                                            }}
-                                                        />
-                                                        <div className="flex-1 flex justify-between items-center">
-                                                            <span className={`text-xs font-black ${isPaid ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-slate-200' : 'text-[#1E3A8A]')}`}>
-                                                                {item.fee_name} {isPaid && '(পরিশোধিত)'}
-                                                            </span>
-                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'text-slate-400 bg-slate-800' : 'text-slate-400 bg-slate-100'}`}>৳{item.amount}</span>
-                                                        </div>
-                                                    </label>
-                                                </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="text-center py-4 text-slate-400 text-xs font-bold">কোনো ফি আইটেম পাওয়া যায়নি। দয়া করে ফি সেটিংস থেকে আইটেম যোগ করুন।</div>
-                                    )}
+                                    {(() => {
+                                        const displayItems = availableFeeItems.length > 0 ? availableFeeItems : (selectedStudent.fee_items || []);
+                                        if (displayItems.length > 0) {
+                                            return displayItems.map((item: any, idx: number) => {
+                                                const itemName = item.fee_name || item.name || `ফি ${idx + 1}`;
+                                                const itemAmt = item.amount || 0;
+                                                const isPaid = (paidFeeCategories || []).includes(itemName);
+                                                const isSelected = (selectedFeeCategories || []).includes(itemName);
+                                                
+                                                return (
+                                                    <div key={item.id || idx} className={`flex flex-col gap-2 p-3 rounded-xl transition-colors ${isPaid ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50') : (isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-100')}`}>
+                                                        <label className={`flex items-center gap-3 cursor-pointer`}>
+                                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected || isPaid ? 'bg-[#2563EB] border-[#2563EB]' : (isDark ? 'border-slate-600' : 'border-slate-300')} ${isPaid ? 'opacity-50' : ''}`}>
+                                                                {(isSelected || isPaid) && <CheckCircle2 size={14} className="text-white" />}
+                                                            </div>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="hidden"
+                                                                checked={isSelected || isPaid}
+                                                                disabled={isPaid}
+                                                                onChange={(e) => {
+                                                                    if (isPaid) return;
+                                                                    let newCategories = [];
+                                                                    if (e.target.checked) {
+                                                                        newCategories = [...selectedFeeCategories, itemName];
+                                                                    } else {
+                                                                        newCategories = selectedFeeCategories.filter(c => c !== itemName);
+                                                                    }
+                                                                    setSelectedFeeCategories(newCategories);
+                                                                    setCollectAmount(calculateTotal(newCategories, discount, displayItems));
+                                                                }}
+                                                            />
+                                                            <div className="flex-1 flex justify-between items-center">
+                                                                <span className={`text-xs font-black ${isPaid ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-slate-200' : 'text-[#1E3A8A]')}`}>
+                                                                    {itemName} {isPaid && '(পরিশোধিত)'}
+                                                                </span>
+                                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'text-slate-400 bg-slate-800' : 'text-slate-400 bg-slate-100'}`}>৳{itemAmt}</span>
+                                                            </div>
+                                                        </label>
+                                                    </div>
+                                                );
+                                            });
+                                        }
+                                        return (
+                                            <div className="text-center py-4 text-slate-400 text-xs font-bold">কোনো ফি আইটেম পাওয়া যায়নি। দয়া করে ফি সেটিংস থেকে আইটেম যোগ করুন।</div>
+                                        );
+                                     })()}
                                 </div>
                             </div>
                         </div>
@@ -1242,14 +1297,16 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                             {isSaving ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20}/> পেমেন্ট নিশ্চিত করুন</>}
                         </button>
                     </div>
+                    </div>
                 </div>
             </div>
          )}
 
          {/* HISTORY MODAL */}
          {showHistoryModal && historyStudent && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-                <div className={`w-full max-w-2xl rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 overflow-y-auto max-h-[90vh] shadow-2xl ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-4 sm:p-6">
+                <div className={`w-full max-w-2xl rounded-[2.5rem] shadow-2xl border overflow-hidden animate-in zoom-in-95 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                    <div className="p-6 sm:p-8 space-y-6 overflow-y-auto max-h-[85vh]">
                     <div className="flex items-center justify-between">
                         <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>ফি হিস্ট্রি</h3>
                         <button onClick={() => setShowHistoryModal(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
@@ -1288,6 +1345,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                             const studentSettings = historyStudentSettings;
                             const now = new Date();
                             const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                            const yearStart = madrasah.config_json?.academic_year_start;
+                            const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
                             
                             const studentFeeStructures = structures.filter(fs => {
                                 const isClassMatch = fs.class_id === historyStudent.class_id || fs.class_id === null;
@@ -1295,14 +1354,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 
                                 const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
                                 const isEnabled = setting ? setting.is_enabled : true;
-                                const isMonthExpired = fs.due_date && monthStr > fs.due_date.slice(0, 7);
-                                const isMonthNotStarted = fs.start_date && monthStr < fs.start_date.slice(0, 7);
-
-                                // If yearStart (academic_year_start) exists, ensure the month is not before it
-                                const yearStart = madrasah.config_json?.academic_year_start;
-                                const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
-
-                                return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart;
+                                const isApplicable = isStructureApplicableForMonth(fs, monthStr, madrasah);
+                                return isEnabled && isApplicable && !isBeforeYearStart;
                             });
                             const totalPayable = studentFeeStructures.reduce((sum, fs) => {
                                 const setting = studentSettings?.find(ss => ss.fee_structure_id === fs.id);
@@ -1351,6 +1404,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                             );
                         })}
                     </div>
+                    </div>
                 </div>
             </div>
          )}
@@ -1392,25 +1446,49 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
          )}
 
          <div className={`p-6 rounded-[2.5rem] border shadow-bubble ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                     <h3 className={`text-lg font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ফি সেটিংস' : 'Fee Settings'}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? `${institutionPossessiveBn} ফি কাঠামো নির্ধারণ করুন` : 'Set up institution fee structures'}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? `${institutionPossessiveBn} ফি কাঠামো ও ক্যাটাগরি নির্ধারণ করুন` : 'Set up institution fee structures & categories'}</p>
                 </div>
-                <button 
-                    onClick={() => {
-                        setEditingStructureId(null);
-                        setCategory('');
-                        setAmount('');
-                        setStructureSelectedClass('');
-                        setDueDate(activeYearEndDate);
-                        setStartDate(madrasah.config_json?.academic_year_start || '');
-                        setShowAddStructure(true);
-                    }} 
-                    className="w-12 h-12 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 active:scale-95 transition-all"
-                >
-                    <Plus size={24} strokeWidth={3} />
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button 
+                        onClick={() => setShowCategoryManager(true)}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 shadow-sm ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700' : 'bg-blue-50 border-blue-100 text-[#2563EB] hover:bg-blue-100'}`}
+                        title={lang === 'bn' ? 'ফি ক্যাটাগরি সেটিংস' : 'Fee Categories'}
+                    >
+                        <Layers size={15} />
+                        <span>{lang === 'bn' ? 'ক্যাটাগরি সেটিংস' : 'Categories'}</span>
+                    </button>
+
+                    <button 
+                        onClick={() => {
+                            const defCat = feeCategories[0] || { id: 'monthly_tuition', name: 'মাসিক বেতন', frequency: 'monthly' };
+                            setEditingStructureId(null);
+                            setStructureCategoryId(defCat.id);
+                            setCategory(defCat.name);
+                            setAmount('');
+                            setStructureSelectedClass('');
+                            const yr = new Date().getFullYear();
+                            setStartMonth(`${yr}-01`);
+                            setEndMonth(`${yr}-12`);
+                            setDueDate(activeYearEndDate);
+                            setStartDate(madrasah.config_json?.academic_year_start || '');
+                            setHasDateRange(defCat.frequency === 'monthly');
+                            setExamFeeMode('same_all_year');
+                            setSelectedExamMonths(['04', '08', '11']);
+                            setSpecificExamTitle(lang === 'bn' ? '১ম সাময়িক পরীক্ষা ফি' : '1st Term Exam Fee');
+                            setSingleExamMonth(`${yr}-04`);
+                            setShowStructureCategoryDropdown(false);
+                            setShowStructureClassDropdown(false);
+                            setShowAddStructure(true);
+                        }} 
+                        className="px-4 py-2.5 bg-[#2563EB] text-white rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-blue-200 active:scale-95 transition-all text-xs font-black"
+                    >
+                        <Plus size={16} strokeWidth={3} />
+                        <span>{lang === 'bn' ? 'নতুন ফি' : 'Add Fee'}</span>
+                    </button>
+                </div>
             </div>
 
             <div className="space-y-3">
@@ -1428,15 +1506,59 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 <div className={`h-px flex-1 ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}></div>
                             </div>
                             <div className="grid grid-cols-1 gap-2">
-                                {items.map((s: any) => (
+                                {items.map((s: any) => {
+                                    const assignedCategory = getCategoryForStructure(s, feeCategories, madrasah);
+                                    const freqInfo = FREQUENCY_LABELS[assignedCategory.frequency] || FREQUENCY_LABELS.custom;
+                                    return (
                                     <div key={s.id} className={`p-4 rounded-2xl border flex items-center justify-between group transition-all ${isDark ? 'bg-slate-900/50 border-slate-700 hover:bg-slate-900' : 'bg-slate-50/50 border-slate-100 hover:bg-white hover:shadow-sm'}`}>
                                         <div className="flex items-center gap-3">
                                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-white text-[#2563EB]'}`}>
                                                 <Tag size={18} />
                                             </div>
                                             <div>
-                                                <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{s.fee_name}</h5>
-                                                <p className="text-[10px] font-bold text-slate-400">{lang === 'bn' ? 'নির্ধারিত ফি' : 'Assigned Fee'} {s.due_date && `• ${lang === 'bn' ? 'শেষ তারিখ' : 'Due Date'}: ${new Date(s.due_date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US')}`}</p>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{s.fee_name}</h5>
+                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                                                        assignedCategory.color === 'emerald'
+                                                          ? (isDark ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+                                                          : assignedCategory.color === 'purple'
+                                                          ? (isDark ? 'bg-purple-950/60 border-purple-800 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700')
+                                                          : assignedCategory.color === 'amber'
+                                                          ? (isDark ? 'bg-amber-950/60 border-amber-800 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700')
+                                                          : (isDark ? 'bg-blue-950/60 border-blue-800 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700')
+                                                    }`}>
+                                                        <Tag size={10} />
+                                                        {assignedCategory.name}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                                    <span className="text-[10px] font-bold text-slate-400">
+                                                        {lang === 'bn' ? freqInfo.badgeBn : freqInfo.en}
+                                                    </span>
+                                                    {(() => {
+                                                        const examMonths = getStructureExamMonths(s.id, madrasah);
+                                                        if (examMonths.length > 0) {
+                                                            const mNames = examMonths.map(m => MONTH_DEFINITIONS.find(d => d.value === m)?.nameBn).filter(Boolean).join(', ');
+                                                            return (
+                                                                <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                                                    {lang === 'bn' ? `পরীক্ষার মাস: ${mNames}` : `Exam: ${mNames}`}
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (s.start_date || s.due_date) {
+                                                            return (
+                                                                <span className="text-[10px] font-medium text-slate-400">
+                                                                    • {formatMonthLabel(s.start_date?.slice(0, 7) || '', lang)} - {formatMonthLabel(s.due_date?.slice(0, 7) || '', lang)}
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                                                {lang === 'bn' ? 'উন্মুক্ত সময়সীমা' : 'No Date Limit'}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
@@ -1466,11 +1588,52 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                                 <div className="flex items-center gap-1">
                                                     <button onClick={() => {
                                                         setEditingStructureId(s.id);
-                                                        setCategory(s.fee_name);
+                                                        const cat = getCategoryForStructure(s, feeCategories, madrasah);
+                                                        setStructureCategoryId(cat.id);
+                                                        setCategory(s.fee_name || cat.name);
                                                         setAmount(s.amount?.toString() || '');
                                                         setStructureSelectedClass(s.class_id || '');
                                                         setDueDate(s.due_date || '');
                                                         setStartDate(s.start_date || '');
+                                                        const yr = new Date().getFullYear();
+                                                        setStartMonth(s.start_date ? s.start_date.slice(0, 7) : `${yr}-01`);
+                                                        setEndMonth(s.due_date ? s.due_date.slice(0, 7) : `${yr}-12`);
+                                                        setHasDateRange(Boolean(s.start_date || s.due_date));
+                                                        
+                                                        const examMonths = getStructureExamMonths(s.id, madrasah);
+                                                        const isExamCat = cat.id === 'exam_fee' || cat.frequency === 'exam' || cat.name?.includes('পরীক্ষা') || s.fee_name?.includes('পরীক্ষা') || s.fee_name?.includes('Exam');
+
+                                                        if (examMonths && examMonths.length > 0) {
+                                                            if (examMonths.length === 1 && !s.fee_name?.includes('সকল')) {
+                                                                setExamFeeMode('different_per_exam');
+                                                                setSpecificExamTitle(s.fee_name || '');
+                                                                const examYr = s.due_date ? s.due_date.slice(0, 4) : s.start_date ? s.start_date.slice(0, 4) : `${yr}`;
+                                                                setSingleExamMonth(`${examYr}-${examMonths[0].padStart(2, '0')}`);
+                                                            } else {
+                                                                setExamFeeMode('same_all_year');
+                                                                setSelectedExamMonths(examMonths);
+                                                            }
+                                                        } else if (isExamCat) {
+                                                            const derivedMonth = s.due_date ? s.due_date.slice(0, 7) : s.start_date ? s.start_date.slice(0, 7) : null;
+                                                            if (derivedMonth) {
+                                                                setExamFeeMode('different_per_exam');
+                                                                setSpecificExamTitle(s.fee_name || '');
+                                                                setSingleExamMonth(derivedMonth);
+                                                            } else {
+                                                                setExamFeeMode('same_all_year');
+                                                                setSelectedExamMonths(['04', '08', '11']);
+                                                                setSpecificExamTitle(s.fee_name || (lang === 'bn' ? '১ম সাময়িক পরীক্ষা ফি' : '1st Term Exam Fee'));
+                                                                setSingleExamMonth(`${yr}-04`);
+                                                            }
+                                                        } else {
+                                                            setExamFeeMode('same_all_year');
+                                                            setSelectedExamMonths(['04', '08', '11']);
+                                                            setSpecificExamTitle(s.fee_name || (lang === 'bn' ? '১ম সাময়িক পরীক্ষা ফি' : '1st Term Exam Fee'));
+                                                            setSingleExamMonth(s.due_date ? s.due_date.slice(0, 7) : `${yr}-04`);
+                                                        }
+
+                                                        setShowStructureCategoryDropdown(false);
+                                                        setShowStructureClassDropdown(false);
                                                         setShowAddStructure(true);
                                                     }} className={`w-8 h-8 flex items-center justify-center transition-colors ${isDark ? 'text-blue-400 hover:bg-slate-700' : 'text-[#2563EB] hover:bg-blue-50 rounded-lg'}`}>
                                                         <Edit3 size={16}/>
@@ -1482,7 +1645,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     ))
@@ -1497,128 +1661,597 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             </div>
          </div>
 
-         {/* ADD STRUCTURE MODAL */}
-         {showAddStructure && (
-           <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-              <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 shadow-2xl relative ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
-                 <div className="flex items-center justify-between">
-                   <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{editingStructureId ? (lang === 'bn' ? 'ফি এডিট করুন' : 'Edit Fee Structure') : (lang === 'bn' ? 'ফি সেটআপ করুন' : 'Setup Fee Structure')}</h3>
-                   <button onClick={() => setShowAddStructure(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
-                 </div>
-                 <div className="space-y-4">
-                    <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'শ্রেণি নির্বাচন করুন (ঐচ্ছিক)' : 'Select Class (Optional)'}</label>
-                       <button onClick={() => setShowStructureClassDropdown(!showStructureClassDropdown)} className={`w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between font-black transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
-                          <span className="truncate">{classes.find(c => c.id === structureSelectedClass)?.class_name || 'সব শ্রেণি (All Classes)'}</span>
-                          <ChevronDown size={20} className="text-slate-300" />
-                       </button>
-                       {showStructureClassDropdown && (
-                           <div className={`absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-2xl border z-[1001] p-2 max-h-48 overflow-y-auto ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                               <button onClick={() => { setStructureSelectedClass(''); setShowStructureClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black transition-colors ${isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50'}`}>সব শ্রেণি (All Classes)</button>
-                               {classes.map(c => (
-                                   <button key={c.id} onClick={() => { setStructureSelectedClass(c.id); setShowStructureClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black transition-colors ${isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50'}`}>{c.class_name}</button>
-                               ))}
-                           </div>
-                       )}
+         {/* ADD / EDIT STRUCTURE MODAL */}
+         {showAddStructure && (() => {
+           const activeSelectedCat = feeCategories.find(c => c.id === structureCategoryId) || feeCategories[0];
+           const isMonthlyCategory = activeSelectedCat?.frequency === 'monthly';
+           const isExamCategory = structureCategoryId === 'exam_fee' || activeSelectedCat?.frequency === 'exam' || activeSelectedCat?.name?.includes('পরীক্ষা');
+           const activeCatFreqLabel = activeSelectedCat ? (FREQUENCY_LABELS[activeSelectedCat.frequency] || FREQUENCY_LABELS.custom) : FREQUENCY_LABELS.custom;
+           
+           const calYear = new Date().getFullYear();
+           const availableYears = [calYear - 1, calYear, calYear + 1];
+           const monthPickerOptions = availableYears.flatMap(yr =>
+             MONTH_DEFINITIONS.map(m => {
+               const yrText = lang === 'bn' ? yr.toString().replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : yr.toString();
+               return {
+                 value: `${yr}-${m.value}`,
+                 label: `${lang === 'bn' ? m.nameBn : m.nameEn} ${yrText}`
+               };
+             })
+           );
+
+           return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+               <div className={`w-full max-w-md rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-6 space-y-4 animate-in zoom-in-95 shadow-2xl relative max-h-[92vh] flex flex-col my-auto border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                    <div>
+                      <h3 className={`text-base sm:text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                        {editingStructureId ? (lang === 'bn' ? 'ফি এডিট করুন' : 'Edit Fee Structure') : (lang === 'bn' ? 'ফি সেটআপ করুন' : 'Setup Fee Structure')}
+                      </h3>
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        {lang === 'bn' ? 'শ্রেণি ও ক্যাটাগরি অনুযায়ী ফি নির্ধারণ' : 'Configure fees by class and category'}
+                      </p>
                     </div>
-                    <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'ফি-র নাম' : 'Fee Name'}</label>
-                       <input type="text" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-slate-700 focus:border-[#2563EB]/20'}`} placeholder={lang === 'bn' ? "যেমন: মাসিক বেতন" : "e.g. Monthly Fee"} value={category} onChange={(e) => setCategory(e.target.value)} />
-                       <Tag className={`absolute left-4 top-[44px] ${isDark ? 'text-slate-500' : 'text-slate-300'}`} size={20}/>
-                       <div className="flex flex-wrap gap-2 mt-2 px-1">
-                          {(lang === 'bn' ? ['পরীক্ষার ফি', 'কোচিং ফি', 'অন্যান্য ফি'] : ['Exam Fee', 'Coaching Fee', 'Other Fee']).map(suggestion => (
-                             <button 
-                                key={suggestion}
-                                type="button"
-                                onClick={() => setCategory(suggestion)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all ${category === suggestion ? (isDark ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-[#2563EB]/20') : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200')}`}
-                             >
-                                {suggestion}
-                             </button>
-                          ))}
-                       </div>
-                    </div>
-                    <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'টাকার পরিমাণ' : 'Amount'}</label>
-                       <input 
-                         type="text" 
-                         inputMode="decimal"
-                         className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} 
-                         placeholder="0" 
-                         value={amount} 
-                         onChange={(e) => {
-                           let val = e.target.value;
-                           const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-                           val = val.replace(/[০-৯]/g, match => numbers[match]);
-                           // Allow only digits and one decimal point
-                           val = val.replace(/[^0-9.]/g, '');
-                           setAmount(val);
-                         }} 
-                       />
-                       <DollarSign className={`absolute left-4 top-[44px] ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
-                    </div>
-                    <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'শুরুর তারিখ' : 'Start Date'}</label>
-                       <div className="relative">
-                           <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                           <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
-                       </div>
-                    </div>
-                    <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'শেষ তারিখ (Optional)' : 'End Date (Optional)'}</label>
-                       <div className="relative">
-                           <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                           <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
-                       </div>
-                    </div>
-                    
-                    <button onClick={async () => {
-                       setActionError(null);
-                       if (!category || !amount) {
-                           setActionError(lang === 'bn' ? 'দয়া করে ফি-র নাম এবং পরিমাণ দিন।' : 'Please enter fee name and amount.');
-                           return;
-                       }
-                       setIsSaving(true);
-                       try {
-                           const payload = {
-                               institution_id: madrasah.id,
-                               class_id: structureSelectedClass || null,
-                               fee_name: category,
-                               amount: parseFloat(amount),
-                               due_date: dueDate || null,
-                               start_date: startDate || null
-                           };
-                           
-                           let error;
-                           if (editingStructureId) {
-                               const { error: updateError } = await supabase.from('fee_structures').update(payload).eq('id', editingStructureId);
-                               error = updateError;
-                           } else {
-                               const { error: insertError } = await supabase.from('fee_structures').insert(payload);
-                               error = insertError;
-                           }
-                           
-                           if (error) {
-                               if (error.message.includes('start_date does not exist')) {
-                                   throw new Error("Database schema error: Please run the SQL migration script 'src/services/migration_add_start_date_fee_structures.sql' in Supabase SQL Editor to add the 'start_date' column.");
-                               }
-                               throw error;
-                           }
-                           setShowAddStructure(false);
-                           setCategory(''); setAmount(''); setStructureSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
-                           await requestManager.invalidatePattern(`structures:${madrasah.id}`);
-                           await requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
-                           clearGlobalSchoolFeeCache();
-                           if (triggerRefresh) triggerRefresh();
-                           fetchData();
-                       } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
-                    }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all text-base">
-                       {isSaving ? <Loader2 className="animate-spin" /> : (lang === 'bn' ? 'সেভ করুন' : 'Save')}
+                    <button 
+                      onClick={() => {
+                        setShowAddStructure(false);
+                        setShowStructureClassDropdown(false);
+                        setShowStructureCategoryDropdown(false);
+                      }} 
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                    >
+                      <X size={18} />
                     </button>
-                 </div>
-              </div>
-           </div>
-         )}
+                  </div>
+
+                  {/* Scrollable Form Body */}
+                  <div className="flex-1 overflow-y-auto pr-0.5 space-y-4 py-1">
+                     {/* 1. SELECT CLASS (First field as requested) */}
+                     <div className="relative">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1.5 block">
+                          {lang === 'bn' ? '১. শ্রেণি নির্বাচন করুন *' : '1. Select Class *'}
+                        </label>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setShowStructureClassDropdown(!showStructureClassDropdown);
+                            setShowStructureCategoryDropdown(false);
+                          }} 
+                          className={`w-full h-12 sm:h-13 px-4 rounded-xl sm:rounded-2xl border-2 flex items-center justify-between font-black transition-all ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'
+                          }`}
+                        >
+                           <div className="flex items-center gap-2 truncate">
+                             <Users size={18} className="text-[#2563EB] shrink-0" />
+                             <span className="truncate text-xs sm:text-sm font-black">
+                               {classes.find(c => c.id === structureSelectedClass)?.class_name || (lang === 'bn' ? 'সব শ্রেণি (All Classes)' : 'All Classes')}
+                             </span>
+                           </div>
+                           <ChevronDown size={18} className={`text-slate-400 transition-transform ${showStructureClassDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showStructureClassDropdown && (
+                            <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-xl sm:rounded-2xl shadow-2xl border z-[1001] p-1.5 max-h-48 overflow-y-auto ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                                <button 
+                                  type="button"
+                                  onClick={() => { setStructureSelectedClass(''); setShowStructureClassDropdown(false); }} 
+                                  className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-black transition-colors ${
+                                    !structureSelectedClass 
+                                      ? (isDark ? 'bg-blue-600/25 text-blue-300' : 'bg-blue-50 text-[#2563EB]') 
+                                      : (isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50')
+                                  }`}
+                                >
+                                  {lang === 'bn' ? 'সব শ্রেণি (সকল শিক্ষার্থীর জন্য)' : 'All Classes'}
+                                </button>
+                                {classes.map(c => (
+                                    <button 
+                                      key={c.id} 
+                                      type="button"
+                                      onClick={() => { setStructureSelectedClass(c.id); setShowStructureClassDropdown(false); }} 
+                                      className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-black transition-colors ${
+                                        structureSelectedClass === c.id 
+                                          ? (isDark ? 'bg-blue-600/25 text-blue-300' : 'bg-blue-50 text-[#2563EB]') 
+                                          : (isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50')
+                                      }`}
+                                    >
+                                      {c.class_name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                     </div>
+
+                     {/* 2. SELECT CATEGORY (Second field - Dropdown selection, replacing redundant fee name input) */}
+                     <div className="relative">
+                        <div className="flex items-center justify-between px-1 mb-1.5">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                             {lang === 'bn' ? '২. ফি ক্যাটাগরি নির্বাচন *' : '2. Fee Category *'}
+                           </label>
+                           <button 
+                              type="button" 
+                              onClick={() => setShowCategoryManager(true)}
+                              className="text-[10px] font-bold text-[#2563EB] dark:text-blue-400 hover:underline flex items-center gap-1"
+                           >
+                              <Plus size={12} />
+                              {lang === 'bn' ? 'নতুন ক্যাটাগরি যোগ' : '+ Add New'}
+                           </button>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setShowStructureCategoryDropdown(!showStructureCategoryDropdown);
+                            setShowStructureClassDropdown(false);
+                          }}
+                          className={`w-full h-12 sm:h-13 px-4 rounded-xl sm:rounded-2xl border-2 flex items-center justify-between font-black transition-all ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'
+                          }`}
+                        >
+                           <div className="flex items-center gap-2.5 truncate">
+                             <Tag size={18} className="text-[#2563EB] shrink-0" />
+                             <span className="truncate text-xs sm:text-sm font-black">
+                               {activeSelectedCat?.name || (lang === 'bn' ? 'ক্যাটাগরি নির্বাচন করুন' : 'Select Category')}
+                             </span>
+                             {activeSelectedCat && (
+                               <span className="text-[9px] font-bold px-2 py-0.5 rounded-md border bg-blue-50 text-[#2563EB] border-blue-200 dark:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 shrink-0">
+                                 {lang === 'bn' ? activeCatFreqLabel.badgeBn : activeCatFreqLabel.en}
+                               </span>
+                             )}
+                           </div>
+                           <ChevronDown size={18} className={`text-slate-400 transition-transform ${showStructureCategoryDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showStructureCategoryDropdown && (
+                            <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-xl sm:rounded-2xl shadow-2xl border z-[1002] p-1.5 max-h-56 overflow-y-auto ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                               {feeCategories.map(cat => {
+                                  const freq = FREQUENCY_LABELS[cat.frequency] || FREQUENCY_LABELS.custom;
+                                  const isSelected = structureCategoryId === cat.id;
+                                  return (
+                                     <button
+                                        key={cat.id}
+                                        type="button"
+                                        onClick={() => {
+                                           setStructureCategoryId(cat.id);
+                                           setCategory(cat.name);
+                                           setShowStructureCategoryDropdown(false);
+                                        }}
+                                        className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-black flex items-center justify-between transition-colors ${
+                                           isSelected
+                                              ? (isDark ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-50 text-[#2563EB]')
+                                              : (isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50')
+                                        }`}
+                                     >
+                                        <div className="flex items-center gap-2 truncate">
+                                           <span className="truncate">{cat.name}</span>
+                                           {cat.is_default && (
+                                              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200 shrink-0">
+                                                 {lang === 'bn' ? 'ডিফল্ট' : 'Default'}
+                                              </span>
+                                           )}
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                           {lang === 'bn' ? freq.badgeBn : freq.en}
+                                        </span>
+                                     </button>
+                                  );
+                               })}
+                               <div className="pt-1.5 mt-1 border-t border-slate-100 dark:border-slate-700">
+                                  <button
+                                     type="button"
+                                     onClick={() => {
+                                        setShowStructureCategoryDropdown(false);
+                                        setShowCategoryManager(true);
+                                     }}
+                                     className="w-full text-left px-3.5 py-2 rounded-lg text-xs font-bold text-[#2563EB] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
+                                  >
+                                     <Layers size={13} />
+                                     <span>{lang === 'bn' ? '+ নতুন ক্যাটাগরি তৈরি বা এডিট' : '+ Add / Manage Categories'}</span>
+                                  </button>
+                               </div>
+                            </div>
+                        )}
+                     </div>
+
+                     {/* 3. AMOUNT */}
+                     <div className="relative">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1.5 block">
+                          {lang === 'bn' ? '৩. টাকার পরিমাণ *' : '3. Amount *'}
+                        </label>
+                        <div className="relative">
+                          <input 
+                            type="text" 
+                            inputMode="decimal"
+                            className={`w-full h-12 sm:h-13 rounded-xl sm:rounded-2xl px-11 font-black text-base sm:text-lg outline-none border-2 border-transparent transition-all ${
+                              isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'
+                            }`} 
+                            placeholder="0" 
+                            value={amount} 
+                            onChange={(e) => {
+                              let val = e.target.value;
+                              const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+                              val = val.replace(/[০-৯]/g, match => numbers[match]);
+                              val = val.replace(/[^0-9.]/g, '');
+                              setAmount(val);
+                            }} 
+                          />
+                          <DollarSign className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`} size={18}/>
+                        </div>
+                     </div>
+
+                     {/* 4. EXAM FEE SETTINGS: If Exam category is chosen */}
+                     {isExamCategory && (
+                       <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border space-y-3.5 bg-purple-50/40 border-purple-100 dark:bg-slate-800/60 dark:border-slate-700/80">
+                         <div className="flex items-center justify-between">
+                           <label className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-400 flex items-center gap-1.5">
+                             <GraduationCap size={15} />
+                             <span>{lang === 'bn' ? 'পরীক্ষা ফি নির্ধারণ ও আদায় পদ্ধতি' : 'Exam Fee Setup Method'}</span>
+                           </label>
+                         </div>
+
+                         {/* Option selector pills */}
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                           <button
+                             type="button"
+                             onClick={() => setExamFeeMode('same_all_year')}
+                             className={`p-2.5 rounded-xl border text-left transition-all ${
+                               examFeeMode === 'same_all_year'
+                                 ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
+                                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                             }`}
+                           >
+                             <div className="flex items-center gap-2">
+                               <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${examFeeMode === 'same_all_year' ? 'border-white bg-white' : 'border-slate-400'}`}>
+                                 {examFeeMode === 'same_all_year' && <div className="w-1.5 h-1.5 rounded-full bg-purple-600" />}
+                               </div>
+                               <span className="text-xs font-black">{lang === 'bn' ? 'সকল পরীক্ষায় একই ফি' : 'Same Fee For All Exams'}</span>
+                             </div>
+                             <p className={`text-[10px] mt-1 pl-5 ${examFeeMode === 'same_all_year' ? 'text-purple-100' : 'text-slate-400'}`}>
+                               {lang === 'bn' ? 'নির্দিষ্ট মাসগুলোতে ফি জমার সময় শো করবে' : 'Shows up in selected exam months'}
+                             </p>
+                           </button>
+
+                           <button
+                             type="button"
+                             onClick={() => setExamFeeMode('different_per_exam')}
+                             className={`p-2.5 rounded-xl border text-left transition-all ${
+                               examFeeMode === 'different_per_exam'
+                                 ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
+                                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                             }`}
+                           >
+                             <div className="flex items-center gap-2">
+                               <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${examFeeMode === 'different_per_exam' ? 'border-white bg-white' : 'border-slate-400'}`}>
+                                 {examFeeMode === 'different_per_exam' && <div className="w-1.5 h-1.5 rounded-full bg-purple-600" />}
+                               </div>
+                               <span className="text-xs font-black">{lang === 'bn' ? 'আলাদা পরীক্ষা আলাদা ফি' : 'Separate Fee Per Exam'}</span>
+                             </div>
+                             <p className={`text-[10px] mt-1 pl-5 ${examFeeMode === 'different_per_exam' ? 'text-purple-100' : 'text-slate-400'}`}>
+                               {lang === 'bn' ? 'নির্দিষ্ট পরীক্ষার নাম ও মাস নির্ধারণ' : 'Set specific exam name & month'}
+                             </p>
+                           </button>
+                         </div>
+
+                         {/* Mode 1: Same Fee For All Exams */}
+                         {examFeeMode === 'same_all_year' && (
+                           <div className="space-y-2.5 pt-1">
+                             <div className="flex items-center justify-between">
+                               <span className="text-[10px] font-black text-slate-500 dark:text-slate-400">
+                                 {lang === 'bn' ? 'যে যে মাসে পরীক্ষা হয় সিলেক্ট করুন (একাধিক নির্বাচনযোগ্য):' : 'Select exam months (multi-select):'}
+                               </span>
+                               <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                                 {selectedExamMonths.length} {lang === 'bn' ? 'টি মাস নির্বাচিত' : 'months selected'}
+                               </span>
+                             </div>
+
+                             {/* 12 Months Selection Grid */}
+                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                               {MONTH_DEFINITIONS.map(m => {
+                                 const isSelected = selectedExamMonths.includes(m.value);
+                                 return (
+                                   <button
+                                     key={m.value}
+                                     type="button"
+                                     onClick={() => {
+                                       setSelectedExamMonths(prev =>
+                                         prev.includes(m.value) ? prev.filter(x => x !== m.value) : [...prev, m.value].sort()
+                                       );
+                                     }}
+                                     className={`py-1.5 px-2 rounded-lg text-xs font-black flex items-center justify-center gap-1 transition-all ${
+                                       isSelected
+                                         ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/30'
+                                         : 'bg-white dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-purple-300'
+                                     }`}
+                                   >
+                                     {isSelected && <Check size={11} strokeWidth={3} />}
+                                     <span>{lang === 'bn' ? m.nameBn : m.nameEn.slice(0, 3)}</span>
+                                   </button>
+                                 );
+                               })}
+                             </div>
+
+                             {/* Quick Presets */}
+                             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                               <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'প্রিসেট:' : 'Presets:'}</span>
+                               <button
+                                 type="button"
+                                 onClick={() => setSelectedExamMonths(['04', '08', '11'])}
+                                 className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 hover:opacity-80"
+                               >
+                                 {lang === 'bn' ? '৩টি পরীক্ষা (এপ্রিল, আগস্ট, নভেম্বর)' : '3 Exams (Apr, Aug, Nov)'}
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={() => setSelectedExamMonths(['06', '12'])}
+                                 className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 hover:opacity-80"
+                               >
+                                 {lang === 'bn' ? '২টি পরীক্ষা (জুন, ডিসেম্বর)' : '2 Exams (Jun, Dec)'}
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={() => setSelectedExamMonths([])}
+                                 className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:opacity-80"
+                               >
+                                 {lang === 'bn' ? 'রিসেট' : 'Reset'}
+                               </button>
+                             </div>
+
+                             <p className="text-[10px] text-purple-700 dark:text-purple-300 bg-purple-100/50 dark:bg-purple-950/40 p-2 rounded-lg">
+                               {lang === 'bn'
+                                 ? `💡 'ফি জমা' নেওয়ার সময় শুধুমাত্র নির্বাচিত ${selectedExamMonths.map(v => MONTH_DEFINITIONS.find(m => m.value === v)?.nameBn).filter(Boolean).join(', ') || 'মাসগুলোতে'} পরীক্ষা ফি (৳${amount || '০'}) স্বয়ংক্রিয়ভাবে যোগ হবে।`
+                                 : `💡 Exam fee will only be charged in the selected months during fee collection.`}
+                             </p>
+                           </div>
+                         )}
+
+                         {/* Mode 2: Different Fee Per Exam */}
+                         {examFeeMode === 'different_per_exam' && (
+                           <div className="space-y-2.5 pt-1">
+                             <CompactMonthPicker
+    label={lang === 'bn' ? 'যে মাসে এই পরীক্ষা ফি আদায় হবে' : 'Month to collect this exam fee'}
+    value={singleExamMonth}
+    onChange={setSingleExamMonth}
+    lang={lang}
+    isDark={isDark}
+  />
+
+                             <p className="text-[10px] text-purple-700 dark:text-purple-300 bg-purple-100/50 dark:bg-purple-950/40 p-2 rounded-lg">
+                               {lang === 'bn'
+                                 ? `💡 এই পরীক্ষা ফি-টি শুধুমাত্র নির্বাচিত মাসে ফি জমার সময় শো করবে। অন্য পরীক্ষার জন্য আলাদা ফি তৈরি করতে পারবেন।`
+                                 : `💡 This exam fee will only be billed in the chosen month.`}
+                             </p>
+                           </div>
+                         )}
+                       </div>
+                     )}
+
+                     {/* 5. OPTIONAL START & END DATES TOGGLE: Requirement 1 */}
+                     <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border space-y-3 bg-slate-50/70 border-slate-200/80 dark:bg-slate-800/40 dark:border-slate-700/60">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <Calendar size={16} className={hasDateRange ? 'text-[#2563EB]' : 'text-slate-400'} />
+                           <div>
+                             <span className="text-xs font-black block text-slate-700 dark:text-slate-200">
+                               {lang === 'bn' ? 'শুরু ও শেষের তারিখ নির্ধারণ (অপশনাল)' : 'Start & End Dates (Optional)'}
+                             </span>
+                             <span className="text-[10px] text-slate-400 font-medium">
+                               {hasDateRange 
+                                 ? (lang === 'bn' ? 'চালু আছে: নির্দিষ্ট সময়সীমা বা মাস নির্বাচন করুন' : 'ON: Date range enabled')
+                                 : (lang === 'bn' ? 'বন্ধ আছে: কোনো নির্দিষ্ট সময়সীমা নেই (যেকোনো সময় প্রযোজ্য)' : 'OFF: No date constraints')}
+                             </span>
+                           </div>
+                         </div>
+                         
+                         {/* ON / OFF Toggle Switch Button */}
+                         <button
+                           type="button"
+                           onClick={() => setHasDateRange(!hasDateRange)}
+                           className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                             hasDateRange ? 'bg-[#2563EB]' : 'bg-slate-300 dark:bg-slate-600'
+                           }`}
+                           aria-label="Toggle start and end dates"
+                         >
+                           <span
+                             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-md ${
+                               hasDateRange ? 'translate-x-6' : 'translate-x-1'
+                             }`}
+                           />
+                         </button>
+                       </div>
+
+                       {/* When Date Range is ON */}
+                       {hasDateRange ? (
+                         <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                           <div className="grid grid-cols-2 gap-2.5">
+  <CompactMonthPicker
+    label={lang === 'bn' ? 'শুরুর মাস' : 'Start Month'}
+    value={startMonth}
+    onChange={setStartMonth}
+    lang={lang}
+    isDark={isDark}
+  />
+  <CompactMonthPicker
+    label={lang === 'bn' ? 'শেষের মাস' : 'End Month'}
+    value={endMonth}
+    onChange={setEndMonth}
+    lang={lang}
+    isDark={isDark}
+  />
+</div>
+
+                           {/* Quick Month Shortcuts */}
+                           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 const curY = new Date().getFullYear();
+                                 setStartMonth(`${curY}-01`);
+                                 setEndMonth(`${curY}-12`);
+                               }}
+                               className="text-[9px] sm:text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-100 text-[#2563EB] dark:bg-blue-900/50 dark:text-blue-300 hover:opacity-80 transition-opacity"
+                             >
+                               {lang === 'bn' ? 'পুরো শিক্ষাবর্ষ (জানু - ডিসে)' : 'Full Year (Jan - Dec)'}
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 const now = new Date();
+                                 const curY = now.getFullYear();
+                                 const curM = String(now.getMonth() + 1).padStart(2, '0');
+                                 setStartMonth(`${curY}-${curM}`);
+                                 setEndMonth(`${curY}-12`);
+                               }}
+                               className="text-[9px] sm:text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:opacity-80 transition-opacity"
+                             >
+                               {lang === 'bn' ? 'চলতি মাস থেকে' : 'From Current Month'}
+                             </button>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="pt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                           <Info size={14} className="text-[#2563EB] shrink-0" />
+                           <span>
+                             {lang === 'bn' 
+                               ? 'তারিখ নির্ধারণ বন্ধ আছে। এই ফি-টি কোনো মাস বা তারিখ দ্বারা সীমাবদ্ধ থাকবে না।'
+                               : 'Dates are disabled. This fee has no time constraint.'}
+                           </span>
+                         </div>
+                       )}
+                     </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-2 shrink-0">
+                    <button 
+                      type="button"
+                      disabled={isSaving}
+                      onClick={async () => {
+                        setActionError(null);
+                        const baseFeeName = activeSelectedCat?.name || category || (lang === 'bn' ? 'ফি' : 'Fee');
+                        const finalFeeName = (isExamCategory && examFeeMode === 'different_per_exam' && specificExamTitle.trim())
+                          ? specificExamTitle.trim()
+                          : baseFeeName;
+
+                        if (!finalFeeName || !amount) {
+                            setActionError(lang === 'bn' ? 'দয়া করে ফি ক্যাটাগরি এবং টাকার পরিমাণ দিন।' : 'Please select fee category and amount.');
+                            return;
+                        }
+                        setIsSaving(true);
+                        try {
+                            let finalStartDate: string | null = null;
+                            let finalDueDate: string | null = null;
+
+                            // Requirement 1: Check optional dates toggle
+                            if (isExamCategory) {
+                              if (examFeeMode === 'different_per_exam' && singleExamMonth) {
+                                finalStartDate = `${singleExamMonth}-01`;
+                                finalDueDate = getLastDayOfMonth(singleExamMonth);
+                              } else if (examFeeMode === 'same_all_year') {
+                                const yr = singleExamMonth ? singleExamMonth.slice(0, 4) : `${new Date().getFullYear()}`;
+                                finalStartDate = `${yr}-01-01`;
+                                finalDueDate = `${yr}-12-31`;
+                              }
+                            } else if (hasDateRange) {
+                              if (startMonth || endMonth) {
+                                finalStartDate = startMonth ? `${startMonth}-01` : (startDate || null);
+                                finalDueDate = endMonth ? getLastDayOfMonth(endMonth) : (dueDate || null);
+                              }
+                            } else {
+                              // Dates turned OFF by user toggle
+                              finalStartDate = null;
+                              finalDueDate = null;
+                            }
+
+                            const payload: any = {
+                                institution_id: madrasah.id,
+                                class_id: structureSelectedClass || null,
+                                fee_name: finalFeeName,
+                                amount: parseFloat(amount),
+                                due_date: finalDueDate,
+                                start_date: finalStartDate
+                            };
+                            if (structureCategoryId) {
+                                payload.category_id = structureCategoryId;
+                            }
+                            
+                            let error: any;
+                            let savedId: string | null = editingStructureId;
+                            if (editingStructureId) {
+                                const { error: updateError } = await supabase.from('fee_structures').update(payload).eq('id', editingStructureId);
+                                error = updateError;
+                            } else {
+                                const { data: insertRes, error: insertError } = await supabase.from('fee_structures').insert(payload).select('id');
+                                error = insertError;
+                                if (insertRes && insertRes.length > 0) savedId = insertRes[0].id;
+                            }
+                            
+                            if (error && (error.message?.includes('category_id') || error.code === '42703')) {
+                                delete payload.category_id;
+                                if (editingStructureId) {
+                                    const { error: retryError } = await supabase.from('fee_structures').update(payload).eq('id', editingStructureId);
+                                    error = retryError;
+                                } else {
+                                    const { data: retryInsertRes, error: retryInsertError } = await supabase.from('fee_structures').insert(payload).select('id');
+                                    error = retryInsertError;
+                                    if (retryInsertRes && retryInsertRes.length > 0) savedId = retryInsertRes[0].id;
+                                }
+                            }
+                            
+                            if (error) {
+                                if (error.message?.includes('start_date does not exist')) {
+                                    throw new Error("Database schema error: Please run the SQL migration script 'src/services/migration_add_start_date_fee_structures.sql' in Supabase SQL Editor to add the 'start_date' column.");
+                                }
+                                throw error;
+                            }
+
+                            // Guarantee category mapping is saved in institution config
+                            if (savedId && structureCategoryId) {
+                                await batchSaveFeeStructureCategories(supabase, madrasah, {
+                                    [savedId]: structureCategoryId
+                                });
+                            }
+
+                            // Requirement 2: Save exam fee month selection in config_json if exam category
+                            if (savedId && isExamCategory) {
+                                const targetMonths = examFeeMode === 'different_per_exam'
+                                  ? (singleExamMonth ? [singleExamMonth.slice(5, 7)] : ['04'])
+                                  : selectedExamMonths;
+                                await saveStructureExamMonths(supabase, madrasah, savedId, targetMonths);
+                            }
+
+                            setShowAddStructure(false);
+                            setCategory(''); setAmount(''); setStructureSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
+                            await requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                            await requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                            clearGlobalSchoolFeeCache();
+                            if (triggerRefresh) triggerRefresh();
+                            fetchData();
+                        } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
+                      }} 
+                      className="w-full py-3.5 sm:py-4 bg-[#2563EB] hover:bg-blue-700 text-white font-black rounded-xl sm:rounded-2xl shadow-lg active:scale-95 transition-all text-sm flex items-center justify-center gap-2"
+                    >
+                       {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                       <span>{lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save Structure'}</span>
+                    </button>
+                  </div>
+               </div>
+            </div>
+           );
+         })()}
+
+         {/* CATEGORY MANAGER MODAL */}
+         <FeeCategoryManagerModal
+            isOpen={showCategoryManager}
+            onClose={() => setShowCategoryManager(false)}
+            categories={feeCategories}
+            madrasah={madrasah}
+            supabase={supabase}
+            lang={lang}
+            onCategoriesUpdated={(updatedList) => {
+               setFeeCategories(updatedList);
+               if (triggerRefresh) triggerRefresh();
+            }}
+         />
+
+
       </div>
     );
   }

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase, offlineApi } from 'supabase';
-import { Mail, Lock, Loader2, BookOpen, AlertCircle, Smartphone, Key, Moon, Star, Sparkles } from 'lucide-react';
+import { Mail, Lock, Loader2, BookOpen, AlertCircle, Smartphone, Key, Moon, Star, Sparkles, ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Language } from 'types';
 import { t } from 'translations';
@@ -27,10 +27,145 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
   const [supportPhone, setSupportPhone] = useState('');
   const [brandInfo, setBrandInfo] = useState({ name: 'দ্বীনোরা' });
 
+  // Helper to convert Bengali numbers to English
+  const toEnDigits = (str: string) => {
+    const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+    return String(str || '').replace(/[০-৯]/g, d => String(bn.indexOf(d)));
+  };
+
+  // Reset Password State
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [resetStep, setResetStep] = useState<1 | 2 | 3>(1); // 1: phone, 2: otp, 3: new password
+  const [resetPhone, setResetPhone] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [adminResetEmail, setAdminResetEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Password visibility states
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [showTeacherPin, setShowTeacherPin] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    let timer: any;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   useEffect(() => {
     const name = localStorage.getItem('m_name');
     if (name) setBrandInfo({ name });
   }, []);
+
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanPhone = toEnDigits(resetPhone).trim();
+    if (!cleanPhone) {
+      setError(lang === 'bn' ? 'সঠিক ফোন নম্বর দিন' : 'Enter valid phone number');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request-otp',
+          phone: cleanPhone,
+          type: 'admin'
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to send OTP');
+      setResetStep(2);
+      setResendCooldown(45);
+    } catch (err: any) {
+      setError(err.message || 'Error sending OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanOtp = toEnDigits(resetOtp).trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
+      setError(lang === 'bn' ? '৬ ডিজিটের ওটিপি কোডটি লিখুন' : 'Enter 6-digit OTP code');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify-otp',
+          phone: toEnDigits(resetPhone).trim(),
+          otp: cleanOtp
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'ভুল কোড দেওয়া হয়েছে');
+      setResetStep(3);
+    } catch (err: any) {
+      setError(err.message || 'Error verifying OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setError(lang === 'bn' ? 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে' : 'Password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError(lang === 'bn' ? 'পাসওয়ার্ড মেলেনি' : 'Passwords do not match');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const cleanPhone = toEnDigits(resetPhone).trim();
+      const cleanOtp = toEnDigits(resetOtp).trim();
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify-otp-reset',
+          phone: cleanPhone,
+          otp: cleanOtp,
+          newPassword: newPassword,
+          type: 'admin'
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Reset failed');
+      
+      if (data.adminEmail) {
+        setAdminResetEmail(data.adminEmail);
+        setEmail(data.adminEmail);
+      }
+      setPhone(cleanPhone);
+      setCode(newPassword);
+      setPin(newPassword);
+
+      setResetSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'Error resetting password');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAdminAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,7 +457,190 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
             </button>
           </div>
 
-          {loginType === 'admin' ? (
+          {isResetMode ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <button 
+                onClick={() => { setIsResetMode(false); setResetStep(1); setError(''); }}
+                className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors mb-4"
+              >
+                <ArrowLeft size={16} />
+                <span className="text-xs font-black uppercase tracking-widest">ফিরে যান</span>
+              </button>
+
+              <div className="text-center space-y-2 mb-6">
+                <h2 className="text-2xl font-black text-white">{t('reset_password', lang)}</h2>
+                <p className="text-xs text-slate-400">
+                  অ্যাডমিন অ্যাকাউন্টের পাসওয়ার্ড রিসেট
+                </p>
+              </div>
+
+              <AnimatePresence mode="wait">
+                {resetSuccess ? (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center justify-center py-6 space-y-5"
+                  >
+                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 border border-green-500/20 shadow-xl shadow-green-500/10">
+                      <CheckCircle2 size={48} />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h3 className="text-xl font-black text-white font-noto">পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে!</h3>
+                      {adminResetEmail ? (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-slate-300 space-y-1">
+                          <p className="text-slate-400">আপনার লগইন ইমেইল এড্রেস:</p>
+                          <p className="text-blue-400 font-mono font-bold text-sm select-all">{adminResetEmail}</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">আপনার মোবাইল নম্বর ও নতুন পাসওয়ার্ড দিয়ে লগইন করুন।</p>
+                      )}
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="button"
+                      onClick={() => {
+                        setIsResetMode(false);
+                        setResetSuccess(false);
+                        setResetStep(1);
+                        setError('');
+                      }}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all flex items-center justify-center gap-2 text-base font-noto shadow-xl shadow-blue-600/20"
+                    >
+                      <span>এখনই লগইন করুন</span>
+                    </motion.button>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-5">
+                    {error && (
+                      <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-start gap-3 font-semibold text-sm text-red-400 shadow-xl">
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span className="flex-1 leading-relaxed">{error}</span>
+                      </div>
+                    )}
+
+                    {resetStep === 1 && (
+                      <form onSubmit={handleRequestOtp} className="space-y-5">
+                        <p className="text-xs text-slate-400 text-center font-noto">নিবন্ধিত অ্যাডমিনের মোবাইল নম্বর দিন। এই নম্বরে এসএমএস ওটিপি কোড পাঠানো হবে।</p>
+                        <div className="group relative">
+                          <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                          <input
+                            type="tel"
+                            required
+                            placeholder="অ্যাডমিনের ফোন নম্বর (01...)"
+                            className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                            value={resetPhone}
+                            onChange={(e) => setResetPhone(toEnDigits(e.target.value))}
+                          />
+                        </div>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          type="submit"
+                          disabled={loading}
+                          className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all flex items-center justify-center gap-3 text-lg font-noto shadow-xl shadow-blue-600/20"
+                        >
+                          {loading ? <Loader2 className="animate-spin" size={24} /> : t('send_otp', lang)}
+                        </motion.button>
+                      </form>
+                    )}
+
+                    {resetStep === 2 && (
+                      <form onSubmit={handleVerifyOtp} className="space-y-5">
+                        <p className="text-xs text-slate-400 text-center font-noto">আপনার মোবাইল নম্বরে পাঠানো ৬ ডিজিটের ওটিপি কোডটি লিখুন</p>
+                        <div className="group relative">
+                          <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                          <input
+                            type="text"
+                            required
+                            maxLength={6}
+                            placeholder="৬ ডিজিটের কোড"
+                            className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600 text-center tracking-[0.5em]"
+                            value={resetOtp}
+                            onChange={(e) => setResetOtp(toEnDigits(e.target.value))}
+                          />
+                        </div>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          type="submit"
+                          disabled={loading}
+                          className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all flex items-center justify-center gap-3 text-lg font-noto shadow-xl shadow-blue-600/20"
+                        >
+                          {loading ? <Loader2 className="animate-spin" size={24} /> : t('verify_otp', lang)}
+                        </motion.button>
+                        <div className="text-center pt-1">
+                          <button
+                            type="button"
+                            disabled={resendCooldown > 0 || loading}
+                            onClick={() => handleRequestOtp()}
+                            className="text-xs font-bold text-blue-400 hover:text-blue-300 disabled:text-slate-500 transition-colors"
+                          >
+                            {resendCooldown > 0 ? `পুনরায় কোড পাঠান (${resendCooldown}s)` : 'কোড পাননি? পুনরায় কোড পাঠান'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {resetStep === 3 && (
+                      <form onSubmit={handleResetPassword} className="space-y-5">
+                        <p className="text-xs text-slate-400 text-center font-noto">কমপক্ষে ৬ অক্ষরের নতুন পাসওয়ার্ড দিন</p>
+                        <div className="group relative">
+                          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            required
+                            minLength={6}
+                            placeholder={t('new_password', lang)}
+                            className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-2 rounded-xl focus:outline-none"
+                            tabIndex={-1}
+                          >
+                            {showNewPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                          </button>
+                        </div>
+                        <div className="group relative">
+                          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            required
+                            minLength={6}
+                            placeholder={t('confirm_new_password', lang)}
+                            className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-2 rounded-xl focus:outline-none"
+                            tabIndex={-1}
+                          >
+                            {showConfirmPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                          </button>
+                        </div>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          type="submit"
+                          disabled={loading}
+                          className="w-full py-5 bg-green-600 hover:bg-green-500 text-white font-black rounded-2xl transition-all flex items-center justify-center gap-3 text-lg font-noto shadow-xl shadow-green-600/20"
+                        >
+                          {loading ? <Loader2 className="animate-spin" size={24} /> : t('reset_password', lang)}
+                        </motion.button>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : loginType === 'admin' ? (
             <form onSubmit={handleAdminAuth} className="space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
               <AnimatePresence mode="wait">
                 {error && (
@@ -385,13 +703,21 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                 <div className="group relative">
                   <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
                   <input
-                    type="password"
+                    type={showAdminPassword ? "text" : "password"}
                     required
                     placeholder="পাসওয়ার্ড"
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                    className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-2 rounded-xl focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    {showAdminPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
                 </div>
               </div>
 
@@ -404,6 +730,16 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
               >
                 {loading ? <Loader2 className="animate-spin" size={24} /> : 'লগইন করুন'}
               </motion.button>
+              
+              <div className="text-center mt-2">
+                <button 
+                  type="button"
+                  onClick={() => { setIsResetMode(true); setResetStep(1); setError(''); }}
+                  className="text-xs font-bold text-blue-400/60 hover:text-blue-400 transition-colors"
+                >
+                  {t('forgot_password', lang)}
+                </button>
+              </div>
             </form>
           ) : loginType === 'teacher' ? (
             <form onSubmit={handleTeacherAuth} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -468,13 +804,21 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                 <div className="group relative">
                   <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
                   <input
-                    type="password"
+                    type={showTeacherPin ? "text" : "password"}
                     required
                     placeholder="লগইন পিন"
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                    className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowTeacherPin(!showTeacherPin)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-2 rounded-xl focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    {showTeacherPin ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
                 </div>
               </div>
 
@@ -487,6 +831,12 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
               >
                 {loading ? <Loader2 className="animate-spin" size={24} /> : 'শিক্ষক লগইন'}
               </motion.button>
+
+              <div className="text-center mt-2">
+                <p className="text-[11px] text-slate-500 font-noto">
+                  পিন ভুলে গেলে প্রতিষ্ঠানের প্রধান অ্যাডমিনের সাথে যোগাযোগ করুন
+                </p>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleParentAuth} className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">

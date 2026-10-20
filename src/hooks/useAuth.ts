@@ -139,17 +139,91 @@ export const useAuth = () => {
         
         // 2. Get the institution (Cached)
         if (isValidUUID(finalProfile.institution_id)) {
+          const activeBranchId = typeof window !== 'undefined' ? (sessionStorage.getItem('active_branch_id') || localStorage.getItem('active_branch_id')) : null;
+          const targetInstId = (activeBranchId && isValidUUID(activeBranchId)) ? activeBranchId : finalProfile.institution_id;
+
           const { data: institutionData, error: mError } = await requestManager.cachedFetch(
             'institutions',
-            (q) => q.select('id, name, address, phone, contact_email, logo_url, institution_type, config_json, theme, status, is_active, is_super_admin, created_at, email, balance, sms_balance, subscription_end, voice_sender_id, sms_rate, voice_rate').eq('id', finalProfile.institution_id),
-            `institution:${finalProfile.institution_id}`
+            (q) => q.select('id, name, address, phone, contact_email, logo_url, institution_type, config_json, theme, status, is_active, is_super_admin, created_at, email, balance, sms_balance, subscription_end, voice_sender_id, sms_rate, voice_rate').eq('id', targetInstId),
+            `institution:${targetInstId}`
           );
 
           if (mError) throw mError;
           
-          const singleInstitution = Array.isArray(institutionData) ? institutionData[0] : institutionData;
+          let singleInstitution = Array.isArray(institutionData) ? institutionData[0] : institutionData;
+
+          // If client-side RLS query returned null for child branch, fetch via backend API fallback
+          if (!singleInstitution && targetInstId !== finalProfile.institution_id) {
+            try {
+              const res = await fetch('/api/branches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get-branches', institutionId: finalProfile.institution_id })
+              });
+              if (res.ok) {
+                const bData = await res.json();
+                if (bData.branches) {
+                  const found = bData.branches.find((b: any) => b.id === targetInstId);
+                  if (found) {
+                    singleInstitution = {
+                      id: found.id,
+                      name: found.name,
+                      address: found.address,
+                      phone: found.phone,
+                      contact_email: found.contact_email,
+                      institution_type: found.institution_type,
+                      status: found.status,
+                      is_active: found.is_active,
+                      balance: found.balance,
+                      sms_balance: found.sms_balance,
+                      voice_sender_id: found.voice_sender_id,
+                      voice_rate: found.voice_rate,
+                      theme: found.theme || 'default',
+                      config_json: { parent_institution_id: found.isMain ? null : bData.rootId },
+                      created_at: found.created_at
+                    };
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn('API branch fallback error in useAuth:', err);
+            }
+
+            if (!singleInstitution) {
+              sessionStorage.removeItem('active_branch_id');
+              localStorage.removeItem('active_branch_id');
+              const { data: fallbackData } = await requestManager.cachedFetch(
+                'institutions',
+                (q) => q.select('id, name, address, phone, contact_email, logo_url, institution_type, config_json, theme, status, is_active, is_super_admin, created_at, email, balance, sms_balance, subscription_end, voice_sender_id, sms_rate, voice_rate').eq('id', finalProfile.institution_id),
+                `institution:${finalProfile.institution_id}`
+              );
+              singleInstitution = Array.isArray(fallbackData) ? fallbackData[0] : fallbackData;
+            }
+          }
 
           if (singleInstitution) {
+            // Support branch allocated balance with parent fallback if undefined
+            const parentInstId = (singleInstitution.config_json as any)?.parent_institution_id;
+            if (parentInstId && isValidUUID(parentInstId)) {
+              try {
+                const { data: parentInst } = await supabase
+                  .from('institutions')
+                  .select('sms_balance, balance')
+                  .eq('id', parentInstId)
+                  .maybeSingle();
+                if (parentInst) {
+                  if (singleInstitution.sms_balance === undefined || singleInstitution.sms_balance === null) {
+                    singleInstitution.sms_balance = parentInst.sms_balance || 0;
+                  }
+                  if (singleInstitution.balance === undefined || singleInstitution.balance === null) {
+                    singleInstitution.balance = parentInst.balance || 0;
+                  }
+                }
+              } catch (e) {
+                console.error("Error fetching parent institution shared SMS balance:", e);
+              }
+            }
+
             if (finalProfile.role === 'super_admin') {
               singleInstitution.theme = localStorage.getItem('super_admin_theme') || 'default';
             }
@@ -486,13 +560,14 @@ export const useAuth = () => {
          if (document.visibilityState !== 'visible') return;
          
          try {
-           const { data } = await supabase.from('institutions').select('balance, sms_balance').eq('id', profile.institution_id!).single();
+           const billingTargetId = (madrasah?.config_json as any)?.parent_institution_id || madrasah?.id || profile.institution_id!;
+           const { data } = await supabase.from('institutions').select('balance, sms_balance').eq('id', billingTargetId).single();
            if (data) {
              setMadrasah(prev => {
                 if (!prev) return prev;
                 if (prev.balance !== data.balance || prev.sms_balance !== data.sms_balance) {
                     const updatedInst = { ...prev, balance: data.balance, sms_balance: data.sms_balance };
-                    const instId = profile.institution_id!;
+                    const instId = prev.id;
                     requestManager.setManualCache(`fetch:institutions:institution:${instId}`, updatedInst);
                     requestManager.setManualCache(`fetch:institutions:dashboard_balance:${instId}`, updatedInst);
                     OfflineService.setCache('profile', updatedInst);
@@ -517,6 +592,35 @@ export const useAuth = () => {
     };
   }, [profile?.institution_id]);
 
+  const switchBranch = async (branchId: string) => {
+    if (!branchId) return;
+    if (branchId === profile?.institution_id) {
+      sessionStorage.removeItem('active_branch_id');
+      localStorage.removeItem('active_branch_id');
+    } else {
+      sessionStorage.setItem('active_branch_id', branchId);
+      localStorage.setItem('active_branch_id', branchId);
+    }
+    requestManager.invalidatePattern('students');
+    requestManager.invalidatePattern('classes');
+    requestManager.invalidatePattern('v6_students');
+    requestManager.invalidate(`institution:${branchId}`);
+    requestManager.invalidate(`active_year:${branchId}`);
+    if (profile?.id) {
+      requestManager.invalidate(`profile:${profile.id}`);
+    }
+    try {
+      await requestManager.invalidate();
+    } catch (e) {
+      console.warn('Error clearing cache on branch switch:', e);
+    }
+    OfflineService.removeCache('profile');
+    OfflineService.removeCache('user_profile');
+    window.location.reload();
+  };
+
+  const activeBranchId = typeof window !== 'undefined' ? (sessionStorage.getItem('active_branch_id') || localStorage.getItem('active_branch_id')) : null;
+
   return { 
     session, 
     profile, 
@@ -529,6 +633,8 @@ export const useAuth = () => {
     loading, 
     authError, 
     handleLogout, 
-    refreshMadrasah 
+    refreshMadrasah,
+    activeBranchId,
+    switchBranch
   };
 };

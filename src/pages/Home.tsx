@@ -54,6 +54,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     voiceBalance: 0,
     attendanceToday: 0,
     attendanceTodayLeaves: 0,
+    attendanceTodayAbsents: 0,
+    pendingAttendanceClasses: 0,
     totalIncome: 0,
     totalExpense: 0
   });
@@ -152,7 +154,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const clsProm = requestManager.cachedFetch(
         'classes',
         (q) => {
-          let query = q.select('id', { count: 'exact', head: true }).eq('institution_id', institutionId);
+          let query = q.select('id, class_name', { count: 'exact' }).eq('institution_id', institutionId);
           if (isTeacher && allowedClasses?.length) query = query.in('id', allowedClasses);
           return query;
         },
@@ -188,14 +190,11 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         CACHE_TTLS.MEDIUM
       );
 
-      // 6. Attendance Today (Direct query to avoid RPC issues and support both presents & leaves count)
-      let attendanceTodayCount = 0;
-      let attendanceTodayLeavesCount = 0;
-
-      if (modules.modules.attendance) {
+      // 6. Attendance Today (Parallelized query)
+      const attProm = modules.modules.attendance ? (() => {
         let attQuery = supabase
           .from('attendance')
-          .select('status, student_id')
+          .select('status, student_id, class_id')
           .eq('institution_id', institutionId)
           .eq('date', today);
         
@@ -206,30 +205,49 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         if (isTeacher && allowedClasses?.length) {
           attQuery = attQuery.in('class_id', allowedClasses);
         }
+        return attQuery;
+      })() : Promise.resolve({ data: null, error: null });
 
-        const { data: attData } = await attQuery;
-        if (attData) {
-          const studentAttMap = new Map<string, string[]>();
-          attData.forEach((a: any) => {
-            if (!studentAttMap.has(a.student_id)) {
-              studentAttMap.set(a.student_id, []);
-            }
-            studentAttMap.get(a.student_id)!.push(a.status);
-          });
-
-          studentAttMap.forEach((statuses) => {
-            if (statuses.includes('present') || statuses.includes('late') || statuses.includes('half_day')) {
-              attendanceTodayCount++;
-            } else if (statuses.includes('leave')) {
-              attendanceTodayLeavesCount++;
-            }
-          });
-        }
-      }
-
-      const [stdRes, clsRes, teacherRes, mRes, ledgerRes] = await Promise.all([
-        stdProm, clsProm, teacherProm, instProm, ledgerProm
+      const [stdRes, clsRes, teacherRes, mRes, ledgerRes, attRes] = await Promise.all([
+        stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
       ]);
+
+      let attendanceTodayCount = 0;
+      let attendanceTodayLeavesCount = 0;
+      let attendanceTodayAbsentCount = 0;
+      let pendingClassesCount = 0;
+
+      const allClasses = Array.isArray(clsRes.data) ? clsRes.data : [];
+      const attData = attRes?.data;
+
+      if (attData) {
+        const studentAttMap = new Map<string, string[]>();
+        const recordedClassIds = new Set<string>();
+
+        attData.forEach((a: any) => {
+          if (a.class_id) recordedClassIds.add(a.class_id);
+          if (!studentAttMap.has(a.student_id)) {
+            studentAttMap.set(a.student_id, []);
+          }
+          studentAttMap.get(a.student_id)!.push(a.status);
+        });
+
+        studentAttMap.forEach((statuses) => {
+          if (statuses.includes('present') || statuses.includes('late') || statuses.includes('half_day')) {
+            attendanceTodayCount++;
+          } else if (statuses.includes('leave')) {
+            attendanceTodayLeavesCount++;
+          } else if (statuses.includes('absent')) {
+            attendanceTodayAbsentCount++;
+          }
+        });
+
+        if (allClasses.length > 0) {
+          pendingClassesCount = allClasses.filter((c: any) => !recordedClassIds.has(c.id)).length;
+        }
+      } else if (allClasses.length > 0) {
+        pendingClassesCount = allClasses.length;
+      }
 
       const income = Array.isArray(ledgerRes.data) 
         ? ledgerRes.data.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) 
@@ -242,12 +260,14 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
 
       const newStats = {
         totalStudents: stdRes.count || 0,
-        totalClasses: clsRes.count || 0,
+        totalClasses: clsRes.count || allClasses.length || 0,
         totalTeachers: teacherRes.count || 0,
         smsBalance: singleInst?.sms_balance || 0,
         voiceBalance: singleInst?.balance || 0,
         attendanceToday: attendanceTodayCount,
         attendanceTodayLeaves: attendanceTodayLeavesCount,
+        attendanceTodayAbsents: attendanceTodayAbsentCount,
+        pendingAttendanceClasses: pendingClassesCount,
         totalIncome: income,
         totalExpense: expense
       };
@@ -333,17 +353,81 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           </button>
         )}
         {canManageAttendance && modules.modules.attendance && (
-          <button onClick={onNavigateToAttendance} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-200 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><CheckCircle2 size={20} className="lg:w-6 lg:h-6" /></div>
-             <div className="flex flex-col items-center">
-                <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.attendanceToday}</h4>
-                {!loadingStats && stats.attendanceTodayLeaves > 0 && (
-                  <span className="text-[9px] lg:text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full mt-1">
-                    {lang === 'bn' ? `ছুটি: ${stats.attendanceTodayLeaves} জন` : `Leave: ${stats.attendanceTodayLeaves}`}
-                  </span>
-                )}
+          <button 
+            type="button"
+            onClick={onNavigateToAttendance} 
+            className={`col-span-2 sm:col-span-2 lg:col-span-2 xl:col-span-2 ${
+              madrasah?.theme === 'dark' 
+                ? 'bg-slate-800/90 border-slate-700 hover:bg-slate-800 hover:border-blue-500/40' 
+                : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'
+            } p-4 lg:p-5 rounded-[2rem] shadow-bubble flex flex-col justify-between text-left animate-in zoom-in duration-300 delay-200 active:scale-[0.99] transition-all border w-full group cursor-pointer`}
+          >
+             {/* Header Row: Title & Action Hint */}
+             <div className="flex items-center justify-between w-full pb-2.5 mb-1.5 border-b border-slate-100 dark:border-slate-700/60">
+               <div className="flex items-center gap-2.5">
+                 <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                   <Users size={16} />
+                 </div>
+                 <div>
+                   <h5 className={`text-xs lg:text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                     {lang === 'bn' ? 'আজকের সার্বিক হাজিরা' : "Today's Attendance"}
+                   </h5>
+                   <p className="text-[9px] lg:text-[10px] font-bold text-slate-400">
+                     {lang === 'bn' ? 'ক্লিক করে ক্লাসভিত্তিক হাজিরা দিন' : 'Click to manage attendance'}
+                   </p>
+                 </div>
+               </div>
+               <span className={`text-[10px] lg:text-[11px] font-black px-2.5 py-1 rounded-xl transition-colors ${
+                 madrasah?.theme === 'dark' 
+                   ? 'bg-slate-700 text-blue-400 group-hover:bg-blue-600 group-hover:text-white' 
+                   : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+               }`}>
+                 {lang === 'bn' ? 'হাজিরা শিট →' : 'Sheet →'}
+               </span>
              </div>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'আজকের হাজিরা' : "Today's Attendance"}</p>
+
+             {/* 4 Responsive Attendance Metrics */}
+             <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-2.5">
+                {/* 1. Present */}
+                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/50 group-hover:border-emerald-300 transition-colors">
+                   <span className="text-[10px] lg:text-[11px] font-black text-emerald-800 dark:text-emerald-300 font-noto mb-0.5">
+                     {lang === 'bn' ? 'উপস্থিত' : 'Present'}
+                   </span>
+                   <span className="text-base lg:text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                     {loadingStats ? '...' : stats.attendanceToday}
+                   </span>
+                </div>
+
+                {/* 2. Absent */}
+                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200/70 dark:border-rose-800/50 group-hover:border-rose-300 transition-colors">
+                   <span className="text-[10px] lg:text-[11px] font-black text-rose-800 dark:text-rose-300 font-noto mb-0.5">
+                     {lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}
+                   </span>
+                   <span className="text-base lg:text-xl font-black text-rose-700 dark:text-rose-300 font-mono">
+                     {loadingStats ? '...' : stats.attendanceTodayAbsents}
+                   </span>
+                </div>
+
+                {/* 3. Leave */}
+                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/50 group-hover:border-indigo-300 transition-colors">
+                   <span className="text-[10px] lg:text-[11px] font-black text-indigo-800 dark:text-indigo-300 font-noto mb-0.5">
+                     {lang === 'bn' ? 'ছুটি' : 'Leave'}
+                   </span>
+                   <span className="text-base lg:text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
+                     {loadingStats ? '...' : stats.attendanceTodayLeaves}
+                   </span>
+                </div>
+
+                {/* 4. Pending */}
+                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/50 group-hover:border-amber-300 transition-colors">
+                   <span className="text-[10px] lg:text-[11px] font-black text-amber-800 dark:text-amber-300 font-noto mb-0.5">
+                     {lang === 'bn' ? 'হাজিরা বাকি' : 'Pending'}
+                   </span>
+                   <span className="text-base lg:text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
+                     {loadingStats ? '...' : `${stats.pendingAttendanceClasses} টি`}
+                   </span>
+                </div>
+             </div>
           </button>
         )}
         {canManageAccounting && canViewReports && modules.modules.accounting && (

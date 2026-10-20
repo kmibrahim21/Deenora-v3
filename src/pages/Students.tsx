@@ -10,6 +10,7 @@ import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { extractStudentExtraFields } from 'utils/studentExtraFields';
+import { isValidUUID } from 'utils/validation';
 import { useVoiceCall } from '../context/CallContext';
 
 interface StudentsProps {
@@ -36,6 +37,7 @@ interface StudentsProps {
 const PAGE_SIZE = 50;
 
 const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToVoiceBroadcast, selectedYear, activeYear, readOnly = false }) => {
+  const effectiveInstitutionId = institutionId || madrasah?.id;
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -81,18 +83,18 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   // Fetch all classes for sorting serials
   const fetchAllClassesForReg = useCallback(async () => {
-    if (!institutionId) return;
+    if (!effectiveInstitutionId) return;
     try {
       const { data } = await supabase
         .from('classes')
         .select('id, class_name, sort_order')
-        .eq('institution_id', institutionId)
+        .eq('institution_id', effectiveInstitutionId)
         .order('sort_order', { ascending: true });
       if (data) setClassListForReg(data);
     } catch (err) {
       console.error('Error fetching classes:', err);
     }
-  }, [institutionId]);
+  }, [effectiveInstitutionId]);
 
   useEffect(() => {
     if (showRegNoModal) {
@@ -137,7 +139,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   // Bulk Generate Execution
   const handleBulkGenerateRegNo = async () => {
-    if (!institutionId) return;
+    if (!effectiveInstitutionId) return;
     setIsProcessingRegNo(true);
     try {
       let targetClasses = classListForReg;
@@ -145,7 +147,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         const { data: clsData } = await supabase
           .from('classes')
           .select('id, class_name, sort_order')
-          .eq('institution_id', institutionId)
+          .eq('institution_id', effectiveInstitutionId)
           .order('sort_order', { ascending: true });
         targetClasses = clsData || [];
       }
@@ -164,7 +166,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       const { data: targetStudents, error: fetchErr } = await supabase
         .from('students')
         .select('id, class_id, roll, student_name')
-        .eq('institution_id', institutionId)
+        .eq('institution_id', effectiveInstitutionId)
         .in('class_id', classIds)
         .order('roll', { ascending: true });
 
@@ -221,14 +223,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
               .from('students')
               .update({ registration_number: u.registration_number })
               .eq('id', u.id)
-              .eq('institution_id', institutionId)
+              .eq('institution_id', effectiveInstitutionId)
           )
         );
         const firstErr = results.find(r => r.error)?.error;
         if (firstErr) throw firstErr;
       }
 
-      requestManager.invalidatePattern(`students:${institutionId}`);
+      requestManager.invalidatePattern(`students:${effectiveInstitutionId}`);
       triggerRefresh();
       setShowRegNoModal(false);
 
@@ -255,10 +257,10 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   // Bulk Clear Execution
   const handleBulkClearRegNo = async () => {
-    if (!institutionId) return;
+    if (!effectiveInstitutionId) return;
     setIsProcessingRegNo(true);
     try {
-      let query = supabase.from('students').select('id').eq('institution_id', institutionId);
+      let query = supabase.from('students').select('id').eq('institution_id', effectiveInstitutionId);
       if (regScope === 'current') {
         query = query.eq('class_id', selectedClass.id);
       }
@@ -291,14 +293,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
               .from('students')
               .update({ registration_number: null })
               .eq('id', u.id)
-              .eq('institution_id', institutionId)
+              .eq('institution_id', effectiveInstitutionId)
           )
         );
         const firstErr = results.find(r => r.error)?.error;
         if (firstErr) throw firstErr;
       }
 
-      requestManager.invalidatePattern(`students:${institutionId}`);
+      requestManager.invalidatePattern(`students:${effectiveInstitutionId}`);
       triggerRefresh();
       setShowClearConfirm(false);
       setShowRegNoModal(false);
@@ -359,20 +361,20 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         name: profile?.full_name || profile?.name || madrasah?.name || 'মাদ্রাসা কর্তৃপক্ষ',
         role: profile?.role || 'teacher',
       },
-      institutionId || madrasah?.id
+      effectiveInstitutionId || madrasah?.id
     );
-  }, [startCall, selectedClass, madrasah, profile, institutionId, isLiveChatEnabled, lang]);
+  }, [startCall, selectedClass, madrasah, profile, effectiveInstitutionId, isLiveChatEnabled, lang]);
 
   // Fetch Templates (Cached)
   const fetchTemplates = useCallback(async () => {
-    if (!institutionId) return;
+    if (!effectiveInstitutionId) return;
     const { data } = await requestManager.cachedFetch(
       'sms_templates', 
-      (q) => q.select('id, title, body').eq('institution_id', institutionId),
-      `templates:${institutionId}`
+      (q) => q.select('id, title, body').eq('institution_id', effectiveInstitutionId),
+      `templates:${effectiveInstitutionId}`
     );
     if (data) setTemplates(data);
-  }, [institutionId]);
+  }, [effectiveInstitutionId]);
 
   // Paginated Fetching
   const activeYearId = useMemo(() => {
@@ -389,7 +391,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   }, [selectedYear, activeYear, madrasah]);
 
   const fetchStudents = useCallback(async (reset = false) => {
-    if (!institutionId) return;
+    if (!effectiveInstitutionId) return;
     if (reset) { setLoading(true); setPage(0); } else { setLoadingMore(true); }
 
     const currentPage = reset ? 0 : page;
@@ -412,14 +414,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         'students',
         (q) => {
           let query = q.select(selectFields)
-            .eq('institution_id', institutionId)
+            .eq('institution_id', effectiveInstitutionId)
             .eq('class_id', selectedClass.id)
             .order('roll', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true })
             .range(from, to);
 
-          if (activeYearId) {
-            query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          if (readOnly && selectedYear?.id && isValidUUID(selectedYear.id)) {
+            query = query.eq('academic_year_id', selectedYear.id);
           }
 
           if (!showInactive && (window as any)._hasIsActive !== false) {
@@ -531,7 +533,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [institutionId, selectedClass.id, page, searchQuery, activeYearId]);
+  }, [effectiveInstitutionId, selectedClass.id, page, searchQuery, activeYearId]);
 
   useEffect(() => {
     // Clear any leftover old student cache patterns from previous selective column runs
@@ -545,7 +547,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   useEffect(() => {
     fetchTemplates();
-  }, [institutionId, fetchTemplates]);
+  }, [effectiveInstitutionId, fetchTemplates]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === students.length) {
@@ -557,7 +559,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   const handlePremiumSMS = async () => {
     if (isSendingRef.current) return;
-    if (!selectedTemplate || selectedIds.size === 0 || !institutionId) return;
+    if (!selectedTemplate || selectedIds.size === 0 || !effectiveInstitutionId) return;
     isSendingRef.current = true;
     setSending(true);
     try {
@@ -568,7 +570,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         return;
       }
 
-      await smsApi.sendBulk(institutionId, selectedStudents, selectedTemplate.body);
+      await smsApi.sendBulk(effectiveInstitutionId, selectedStudents, selectedTemplate.body);
       setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: t('sms_success', lang) });
       setIsSelectionMode(false);
       setSelectedIds(new Set());

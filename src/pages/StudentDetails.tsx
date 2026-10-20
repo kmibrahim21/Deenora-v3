@@ -83,6 +83,7 @@ const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Pr
 };
 
 const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEdit, onBack, lang, readOnly, institutionId, triggerRefresh, role, profile, onStudentUpdate }) => {
+  const effectiveInstitutionId = institutionId || madrasah?.id;
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -133,7 +134,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         role: role || 'teacher',
         institutionName: madrasah?.name || '',
       },
-      institutionId || madrasah?.id
+      effectiveInstitutionId || madrasah?.id
     );
   };
   
@@ -309,11 +310,11 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
 
       requestManager.invalidatePattern('fetch:students:');
       
-      if (institutionId) {
-        const cached = await CacheService.getCachedData('students', institutionId);
+      if (effectiveInstitutionId) {
+        const cached = await CacheService.getCachedData('students', effectiveInstitutionId);
         if (Array.isArray(cached)) {
           const updated = cached.map((s: any) => s.id === student.id ? { ...s, photo_url: publicUrl } : s);
-          await CacheService.cacheData('students', institutionId, updated);
+          await CacheService.cacheData('students', effectiveInstitutionId, updated);
         }
       }
 
@@ -381,11 +382,11 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
 
       requestManager.invalidatePattern('fetch:students:');
 
-      if (institutionId) {
-        const cached = await CacheService.getCachedData('students', institutionId);
+      if (effectiveInstitutionId) {
+        const cached = await CacheService.getCachedData('students', effectiveInstitutionId);
         if (Array.isArray(cached)) {
           const updated = cached.map((s: any) => s.id === student.id ? { ...s, photo_url: null } : s);
-          await CacheService.cacheData('students', institutionId, updated);
+          await CacheService.cacheData('students', effectiveInstitutionId, updated);
         }
       }
 

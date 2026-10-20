@@ -1,5 +1,14 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  User, 
+  signOut 
+} from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Reuse existing app or initialize if not present
@@ -8,6 +17,9 @@ export const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.file');
+provider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 const ACCESS_TOKEN_KEY = 'deenora_gdrive_access_token';
 const TOKEN_EXPIRY_KEY = 'deenora_gdrive_token_expiry';
@@ -55,11 +67,81 @@ export function decryptData(base64: string): string {
 }
 
 /**
- * Initialize OAuth Auth state listener.
+ * Friendly error message parser for Google/Firebase authentication
+ */
+export function getFriendlyAuthErrorMessage(err: any, lang: 'bn' | 'en' = 'bn'): { message: string; isPopupBlockedOrClosed: boolean } {
+  const code = err?.code || '';
+  const isPopupBlockedOrClosed = 
+    code === 'auth/popup-closed-by-user' || 
+    code === 'auth/popup-blocked' || 
+    code === 'auth/cancelled-popup-request';
+  
+  if (code === 'auth/popup-closed-by-user') {
+    return {
+      message: lang === 'bn'
+        ? 'গুগল সাইন-ইন পপআপ উইন্ডোটি বন্ধ করা হয়েছে বা ব্রাউজার কর্তৃক আটকে দেওয়া হয়েছে। আপনি সরাসরি "রিডাইরেক্ট করে সাইন ইন করুন" বোতাম ব্যবহার করতে পারেন।'
+        : 'Google Sign-In popup was closed or blocked. You can use "Sign in with Redirect" instead.',
+      isPopupBlockedOrClosed: true
+    };
+  }
+  if (code === 'auth/popup-blocked') {
+    return {
+      message: lang === 'bn'
+        ? 'আপনার ব্রাউজার গুগল সাইন-ইন পপআপ ব্লক করেছে। অনুগ্রহ করে ব্রাউজার অ্যাড্রেস বার থেকে পপআপ এলাউ (Allow) করুন অথবা "রিডাইরেক্ট করে সাইন ইন করুন" বোতাম ব্যবহার করুন।'
+        : 'Your browser blocked the Google Sign-In popup. Please allow popups or use "Sign in with Redirect".',
+      isPopupBlockedOrClosed: true
+    };
+  }
+  if (code === 'auth/cancelled-popup-request') {
+    return {
+      message: lang === 'bn'
+        ? 'পূর্বের সাইন-ইন অনুরোধটি বাতিল হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।'
+        : 'Previous sign-in request was cancelled. Please try again.',
+      isPopupBlockedOrClosed: true
+    };
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return {
+      message: lang === 'bn'
+        ? 'এই ওয়েবসাইট ডোমেইনটি Firebase Auth Authorized Domains তালিকায় অনুমোদিত নয়।'
+        : 'This domain is not authorized in Firebase Auth.',
+      isPopupBlockedOrClosed: false
+    };
+  }
+  return {
+    message: err?.message || (lang === 'bn' ? 'গুগল অ্যাকাউন্ট কানেক্ট করতে ব্যর্থ হয়েছে।' : 'Failed to connect Google account.'),
+    isPopupBlockedOrClosed
+  };
+}
+
+/**
+ * Initialize OAuth Auth state listener and resolve any pending redirect sign-in.
  */
 export const initAuth = (
   onAuthChange?: (user: User | null, token: string | null) => void
 ) => {
+  // Check for redirect result on page load / return from Google redirect
+  getRedirectResult(auth)
+    .then((result) => {
+      if (result) {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential?.accessToken) {
+          cachedAccessToken = credential.accessToken;
+          try {
+            localStorage.setItem(ACCESS_TOKEN_KEY, credential.accessToken);
+            const expiryTime = Date.now() + 55 * 60 * 1000;
+            localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
+          } catch (e) {
+            console.error('Error saving access token to localStorage:', e);
+          }
+          if (onAuthChange) onAuthChange(result.user, credential.accessToken);
+        }
+      }
+    })
+    .catch((err) => {
+      console.warn('Google getRedirectResult error:', err);
+    });
+
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
       let token = cachedAccessToken;
@@ -84,7 +166,7 @@ export const initAuth = (
 };
 
 /**
- * Authenticate with Google Drive scopes.
+ * Authenticate with Google Drive scopes via Popup.
  */
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
@@ -112,6 +194,19 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     throw error;
   } finally {
     isSigningIn = false;
+  }
+};
+
+/**
+ * Authenticate with Google Drive scopes via Full Page Redirect.
+ * Recommended for mobile browsers, PWAs, or when popups are blocked/closed.
+ */
+export const googleSignInRedirect = async (): Promise<void> => {
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (error: any) {
+    console.error('Google sign-in redirect error:', error);
+    throw error;
   }
 };
 

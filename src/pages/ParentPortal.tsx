@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { 
+  Paperclip,
+  Eye,
+  X,
   User, 
   Calendar, 
   CreditCard, 
@@ -188,6 +191,21 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return null;
   }, [studentId]);
 
+  const [readDiaryIds, setReadDiaryIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('parent_read_diaries') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('parent_read_diaries', JSON.stringify(readDiaryIds));
+    } catch {}
+  }, [readDiaryIds]);
+
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [student, setStudent] = useState<any>(() => initialCache?.student || null);
   const [children, setChildren] = useState<any[]>(() => initialCache?.children || []);
   const [switchingChildId, setSwitchingChildId] = useState<string | null>(null);
@@ -2991,6 +3009,64 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 {parsed.subjects && Array.isArray(parsed.subjects) && parsed.subjects.length > 0 && (
                                   <SyllabusAccordion subjects={parsed.subjects} />
                                 )}
+
+                                {parsed.attachments && Array.isArray(parsed.attachments) && parsed.attachments.length > 0 && (
+                                  <div className="space-y-2 pt-2.5 border-t border-slate-100">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                      <Paperclip size={12} className="text-blue-500" /> সংযুক্ত ফাইল / ছবি:
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {parsed.attachments.map((att: any, attIdx: number) => (
+                                        att.type === 'pdf' ? (
+                                          <a
+                                            key={attIdx}
+                                            href={att.url}
+                                            download={att.name}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center gap-2 p-2.5 bg-red-50 hover:bg-red-100 border border-red-100 rounded-xl transition-all text-xs font-bold text-red-700"
+                                          >
+                                            <FileText size={18} className="text-red-500 shrink-0" />
+                                            <span className="truncate flex-1">{att.name}</span>
+                                            <Download size={14} className="shrink-0 text-red-400" />
+                                          </a>
+                                        ) : (
+                                          <div
+                                            key={attIdx}
+                                            onClick={() => setZoomedImage(att.url)}
+                                            className="relative group rounded-xl overflow-hidden border border-slate-200 cursor-pointer aspect-video bg-slate-100"
+                                          >
+                                            <img src={att.url} alt={att.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold">
+                                              <Eye size={16} />
+                                            </div>
+                                          </div>
+                                        )
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {activeNoticeTab === 'diary' && (
+                                  <div className="pt-2.5 flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReadDiaryIds(prev =>
+                                          prev.includes(notice.id) ? prev.filter(id => id !== notice.id) : [...prev, notice.id]
+                                        );
+                                      }}
+                                      className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                        readDiaryIds.includes(notice.id)
+                                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-xs'
+                                          : 'bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200/80'
+                                      }`}
+                                    >
+                                      <CheckCircle2 size={15} className={readDiaryIds.includes(notice.id) ? 'text-emerald-600' : 'text-slate-400'} />
+                                      <span>{readDiaryIds.includes(notice.id) ? 'দেখেছি (অভিভাবকের স্বাক্ষর)' : 'পড়া দেখেছি মার্ক করুন'}</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           } catch (e) {
@@ -3112,6 +3188,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           })}
         </nav>
       </div>
+      )}
+      {zoomedImage && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
+          <button
+            type="button"
+            onClick={() => setZoomedImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 text-white rounded-full flex items-center justify-center transition-colors"
+          >
+            <X size={20} />
+          </button>
+          <img src={zoomedImage} alt="Attachment" className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl" />
+        </div>
       )}
       </div>
       </div>

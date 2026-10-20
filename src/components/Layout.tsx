@@ -8,6 +8,7 @@ import { hardReload } from 'utils/reloadUtils';
 import { hasAdmissionFormAccess } from 'utils/packageUtils';
 import { useOfflineStatus } from '../hooks/useOffline';
 import MultiCalendarHeader from './MultiCalendarHeader';
+import { BranchSwitcher } from './branch/BranchSwitcher';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,6 +21,8 @@ interface LayoutProps {
   selectedYear?: any;
   isHistoricalMode?: boolean;
   onReturnToCurrentYear?: () => void;
+  activeBranchId?: string | null;
+  onSwitchBranch?: (branchId: string) => void;
 }
 
 interface AppNotification {
@@ -30,7 +33,20 @@ interface AppNotification {
   time: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, madrasah, profile, isMobileChatActive = false, selectedYear, isHistoricalMode = false, onReturnToCurrentYear }) => {
+const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  currentView, 
+  setView, 
+  lang, 
+  madrasah, 
+  profile, 
+  isMobileChatActive = false, 
+  selectedYear, 
+  isHistoricalMode = false, 
+  onReturnToCurrentYear,
+  activeBranchId,
+  onSwitchBranch
+}) => {
   const isOnline = useOfflineStatus();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -179,9 +195,21 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             <h1 className={`text-lg font-black leading-tight tracking-tight font-noto line-clamp-3 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
               {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
             </h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
-              {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
-            </p>
+            {!isSystemStaff && madrasah && onSwitchBranch ? (
+              <div className="mt-1">
+                <BranchSwitcher
+                  madrasah={madrasah}
+                  lang={lang}
+                  activeBranchId={activeBranchId || null}
+                  onSwitchBranch={onSwitchBranch}
+                  compact
+                />
+              </div>
+            ) : (
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
+                {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -324,10 +352,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 ${madrasah?.theme === 'dark' ? 'border-slate-900' : 'border-white'} ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className={`text-[16px] font-black leading-[1.2] tracking-tight font-noto line-clamp-3 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
-                {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
+              <h1 className={`text-[15px] font-black leading-[1.2] tracking-tight font-noto truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
+                {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || 'Deenora')}
               </h1>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] font-noto mt-0.5">
                 {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
               </p>
             </div>
@@ -344,9 +372,11 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         {/* Desktop Top Bar */}
         {role !== 'parent' && (
           <header className={`hidden md:flex flex-none h-20 px-8 items-center justify-between relative z-10 border-b ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md`}>
-            <div className="flex-1">
-             {/* Optional: Add breadcrumbs or page title here in the future */}
-          </div>
+            <div className="flex-1 flex items-center gap-4">
+              <h1 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
+                {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || 'Deenora')}
+              </h1>
+            </div>
           <div className="flex items-center gap-4">
             <button onClick={hardReload} className="flex items-center gap-2 px-4 py-2.5 rounded-2xl active:scale-95 transition-all shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40 bg-gradient-to-br from-[#4facfe] to-[#0082ff] text-white hover:brightness-110">
               <RefreshCw size={18} strokeWidth={2.5} />

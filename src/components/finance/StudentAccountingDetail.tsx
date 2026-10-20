@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, LedgerEntry, Fee } from 'types';
-import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock, Trash2, User, ChevronRight, Check, Printer } from 'lucide-react';
+import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock, Trash2, User, ChevronRight, Check, Printer, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CacheService } from '../../services/cacheService';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
@@ -10,6 +10,15 @@ import { clearGlobalSchoolFeeCache } from './SchoolFeeEngine';
 import { clearGlobalQawmiFeeCache } from './QawmiFeeEngine';
 import { generateFeeReceiptPDF_Universal } from '../../utils/pdfGenerator';
 import { ThermalReceiptPreviewModal } from './ThermalReceiptPreviewModal';
+import {
+  getInstitutionFeeCategories,
+  getCategoryForStructure,
+  FREQUENCY_LABELS,
+  isStructureApplicableForMonth,
+  getStructureExamMonths,
+  MONTH_DEFINITIONS
+} from '../../utils/feeCategoryHelper';
+import { CompactMonthPicker } from './CompactMonthPicker';
 
 interface StudentAccountingDetailProps {
   student: any;
@@ -84,27 +93,36 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       const actualPaid = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
       const discountAmt = monthFees.reduce((sum, f) => sum + (Number(f.discount) || 0), 0);
       
-      const monthPayable = structures.reduce((sum, s) => {
+      const yearStart = madrasah.config_json?.academic_year_start;
+      const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
+      const isBeforeAccStart = accStartDate && monthStr < accStartDate.slice(0, 7);
+
+      const applicableStructures = structures.filter(s => {
         const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
         const isEnabled = setting ? setting.is_enabled : true;
-        const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
-        const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
-        
-        const yearStart = madrasah.config_json?.academic_year_start;
-        const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
-        
-        // Respect individual student accounting start date
-        const isBeforeAccStart = accStartDate && monthStr < accStartDate.slice(0, 7);
-        
+        if (!isEnabled) return false;
+
+        // Check if structure is applicable for this specific month (exam months, start_date, due_date)
+        const isApplicable = isStructureApplicableForMonth(s, monthStr, madrasah);
+        if (!isApplicable) return false;
+
+        if (isBeforeYearStart || isBeforeAccStart) return false;
+
+        return true;
+      });
+
+      const monthPayable = applicableStructures.reduce((sum, s) => {
+        const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
         const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
-        return (isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart) ? sum + amountToCharge : sum;
+        return sum + amountToCharge;
       }, 0);
       
       return { 
         due: Math.max(0, monthPayable - actualPaid - discountAmt), 
         payable: monthPayable, 
         paid: actualPaid,
-        discount: discountAmt
+        discount: discountAmt,
+        applicableStructures
       };
   };
 
@@ -163,7 +181,9 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
 
         let totalCategories = structures.filter(s => {
             const set = studentFeeSettings.find(se => se.fee_structure_id === s.id);
-            return set ? set.is_enabled : true;
+            const isEnabled = set ? set.is_enabled : true;
+            if (!isEnabled) return false;
+            return sortedMonths.some(m => isStructureApplicableForMonth(s, m, madrasah));
         }).map(s => s.fee_name).join(', ');
 
         const createdFeeIds = [];
@@ -231,51 +251,55 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
             finalDescription += createdFeeIds.map(id => ` || FEE_ID: ${id}`).join('');
         }
 
-        await bgInsertLedger(madrasah.id, totalPaid, finalDescription, activeYearId);
-
         setShowMultiCollect(false);
-        await requestManager.invalidatePattern(`fees:${madrasah.id}`);
-      await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
-      await requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`);
-      await requestManager.invalidatePattern(`stats:${madrasah.id}`);
-      await requestManager.invalidatePattern(`dashboard_`);
-      if (student?.student_id) {
-          await requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
-          await requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
-      }
-      await requestManager.invalidatePattern(`fetch:ledger:`);
-      
-      clearGlobalSchoolFeeCache();
+
+        const ledgerPromise = bgInsertLedger(madrasah.id, totalPaid, finalDescription, activeYearId);
+        const sId = student?.student_id;
+
+        const cachePromise = Promise.all([
+          requestManager.invalidatePattern(`fees:${madrasah.id}`),
+          requestManager.invalidatePattern(`all_fees:${madrasah.id}`),
+          requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`),
+          requestManager.invalidatePattern(`stats:${madrasah.id}`),
+          requestManager.invalidatePattern(`dashboard_`),
+          sId ? requestManager.invalidatePattern(`accounting-fees-${sId}`) : Promise.resolve(),
+          sId ? requestManager.invalidatePattern(`accounting-history-${sId}`) : Promise.resolve(),
+          requestManager.invalidatePattern(`fetch:ledger:`)
+        ]);
+        
+        clearGlobalSchoolFeeCache();
         clearGlobalQawmiFeeCache();
         
-        // Auto Send SMS
+        // Auto Send SMS in background without blocking UI
         if (config?.features?.fee_collection_sms) {
-            try {
-                const { smsApi: smsApiModule } = await import('../../supabase');
-                const templates = config?.features?.sms_templates || {};
-                let template = templates.fee_collection || (lang === 'bn' 
-                    ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
-                    : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
-                
-                const currentDue = Math.max(0, Number(student.balance_due || 0) - totalPaid - totalDisc);
-                
-                let collectMsg = template
-                    .replace(/\{student_name\}/g, student.student_name || '')
-                    .replace(/\{father_name\}/g, student.father_name || '')
-                    .replace(/\{class\}/g, classNameToSave)
-                    .replace(/\{roll\}/g, roll)
-                    .replace(/\{month\}/g, monthsNames)
-                    .replace(/\{paid_amount\}/g, totalPaid.toString())
-                    .replace(/\{amount\}/g, totalPaid.toString())
-                    .replace(/\{due_amount\}/g, currentDue.toString());
-                
-                await smsApiModule.sendBulk(madrasah.id, [student], collectMsg);
-            } catch (smsError: any) {
-                console.error("Multi-Fee SMS error: ", smsError);
-                alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${smsError.message}` : `Auto SMS failed: ${smsError.message}`);
-            }
+            (async () => {
+                try {
+                    const { smsApi: smsApiModule } = await import('../../supabase');
+                    const templates = config?.features?.sms_templates || {};
+                    let template = templates.fee_collection || (lang === 'bn' 
+                        ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
+                        : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
+                    
+                    const currentDue = Math.max(0, Number(student.balance_due || 0) - totalPaid - totalDisc);
+                    
+                    let collectMsg = template
+                        .replace(/\{student_name\}/g, student.student_name || '')
+                        .replace(/\{father_name\}/g, student.father_name || '')
+                        .replace(/\{class\}/g, classNameToSave)
+                        .replace(/\{roll\}/g, roll)
+                        .replace(/\{month\}/g, monthsNames)
+                        .replace(/\{paid_amount\}/g, totalPaid.toString())
+                        .replace(/\{amount\}/g, totalPaid.toString())
+                        .replace(/\{due_amount\}/g, currentDue.toString());
+                    
+                    await smsApiModule.sendBulk(madrasah.id, [student], collectMsg);
+                } catch (smsError: any) {
+                    console.error("Multi-Fee SMS background error: ", smsError);
+                }
+            })();
         }
 
+        await Promise.all([ledgerPromise, cachePromise]);
         fetchStudentAccountingData();
     } catch (err: any) {
         setErrorMulti(err.message);
@@ -375,16 +399,24 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       // Parse fee items categories
       const categoriesMatch = description.split(' - ')[0];
       const categories = categoriesMatch ? categoriesMatch : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+      const rawCategories = categories.split(',').map(s => s.trim()).filter(Boolean);
+      const totalAmountWithDiscount = entry.amount + discount;
+
+      const feeItems = rawCategories.length > 1
+        ? rawCategories.map((c, i) => ({
+            name: c,
+            amount: i === 0 ? totalAmountWithDiscount : 0,
+            category_name: c
+          }))
+        : [{ name: categories, amount: totalAmountWithDiscount, category_name: categories }];
 
       const receiptStudent = {
         ...student,
-        total_payable: entry.amount + discount,
+        total_payable: totalAmountWithDiscount,
         total_paid: entry.amount,
         balance_due: 0,
         discount: discount,
-        fee_items: [
-           { name: categories, amount: entry.amount + discount }
-        ]
+        fee_items: feeItems
       };
       
       await generateFeeReceiptPDF_Universal(
@@ -861,7 +893,14 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     >
                       <div className="flex flex-col h-full gap-3">
                         <div className="flex items-center justify-between gap-2">
-                          <p className={`text-[11px] font-black tracking-tight ${status === 'paid' ? 'text-emerald-600' : status === 'partial' ? 'text-amber-600' : 'text-slate-400'}`}>{monthName}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className={`text-[11px] font-black tracking-tight ${status === 'paid' ? 'text-emerald-600' : status === 'partial' ? 'text-amber-600' : 'text-slate-400'}`}>{monthName}</p>
+                            {monthDetails.applicableStructures?.some(s => s.fee_name?.includes('পরীক্ষা') || (madrasah.config_json as any)?.fee_structure_exam_months?.[s.id]) && (
+                              <span className="text-[7.5px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
+                                {lang === 'bn' ? 'পরীক্ষা ফি' : 'Exam'}
+                              </span>
+                            )}
+                          </div>
                           {discountAmt > 0 && (
                             <div className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg border animate-pulse ${isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                {lang === 'bn' ? 'ছাড়' : 'Discount'} ৳{discountAmt?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}
@@ -904,21 +943,14 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                    {lang === 'bn' ? 'হিসাব শুরুর তারিখ' : 'Accounting Start Date'}
                 </h3>
               </div>
-              <div className={`flex items-center gap-4 p-5 rounded-2xl border transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-blue-50/30 border-blue-100/50'}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                  <Calendar size={18} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'যেই মাস থেকে হিসাব শুরু হবে' : 'The month from which accounting starts'}</p>
-                  <input 
-                    type="month" 
-                    value={accStartDate || (madrasah.config_json?.academic_year_start?.slice(0, 7) || new Date().toISOString().slice(0, 7))}
-                    onChange={(e) => handleSaveAccStartDate(e.target.value)}
-                    disabled={isUpdatingAccStart}
-                    className={`w-full bg-transparent border-none p-0 focus:ring-0 outline-none cursor-pointer text-sm font-black ${isDark ? 'text-slate-200' : 'text-blue-600'}`}
-                  />
-                </div>
-                {isUpdatingAccStart && <Loader2 size={16} className="animate-spin text-blue-500" />}
+              <div className="p-1">
+                <CompactMonthPicker
+                  label={lang === 'bn' ? 'যেই মাস থেকে হিসাব শুরু হবে' : 'The month from which accounting starts'}
+                  value={accStartDate || (madrasah.config_json?.academic_year_start?.slice(0, 7) || new Date().toISOString().slice(0, 7))}
+                  onChange={(val) => handleSaveAccStartDate(val)}
+                  lang={lang}
+                  isDark={isDark}
+                />
               </div>
               <p className="mt-3 text-[9px] font-medium text-slate-400 leading-relaxed font-noto italic">
                 *{lang === 'bn' ? ' এই তারিখের পূর্বের কোনো ফি বকেয়া হিসেবে গণ্য হবে না।' : ' Any fees before this date will not be counted as due.'}
@@ -944,16 +976,52 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     const isExpired = fee.due_date && fee.due_date < today;
                     const customAmount = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? setting.custom_amount : fee.amount;
                     
+                    const feeCategories = getInstitutionFeeCategories(madrasah);
+                    const cat = getCategoryForStructure(fee, feeCategories, madrasah);
+                    const freqInfo = FREQUENCY_LABELS[cat.frequency] || FREQUENCY_LABELS.custom;
+                    
                     return (
                       <div key={fee.id} className={`flex flex-col gap-4 p-5 rounded-[2rem] border transition-all ${isEnabled && !isExpired ? (isDark ? 'bg-blue-500/5 border-blue-500/10' : 'bg-blue-50/30 border-blue-100/50') : (isDark ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-50/50 border-slate-100')} ${isExpired ? 'opacity-50 grayscale-[0.5]' : ''}`}>
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex flex-col min-w-0 gap-1">
                               <div className="flex items-center flex-wrap gap-2">
                                 <span className={`text-xs font-black tracking-tight ${isEnabled && !isExpired ? (isDark ? 'text-blue-300' : 'text-[#1E3A8A]') : 'text-slate-400'}`}>{fee.fee_name}</span>
+                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                                  cat.color === 'emerald'
+                                    ? (isDark ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+                                    : cat.color === 'purple'
+                                    ? (isDark ? 'bg-purple-950/60 border-purple-800 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700')
+                                    : cat.color === 'amber'
+                                    ? (isDark ? 'bg-amber-950/60 border-amber-800 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700')
+                                    : (isDark ? 'bg-blue-950/60 border-blue-800 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700')
+                                }`}>
+                                  <Tag size={9} />
+                                  {cat.name}
+                                </span>
                                 {isExpired && <span className="text-[7px] font-black bg-rose-500/10 text-rose-500 border border-rose-500/20 px-1.5 py-0.5 rounded-lg uppercase tracking-widest">Expired</span>}
                               </div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center flex-wrap gap-2">
                                 <span className="text-[9px] font-black text-slate-400/80 uppercase tracking-widest">{lang === 'bn' ? 'ডিফল্ট' : 'Default'}: ৳{fee.amount?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span>
+                                <span className="text-[9px] text-slate-400 font-bold">• {lang === 'bn' ? freqInfo.badgeBn : freqInfo.en}</span>
+                                {(() => {
+                                  const examMonths = getStructureExamMonths(fee.id, madrasah);
+                                  if (examMonths.length > 0) {
+                                    const monthNames = examMonths.map(m => MONTH_DEFINITIONS.find(d => d.value === m)?.nameBn).filter(Boolean).join(', ');
+                                    return (
+                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                        {lang === 'bn' ? `পরীক্ষার মাস: ${monthNames}` : `Exam: ${monthNames}`}
+                                      </span>
+                                    );
+                                  }
+                                  if (!fee.start_date && !fee.due_date) {
+                                    return (
+                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                        {lang === 'bn' ? 'উন্মুক্ত সময়সীমা' : 'No Date Limit'}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
                             
@@ -1165,6 +1233,11 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                       >
                                           <span className="text-[10px] font-black uppercase tracking-tighter">{monthName}</span>
                                           <span className={`text-[9px] font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>৳{due?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span>
+                                          {details.applicableStructures?.some(s => s.fee_name?.includes('পরীক্ষা') || (madrasah.config_json as any)?.fee_structure_exam_months?.[s.id]) && (
+                                            <span className={`text-[7px] font-black px-1 rounded ${isSelected ? 'bg-purple-500 text-white' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300'}`}>
+                                              {lang === 'bn' ? 'পরীক্ষাসহ' : 'Exam'}
+                                            </span>
+                                          )}
                                           {isSelected && (
                                             <div 
                                               className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center text-blue-600 shadow-md border-2 border-blue-600"

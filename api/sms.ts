@@ -15,22 +15,28 @@ export interface SmsProviderResult {
 const requestCache = new Map<string, number>();
 
 async function httpsGet(url: string, agent: https.Agent, timeoutMs = 15000): Promise<{ ok: boolean; text: string }> {
-  try {
-    const res = await fetch(url, { 
-      agent, 
-      signal: AbortSignal.timeout(timeoutMs) 
-    } as any);
-    const text = await res.text();
-    return {
-      ok: res.ok,
-      text: text
-    };
-  } catch (err: any) {
-    return {
-      ok: false,
-      text: err.name === 'TimeoutError' ? 'Request timeout' : (err.message || 'Network error')
-    };
-  }
+  return new Promise((resolve) => {
+    try {
+      const req = https.get(url, { agent }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          resolve({ ok: res.statusCode ? res.statusCode < 400 : false, text: data });
+        });
+      });
+
+      req.on('error', (err) => {
+        resolve({ ok: false, text: err.message });
+      });
+
+      req.setTimeout(timeoutMs, () => {
+        req.destroy();
+        resolve({ ok: false, text: 'Gateway Timeout' });
+      });
+    } catch (err: any) {
+      resolve({ ok: false, text: err.message });
+    }
+  });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -45,6 +51,156 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const agent = new https.Agent({
       rejectUnauthorized: false
     });
+
+    // 0. Check for get_history request
+    if (action === 'get_history') {
+      const targetInstId = institutionId || req.body.institutionId || req.query.institutionId;
+      if (!targetInstId) {
+        return res.status(400).json({ error: 'institutionId is required' });
+      }
+
+      const supabase = getSupabaseAdmin();
+      if (!supabase) {
+        return res.status(500).json({ error: 'Supabase admin not available' });
+      }
+
+      // Check if targetInstId is a branch or has a parent institution
+      const { data: targetInst } = await supabase
+        .from('institutions')
+        .select('id, config_json')
+        .eq('id', targetInstId)
+        .maybeSingle();
+
+      const parentId = (targetInst?.config_json as any)?.parent_institution_id;
+      const searchInstIds = parentId ? [targetInstId, parentId] : [targetInstId];
+
+      const [{ data: smsLogs, error: logErr }, { data: students }, { data: classes }, { data: teachers }] = await Promise.all([
+        supabase
+          .from('sms_logs')
+          .select('*')
+          .in('institution_id', searchInstIds)
+          .order('created_at', { ascending: false })
+          .limit(150),
+        supabase
+          .from('students')
+          .select('student_name, roll, guardian_phone, guardian_phone_2, class_id')
+          .in('institution_id', searchInstIds),
+        supabase
+          .from('classes')
+          .select('id, class_name')
+          .in('institution_id', searchInstIds),
+        supabase
+          .from('teachers')
+          .select('name, phone')
+          .in('institution_id', searchInstIds)
+      ]);
+
+      if (logErr) {
+        console.error('Error fetching sms_logs in API:', logErr);
+        return res.status(500).json({ error: logErr.message });
+      }
+
+      return res.status(200).json({
+        success: true,
+        smsLogs: smsLogs || [],
+        students: students || [],
+        classes: classes || [],
+        teachers: teachers || []
+      });
+    }
+
+    // 0.1 Check for get_templates request
+    if (action === 'get_templates') {
+      const targetInstId = institutionId || req.body.institutionId || req.query.institutionId;
+      if (!targetInstId) return res.status(400).json({ error: 'institutionId is required' });
+
+      const supabase = getSupabaseAdmin();
+      if (!supabase) return res.status(500).json({ error: 'Supabase admin not available' });
+
+      const { data, error } = await supabase
+        .from('sms_templates')
+        .select('*')
+        .eq('institution_id', targetInstId)
+        .order('created_at', { ascending: false });
+
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ success: true, templates: data || [] });
+    }
+
+    // 0.2 Check for save_template request
+    if (action === 'save_template') {
+      const { targetInstitutionId, id, title, body, systemEvent } = req.body;
+      if (!targetInstitutionId || !title || !body) {
+        return res.status(400).json({ error: 'targetInstitutionId, title, and body are required' });
+      }
+
+      const supabase = getSupabaseAdmin();
+      if (!supabase) return res.status(500).json({ error: 'Supabase admin not available' });
+
+      const cleanBody = String(body).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+      let resultData = null;
+      if (id) {
+        const { data, error } = await supabase
+          .from('sms_templates')
+          .update({ title, body: cleanBody })
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) return res.status(500).json({ error: error.message });
+        resultData = data;
+      } else {
+        const { data, error } = await supabase
+          .from('sms_templates')
+          .insert({
+            institution_id: targetInstitutionId,
+            title,
+            body: cleanBody
+          })
+          .select()
+          .single();
+        if (error) return res.status(500).json({ error: error.message });
+        resultData = data;
+      }
+
+      if (systemEvent) {
+        const { data: instData } = await supabase
+          .from('institutions')
+          .select('config_json')
+          .eq('id', targetInstitutionId)
+          .maybeSingle();
+
+        if (instData) {
+          const updatedConfig = {
+            ...(instData.config_json || {}),
+            features: {
+              ...((instData.config_json as any)?.features || {}),
+              sms_templates: {
+                ...((instData.config_json as any)?.features?.sms_templates || {}),
+                [systemEvent]: cleanBody
+              }
+            }
+          };
+          await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', targetInstitutionId);
+        }
+      }
+
+      return res.status(200).json({ success: true, message: 'টেমপ্লেট সফলভাবে সেভ হয়েছে!', template: resultData });
+    }
+
+    // 0.3 Check for delete_template request
+    if (action === 'delete_template') {
+      const { id } = req.body;
+      if (!id) return res.status(400).json({ error: 'id is required' });
+
+      const supabase = getSupabaseAdmin();
+      if (!supabase) return res.status(500).json({ error: 'Supabase admin not available' });
+
+      const { error } = await supabase.from('sms_templates').delete().eq('id', id);
+      if (error) return res.status(500).json({ error: error.message });
+
+      return res.status(200).json({ success: true, message: 'টেমপ্লেট মোছা হয়েছে!' });
+    }
 
     // 1. Check if this is a Routed Dispatch Request
     if (action === 'send_routed_sms' || (Array.isArray(messages) && messages.length > 0)) {
@@ -61,7 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
           automas: { masking_enabled: false, non_masking_enabled: true },
-          primary: { masking: 'reve', non_masking: 'reve' },
+          primary: { masking: 'reve', non_masking: 'automas' },
           masking_rate: 0.55,
           non_masking_rate: 0.35
         }
@@ -110,27 +266,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Provider configuration logic
       const config = sysSettings.sms_provider_config || defaults.sms_provider_config;
 
-      // Ensure API keys actually exist before considering them active
-      const hasReveKey = Boolean((instSettings.reve_api_key || sysSettings.reve_api_key) && (instSettings.reve_secret_key || sysSettings.reve_secret_key));
-      const hasAutomasKey = Boolean(instSettings.automas_api_key || sysSettings.automas_api_key);
+      // Determine requested type ('masking' or 'non_masking')
+      let finalType: 'masking' | 'non_masking' = 'non_masking';
+      if (smsType === 'masking') {
+        finalType = 'masking';
+      } else if (smsType === 'non_masking') {
+        finalType = 'non_masking';
+      } else {
+        // If smsType is 'unknown', use super admin configured default_type
+        finalType = (config.default_type === 'masking' ? 'masking' : 'non_masking');
+      }
 
-      const hasPersonalReveKey = Boolean(instSettings.reve_api_key?.trim() && instSettings.reve_secret_key?.trim());
+      // Check API keys
+      const hasReveKey = Boolean((instSettings.reve_api_key?.trim() || sysSettings.reve_api_key?.trim()) && (instSettings.reve_secret_key?.trim() || sysSettings.reve_secret_key?.trim()));
+      const hasAutomasKey = Boolean((instSettings.automas_api_key?.trim() || sysSettings.automas_api_key?.trim()));
 
-      let finalType: 'masking' | 'non_masking' = smsType === 'non_masking' ? 'non_masking' : 'masking';
       let primaryProvider: 'reve' | 'automas' = 'reve';
 
-      if (hasPersonalReveKey) {
-        finalType = 'masking';
+      // Get Super Admin primary provider for this specific type ('masking' or 'non_masking')
+      const configuredPrimary = config.primary?.[finalType] || (finalType === 'non_masking' ? 'automas' : 'reve');
+
+      if (configuredPrimary === 'automas' && hasAutomasKey) {
+        primaryProvider = 'automas';
+      } else if (configuredPrimary === 'reve' && hasReveKey) {
         primaryProvider = 'reve';
-      } else {
-        const configuredPrimary = config.primary?.[finalType] || config.primary?.masking || 'reve';
-        if (configuredPrimary === 'automas' && hasAutomasKey) {
-          primaryProvider = 'automas';
-        } else if (hasReveKey) {
-          primaryProvider = 'reve';
-        } else if (hasAutomasKey) {
-          primaryProvider = 'automas';
-        }
+      } else if (finalType === 'non_masking' && hasAutomasKey) {
+        primaryProvider = 'automas';
+      } else if (hasReveKey) {
+        primaryProvider = 'reve';
+      } else if (hasAutomasKey) {
+        primaryProvider = 'automas';
       }
 
       // Setup REVE send function
@@ -314,24 +479,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let normPhone = String(rawPhone).replace(/\D/g, '');
         if (normPhone.length === 10 && normPhone.startsWith('1')) normPhone = `0${normPhone}`;
-        const currentPhone = normPhone.startsWith('880') && normPhone.length === 13 ? normPhone.slice(2) : normPhone;
+        const msisdn = normPhone.startsWith('88') ? normPhone : `88${normPhone}`;
+
+        let sender = rawAutomasSenderId.trim();
+        if (sender.startsWith('0961')) sender = `88${sender}`;
+
         const isUnicode = /[^\x00-\x7F]/.test(item.text);
 
         try {
-          const payload: any = {
-            api_key: automasApiKey,
-            senderid: rawAutomasSenderId,
-            type: isUnicode ? 'unicode' : 'text',
-            scheduledDateTime: '',
-            msg: item.text,
-            contacts: currentPhone
-          };
-          if (isUnicode) payload.smsformat = 8;
+          const automasUrl = `https://api.automas.com.bd/smsapiv3?apikey=${encodeURIComponent(automasApiKey)}&sender=${encodeURIComponent(sender)}&msisdn=${encodeURIComponent(msisdn)}&smstext=${encodeURIComponent(item.text)}&type=${isUnicode ? 'unicode' : 'text'}${isUnicode ? '&smsformat=8' : ''}`;
 
-          const response = await fetch('https://api.automas.com.bd/smsapiv3', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+          const response = await fetch(automasUrl, {
+            method: 'GET',
             signal: AbortSignal.timeout(10000)
           });
 

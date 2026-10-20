@@ -13,6 +13,7 @@ import { getTodayDateString } from '../utils/calendarUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
+import { SmartDatePicker } from 'components/common/SmartDatePicker';
 
 interface AccountingProps {
   lang: Language;
@@ -883,15 +884,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                         <ChevronDown size={12} className={`transition-transform duration-300 ${showMonthFilterMenu ? 'rotate-180' : ''}`} />
                       </button>
                     ) : (
-                      <input 
-                        type="date"
+                      <SmartDatePicker
                         value={selectedHistoryDate}
-                        onChange={(e) => setSelectedHistoryDate(e.target.value)}
-                        className={`h-9 w-full sm:w-auto px-4 rounded-xl text-[10px] font-black tracking-wider transition-all border outline-none shadow-sm ${
-                          isDark 
-                            ? 'bg-slate-900/50 border-slate-700/50 text-slate-300' 
-                            : 'bg-white border-slate-200 text-slate-600'
-                        }`}
+                        onChange={setSelectedHistoryDate}
+                        lang={lang}
+                        isDark={isDark}
                       />
                     )}
 
@@ -1249,32 +1246,44 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   </div>
 
                   <div className="flex-1">
-                    <div className="relative group">
-                      <input 
-                        type="date" 
-                        className={`w-full h-16 rounded-[1.8rem] px-6 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900 [color-scheme:dark]' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
-                        value={transactionDate} 
-                        onChange={(e) => setTransactionDate(e.target.value)} 
-                      />
-                    </div>
+                    <SmartDatePicker
+                      label={lang === 'bn' ? 'লেনদেনের তারিখ' : 'Transaction Date'}
+                      value={transactionDate}
+                      onChange={setTransactionDate}
+                      lang={lang}
+                      isDark={isDark}
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2 px-1">
-                     {(type === 'income' 
-                        ? (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? (lang === 'bn' ? ['ভর্তি ফি', 'মাসিক বেতন', 'সেশন চার্জ', 'পরীক্ষার ফি'] : ['Admission Fee', 'Monthly Fee', 'Session Charge', 'Exam Fee']) : (lang === 'bn' ? ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড'] : ['Sadakah Collection', 'Lillah Fund', 'Zakat Fund'])) 
-                        : (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? (lang === 'bn' ? ['অফিস খরচ', 'বিদ্যুৎ বিল', 'শিক্ষক বেতন', 'অন্যান্য খরচ'] : ['Office Expense', 'Electricity Bill', 'Teacher Salary', 'Other Expenses']) : (lang === 'bn' ? ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance'] : ['Kitchen Expense', 'Food Expense', 'Teacher Salary', 'Maintenance']))
-                     ).map(suggestion => (
-                        <button 
-                           key={suggestion}
-                           type="button"
-                           onClick={() => setCategory(suggestion)}
-                           className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${category === suggestion ? (isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-sm' : 'bg-blue-50 text-[#2563EB] border-blue-200 shadow-sm') : (isDark ? 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-600' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200')}`}
-                        >
-                           {suggestion}
-                        </button>
-                     ))}
+                     {(() => {
+                        let conf = madrasah?.config_json as any;
+                        if (typeof conf === 'string') {
+                          try { conf = JSON.parse(conf); } catch { conf = {}; }
+                        }
+                        const configCats = (conf?.fee_categories || []).map((c: any) => c.name);
+                        const defaultIncomeCats = (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten')
+                          ? (lang === 'bn' ? ['মাসিক বেতন', 'ভর্তি ফি', 'সেশন ফি', 'পরীক্ষার ফি'] : ['Monthly Fee', 'Admission Fee', 'Session Fee', 'Exam Fee'])
+                          : (lang === 'bn' ? ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড', 'মাসিক বেতন', 'ভর্তি ফি'] : ['Sadakah Collection', 'Lillah Fund', 'Zakat Fund', 'Monthly Fee', 'Admission Fee']);
+                        const expenseCats = (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten')
+                          ? (lang === 'bn' ? ['অফিস খরচ', 'বিদ্যুৎ বিল', 'শিক্ষক বেতন', 'অন্যান্য খরচ'] : ['Office Expense', 'Electricity Bill', 'Teacher Salary', 'Other Expenses'])
+                          : (lang === 'bn' ? ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance'] : ['Kitchen Expense', 'Food Expense', 'Teacher Salary', 'Maintenance']);
+                        const suggestions = type === 'income'
+                          ? Array.from(new Set([...configCats, ...defaultIncomeCats]))
+                          : expenseCats;
+                        return suggestions.map((suggestion: string) => (
+                           <button 
+                              key={suggestion}
+                              type="button"
+                              onClick={() => setCategory(suggestion)}
+                              className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${category === suggestion ? (isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-sm' : 'bg-blue-50 text-[#2563EB] border-blue-200 shadow-sm') : (isDark ? 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-600' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200')}`}
+                           >
+                              {suggestion}
+                           </button>
+                        ));
+                     })()}
                   </div>
                 </div>
 

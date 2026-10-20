@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
@@ -69,6 +69,8 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
   // Support / Help state
@@ -1884,23 +1886,43 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
               <div className="space-y-3.5">
                  <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'নতুন পাসওয়ার্ড' : 'New Password'}</label>
-                   <input 
-                     type="password" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={newPassword} 
-                     onChange={(e) => setNewPassword(e.target.value)} 
-                     placeholder="••••••••"
-                   />
+                   <div className="relative">
+                     <input 
+                       type={showNewPassword ? "text" : "password"} 
+                       className={`w-full h-11 border rounded-xl pl-4 pr-11 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
+                       value={newPassword} 
+                       onChange={(e) => setNewPassword(e.target.value)} 
+                       placeholder="••••••••"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowNewPassword(!showNewPassword)}
+                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-1"
+                       tabIndex={-1}
+                     >
+                       {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                     </button>
+                   </div>
                  </div>
                  <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'পাসওয়ার্ড নিশ্চিত করুন' : 'Confirm Password'}</label>
-                   <input 
-                     type="password" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={confirmPassword} 
-                     onChange={(e) => setConfirmPassword(e.target.value)} 
-                     placeholder="••••••••"
-                   />
+                   <div className="relative">
+                     <input 
+                       type={showConfirmPassword ? "text" : "password"} 
+                       className={`w-full h-11 border rounded-xl pl-4 pr-11 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
+                       value={confirmPassword} 
+                       onChange={(e) => setConfirmPassword(e.target.value)} 
+                       placeholder="••••••••"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-1"
+                       tabIndex={-1}
+                     >
+                       {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                     </button>
+                   </div>
                  </div>
               </div>
               <div className="flex gap-2 pt-2 shrink-0">

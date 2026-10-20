@@ -144,10 +144,12 @@ export const elementToImageDataUrl = async (element: HTMLElement): Promise<strin
   return canvas.toDataURL('image/jpeg', 0.95);
 };
 
+import { downloadBlob } from './fileDownloader';
+
 /**
- * Generates an A4 PDF from an Image Data URL.
+ * Generates an A4 PDF from an Image Data URL and downloads via robust cross-platform downloader.
  */
-export const saveImageAsA4Pdf = (imgDataUrl: string, fileName: string): void => {
+export const saveImageAsA4Pdf = async (imgDataUrl: string, fileName: string): Promise<void> => {
   const pdf = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -156,7 +158,8 @@ export const saveImageAsA4Pdf = (imgDataUrl: string, fileName: string): void => 
 
   // Standard A4 dimensions: 210mm x 297mm
   pdf.addImage(imgDataUrl, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
-  pdf.save(fileName);
+  const blob = pdf.output('blob');
+  await downloadBlob(blob, fileName, 'application/pdf');
 };
 
 /**
@@ -171,6 +174,7 @@ export const exportAdmissionFormHeadless = async ({
   config,
   isBlank = false,
   fileName,
+  onProgress,
 }: {
   formData: AdmissionFormData;
   madrasah: Institution | null;
@@ -178,7 +182,10 @@ export const exportAdmissionFormHeadless = async ({
   config: AdmissionFormConfig;
   isBlank?: boolean;
   fileName?: string;
+  onProgress?: (progress: number, stepText: string) => void;
 }): Promise<void> => {
+  onProgress?.(15, lang === 'bn' ? 'লোগো ও ছবি প্রক্রিয়াকরণ করা হচ্ছে...' : 'Processing logo & images...');
+
   // Pre-fetch images to base64 to avoid cross-origin issues
   let safeLogoUrl = madrasah?.logo_url || null;
   let safePhotoUrl = formData.photoUrl || null;
@@ -194,7 +201,41 @@ export const exportAdmissionFormHeadless = async ({
   }
 
   const preparedMadrasah = madrasah ? { ...madrasah, logo_url: safeLogoUrl } : null;
-  const preparedFormData = { ...formData, photoUrl: isBlank ? '' : (safePhotoUrl || '') };
+
+  // When isBlank is true, generate an authentic, completely blank form for offline pen/handwriting use!
+  const emptyFormData: AdmissionFormData = {
+    formNumber: '',
+    admissionDate: '',
+    academicYear: '',
+    session: '',
+    studentName: '',
+    studentNameEn: '',
+    date_of_birth: '',
+    gender: undefined,
+    blood_group: '',
+    fatherName: '',
+    fatherOccupation: '',
+    motherName: '',
+    motherOccupation: '',
+    guardian_name: '',
+    guardianRelation: '',
+    guardian_phone: '',
+    presentAddress: '',
+    permanentAddress: '',
+    admissionClass: '',
+    previousInstitution: '',
+    previousClass: '',
+    photoUrl: '',
+    admission_number: '',
+    roll: undefined,
+    nationality: '',
+    religion: '',
+    documentsChecked: [],
+  };
+
+  const preparedFormData = isBlank ? emptyFormData : { ...formData, photoUrl: safePhotoUrl || '' };
+
+  onProgress?.(35, lang === 'bn' ? 'লেআউট ও ফন্ট রেন্ডার করা হচ্ছে...' : 'Rendering layout & fonts...');
 
   // Create isolated off-screen container
   const container = document.createElement('div');
@@ -221,12 +262,15 @@ export const exportAdmissionFormHeadless = async ({
             config={config}
             isPrint={true}
             hideButtons={true}
+            isBlank={isBlank}
           />
         </div>
       );
       // Allow react rendering and font/image settling
       setTimeout(resolve, 600);
     });
+
+    onProgress?.(65, lang === 'bn' ? 'হাই-কোয়ালিটি ভেক্টর/পিডিএফ তৈরি হচ্ছে...' : 'Generating high quality PDF...');
 
     const targetElement = (container.querySelector('#print-area') as HTMLElement) || (container.firstElementChild as HTMLElement);
     
@@ -248,14 +292,19 @@ export const exportAdmissionFormHeadless = async ({
         filename: finalFileName
       });
       if (serverSuccess) {
+        onProgress?.(100, lang === 'bn' ? 'পিডিএফ ডাউনলোড সম্পন্ন!' : 'Download complete!');
         return;
       }
     } catch (serverErr) {
       console.warn('Server PDF generation failed for admission form, using client fallback:', serverErr);
     }
 
+    onProgress?.(80, lang === 'bn' ? 'ক্লায়েন্ট ইমেজ-টু-পিডিএফ কম্পাইল হচ্ছে...' : 'Compiling client image-to-PDF...');
     const imgDataUrl = await elementToImageDataUrl(targetElement);
-    saveImageAsA4Pdf(imgDataUrl, finalFileName);
+
+    onProgress?.(95, lang === 'bn' ? 'ফাইল ডাউনলোড শুরু হচ্ছে...' : 'Initiating download...');
+    await saveImageAsA4Pdf(imgDataUrl, finalFileName);
+    onProgress?.(100, lang === 'bn' ? 'পিডিএফ ডাউনলোড সম্পন্ন!' : 'Download complete!');
   } finally {
     try {
       root.unmount();

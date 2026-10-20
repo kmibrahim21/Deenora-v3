@@ -39,7 +39,7 @@ export const SMSService = {
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
           automas: { masking_enabled: false, non_masking_enabled: false },
-          primary: { masking: 'reve', non_masking: 'reve' },
+          primary: { masking: 'reve', non_masking: 'automas' },
           masking_rate: 0.55,
           non_masking_rate: 0.35
         },
@@ -87,7 +87,7 @@ export const SMSService = {
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
           automas: { masking_enabled: false, non_masking_enabled: false },
-          primary: { masking: 'reve', non_masking: 'reve' } as const,
+          primary: { masking: 'reve', non_masking: 'automas' } as const,
           masking_rate: 0.55,
           non_masking_rate: 0.35
         },
@@ -108,12 +108,35 @@ export const SMSService = {
     smsType: 'masking' | 'non_masking' | 'unknown' = 'unknown'
   ) => {
     const [mRes, global] = await Promise.all([
-      supabase.from('institutions').select('sms_balance, reve_api_key, reve_secret_key, reve_client_id, voice_sender_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id').eq('id', institutionId).single(),
+      supabase.from('institutions').select('sms_balance, reve_api_key, reve_secret_key, reve_client_id, voice_sender_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id, config_json').eq('id', institutionId).single(),
       SMSService.getGlobalSettings()
     ]);
 
     const mData = mRes.data;
     if (!mData) throw new Error("Security Violation: Unauthorized Institution context.");
+
+    // Support Branch-specific Allocated SMS Balance
+    const parentId = (mData.config_json as any)?.parent_institution_id;
+    let billingInstId = institutionId;
+    let balance = mData.sms_balance || 0;
+
+    if (parentId) {
+      // If branch has its own allocated SMS balance, use branch's sms_balance directly
+      if (mData.sms_balance !== undefined && mData.sms_balance !== null) {
+        billingInstId = institutionId;
+        balance = mData.sms_balance || 0;
+      } else {
+        try {
+          const { data: parentInst } = await supabase.from('institutions').select('sms_balance').eq('id', parentId).maybeSingle();
+          if (parentInst) {
+            billingInstId = parentId;
+            balance = parentInst.sms_balance || 0;
+          }
+        } catch (e) {
+          console.error("Error fetching parent institution SMS balance:", e);
+        }
+      }
+    }
     
     // Check for shortcodes
     const hasShortcodes = /\{[a-z_]+\}/gi.test(message);
@@ -138,8 +161,6 @@ export const SMSService = {
       if (parts > 7) throw new Error("SMS length exceeds the maximum limit of 7 parts.");
       totalSmsNeeded = students.length * parts;
     }
-
-    const balance = mData.sms_balance || 0;
     
     if (balance < totalSmsNeeded) {
       throw new Error(`এসএমএস ব্যালেন্স পর্যাপ্ত নয়। প্রয়োজন: ${totalSmsNeeded} টি, আছে: ${balance} টি`);
@@ -159,7 +180,7 @@ export const SMSService = {
     }
 
     const { data: rpcData, error: rpcError } = await supabase.rpc('send_bulk_sms_rpc', {
-      p_institution_id: institutionId,
+      p_institution_id: billingInstId,
       p_student_ids: studentIdsForRpc,
       p_message: (message || '').trim()
     });
@@ -404,12 +425,12 @@ export const SMSService = {
         .reduce((sum, l) => sum + (Number(l.parts) || 1), 0);
 
       if (totalFailedSms > 0) {
-        console.log(`Refunding ${totalFailedSms} failed SMS to institution ${institutionId}`);
+        console.log(`Refunding ${totalFailedSms} failed SMS to institution ${billingInstId}`);
         try {
           const { data: instData } = await supabase
             .from('institutions')
             .select('sms_balance')
-            .eq('id', institutionId)
+            .eq('id', billingInstId)
             .single();
           
           if (instData) {
@@ -417,7 +438,7 @@ export const SMSService = {
             await supabase
               .from('institutions')
               .update({ sms_balance: currentBal + totalFailedSms })
-              .eq('id', institutionId);
+              .eq('id', billingInstId);
           }
         } catch (refundErr) {
           console.error("Failed to refund SMS balance:", refundErr);
@@ -516,40 +537,67 @@ export const SMSService = {
         return digits;
       };
 
-      const [{ data, error }, { data: students }, { data: classes }, { data: teachers }] = await Promise.all([
-        supabase
-          .from('sms_logs')
-          .select('*')
-          .eq('institution_id', institutionId)
-          .order('created_at', { ascending: false })
-          .limit(100),
-        supabase
-          .from('students')
-          .select('student_name, roll, guardian_phone, guardian_phone_2, class_id')
-          .eq('institution_id', institutionId),
-        supabase
-          .from('classes')
-          .select('id, class_name')
-          .eq('institution_id', institutionId),
-        supabase
-          .from('teachers')
-          .select('name, phone')
-          .eq('institution_id', institutionId)
-      ]);
-        
-      if (error && error.code !== '42P01') throw error;
+      let logsData: any[] = [];
+      let studentsData: any[] = [];
+      let classesData: any[] = [];
+      let teachersData: any[] = [];
+
+      try {
+        const res = await fetch('/api/sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_history', institutionId })
+        });
+        const apiJson = await res.json();
+        if (res.ok && apiJson.success) {
+          logsData = apiJson.smsLogs || [];
+          studentsData = apiJson.students || [];
+          classesData = apiJson.classes || [];
+          teachersData = apiJson.teachers || [];
+        } else {
+          throw new Error(apiJson.error || 'API fetch failed');
+        }
+      } catch (apiErr) {
+        console.warn("[SMSService] API get_history failed, falling back to client query:", apiErr);
+        const [{ data, error }, { data: students }, { data: classes }, { data: teachers }] = await Promise.all([
+          supabase
+            .from('sms_logs')
+            .select('*')
+            .eq('institution_id', institutionId)
+            .order('created_at', { ascending: false })
+            .limit(100),
+          supabase
+            .from('students')
+            .select('student_name, roll, guardian_phone, guardian_phone_2, class_id')
+            .eq('institution_id', institutionId),
+          supabase
+            .from('classes')
+            .select('id, class_name')
+            .eq('institution_id', institutionId),
+          supabase
+            .from('teachers')
+            .select('name, phone')
+            .eq('institution_id', institutionId)
+        ]);
+
+        if (error && error.code !== '42P01') throw error;
+        logsData = data || [];
+        studentsData = students || [];
+        classesData = classes || [];
+        teachersData = teachers || [];
+      }
 
       const classMap: Record<string, string> = {};
-      if (classes) {
-        classes.forEach(c => {
+      if (classesData) {
+        classesData.forEach(c => {
           if (c.id && c.class_name) classMap[c.id] = c.class_name;
         });
       }
 
       const phoneMap: Record<string, { name: string; class_name?: string; roll?: any; type: 'student' | 'teacher' }> = {};
 
-      if (students) {
-        students.forEach(s => {
+      if (studentsData) {
+        studentsData.forEach(s => {
           const cName = s.class_id ? classMap[s.class_id] : undefined;
           const info = { name: s.student_name, class_name: cName, roll: s.roll, type: 'student' as const };
           if (s.guardian_phone) {
@@ -563,8 +611,8 @@ export const SMSService = {
         });
       }
 
-      if (teachers) {
-        teachers.forEach(t => {
+      if (teachersData) {
+        teachersData.forEach(t => {
           if (t.phone) {
             const k = normalizePhoneKey(t.phone);
             if (k) phoneMap[k] = { name: t.name, class_name: 'শিক্ষক', type: 'teacher' };
@@ -572,7 +620,7 @@ export const SMSService = {
         });
       }
       
-      const safeData = data || [];
+      const safeData = logsData || [];
       return safeData.map(log => {
         const k = normalizePhoneKey(log.recipient);
         const recipientInfo = phoneMap[k] || null;

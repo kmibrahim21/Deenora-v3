@@ -30,7 +30,9 @@ import {
   Lock,
   Timer,
   ShieldCheck,
-  Info
+  Info,
+  Plus,
+  Square
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
@@ -114,6 +116,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   
   // Voices state
   const [voices, setVoices] = useState<any[]>([]);
+  const [voiceStatusFilter, setVoiceStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [voiceDurations, setVoiceDurations] = useState<{ [id: string]: number }>({});
 
   useEffect(() => {
@@ -136,6 +139,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
     return 1;
   };
+
+  const filteredVoices = useMemo(() => {
+    if (voiceStatusFilter === 'all') return voices;
+    return voices.filter(v => {
+      const status = v.admin_status || v.provider_status || 'approved';
+      return status === voiceStatusFilter;
+    });
+  }, [voices, voiceStatusFilter]);
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Transaction state
@@ -374,6 +385,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [uploadName, setUploadName] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<any>(null);
 
   // Recharge state
   const [rechargeAmount, setRechargeAmount] = useState('');
@@ -416,6 +433,70 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{id: string, providerId: string | null, fileUrl: string | null, title: string} | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Sister Branches for Voice Assignment
+  const [childBranches, setChildBranches] = useState<any[]>([]);
+  const [assignModalVoice, setAssignModalVoice] = useState<any | null>(null);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [assigningVoiceModal, setAssigningVoiceModal] = useState<boolean>(false);
+  const [assignVoiceSuccess, setAssignVoiceSuccess] = useState<string>('');
+  const [assignVoiceError, setAssignVoiceError] = useState<string>('');
+
+  useEffect(() => {
+    const fetchChildBranches = async () => {
+      if (!madrasah?.id) return;
+      try {
+        const res = await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get-branches', institutionId: madrasah.id })
+        });
+        const data = await res.json();
+        if (res.ok && data.branches) {
+          setChildBranches(data.branches.filter((b: any) => !b.isMain));
+        }
+      } catch (err) {
+        console.error("Failed to fetch branches for voice assign:", err);
+      }
+    };
+    fetchChildBranches();
+  }, [madrasah?.id]);
+
+  const handleAssignVoiceToBranches = async () => {
+    if (!assignModalVoice || selectedBranchIds.length === 0 || !madrasah?.id) return;
+
+    setAssigningVoiceModal(true);
+    setAssignVoiceError('');
+    setAssignVoiceSuccess('');
+
+    try {
+      const res = await fetch('/api/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'assign-voice-template',
+          parent_institution_id: madrasah.id,
+          voice_template_id: assignModalVoice.id,
+          target_branch_ids: selectedBranchIds
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to assign voice to branches');
+
+      setAssignVoiceSuccess(data.message || 'ভয়েস মেসেজটি সফলভাবে শাখায় এসাইন করা হয়েছে!');
+      setTimeout(() => {
+        setAssignModalVoice(null);
+        setSelectedBranchIds([]);
+        setAssignVoiceSuccess('');
+      }, 1500);
+    } catch (err: any) {
+      console.error('Error assigning voice to branches:', err);
+      setAssignVoiceError(err.message || 'শাখায় এসাইন করতে সমস্যা হয়েছে');
+    } finally {
+      setAssigningVoiceModal(false);
+    }
+  };
 
   useEffect(() => {
     if (!madrasah && !isSuperAdmin) return;
@@ -1612,8 +1693,62 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const recordedFile = new File([audioBlob], `recorded_voice_${Date.now()}.webm`, { type: 'audio/webm' });
+        setUploadFile(recordedFile);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start(200);
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err: any) {
+      console.error('Error accessing microphone:', err);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'মাইক্রোফোন সমস্যা' : 'Microphone Error',
+        message: lang === 'bn' ? 'মাইক্রোফোন এক্সেস পাওয়া যায়নি। অনুগ্রহ করে পারমিশন চেক করুন।' : 'Microphone access denied. Please check permissions.'
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
   const handleVoiceUpload = async () => {
-    if (!madrasah || !uploadName || !uploadFile) return;
+    if (!madrasah || !uploadName.trim() || !uploadFile) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'তথ্য অসম্পূর্ণ' : 'Incomplete Form',
+        message: lang === 'bn' ? 'অনুগ্রহ করে ভয়েসের শিরোনাম দিন এবং অডিও ফাইল নির্বাচন বা রেকর্ড করুন।' : 'Please provide a voice title and select or record an audio file.'
+      });
+      return;
+    }
 
     const validExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm', 'flac', 'mpeg', 'mp4'];
     const fileExtLower = (uploadFile.name.split('.').pop() || '').toLowerCase();
@@ -1638,7 +1773,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         reader.readAsDataURL(uploadFile);
       });
 
-      const encodedName = encodeURIComponent(uploadName);
+      const cleanTitle = uploadName.trim();
+      const encodedName = encodeURIComponent(cleanTitle);
       const response = await fetch(`/api/voices/upload?name=${encodedName}`, {
         method: 'POST',
         headers: {
@@ -1646,9 +1782,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           'X-Voice-Name': encodedName
         },
         body: JSON.stringify({
-          name: uploadName,
-          voice_name: uploadName,
-          title: uploadName,
+          name: cleanTitle,
+          voice_name: cleanTitle,
+          title: cleanTitle,
           audio_base64: base64Audio,
           filename: uploadFile.name
         })
@@ -1660,39 +1796,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         throw new Error(resData.message || resData.error || 'Failed to upload voice to Awaj Digital server.');
       }
 
-      let audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
-
-      // Upload to Supabase Storage as permanent backup if not provided
-      if (!audioUrl) {
-        try {
-          const fileExt = uploadFile.name.split('.').pop() || 'mp3';
-          const storagePath = `voices/${madrasah.id}/${Date.now()}_${uploadName.replace(/[^a-zA-Z0-9_-]/g, '_')}.${fileExt}`;
-          const { data: uploadData, error: upError } = await supabase.storage
-            .from('voice-templates')
-            .upload(storagePath, uploadFile, { upsert: true });
-
-          if (!upError && uploadData) {
-            const { data: publicUrlData } = supabase.storage
-              .from('voice-templates')
-              .getPublicUrl(storagePath);
-            if (publicUrlData?.publicUrl) {
-              audioUrl = publicUrlData.publicUrl;
-            }
-          }
-        } catch (e) {
-          console.warn('Supabase storage fallback upload notice:', e);
-        }
-      }
-
+      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
-      const providerVoiceName = resData.name || resData.title || uploadName;
+      const providerVoiceName = resData.name || resData.title || cleanTitle;
+
+      const initialStatus = isSuperAdmin ? 'approved' : 'pending';
 
       const { error: dbError } = await supabase.from('voice_templates').insert({
         institution_id: madrasah.id,
-        title: uploadName,
+        title: cleanTitle,
         file_url: audioUrl,
-        admin_status: 'approved',
-        provider_status: 'approved',
+        admin_status: initialStatus,
+        provider_status: initialStatus,
         is_active: true,
         provider_voice_name: providerVoiceName,
         provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
@@ -1704,10 +1819,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড ও অনুমোদন হয়েছে! আপনি সরাসরি ব্রডকাস্ট পাঠাতে পারবেন।' : 'Voice uploaded to Awaj Digital server and approved successfully! You can send broadcasts now.'
+        message: isSuperAdmin 
+          ? (lang === 'bn' ? 'ভয়েস Awaj Digital সার্ভারে আপলোড ও সরাসরি অনুমোদন হয়েছে।' : 'Voice uploaded to Awaj Digital server and approved.')
+          : (lang === 'bn' ? 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড হয়েছে! এটি এখন পেন্ডিং অবস্থায় আছে। সুপার অ্যাডমিন অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Voice uploaded successfully to Awaj Digital! Pending approval from Super Admin.')
       });
+
       setUploadName('');
       setUploadFile(null);
+      setShowUploadModal(false);
       fetchVoices();
     } catch (err: any) {
       setStatusModal({
@@ -1721,20 +1840,46 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const handleRequestApproval = async (voiceId: string) => {
+  const handleApproveVoice = async (voiceId: string) => {
     try {
       const { error } = await supabase.from('voice_templates').update({
         admin_status: 'approved',
         provider_status: 'approved'
       }).eq('id', voiceId);
-      
+
       if (error) throw error;
-      
+
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'ভয়েস অটো-অনুমোদিত করা হয়েছে।' : 'Voice auto-approved successfully.'
+        message: lang === 'bn' ? 'ভয়েস সফলভাবে অনুমোদন করা হয়েছে।' : 'Voice approved successfully.'
+      });
+      fetchVoices();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ' : 'Failed',
+        message: err.message
+      });
+    }
+  };
+
+  const handleRejectVoice = async (voiceId: string) => {
+    try {
+      const { error } = await supabase.from('voice_templates').update({
+        admin_status: 'rejected',
+        provider_status: 'rejected'
+      }).eq('id', voiceId);
+
+      if (error) throw error;
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'সফল' : 'Success',
+        message: lang === 'bn' ? 'ভয়েসটি বাতিল করা হয়েছে।' : 'Voice rejected successfully.'
       });
       fetchVoices();
     } catch (err: any) {
@@ -2172,53 +2317,172 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
         {activeTab === 'templates' && (
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
-            <div className="flex items-center justify-between px-2">
-              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('your_voices', lang)}</h2>
-              <button onClick={() => fetchVoices(true)} disabled={loading} className="bg-blue-50 text-[#2563EB] px-4 py-2 rounded-2xl text-[10px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100">
-                 {loading ? <Loader2 className="animate-spin" size={14} /> : <History size={14} />} {t('sync_voices', lang)}
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-2">
+              <div>
+                <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('your_voices', lang)}</h2>
+                <p className="text-xs font-bold text-slate-500 mt-0.5 font-noto">
+                  {lang === 'bn' ? 'ব্রডকাস্টে ব্যবহারের জন্য অনুমোদিত ও পেন্ডিং ভয়েস বার্তা তালিকা' : 'List of approved and pending voice templates'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowUploadModal(true)} 
+                  className="bg-[#2563EB] hover:bg-blue-700 text-white px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200 cursor-pointer"
+                >
+                  <Plus size={16} /> <span>{lang === 'bn' ? 'নতুন ভয়েস আপলোড / রেকর্ড' : 'Upload / Record Voice'}</span>
+                </button>
+                <button 
+                  onClick={() => fetchVoices(true)} 
+                  disabled={loading} 
+                  className="bg-blue-50 text-[#2563EB] px-3.5 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 hover:bg-blue-100 cursor-pointer"
+                >
+                  {loading ? <Loader2 className="animate-spin" size={14} /> : <History size={14} />} {t('sync_voices', lang)}
+                </button>
+              </div>
+            </div>
+
+            {/* Voice Status Filter Tabs */}
+            <div className="flex items-center gap-2 px-1 overflow-x-auto py-1">
+              {(['all', 'approved', 'pending', 'rejected'] as const).map(statusKey => {
+                const count = statusKey === 'all' 
+                  ? voices.length 
+                  : voices.filter(v => (v.admin_status || v.provider_status || 'approved') === statusKey).length;
+                return (
+                  <button
+                    key={statusKey}
+                    onClick={() => setVoiceStatusFilter(statusKey)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                      voiceStatusFilter === statusKey 
+                        ? 'bg-[#1E3A8A] text-white shadow-sm' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>
+                      {statusKey === 'all' ? (lang === 'bn' ? 'সকল' : 'All') :
+                       statusKey === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
+                       statusKey === 'pending' ? (lang === 'bn' ? 'পেন্ডিং (অপেক্ষমাণ)' : 'Pending') :
+                       (lang === 'bn' ? 'বাতিলকৃত' : 'Rejected')}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${voiceStatusFilter === statusKey ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
                {loading ? (
                   <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" size={30} /></div>
-               ) : voices.length > 0 ? (
-                  voices.map(v => (
-                    <div key={v.id} className="bg-white p-5 rounded-[2.2rem] border border-slate-100 shadow-bubble">
-                       <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                             <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100">
-                                <Mic size={18} />
-                             </div>
-                             <div>
-                               <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
-                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                                 {t('approved', lang)}
-                               </span>
-                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {v.file_url && (
+               ) : filteredVoices.length > 0 ? (
+                  filteredVoices.map(v => {
+                    const status = v.admin_status || v.provider_status || 'approved';
+                    const isPending = status === 'pending';
+                    const isRejected = status === 'rejected';
+
+                    return (
+                      <div key={v.id} className="bg-white p-5 rounded-[2.2rem] border border-slate-100 shadow-bubble space-y-3">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                                 isPending ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                 isRejected ? 'bg-red-50 text-red-600 border-red-100' :
+                                 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                               }`}>
+                                  <Mic size={18} />
+                               </div>
+                               <div>
+                                 <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
+                                 {isPending ? (
+                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 w-fit">
+                                     <Clock size={10} /> {lang === 'bn' ? 'অপেক্ষমাণ (পেন্ডিং)' : 'Pending'}
+                                   </span>
+                                 ) : isRejected ? (
+                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 flex items-center gap-1 w-fit">
+                                     <XCircle size={10} /> {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
+                                   </span>
+                                 ) : (
+                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit">
+                                     <CheckCircle2 size={10} /> {lang === 'bn' ? 'অনুমোদিত' : 'Approved'}
+                                   </span>
+                                 )}
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {v.file_url && (
+                                <button 
+                                  onClick={() => togglePlay(v.id, v.file_url)}
+                                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
+                                  title="শুনুন"
+                                >
+                                  {playingId === v.id ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                                </button>
+                              )}
                               <button 
-                                onClick={() => togglePlay(v.id, v.file_url)}
-                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
+                                onClick={() => setShowDeleteConfirm({ id: v.id, providerId: v.provider_voice_id, fileUrl: v.file_url, title: v.title })}
+                                className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors cursor-pointer"
+                                title="মুছে ফেলুন"
                               >
-                                {playingId === v.id ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                                <Trash2 size={16} />
                               </button>
-                            )}
-                            <button 
-                              onClick={() => setShowDeleteConfirm({ id: v.id, providerId: v.provider_voice_id, fileUrl: v.file_url, title: v.title })}
-                              className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                       </div>
-                    </div>
-                  ))
+                            </div>
+                         </div>
+
+                         {/* Super Admin Approval Action Buttons if Pending */}
+                         {isPending && isSuperAdmin && (
+                           <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                             <button
+                               onClick={() => handleApproveVoice(v.id)}
+                               className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                             >
+                               <CheckCircle2 size={14} />
+                               <span>{lang === 'bn' ? 'অনুমোদন করুন' : 'Approve'}</span>
+                             </button>
+                             <button
+                               onClick={() => handleRejectVoice(v.id)}
+                               className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all border border-red-200 cursor-pointer"
+                             >
+                               <XCircle size={14} />
+                               <span>{lang === 'bn' ? 'বাতিল' : 'Reject'}</span>
+                             </button>
+                           </div>
+                         )}
+
+                         {/* Info note for regular user when pending */}
+                         {isPending && !isSuperAdmin && (
+                           <p className="text-[10px] font-bold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100 flex items-center gap-1.5 font-noto">
+                             <Info size={13} className="shrink-0 text-amber-600" />
+                             <span>{lang === 'bn' ? 'এটি এখন পেন্ডিং অবস্থায় আছে। সুপার এডমিন অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Pending approval from Super Admin.'}</span>
+                           </p>
+                         )}
+
+                         {childBranches.length > 0 && !isPending && !isRejected && (
+                           <div className="pt-2 border-t border-slate-100 flex justify-end">
+                             <button 
+                               onClick={() => {
+                                 setAssignModalVoice(v);
+                                 setSelectedBranchIds([]);
+                                 setAssignVoiceSuccess('');
+                                 setAssignVoiceError('');
+                               }}
+                               title="শাখা একাউন্টে এসাইন করুন"
+                               className="w-full py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-purple-100/60 shadow-sm active:scale-95"
+                             >
+                               <Building2 size={14} />
+                               <span>{lang === 'bn' ? 'শাখায় এসাইন করুন' : 'Assign to Branch'}</span>
+                             </button>
+                           </div>
+                         )}
+                      </div>
+                    );
+                  })
                ) : (
-                  <div className="col-span-full text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-                     <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">{t('no_templates', lang)}</p>
+                  <div className="col-span-full text-center py-16 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                     <Mic className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                     <p className="text-slate-400 font-black text-xs uppercase tracking-widest">{t('no_templates', lang)}</p>
+                     <p className="text-slate-400 text-xs mt-1 font-noto">
+                       {lang === 'bn' ? 'নতুন ভয়েস বার্তা আপলোড বা রেকর্ড করতে উপরের বোতামে চাপ দিন' : 'Click the button above to upload or record a new voice message'}
+                     </p>
                   </div>
                )}
             </div>
@@ -2889,6 +3153,260 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   {t('cancel', lang)}
                 </button>
              </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {assignModalVoice && createPortal(
+        <div className="modal-overlay bg-[#080A12]/40 backdrop-blur-2xl animate-in fade-in duration-300 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-6 sm:p-8 shadow-bubble border border-slate-100 space-y-6 animate-in zoom-in-95 duration-300 relative">
+            <button 
+              onClick={() => { setAssignModalVoice(null); setSelectedBranchIds([]); }} 
+              className="absolute top-6 right-6 w-9 h-9 bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center border border-purple-100">
+                <Building2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 font-noto">
+                  {lang === 'bn' ? 'শাখা একাউন্টে ভয়েস বার্তা এসাইন' : 'Assign Voice to Branch'}
+                </h3>
+                <p className="text-xs font-bold text-slate-500 mt-0.5 font-noto">
+                  {assignModalVoice.title}
+                </p>
+              </div>
+            </div>
+
+            {assignVoiceSuccess ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-sm flex items-center gap-2.5 animate-in fade-in">
+                <CheckCircle2 size={20} className="text-emerald-600 flex-shrink-0" />
+                <span>{assignVoiceSuccess}</span>
+              </div>
+            ) : null}
+
+            {assignVoiceError ? (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 font-bold text-sm flex items-center gap-2.5 animate-in fade-in">
+                <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
+                <span>{assignVoiceError}</span>
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                  {lang === 'bn' ? 'শাখা নির্বাচন করুন' : 'Select Target Branches'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedBranchIds.length === childBranches.length) {
+                      setSelectedBranchIds([]);
+                    } else {
+                      setSelectedBranchIds(childBranches.map(b => b.id));
+                    }
+                  }}
+                  className="text-xs font-bold text-purple-600 hover:text-purple-700 cursor-pointer"
+                >
+                  {selectedBranchIds.length === childBranches.length ? (lang === 'bn' ? 'সব আনসেলেক্ট করুন' : 'Deselect All') : (lang === 'bn' ? 'সবগুলো সিলেক্ট করুন' : 'Select All')}
+                </button>
+              </div>
+
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {childBranches.map(branch => {
+                  const isChecked = selectedBranchIds.includes(branch.id);
+                  return (
+                    <div
+                      key={branch.id}
+                      onClick={() => {
+                        if (isChecked) {
+                          setSelectedBranchIds(selectedBranchIds.filter(id => id !== branch.id));
+                        } else {
+                          setSelectedBranchIds([...selectedBranchIds, branch.id]);
+                        }
+                      }}
+                      className={`p-3.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                        isChecked ? 'bg-purple-50/70 border-purple-300 text-purple-900 shadow-sm' : 'bg-slate-50 border-slate-100 hover:bg-slate-100/80 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${isChecked ? 'bg-purple-600 border-purple-600 text-white' : 'border-slate-300 bg-white'}`}>
+                          {isChecked && <Check size={14} strokeWidth={3} />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black font-noto">{branch.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400">{branch.phone || branch.address || 'শাখা একাউন্ট'}</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500">
+                        {lang === 'bn' ? 'শাখা' : 'Branch'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setAssignModalVoice(null); setSelectedBranchIds([]); }}
+                className="w-1/3 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-xs transition-all cursor-pointer"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleAssignVoiceToBranches}
+                disabled={assigningVoiceModal || selectedBranchIds.length === 0}
+                className="w-2/3 py-3.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-black rounded-2xl text-xs shadow-lg shadow-purple-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {assigningVoiceModal ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                <span>{lang === 'bn' ? `এসাইন করুন (${selectedBranchIds.length})` : `Assign (${selectedBranchIds.length})`}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showUploadModal && createPortal(
+        <div className="modal-overlay bg-[#080A12]/50 backdrop-blur-md animate-in fade-in duration-300 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-6 animate-in zoom-in-95 duration-300 relative">
+            <button 
+              onClick={() => {
+                if (isRecording) stopRecording();
+                setShowUploadModal(false);
+              }} 
+              className="absolute top-6 right-6 w-9 h-9 bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center border border-blue-100">
+                <Mic size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-[#1E3A8A] font-noto">
+                  {lang === 'bn' ? 'নতুন ভয়েস বার্তা যোগ করুন' : 'Add New Voice Message'}
+                </h3>
+                <p className="text-xs font-bold text-slate-400 mt-0.5 font-noto">
+                  {isSuperAdmin 
+                    ? (lang === 'bn' ? 'সরাসরি আপলোড ও অনুমোদন' : 'Direct upload and approval') 
+                    : (lang === 'bn' ? 'আপলোডকৃত ভয়েসটি সুপার এডমিন অনুমোদনের পর ব্যবহৃত হবে' : 'Uploaded voice will be pending Super Admin approval')}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 mb-1.5 block font-noto">
+                  {lang === 'bn' ? 'ভয়েস এর শিরোনাম / বিষয় *' : 'Voice Title / Subject *'}
+                </label>
+                <input 
+                  type="text" 
+                  placeholder={lang === 'bn' ? 'যেমন: ফি জমার তাগাদা বার্তা' : 'e.g. Fee Due Notice Voice'}
+                  value={uploadName}
+                  onChange={(e) => setUploadName(e.target.value)}
+                  className="w-full h-13 px-4 rounded-2xl bg-slate-50 border border-slate-200 font-bold text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition-all font-noto"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 block font-noto">
+                  {lang === 'bn' ? 'অডিও রেকর্ড বা ফাইল নির্বাচন' : 'Audio Input Method'}
+                </label>
+
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center space-y-4">
+                  <div className="flex items-center justify-center gap-3">
+                    {!isRecording ? (
+                      <button 
+                        type="button" 
+                        onClick={startRecording}
+                        className="px-5 py-3 rounded-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs flex items-center gap-2 active:scale-95 transition-all cursor-pointer font-noto"
+                      >
+                        <Mic size={18} className="animate-pulse" />
+                        <span>{lang === 'bn' ? 'লাইভ রেকর্ড শুরু করুন' : 'Start Recording'}</span>
+                      </button>
+                    ) : (
+                      <button 
+                        type="button" 
+                        onClick={stopRecording}
+                        className="px-5 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-xs flex items-center gap-2 active:scale-95 transition-all cursor-pointer animate-pulse font-noto"
+                      >
+                        <Square size={16} />
+                        <span>{lang === 'bn' ? `রেকর্ডিং থামান (${Math.floor(recordingTime / 60)}:${('0' + (recordingTime % 60)).slice(-2)})` : `Stop Recording (${recordingTime}s)`}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative flex items-center justify-center my-2">
+                    <div className="border-t border-slate-200 w-full" />
+                    <span className="bg-slate-50 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest absolute font-noto">
+                      {lang === 'bn' ? 'অথবা ফাইল সিলেক্ট করুন' : 'OR Select Audio File'}
+                    </span>
+                  </div>
+
+                  <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 text-slate-700 font-bold text-xs shadow-sm transition-all w-full mt-2 font-noto">
+                    <Upload size={16} className="text-blue-500" />
+                    <span>{uploadFile ? uploadFile.name : (lang === 'bn' ? 'অডিও ফাইল বাছুন (MP3, M4A, WAV)' : 'Choose Audio File (MP3, M4A, WAV)')}</span>
+                    <input 
+                      type="file" 
+                      accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setUploadFile(e.target.files[0]);
+                        }
+                      }} 
+                    />
+                  </label>
+
+                  {uploadFile && (
+                    <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-100 flex items-center justify-between text-left">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <Mic size={16} className="text-[#2563EB] shrink-0" />
+                        <span className="text-xs font-bold text-slate-700 truncate font-noto">{uploadFile.name}</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setUploadFile(null)} 
+                        className="text-red-500 hover:text-red-700 p-1 rounded-lg text-xs shrink-0 cursor-pointer"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isRecording) stopRecording();
+                  setShowUploadModal(false);
+                }}
+                className="w-1/3 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-xs transition-all cursor-pointer font-noto"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleVoiceUpload}
+                disabled={isUploading || !uploadName.trim() || !uploadFile}
+                className="w-2/3 py-3.5 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-2xl text-xs shadow-lg shadow-blue-200 flex items-center justify-center gap-2 transition-all cursor-pointer font-noto"
+              >
+                {isUploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                <span>{lang === 'bn' ? 'জমা দিন' : 'Upload Voice'}</span>
+              </button>
+            </div>
           </div>
         </div>,
         document.body

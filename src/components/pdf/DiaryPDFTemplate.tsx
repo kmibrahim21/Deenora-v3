@@ -58,8 +58,16 @@ export const DiaryPDFTemplate: React.FC<DiaryPDFTemplateProps> = ({
     }
   };
 
-  const rawClass = (diary.class_name || '').replace(/^APP_DIARY/i, '').trim();
-  const className = parsed?.classGroup || parsed?.class || rawClass || 'নির্দিষ্ট শ্রেণি';
+  const isUUID = (str?: string) => str ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim()) : false;
+  let rawClass = (diary.class_name || '').replace(/^APP_DIARY/i, '').trim();
+  if (isUUID(rawClass)) {
+    rawClass = 'নির্দিষ্ট শ্রেণি';
+  }
+  let className = parsed?.classGroup || parsed?.class || rawClass || 'নির্দিষ্ট শ্রেণি';
+  if (isUUID(className)) {
+    className = 'নির্দিষ্ট শ্রেণি';
+  }
+  const cleanTitle = (diary.title || '').replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '').trim();
   const diaryDate = parsed?.date ? formatDate(parsed.date) : formatDate(diary.created_at || new Date().toISOString());
   const subjects: Array<{ subject: string; details: string }> = Array.isArray(parsed?.subjects)
     ? parsed.subjects
@@ -156,10 +164,10 @@ export const DiaryPDFTemplate: React.FC<DiaryPDFTemplateProps> = ({
           </div>
         </div>
 
-        {diary.title && (
+        {cleanTitle && (
           <div className="mb-3 px-3 py-2 bg-blue-50/50 border-l-4 border-blue-600 rounded-r-lg">
             <h3 className="text-xs font-black text-blue-950">
-              {diary.title}
+              {cleanTitle}
             </h3>
           </div>
         )}

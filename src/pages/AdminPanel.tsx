@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng, toJpeg } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
@@ -273,6 +273,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editSubscriptionNote, setEditSubscriptionNote] = useState<string>('');
   const [editDueAmount, setEditDueAmount] = useState<number>(0);
   const [editStudentLimit, setEditStudentLimit] = useState<number>(0);
+  const [editBranchLimit, setEditBranchLimit] = useState<number>(0);
 
   const formatMonthsRange = (months: string[]) => {
     if (!months || months.length === 0) return '';
@@ -981,6 +982,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [newInstPhone, setNewInstPhone] = useState('');
   const [newInstEmail, setNewInstEmail] = useState('');
   const [newInstPassword, setNewInstPassword] = useState('');
+  const [showNewInstPassword, setShowNewInstPassword] = useState(false);
   const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching'>('madrasah');
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
@@ -1897,6 +1899,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
 
     setEditStudentLimit(userConfig?.student_limit !== undefined ? Number(userConfig.student_limit) : 200);
+    setEditBranchLimit(userConfig?.branch_limit !== undefined ? Number(userConfig.branch_limit) : 0);
     setEditPassword(userConfig?.user_pin || '');
 
     const userModules = { ...(userConfig?.modules || {}) };
@@ -2110,6 +2113,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             subscription_note: editSubscriptionNote,
             due_amount: editDueAmount,
             student_limit: editStudentLimit,
+            branch_limit: editBranchLimit,
             institute_code: editInstituteCode.trim(),
             user_pin: editPassword.trim()
           }
@@ -3999,6 +4003,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       placeholder="0 for unlimited"
                                     />
                                  </div>
+                                  <div className="space-y-2">
+                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center justify-between">
+                                       <span>শাখার সর্বোচ্চ সীমা / Branch Limit (0 = বন্ধ)</span>
+                                       <span className="text-blue-500 font-mono font-bold">{editBranchLimit} টি</span>
+                                     </label>
+                                     <input 
+                                       type="number" 
+                                       readOnly={!canWrite('institution_info')}
+                                       className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
+                                       value={editBranchLimit}
+                                       onChange={(e) => setEditBranchLimit(Math.max(0, Number(e.target.value)))}
+                                       placeholder="0 = কোনো শাখা খুলতে পারবে না"
+                                     />
+                                  </div>
                               </div>
                            </div>
 
@@ -4784,13 +4802,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">পাসওয়ার্ড</label>
-                <input 
-                  type="password" 
-                  className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl px-6 font-black text-[#1E3A8A] outline-none focus:border-[#2563EB]/20" 
-                  value={newInstPassword} 
-                  onChange={(e) => setNewInstPassword(e.target.value)} 
-                  placeholder="******"
-                />
+                <div className="relative">
+                  <input 
+                    type={showNewInstPassword ? "text" : "password"} 
+                    className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl pl-6 pr-14 font-black text-[#1E3A8A] outline-none focus:border-[#2563EB]/20" 
+                    value={newInstPassword} 
+                    onChange={(e) => setNewInstPassword(e.target.value)} 
+                    placeholder="******"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewInstPassword(!showNewInstPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-2"
+                    tabIndex={-1}
+                  >
+                    {showNewInstPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">

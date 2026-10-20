@@ -50,7 +50,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     sms_provider_config: {
       reve: { masking_enabled: true, non_masking_enabled: true },
       automas: { masking_enabled: false, non_masking_enabled: false },
-      primary: { masking: 'reve', non_masking: 'reve' },
+      primary: { masking: 'reve', non_masking: 'automas' },
       masking_rate: 0.55,
       non_masking_rate: 0.35
     } as SmsProviderConfig,

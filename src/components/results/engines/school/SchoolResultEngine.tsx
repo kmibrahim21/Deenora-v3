@@ -12,6 +12,7 @@ import { generateSeatPlanPDF, generateResultPDF, generateClassResultPDF, generat
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
 
 import ExamSettingsModal from '../../ExamSettingsModal';
+import { SmartDatePicker } from '../../../../components/common/SmartDatePicker';
 
 interface SchoolResultEngineProps {
   lang: Language;
@@ -2991,16 +2992,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                 {/* Exam Times */}
                 <div className="space-y-4">
                   {/* Start Date */}
-                  <div className="space-y-1.5 p-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/10">
-                    <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
-                       <Calendar size={12} className="text-emerald-600" />
-                       {lang === 'bn' ? 'পরীক্ষা শুরুর তারিখ' : 'Exam Start Date'}
-                    </label>
-                    <input 
-                      type="date" 
-                      value={routineStartDate} 
-                      onChange={e => setRoutineStartDate(e.target.value)} 
-                      className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none focus:border-emerald-500 transition-all`}
+                  <div className="p-1">
+                    <SmartDatePicker
+                      label={lang === 'bn' ? 'পরীক্ষা শুরুর তারিখ' : 'Exam Start Date'}
+                      value={routineStartDate}
+                      onChange={setRoutineStartDate}
+                      lang={lang}
+                      isDark={madrasah?.theme === 'dark'}
                     />
                   </div>
 
@@ -4801,14 +4799,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
              </div>
              <div className="space-y-4">
                 <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পরীক্ষার নাম (যেমন: বার্ষিক পরীক্ষা)" value={examName} onChange={(e) => setExamName(e.target.value)} /><BookOpen className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
-                <div className="relative"><input 
-                  type="date" 
-                  className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} 
-                  value={examDate} 
-                  onChange={(e) => setExamDate(e.target.value)}
-                  min={activeYear?.start_date}
-                  max={activeYear?.end_date}
-                /><Calendar className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
+                <SmartDatePicker
+    label={lang === 'bn' ? 'পরীক্ষার তারিখ' : 'Exam Date'}
+    value={examDate}
+    onChange={setExamDate}
+    lang={lang}
+    isDark={madrasah?.theme === 'dark'}
+    minDate={activeYear?.start_date}
+    maxDate={activeYear?.end_date}
+  />
                 <div className="relative">
                     <select className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 appearance-none transition-all`} value={classId} onChange={(e) => setClassId(e.target.value)}>
                         <option value="">ক্লাস বেছে নিন</option>

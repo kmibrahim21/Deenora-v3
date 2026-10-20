@@ -47,6 +47,20 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
   useEffect(() => { fetchTemplates(); }, [madrasah.id]);
 
   const fetchTemplates = async () => {
+    try {
+      const res = await fetch('/api/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_templates', institutionId: madrasah.id })
+      });
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.templates)) {
+        setTemplates(data.templates);
+        return;
+      }
+    } catch (e) {
+      console.warn("API fetch templates failed in SMSModal, fallback to client query:", e);
+    }
     const { data } = await supabase.from('sms_templates').select('*').eq('institution_id', madrasah.id).order('created_at', { ascending: false });
     if (data) setTemplates(data);
   };

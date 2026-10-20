@@ -44,6 +44,8 @@ import {
   CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { SmartDatePicker } from '../components/common/SmartDatePicker';
+import { CompactMonthPicker } from '../components/finance/CompactMonthPicker';
 import {
   Teacher,
   TeacherPermissions,
@@ -1283,9 +1285,19 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     </label>
                     <div className="relative">
                       {reportType === 'daily' ? (
-                        <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className={`w-full h-11 pl-9 pr-4 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} />
+                        <SmartDatePicker
+                          value={reportDate}
+                          onChange={setReportDate}
+                          lang={lang}
+                          isDark={isDark}
+                        />
                       ) : reportType === 'monthly' ? (
-                        <input type="month" value={attendanceMonth} onChange={(e) => setAttendanceMonth(e.target.value)} className={`w-full h-11 pl-9 pr-4 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} />
+                        <CompactMonthPicker
+                          value={attendanceMonth}
+                          onChange={setAttendanceMonth}
+                          lang={lang}
+                          isDark={isDark}
+                        />
                       ) : (
                         <select value={reportYear} onChange={(e) => setReportYear(e.target.value)} className={`w-full h-11 pl-9 pr-4 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
                           {Array.from({length: 5}).map((_, i) => {
@@ -1849,40 +1861,20 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       />
                     </div>
                     
-                    <div className="space-y-2">
-                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
-                        <Calendar size={11} className="text-[#2563EB]" /> 
-                        {lang === 'bn' ? 'জয়েন ডেট' : 'Join Date'}
-                      </label>
-                      <input
-                        type="date"
-                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
-                        value={formData.join_date || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            join_date: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
-                        <Calendar size={11} className="text-[#2563EB]" /> 
-                        {lang === 'bn' ? 'বিদায়ের তারিখ (যদি থাকে)' : 'Leave Date (Optional)'}
-                      </label>
-                      <input
-                        type="date"
-                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
-                        value={formData.leave_date || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            leave_date: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
+                    <SmartDatePicker
+                      label={lang === 'bn' ? 'জয়েন ডেট' : 'Join Date'}
+                      value={formData.join_date || ""}
+                      onChange={(val) => setFormData({ ...formData, join_date: val })}
+                      lang={lang}
+                      isDark={isDark}
+                    />
+                    <SmartDatePicker
+                      label={lang === 'bn' ? 'বিদায়ের তারিখ (যদি থাকে)' : 'Leave Date (Optional)'}
+                      value={formData.leave_date || ""}
+                      onChange={(val) => setFormData({ ...formData, leave_date: val })}
+                      lang={lang}
+                      isDark={isDark}
+                    />
                     
                     <div className="space-y-2">
                       <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>

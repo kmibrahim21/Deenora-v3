@@ -91,6 +91,8 @@ const App: React.FC = () => {
     authError,
     handleLogout,
     refreshMadrasah,
+    activeBranchId,
+    switchBranch
   } = useAuth();
   const [view, setView] = useState<View>("home");
   const [isMobileChatActive, setIsMobileChatActive] = useState(false);
@@ -166,6 +168,26 @@ const App: React.FC = () => {
   });
 
   const { initSignaling: initVoiceSignaling } = useVoiceCall();
+
+  // Preload primary route bundles in background when idle to prevent navigation lag
+  useEffect(() => {
+    if (session && profile) {
+      const preloadCommonRoutes = () => {
+        import("pages/Home");
+        import("pages/Students");
+        import("pages/Classes");
+        import("pages/Accounting");
+        import("pages/Account");
+        import("pages/Attendance");
+        import("pages/Exams");
+      };
+      if ("requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(preloadCommonRoutes);
+      } else {
+        setTimeout(preloadCommonRoutes, 1200);
+      }
+    }
+  }, [session, profile]);
 
   // Initialize Voice Call signaling and native push token for admin/teacher
   useEffect(() => {
@@ -608,6 +630,7 @@ const App: React.FC = () => {
             madrasah={madrasah}
             defaultClassId={selectedClass?.id}
             isEditing={isEditing}
+            activeYear={activeYear}
             onSuccess={(updatedStudent) => {
               if (updatedStudent) {
                 setSelectedStudent(updatedStudent);
@@ -633,6 +656,8 @@ const App: React.FC = () => {
             onProfileUpdate={refreshMadrasah}
             profile={profile}
             dataVersion={dataVersion}
+            activeBranchId={activeBranchId}
+            onSwitchBranch={switchBranch}
           />
         );
       case "teacheraccount":
@@ -1073,6 +1098,8 @@ const App: React.FC = () => {
       selectedYear={selectedYear}
       isHistoricalMode={isHistoricalMode}
       onReturnToCurrentYear={resetToActiveYear}
+      activeBranchId={activeBranchId}
+      onSwitchBranch={switchBranch}
     >
       <OfflineIndicator />
       <NotificationPermissionBanner />

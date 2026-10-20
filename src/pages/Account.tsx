@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart, Eye, EyeOff, Building2 } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -10,6 +10,8 @@ import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
 import PaymentCheckout from '../components/PaymentCheckout';
 import { hasAdmissionFormAccess } from 'utils/packageUtils';
+import { BranchManagementModal } from '../components/branch/BranchManagementModal';
+import { BranchSwitcher } from '../components/branch/BranchSwitcher';
 
 const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -102,9 +104,22 @@ interface AccountProps {
   onLogout: () => void;
   profile?: Profile | null;
   dataVersion?: number;
+  activeBranchId?: string | null;
+  onSwitchBranch?: (branchId: string) => void;
 }
 
-const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setView, initialMadrasah, onLogout, profile, dataVersion = 0 }) => {
+const Account: React.FC<AccountProps> = ({ 
+  lang, 
+  setLang, 
+  onProfileUpdate, 
+  setView, 
+  initialMadrasah, 
+  onLogout, 
+  profile, 
+  dataVersion = 0,
+  activeBranchId,
+  onSwitchBranch
+}) => {
   const getEnglishPkgName = (name: string) => {
     if (!name) return '';
     const mapping: { [key: string]: string } = {
@@ -132,9 +147,12 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
+  const [showBranchModal, setShowBranchModal] = useState(false);
   
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
   const [adminNagad, setAdminNagad] = useState('০১৭৬৬-XXXXXX');
@@ -371,16 +389,40 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     if (!madrasah) return;
     const newTheme = madrasah.theme === 'dark' ? 'default' : 'dark';
     
+    // Optimistic UI update
+    setMadrasah({ ...madrasah, theme: newTheme });
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
     try {
       if (madrasah?.id) {
         requestManager.invalidatePattern(`institution:${madrasah.id}`);
         // Profile/Institution updates might affect dashboard context/branding
         requestManager.invalidatePattern('dashboard_');
       }
-      const { error } = await supabase.from('institutions').update({ theme: newTheme }).eq('id', madrasah.id);
-      if (error) throw error;
-      setMadrasah({ ...madrasah, theme: newTheme });
-      if (onProfileUpdate) onProfileUpdate();
+
+      // Call backend admin API first to ensure branches & main institutions update reliably regardless of RLS restrictions
+      try {
+        await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update-theme', institutionId: madrasah.id, theme: newTheme })
+        });
+      } catch (backendErr) {
+        console.warn('Backend admin theme update error:', backendErr);
+      }
+
+      // Also perform client-side update
+      try {
+        await supabase.from('institutions').update({ theme: newTheme }).eq('id', madrasah.id);
+      } catch (e) {}
+
+      if (onProfileUpdate) {
+        await onProfileUpdate();
+      }
     } catch (err: any) {
       console.error('Error toggling theme:', err);
     }
@@ -1253,11 +1295,22 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </div>
           <div className="space-y-4 mt-2">
              <div className="space-y-1">
-               <div className="px-4">
-                 <h2 className={`text-[20px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                   {isTeacher ? (teacherInfo?.teacher_name || profile?.full_name || 'Teacher') : (madrasah?.name || 'User')}
-                 </h2>
-               </div>
+                <div className="px-4 flex flex-col items-center">
+                  <h2 className={`text-[20px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {isTeacher ? (teacherInfo?.teacher_name || profile?.full_name || 'Teacher') : (madrasah?.name || 'User')}
+                  </h2>
+                  
+                  {!isTeacher && !isSuperAdmin && madrasah && (
+                    <div className="mt-2">
+                      <BranchSwitcher
+                        madrasah={madrasah}
+                        lang={lang}
+                        activeBranchId={activeBranchId || null}
+                        onSwitchBranch={onSwitchBranch || (() => {})}
+                      />
+                    </div>
+                  )}
+                </div>
                
                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-1.5 px-2">
                  {isTeacher ? (
@@ -1763,6 +1816,16 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               onClick={() => setView('teachers')}
               dark={madrasah?.theme === 'dark'}
             />
+
+            {/* Multi-Branch Management Card */}
+            <ActionCard
+              icon={Building2}
+              title={lang === 'bn' ? 'শাখা ও ক্যাম্পাস' : 'Branches & Campus'}
+              subtitle={lang === 'bn' ? 'শাখা পরিচালনা ও সুইচিং' : 'Switch & Manage Branches'}
+              colorClass="bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400"
+              onClick={() => setShowBranchModal(true)}
+              dark={madrasah?.theme === 'dark'}
+            />
           </>
         )}
 
@@ -2140,23 +2203,43 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               <div className="space-y-3.5">
                  <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'নতুন পাসওয়ার্ড' : 'New Password'}</label>
-                   <input 
-                     type="password" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={newPassword} 
-                     onChange={(e) => setNewPassword(e.target.value)} 
-                     placeholder="••••••••"
-                   />
+                   <div className="relative">
+                     <input 
+                       type={showNewPassword ? "text" : "password"} 
+                       className={`w-full h-11 border rounded-xl pl-4 pr-11 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
+                       value={newPassword} 
+                       onChange={(e) => setNewPassword(e.target.value)} 
+                       placeholder="••••••••"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowNewPassword(!showNewPassword)}
+                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-1"
+                       tabIndex={-1}
+                     >
+                       {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                     </button>
+                   </div>
                  </div>
                  <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'পাসওয়ার্ড নিশ্চিত করুন' : 'Confirm Password'}</label>
-                   <input 
-                     type="password" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={confirmPassword} 
-                     onChange={(e) => setConfirmPassword(e.target.value)} 
-                     placeholder="••••••••"
-                   />
+                   <div className="relative">
+                     <input 
+                       type={showConfirmPassword ? "text" : "password"} 
+                       className={`w-full h-11 border rounded-xl pl-4 pr-11 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
+                       value={confirmPassword} 
+                       onChange={(e) => setConfirmPassword(e.target.value)} 
+                       placeholder="••••••••"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-1"
+                       tabIndex={-1}
+                     >
+                       {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                     </button>
+                   </div>
                  </div>
               </div>
               <div className="flex gap-2 pt-2 shrink-0">
@@ -2297,6 +2380,15 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
          document.body
       )}
+
+      <BranchManagementModal
+        isOpen={showBranchModal}
+        onClose={() => setShowBranchModal(false)}
+        madrasah={madrasah}
+        lang={lang}
+        activeBranchId={activeBranchId || null}
+        onSwitchBranch={onSwitchBranch || (() => {})}
+      />
     </div>
   );
 };

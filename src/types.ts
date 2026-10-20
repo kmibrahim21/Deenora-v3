@@ -353,6 +353,18 @@ export interface LedgerEntry {
   created_at: string;
 }
 
+export type FeeCategoryFrequency = 'monthly' | 'one_time' | 'annual' | 'exam' | 'custom';
+
+export interface FeeCategory {
+  id: string;
+  name: string;
+  frequency: FeeCategoryFrequency;
+  is_default?: boolean;
+  description?: string;
+  color?: string;
+  created_at?: string;
+}
+
 export interface FeeStructure {
   id: string;
   institution_id: string;
@@ -360,7 +372,13 @@ export interface FeeStructure {
   fee_name: string;
   amount: number;
   due_date?: string;
+  start_date?: string;
+  category_id?: string;
+  category_name?: string;
   created_at: string;
+  classes?: {
+    class_name: string;
+  };
 }
 
 export interface Fee {

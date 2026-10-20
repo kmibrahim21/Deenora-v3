@@ -18,16 +18,27 @@ interface Props {
   config: AdmissionFormConfig;
   isPrint?: boolean;
   hideButtons?: boolean;
+  isBlank?: boolean;
+  onDownloadRequest?: (isBlank: boolean) => void;
 }
 
-const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, config, isPrint = false, hideButtons = false }) => {
+const AdmissionFormPreview: React.FC<Props> = ({ 
+  formData, 
+  madrasah, 
+  lang, 
+  config, 
+  isPrint = false, 
+  hideButtons = false,
+  isBlank = false,
+  onDownloadRequest,
+}) => {
   const t = ADMISSION_T[lang];
   const printRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
-  const [isGeneratingBlank, setIsGeneratingBlank] = useState(false);
+  const [isGeneratingBlank] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [photoError, setPhotoError] = useState(false);
@@ -48,7 +59,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
 
   useEffect(() => {
     let active = true;
-    if (formData.photoUrl) {
+    if (formData.photoUrl && !isBlank) {
       setPhotoError(false);
       getBase64Image(formData.photoUrl).then(base64 => {
         if (active && base64) setPhotoBase64(base64);
@@ -58,7 +69,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
       setPhotoError(false);
     }
     return () => { active = false; };
-  }, [formData.photoUrl]);
+  }, [formData.photoUrl, isBlank]);
 
   useEffect(() => {
     if (isPrint || !containerRef.current) return;
@@ -85,6 +96,11 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
   }, [isPrint]);
 
   const downloadPDF = async (forceBlank = false) => {
+    if (onDownloadRequest) {
+      onDownloadRequest(forceBlank);
+      return;
+    }
+
     setIsCapturing(true);
 
     try {
@@ -100,7 +116,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
         lang,
         config,
         isBlank: forceBlank,
-        fileName: `Admission_Form_${safeStudentName}.pdf`
+        fileName: forceBlank ? 'Admission_Form_Blank.pdf' : `Admission_Form_${safeStudentName}.pdf`
       });
     } catch (error) {
       console.error('PDF Generation Error:', error);
@@ -112,18 +128,22 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
 
   const Field = ({ label, value, fieldKey, className = "", isFull = false }: { label: string, value?: string, fieldKey?: string, className?: string, isFull?: boolean }) => {
     if (fieldKey && config.fieldVisibility[fieldKey] === false) return null;
-    const displayValue = isGeneratingBlank ? '' : (value || '');
+    const isBlankMode = isBlank || isGeneratingBlank;
+    const displayValue = isBlankMode ? '' : (value || '');
 
     return (
-      <div className={`flex items-center gap-1.5 border-b pb-0.5 min-h-[1.3em] ${isFull ? 'col-span-full' : ''} ${className}`} style={{ borderColor: `${config.themeColor}35` }}>
+      <div 
+        className={`flex items-baseline gap-1.5 border-b pb-0.5 min-h-[1.4em] ${isFull ? 'col-span-full' : ''} ${className}`} 
+        style={{ borderColor: isBlankMode ? `${config.themeColor}25` : `${config.themeColor}35` }}
+      >
         <span 
-          className="font-black whitespace-nowrap shrink-0" 
+          className="font-black whitespace-nowrap shrink-0 select-none" 
           style={{ fontSize: `${8.5 * config.fontScale}px`, color: config.themeColor }}
         >
           {label}:
         </span>
         <span 
-          className="font-bold text-slate-900 flex-1 truncate min-h-[1.1em] border-dotted border-b-0"
+          className={`font-bold text-slate-900 flex-1 truncate min-h-[1.1em] ${isBlankMode ? 'border-b border-dotted border-slate-300' : ''}`}
           style={{ fontSize: `${9.5 * config.fontScale}px` }}
         >
           {displayValue}
@@ -147,43 +167,47 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
     <div className="flex flex-col items-center w-full min-h-screen bg-slate-50/50 pb-20">
       {/* Top Banner Indicator */}
       {isCapturing && (
-        <div className="fixed inset-0 z-[9999] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-xl font-black text-blue-900 animate-pulse">
-            {lang === 'bn' ? 'হাই-কোয়ালিটি ইমেজ থেকে পিডিএফ তৈরি হচ্ছে...' : 'Generating High-Quality Image-to-PDF...'}
-          </p>
-          <span className="text-xs font-semibold text-slate-500 mt-2">
-            {lang === 'bn' ? 'ফন্ট ও লেআউট নিখুঁত রাখতে ইমেজ কনভার্সন ব্যবহার করা হচ্ছে' : 'Preserving exact layout and Bangla fonts'}
-          </span>
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4 border border-slate-100 dark:border-slate-800">
+            <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div>
+              <p className="text-base font-black text-slate-800 dark:text-slate-100 font-noto">
+                {lang === 'bn' ? 'ভর্তি ফরম পিডিএফ প্রস্তুত করা হচ্ছে...' : 'Preparing Admission Form PDF...'}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {lang === 'bn' ? 'নিখুঁত প্রিন্ট কোয়ালিটি ও ফন্ট তৈরি হচ্ছে' : 'Preserving print layout & SolaimanLipi font'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Action Buttons */}
       {!isPrint && !hideButtons && (
-        <div className="flex flex-wrap gap-4 mb-8 justify-center w-full px-4 pt-8 sticky top-0 z-50 bg-slate-50/80 backdrop-blur-md pb-4">
+        <div className="flex flex-wrap gap-3 mb-6 justify-center w-full px-4 pt-4 sticky top-0 z-50 bg-slate-50/90 backdrop-blur-md pb-4">
           <button
             onClick={() => downloadPDF(false)}
             disabled={isCapturing}
-            className="px-6 py-3 sm:px-8 sm:py-4 bg-blue-600 text-white font-black rounded-2xl flex items-center gap-3 shadow-xl shadow-blue-600/30 hover:bg-blue-700 transition-all active:scale-95 text-sm sm:text-base cursor-pointer disabled:opacity-50"
+            className="px-5 py-2.5 sm:px-6 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-2xl flex items-center gap-2.5 shadow-lg shadow-blue-500/25 transition-all active:scale-95 text-xs sm:text-sm cursor-pointer disabled:opacity-50"
           >
-            <Download size={20} />
-            {t.downloadPdf}
+            <Download size={18} />
+            <span>{t.downloadPdf}</span>
           </button>
           <button
             onClick={() => downloadPDF(true)}
             disabled={isCapturing}
-            className="px-6 py-3 sm:px-8 sm:py-4 bg-emerald-600 text-white font-black rounded-2xl flex items-center gap-3 shadow-xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all active:scale-95 text-sm sm:text-base cursor-pointer disabled:opacity-50"
+            className="px-5 py-2.5 sm:px-6 sm:py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black rounded-2xl flex items-center gap-2.5 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 text-xs sm:text-sm cursor-pointer disabled:opacity-50"
           >
-            <Download size={20} />
-            {lang === 'bn' ? 'ব্ল্যাঙ্ক ফরম ডাউনলোড' : 'Download Blank Form'}
+            <Download size={18} />
+            <span>{lang === 'bn' ? 'ব্ল্যাঙ্ক ফরম ডাউনলোড (অফলাইন প্রিন্ট)' : 'Download Blank Form'}</span>
           </button>
           <button
             onClick={() => window.print()}
             disabled={isCapturing}
-            className="px-6 py-3 sm:px-8 sm:py-4 bg-slate-800 text-white font-black rounded-2xl flex items-center gap-3 shadow-xl hover:bg-slate-900 transition-all active:scale-95 text-sm sm:text-base cursor-pointer disabled:opacity-50"
+            className="px-5 py-2.5 sm:px-6 sm:py-3 bg-slate-800 hover:bg-slate-900 text-white font-black rounded-2xl flex items-center gap-2.5 shadow-lg shadow-slate-900/20 transition-all active:scale-95 text-xs sm:text-sm cursor-pointer disabled:opacity-50"
           >
-            <Printer size={20} />
-            {lang === 'bn' ? 'প্রিন্ট করুন' : 'Print Now'}
+            <Printer size={18} />
+            <span>{lang === 'bn' ? 'প্রিন্ট করুন' : 'Print Now'}</span>
           </button>
         </div>
       )}
@@ -293,8 +317,11 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
                 </div>
                 
                 <div className="flex flex-col items-end gap-2">
-                  <div className="w-20 h-24 border-2 bg-slate-50 overflow-hidden shadow-inner flex items-center justify-center p-0.5 rounded-sm" style={{ borderColor: config.themeColor }}>
-                    {((photoBase64 || formData.photoUrl) && !isGeneratingBlank && !photoError) ? (
+                  <div 
+                    className="w-20 h-24 border-2 bg-slate-50 overflow-hidden shadow-inner flex flex-col items-center justify-center p-0.5 rounded-sm text-center" 
+                    style={{ borderColor: config.themeColor, borderStyle: isBlank ? 'dashed' : 'solid' }}
+                  >
+                    {((photoBase64 || formData.photoUrl) && !isBlank && !photoError) ? (
                       <img 
                         src={getProxiedUrl(photoBase64 || formData.photoUrl)} 
                         alt="Student" 
@@ -303,8 +330,18 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
                         crossOrigin="anonymous"
                       />
                     ) : (
-                      <div className="text-center p-1">
-                         <span className="text-[8.5px] font-black text-slate-300 uppercase leading-tight">Student<br/>Photo</span>
+                      <div className="text-center p-1 flex flex-col items-center justify-center h-full">
+                         <span className="text-[8.5px] font-black uppercase leading-tight" style={{ color: config.themeColor }}>
+                           {lang === 'bn' ? 'ছবি' : 'Photo'}
+                         </span>
+                         <span className="text-[7.5px] font-bold text-slate-400 uppercase leading-none mt-0.5">
+                           {lang === 'bn' ? 'পাসপোর্ট সাইজ' : 'Passport Size'}
+                         </span>
+                         {isBlank && (
+                           <span className="text-[6.5px] font-semibold text-slate-400 mt-1 leading-tight">
+                             {lang === 'bn' ? '(এখানে লাগান)' : '(Attach Here)'}
+                           </span>
+                         )}
                       </div>
                     )}
                   </div>
@@ -379,12 +416,12 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
                   <div className="flex flex-wrap gap-x-6 gap-y-1 py-0.5 px-1">
                     {[
                       { id: 'birth', label: t.docBirthCert },
-                      { id: 'parentNID', label: (t as any).docParentNID || 'Parent NID' },
+                      { id: 'parentNID', label: (t as any).docParentNID || (lang === 'bn' ? 'অভিভাবকের জাতীয় পরিচয়পত্র' : 'Parent NID') },
                       { id: 'photos', label: t.docPhotos },
                     ].map(doc => (
                       <div key={doc.id} className="flex items-center gap-1.5">
-                        <div className="w-3.5 h-3.5 border-2 flex items-center justify-center rounded-sm" style={{ borderColor: config.themeColor }}>
-                          {(formData.documentsChecked?.includes(doc.id) && !isGeneratingBlank) && <div className="w-1.5 h-1.5" style={{ backgroundColor: config.themeColor }}></div>}
+                        <div className="w-3.5 h-3.5 border-2 flex items-center justify-center rounded-sm bg-white" style={{ borderColor: config.themeColor }}>
+                          {(!isBlank && formData.documentsChecked?.includes(doc.id)) && <div className="w-1.5 h-1.5" style={{ backgroundColor: config.themeColor }}></div>}
                         </div>
                         <span className="font-bold text-slate-800" style={{ fontSize: `${8.5 * config.fontScale}px` }}>{doc.label}</span>
                       </div>

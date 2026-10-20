@@ -15,6 +15,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { SmartDatePicker } from '../components/common/SmartDatePicker';
+import { CompactMonthPicker } from '../components/finance/CompactMonthPicker';
 
 interface AttendanceProps {
   lang: Language;
@@ -1621,18 +1623,15 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
           {activeTab === 'daily' && (
             <div className="relative animate-in fade-in">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">তারিখ</label>
-              <div className="relative">
-                <input 
-                  type="date" 
-                  className={`w-full h-14 pl-10 pr-2 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-sm ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
-                  value={date} 
-                  onChange={(e) => setDate(e.target.value)}
-                  min={activeYear?.start_date}
-                  max={activeYear?.end_date}
-                />
-                <Calendar className="absolute left-3 top-4 text-[#2563EB]" size={18}/>
-              </div>
+              <SmartDatePicker
+                label={lang === 'bn' ? 'তারিখ' : 'Date'}
+                value={date}
+                onChange={setDate}
+                lang={lang}
+                isDark={isDark}
+                minDate={activeYear?.start_date}
+                maxDate={activeYear?.end_date}
+              />
             </div>
           )}
         </div>
@@ -1683,23 +1682,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         {reportType === 'daily' ? 'তারিখ নির্বাচন করুন' : reportType === 'monthly' ? 'মাস নির্বাচন করুন' : 'বছর নির্বাচন করুন'}
                     </label>
                     {reportType === 'daily' ? (
-                        <div className="relative"><input 
-                          type="date" 
-                          className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
-                          value={reportDate} 
-                          onChange={(e) => setReportDate(e.target.value)}
-                          min={activeYear?.start_date}
-                          max={activeYear?.end_date}
-                        /><Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
+                        <SmartDatePicker
+                          value={reportDate}
+                          onChange={setReportDate}
+                          lang={lang}
+                          isDark={isDark}
+                          minDate={activeYear?.start_date}
+                          maxDate={activeYear?.end_date}
+                        />
                     ) : reportType === 'monthly' ? (
-                        <div className="relative"><input 
-                          type="month" 
-                          className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
-                          value={selectedMonth} 
-                          onChange={(e) => setSelectedMonth(e.target.value)}
-                          min={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : undefined}
-                          max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
-                        /><BarChart3 className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
+                        <CompactMonthPicker
+                          value={selectedMonth}
+                          onChange={setSelectedMonth}
+                          lang={lang}
+                          isDark={isDark}
+                        />
                     ) : (
                         <div className="relative">
                             <select className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all appearance-none ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>

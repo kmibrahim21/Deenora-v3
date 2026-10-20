@@ -390,66 +390,55 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   };
 
   const fetchTemplates = async () => {
-    if (!madrasah) return;
+    if (!madrasah?.id) return;
     setLoading(true);
-    const { data } = await supabase.from('sms_templates').select('*').eq('institution_id', madrasah.id).order('created_at', { ascending: false });
-    if (data) setTemplates(data);
-    setLoading(false);
+    try {
+      const res = await fetch('/api/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_templates', institutionId: madrasah.id })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTemplates(data.templates || []);
+      } else {
+        const { data: clientData } = await supabase.from('sms_templates').select('*').eq('institution_id', madrasah.id).order('created_at', { ascending: false });
+        if (clientData) setTemplates(clientData);
+      }
+    } catch (e) {
+      console.error('Error fetching templates:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveTemplate = async () => {
-    console.log('Saving template:', { madrasah, tempTitle, tempBody });
-    if (!madrasah || !tempTitle.trim() || !tempBody.trim()) {
-      console.log('Missing madrasah or title/body');
-      return;
-    }
+    if (!madrasah || !tempTitle.trim() || !tempBody.trim()) return;
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Please login first');
+      const res = await fetch('/api/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_template',
+          targetInstitutionId: madrasah.id,
+          id: editingId,
+          title: tempTitle.trim(),
+          body: tempBody.trim(),
+          systemEvent: tempSystemEvent || undefined
+        })
+      });
 
-      const { data: profile } = await supabase.from('profiles').select('role, institution_id').eq('id', user.id).single();
-      if (!profile) throw new Error('Profile not found');
-      if (profile.institution_id !== madrasah.id && profile.role !== 'super_admin') {
-        throw new Error('Permission denied for this institution');
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save template');
 
-      // Normalize line endings to avoid double-char issues from CRLF in different browsers/OS
-      const cleanBody = tempBody.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-      if (editingId) {
-        const { error } = await supabase.from('sms_templates').update({ title: tempTitle, body: cleanBody }).eq('id', editingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: cleanBody });
-        if (error) throw error;
-      }
-      
-      // Update config_json if a system event is selected
-      if (tempSystemEvent) {
-         const { requestManager } = await import('../services/RequestManager');
-         const updatedConfig = {
-           ...madrasah.config_json,
-           features: {
-             ...((madrasah.config_json as any)?.features || {}),
-             sms_templates: {
-               ...((madrasah.config_json as any)?.features?.sms_templates || {}),
-               [tempSystemEvent]: cleanBody
-             }
-           }
-         };
-         
-         requestManager.invalidatePattern(`institution:${madrasah.id}`);
-         await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
-         if (triggerRefresh) triggerRefresh();
-      }
-      
       setShowAddModal(false);
       setTempTitle('');
       setTempBody('');
       setTempSystemEvent('');
       setEditingId(null);
       fetchTemplates();
+      if (triggerRefresh) triggerRefresh();
     } catch (e: any) { 
       console.error('Error saving template:', e);
       setStatusModal({
@@ -465,7 +454,14 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (!showDeleteConfirm) return;
     setIsDeleting(true);
     try {
-      await supabase.from('sms_templates').delete().eq('id', showDeleteConfirm.id);
+      const res = await fetch('/api/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_template', id: showDeleteConfirm.id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete template');
+
       setShowDeleteConfirm(null);
       fetchTemplates();
     } catch (e: any) { 

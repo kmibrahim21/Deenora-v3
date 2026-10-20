@@ -434,7 +434,12 @@ export const ThermalReceiptPreviewModal: React.FC<ThermalReceiptPreviewModalProp
                         { name: isBangla ? 'মাসিক বেতন ও অন্যান্য' : 'Monthly Fee', amount: Number(mergedStudent.total_payable || mergedStudent.total_paid) }
                       ]).map((item: any, idx: number) => (
                         <tr key={idx}>
-                          <td className="py-1 pr-1 font-bold leading-tight align-top">{item.name}</td>
+                          <td className="py-1 pr-1 font-bold leading-tight align-top">
+                            <div>{item.name}</div>
+                            {item.category_name && item.category_name !== item.name && (
+                              <div className="text-[9px] font-normal text-slate-600">[{item.category_name}]</div>
+                            )}
+                          </td>
                           <td className="py-1 pl-1 text-right font-bold align-top whitespace-nowrap">
                             ৳{Number(item.amount).toLocaleString()}
                           </td>

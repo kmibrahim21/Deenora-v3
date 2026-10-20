@@ -59,10 +59,10 @@ export default async function handler(req: Request, res: Response) {
       }
 
       const item = downloadCache.get(token)!;
-      // Single-use download cleanup after 5 seconds to free memory
+      // Retain token for 5 minutes so mobile browsers and download managers can finish multi-part/reconnect requests
       setTimeout(() => {
         downloadCache.delete(token);
-      }, 5000);
+      }, 5 * 60 * 1000);
 
       const safeFilename = encodeURIComponent(item.filename).replace(/['()]/g, escape);
       res.setHeader('Content-Type', item.mimeType);

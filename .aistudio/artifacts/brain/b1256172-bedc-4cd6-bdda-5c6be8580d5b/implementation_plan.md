@@ -1,149 +1,156 @@
-# Class-Wise Result System Configuration & Dynamic Routing
+# ফি ও হিসাব: ফি ক্যাটাগরি ব্যবস্থাপনা ও স্মার্ট কনভার্সন সিস্টেম
 
-A flexible, class-level result engine architecture enabling educational institutions (Madrasahs and Schools) to assign specific grading systems—such as GPA/Grading, Befaq, or High School—on a per-class basis within the Exam & Result Settings panel, automatically launching the corresponding result engine interface upon entering each class.
+ফি ও হিসাব (Fees & Accounts) মডিউলের ফি সেটিংসে কাস্টম ও ডিফল্ট ক্যাটাগরি তৈরি, ক্যাটাগরি অনুযায়ী ফি আদায় ও বেতন নির্ধারণ, রশিদ ও প্রিন্ট ভাউচারে ক্যাটাগরিভিত্তিক বিভাজন, এবং বিদ্যমান ফি স্ট্রাকচারকে স্বয়ংক্রিয়ভাবে ক্যাটাগরিতে রূপান্তর করার একটি সমন্বিত আর্কিটেকচারাল পরিকল্পনা।
+
+---
+
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> **Confirmed User Decisions (from Clarification Phase):**
-> - **Settings Location**: The class-wise result system selection is housed directly within the **Exam & Result Settings Panel** (পরীক্ষা ও রেজাল্ট সেটিংস প্যানেল), accessible from the Exam management workspace.
-> - **Allowed Systems by Institution Type**:
->   - **Madrasah**: জিপিএ (GPA/School Grading) and বেফাক (Befaq Examination System).
->   - **School**: জিপিএ (GPA System) and হাই স্কুল (High School Grading System).
-> - **Navigation & Routing**: When entering a class from the exam class list, the system automatically routes to and launches the designated engine interface for that class (e.g., Befaq engine for Befaq classes, GPA engine for GPA classes).
-> - **Average Mark Feature**: The Befaq mark entry table average mark column (গড় নম্বর) requested earlier is fully verified and integrated into the workflow.
+> পর্ব-১ এ ব্যবহারকারীর নিশ্চিত করা সিদ্ধান্তসমূহ:
+> 1. **ডিফল্ট ক্যাটাগরিসমূহ**: মাসিক বেতন, ভর্তি ফি, পরীক্ষার ফি, সেশন ফি এবং অন্যান্য।
+> 2. **ফ্রিকোয়েন্সি ও আচরণ**: প্রতিটি ক্যাটাগরিতে ডিফল্ট ফ্রিকোয়েন্সি (মাসিক / এককালীন) নির্ধারিত থাকবে যা ফি তৈরির সময় স্বয়ংক্রিয়ভাবে প্রযোজ্য হবে এবং প্রয়োজনে কাস্টমাইজ করা যাবে।
+> 3. **মাইগ্রেশন ও কনভার্ট পদ্ধতি**: বিদ্যমান বিভিন্ন নামের ফিগুলোকে ক্যাটাগরিতে রূপান্তর করতে অটো-সাজেস্ট সংবলিত এক-ক্লিকে কনভার্ট করার ডেডিকেটেড স্মার্ট মাইগ্রেশন টুল থাকবে।
+
+- **নিশ্চিত সিদ্ধান্ত ১ (ডিফল্ট ক্যাটাগরি)**: সিস্টেমে প্রথম থেকেই ৫টি মৌলিক ক্যাটাগরি লোড থাকবে। প্রতিষ্ঠান চাইলে যেকোনো সময় নতুন কাস্টম ক্যাটাগরি যোগ, সম্পাদনা বা সক্রিয়/নিষ্ক্রিয় করতে পারবে।
+- **নিশ্চিত সিদ্ধান্ত ২ (ফি ও ভর্তি সমন্বয়)**: শিক্ষার্থী ভর্তির সময় 'ভর্তি ফি' ক্যাটাগরির ফি স্বয়ংক্রিয়ভাবে প্রাথমিক বকেয়া হিসেবে ধার্য হবে এবং 'মাসিক বেতন' ক্যাটাগরি শিক্ষার্থীর ভর্তি মাস অনুযায়ী শিক্ষাবর্ষের শেষ পর্যন্ত নিয়মিত চক্রে গণনা হবে।
+- **নিশ্চিত সিদ্ধান্ত ৩ (প্রিন্ট ও রিসিট)**: থার্মাল রিসিট, এ৪ ভাউচার এবং স্টুডেন্ট স্টেটমেন্টে ফি আইটেমগুলো ক্যাটাগরি অনুযায়ী সুন্দরভাবে আলাদা ও সাব-টোটাল সহ প্রদর্শিত হবে।
 
 ---
 
-## 1. Overview & Core Concept
+### ১. Overview & Core Concept
 
-### What It Does
-This feature enables mixed-curriculum institutions to manage different educational standards within a single institution account. For example, a Madrasah may conduct primary/nursery classes using the standard GPA system while higher theological classes follow the Befaqul Madaris (বেফাক) examination structure. In schools, lower classes can use standard GPA while secondary grades follow the High School grading matrix.
-
-Administrators can designate the result engine for each class in the Exam & Result Settings modal. When viewing exams, the class browser shows each class with its configured result system badge. Clicking a class automatically activates that class's specialized result engine interface with full marksheet, seat plan, admit card, and merit ranking support.
-
-### Target Audience & Persona
-- **Institution Administrators & Head Principals**: Need granular control over which classes follow board/befaq rules versus standard GPA without creating separate institution accounts.
-- **Teachers & Evaluators**: Enter marks and view merit ranks inside the exact regulatory format required for that specific class.
-
-### Key Value
-Eliminates curriculum friction by allowing multi-stream madrasahs and schools to co-exist in one unified management platform with zero manual switching needed by teachers.
+- **মূল উদ্দেশ্য**: পূর্বে প্রতিষ্ঠানের অ্যাডমিনরা নিজেদের মতো করে বিভিন্ন নামে ফি তৈরি করায় রিপোর্টিং, মাসিক বেতন আদায় এবং ভর্তির সময় হিসাব মেলানো জটিল হয়ে পড়ত। ক্যাটাগরি সিস্টেমের মাধ্যমে সকল ফি কাঠামোগত শৃঙ্খলায় আসবে।
+- **টার্গেট অডিয়েন্স**: মাদরাসা, স্কুল ও কোচিং সেন্টারের হিসাবরক্ষক, প্রিন্সিপাল এবং অ্যাডমিন।
+- **মূল সুবিধা**:
+  - ফি সেটিংসে ক্যাটাগরি ম্যানেজমেন্ট ট্যাব (নতুন ক্যাটাগরি যোগ ও পরিচালনা)।
+  - ফি তৈরির সময় ক্যাটাগরি সিলেক্ট করলে স্বয়ংক্রিয়ভাবে টাইপ (মাসিক / এককালীন) ও প্রাসঙ্গিক তারিখ সেট হওয়া।
+  - 'মাসিক বেতন' ক্যাটাগরির ফি স্বয়ংক্রিয়ভাবে মাসিক সাইকেলে কার্যকর হওয়া।
+  - শিক্ষার্থী ভর্তির সময় 'ভর্তি ফি' ক্যাটাগরি অনুযায়ী এককালীন ফি ধার্য হওয়া।
+  - বিদ্যমান সব পুরনো ফি স্ট্রাকচারকে নিমিষেই উপযুক্ত ক্যাটাগরিতে কনভার্ট করার ভিজ্যুয়াল উইজার্ড।
+  - প্রিন্ট ও মানি রিসিটে ক্যাটাগরি অনুযায়ী স্পষ্ট ও মার্জিত লেআউট।
 
 ---
 
-## 2. User Experience & Visual Design
+### ২. User Experience & Visual Design
 
-### Key User Flows
+#### ক. প্রধান ইউজার ফ্লো (User Flows)
+1. **ক্যাটাগরি ম্যানেজমেন্ট ফ্লো**:
+   - ব্যবহারকারী 'ফি ও হিসাব' -> 'ফি সেটিংস' এ যাবেন।
+   - সেখানে 'ক্যাটাগরি সমূহ' ও 'ফি স্ট্রাকচার' দুটি স্পষ্ট সেগমেন্ট থাকবে।
+   - '+ নতুন ক্যাটাগরি' বাটনে ক্লিক করে ক্যাটাগরির নাম (বাংলা ও ইংরেজি) এবং ধরন (মাসিক / এককালীন) দিয়ে সেভ করবেন।
+2. **ফি স্ট্রাকচার তৈরি ফ্লো**:
+   - '+ নতুন ফি তৈরি' বাটনে ক্লিক করলে ড্রপডাউনে ক্যাটাগরি নির্বাচন করা যাবে।
+   - ক্যাটাগরি হিসেবে 'মাসিক বেতন' সিলেক্ট করলে স্বয়ংক্রিয়ভাবে বার্ষিক ক্যালেন্ডার অনুযায়ী শুরুর তারিখ ও মাসিক ফ্রিকোয়েন্সি নির্ধারিত হবে।
+   - 'ভর্তি ফি' সিলেক্ট করলে এককালীন ও ভর্তিকালীন প্রযোজ্য হিসেবে কনফিগার হবে।
+3. **স্মার্ট ফি কনভার্সন ফ্লো (Smart Migration Tool)**:
+   - ফি সেটিংসে উপরে একটি পরিচ্ছন্ন ব্যাচ-অ্যালার্ট ব্যানার থাকবে: *"আপনার কিছু ফি এখনো ক্যাটাগরিতে যুক্ত নেই"* সাথে অ্যাকশন বাটন: `[ক্যাটাগরিতে কনভার্ট করুন]`।
+   - ক্লিক করলে একটি আধুনিক স্লাইড-ইন/মডাল ওপেন হবে।
+   - সিস্টেম স্বয়ংক্রিয়ভাবে প্রতিটি বর্তমান ফি-র নাম বিশ্লেষণ করে সঠিক ক্যাটাগরি সাজেস্ট করবে (যেমন: "খোরাকি" -> মাসিক বেতন, "ভর্তি বাবদ" -> ভর্তি ফি, "বার্ষিক পরীক্ষা" -> পরীক্ষার ফি)।
+   - ব্যবহারকারী চাইলে ড্রপডাউন থেকে পরিবর্তন করতে পারবেন, অতঃপর `[এক ক্লিকে কনভার্ট সম্পন্ন করুন]` চাপলেই সব ফি ক্যাটাগরির সাথে লিঙ্ক হয়ে যাবে।
+4. **ভর্তি ও রিসিট ফ্লো**:
+   - ভর্তি ফরম বা শিক্ষার্থী যুক্ত করার সময় ভর্তি ফি ক্যাটাগরির মোট হিসাব এক নজরে দেখা যাবে।
+   - মানি রিসিট প্রিন্ট করার সময় আইটেমগুলো ক্যাটাগরি অনুসারে গ্রুপ হয়ে প্রদর্শিত হবে।
 
-1. **Configuring Class Result Systems**:
-   - User navigates to **Exams** (পরীক্ষা).
-   - In the header or settings bar, clicks the **Exam & Result Settings** (পরীক্ষা ও রেজাল্ট সেটিংস) gear button.
-   - The settings modal opens with a dedicated section: **"ক্লাস অনুযায়ী রেজাল্ট সিস্টেম নির্ধারণ" (Class-wise Result System Settings)**.
-   - A list of all active classes is displayed with sleek segmented toggle controls matching the institution type:
-     - For Madrasah: `[ জিপিএ (GPA) | বেফাক (Befaq) ]`
-     - For School: `[ জিপিএ (GPA) | হাই স্কুল (High School) ]`
-   - Changing a toggle automatically updates the state and persists to the institution's `config_json.class_result_engines`.
-   - Visual confirmation toast confirms instant save.
-
-2. **Browsing Classes & Automatic Dynamic Interface**:
-   - In the main Exams view (`activeTab === 'exams'`, `view === 'list'`), the class cards grid displays all classes.
-   - Each card displays a clean typography tag indicating its active system (e.g. `বেফাক সিস্টেম` in emerald or `জিপিএ সিস্টেম` in blue).
-   - When the user clicks on a class card:
-     - If the class is set to `befaq`, it dynamically initializes and renders `BefaqResultEngine` scoped to that class.
-     - If the class is set to `school` / `gpa` / `high_school`, it initializes `SchoolResultEngine` scoped to that class.
-   - Clicking **"Back to Classes"** (শ্রেণিতে ফিরে যান) seamlessly unmounts the active class view and returns to the unified class list.
-
-### Visual Identity & Theme
-- **Color Palette & Discipline**:
-  - Light canvas: Clean off-white (`#F8FAFC`) with pure white card surfaces (`#FFFFFF`) and hairline borders (`border-slate-200`).
-  - Dark canvas: Deep navy/slate (`#0F172A`) with subdued elevated panels (`#1E293B`) and dark hairline borders (`border-slate-800`).
-  - Engine Accents:
-    - **Befaq System**: Distinctive emerald branding (`#059669` / `text-emerald-500`) with subtle mint indicator.
-    - **GPA / School System**: Institutional royal blue (`#2563EB` / `text-blue-500`).
-    - **High School System**: Indigo / Violet accent (`#4F46E5`).
-- **Typography**:
-  - Bengali prose: Clean `Hind Siliguri` / `Noto Sans Bengali` with refined weights (font-bold / font-black).
-  - Tabular and score numbers: Strict `font-mono tabular-nums` for roll, marks, total, and average marks.
-- **Anti-Slop Restraint**:
-  - Zero static pill capsules around status text; metadata rendered as clean inline typographic text separated by `·`.
-  - Filter controls and toggles built with functional segmented button controls.
+#### খ. ভিজ্যুয়াল আইডেন্টিটি ও থিম
+- **ডিজাইন ফিলোসফি**: Tailwind CSS স্ট্যান্ডার্ড মেনে ক্ল্যাটার-মুক্ত প্রফেশনাল ফিন্যান্সিয়াল কনসোল। কোনো অপ্রয়োজনীয় পিল-ব্যাজ স্যান্ডউইচ বা ফেক স্ট্যাটাস ডট থাকবে না।
+- **কালার প্যালেট**:
+  - ব্যাকগ্রাউন্ড: Clean White (`#FFFFFF`) / Dark Slate Canvas (`#0F172A`).
+  - প্রাইমারি ব্র্যান্ড কালার: Deep Sapphire Blue (`#1E3A8A` / `#2563EB`).
+  - বর্ডার ও ডিভাইডার: সূক্ষ্ম হেয়ারলাইন বর্ডার (`border-slate-200 dark:border-slate-800`).
+  - স্ট্যাটাস কালার: সবুজ (`#16A34A`), অ্যাম্বার (`#D97706`), ও ব্লু (`#2563EB`)।
+- **টাইপোগ্রাফি**: বাংলা ও ইংরেজি সংখ্যার জন্য `font-noto` এবং টেবিলের সংখ্যার জন্য সুনির্দিষ্ট `tabular-nums` / `font-mono`।
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+### ৩. Key Product Decisions & Trade-Offs
 
-### Decision 1: Storage Architecture for Class-Wise Engine Mapping
-- **Chosen Approach**: Store class engine mappings inside `institutions.config_json.class_result_engines` as a key-value dictionary (`{ [classId]: 'befaq' | 'gpa' | 'high_school' }`).
-- **Why**: 
-  - Works immediately with existing Supabase schema without requiring a database migration on the `classes` table.
-  - Automatically syncs across devices when the institution profile updates.
-  - Fallback logic is straightforward: if a class has no override in `class_result_engines`, it falls back to the institution default `institution.config_json.result_engine`.
-- **Alternatives Considered**: Adding an `engine` column to `classes` table—rejected because it would require altering table schemas and backend RPCs across all environments.
-
-### Decision 2: Routing Architecture in `Exams.tsx`
-- **Chosen Approach**: Elevate the class selection stage to a unified coordinator component in `Exams.tsx`. When a class is selected, `ExamsContent` reads `class_result_engines[selectedClassId]` and mounts the matching engine (`BefaqResultEngine` or `SchoolResultEngine`) pre-initialized with `selectedClassId`.
-- **Why**: 
-  - Prevents state collision and duplicate network fetches between engines.
-  - Ensures a seamless transition: clicking a Befaq class shows Befaq's specific Marhala/Sanad views, while clicking a School class shows standard GPA subject grading.
-  - Teachers only see the interface relevant to their students.
+- **সিদ্ধান্ত ১: ডেটা স্টোরেজ ও রেজিলিয়েন্স (Data Persistence Strategy)**
+  - *পন্থা*: ক্যাটাগরি ডেটা এবং ফি-টু-ক্যাটাগরি ম্যাপিং `madrasah.config_json.fee_categories` এবং `madrasah.config_json.fee_structure_categories` এ সুরক্ষিত রাখা হবে, পাশাপাশি `fee_structures` টেবিলে `category_id` কলাম সক্রিয় থাকলে ব্যাকওয়ার্ড-কম্প্যাটিবল ভাবে ব্যবহার করা হবে।
+  - *কারণ*: Supabase স্কিমা পরিবর্তনের জন্য ম্যানুয়াল SQL মাইগ্রেশন রান না করলেও সিস্টেম তাৎক্ষণিকভাবে কোনো ক্র্যাশ ছাড়াই ১০০% মসৃণভাবে কাজ করতে পারবে।
+- **সিদ্ধান্ত ২: কনভার্সন ইঞ্জিনের অ্যালগরিদম**
+  - *পন্থা*: মাল্টি-কীওয়ার্ড ও লেভেনস্টাইন প্যাটার্ন ম্যাচিং (যেমন: `মাসিক`, `বেতন`, `tuition`, `monthly` -> মাসিক বেতন; `ভর্তি`, `admission`, `ফরম` -> ভর্তি ফি)।
+  - *কারণ*: এক ক্লিকেই ৯৫%+ ফি নির্ভুল ক্যাটাগরি পাবে এবং ব্যবহারকারীর সময় বাঁচবে।
+- **সিদ্ধান্ত ৩: রিসিট ও প্রিন্ট কম্প্যাটিবিলিটি**
+  - *পন্থা*: থার্মাল রিসিট এবং এ৪ ফরম্যাট উভয়ের জন্যই ক্যাটাগরি গ্রুপিং ঐচ্ছিক ও পরিষ্কারভাবে সাজানো থাকবে যাতে ছোট ৫8/৮০ মিমি প্রিন্টারেও অতিরিক্ত জায়গা নষ্ট না হয়।
 
 ---
 
-## 4. Technical Architecture & Data Strategy
-
-### System Architecture Diagram
+### ৪. Technical Architecture & Data Strategy
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                              Exams.tsx                                 │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ Unified Top Bar: Search · Exam Settings Modal Trigger (Settings) │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                   │                                    │
-│                 ┌─────────────────┴─────────────────┐                  │
-│                 ▼                                   ▼                  │
-│       [No Class Selected]                 [Class Selected: ID]         │
-│  ┌──────────────────────────────┐                   │                  │
-│  │     Class Cards Grid         │                   │                  │
-│  │ • Class 1 [জিপিএ সিস্টেম]    │                   │                  │
-│  │ • Class 2 [বেফাক সিস্টেম]    │                   │                  │
-│  │ • Class 3 [হাই স্কুল]        │                   │                  │
-│  └──────────────────────────────┘                   │                  │
-│                 │                                   │                  │
-│                 ▼                                   ▼                  │
-│      [Exam Settings Modal]                Check class engine:          │
-│   ┌─────────────────────────┐             ┌─────────────────┐          │
-│   │ Class Engine Selectors: │             │ engine ===      │          │
-│   │ [Class A] -> [GPA|Befaq]│             │ 'befaq' ?       │          │
-│   │ [Class B] -> [GPA|Befaq]│             └────────┬────────┘          │
-│   │ Instant DB Save         │                      │                   │
-│   └─────────────────────────┘             ┌────────┴────────┐          │
-│                                           ▼                 ▼          │
-│                                  BefaqResultEngine   SchoolResultEngine │
-│                                  (Befaq UI & Logic)  (GPA/School Logic) │
-└────────────────────────────────────────────────────────────────────────┘
+│                        Fee Settings Screen                             │
+├───────────────────────────────────┬────────────────────────────────────┤
+│   Category Management Tab         │   Fee Structure Tab                │
+│   • Default Categories            │   • List of Structures             │
+│   • Custom Category Creator       │   • Assigned Category Tag          │
+│   • Frequency (Monthly/One-time)  │   • [Convert to Category Button]   │
+└─────────────────┬─────────────────┴──────────────────┬─────────────────┘
+                  │                                    │
+                  ▼                                    ▼
+       ┌─────────────────────┐              ┌─────────────────────┐
+       │ Category Store      │              │ Smart Migration     │
+       │ config_json.fee_cat │              │ Converter Engine    │
+       └──────────┬──────────┘              └──────────┬──────────┘
+                  │                                    │
+                  ├─────────────────┬──────────────────┘
+                  ▼                 ▼
+       ┌────────────────────┐ ┌────────────────────┐
+       │ Student Accounting │ │ Receipt & Invoice  │
+       │ Engine & Admission │ │ PDF / Print Render │
+       └────────────────────┘ └────────────────────┘
 ```
 
-### Data Model & State Schema
+#### ডেটা মডেল (TypeScript Interfaces)
 
 ```typescript
-// Extension to Institution config_json:
-interface InstitutionConfig {
-  result_engine?: 'school' | 'befaq' | 'qawmi_custom';
-  class_result_engines?: Record<string, 'gpa' | 'befaq' | 'high_school' | 'school'>;
-  merit_ranking_mode?: string;
-  // ... existing fields preserved
+export type FeeCategoryFrequency = 'monthly' | 'one_time' | 'term' | 'flexible';
+
+export interface FeeCategory {
+  id: string; // e.g. 'cat_monthly_tuition', 'cat_admission', or uuid
+  name_bn: string;
+  name_en: string;
+  frequency: FeeCategoryFrequency;
+  is_default: boolean;
+  color?: string;
+  description?: string;
+}
+
+export interface FeeCategoryMapping {
+  fee_structure_id: string;
+  category_id: string;
 }
 ```
 
-### Interactive State Transitions
+#### ডিফল্ট ক্যাটাগরিসমূহ
+1. `{ id: 'cat_monthly_tuition', name_bn: 'মাসিক বেতন', name_en: 'Monthly Tuition', frequency: 'monthly', is_default: true }`
+2. `{ id: 'cat_admission', name_bn: 'ভর্তি ফি', name_en: 'Admission Fee', frequency: 'one_time', is_default: true }`
+3. `{ id: 'cat_exam', name_bn: 'পরীক্ষার ফি', name_en: 'Exam Fee', frequency: 'term', is_default: true }`
+4. `{ id: 'cat_session', name_bn: 'সেশন ফি', name_en: 'Session Fee', frequency: 'one_time', is_default: true }`
+5. `{ id: 'cat_other', name_bn: 'অন্যান্য ফি', name_en: 'Other Fees', frequency: 'flexible', is_default: true }`
 
-1. **Settings Modal Toggle**:
-   - `handleToggleClassEngine(classId: string, engine: 'gpa' | 'befaq' | 'high_school')`
-   - Immutably clones `madrasah.config_json.class_result_engines`.
-   - Calls Supabase `institutions.update({ config_json })`.
-   - Updates local React state so UI reflects the new choice immediately.
+#### কম্পোনেন্ট ও ফাইল পরিবর্তন পরিকল্পনা
+1. **`src/types.ts`**: `FeeCategory`, `FeeCategoryFrequency` টাইপ যোগ।
+2. **`src/utils/feeCategoryHelper.ts`**: ক্যাটাগরি তৈরি, ডিফল্ট লোড, কীওয়ার্ড ম্যাচিং ও অটো-সাজেস্ট কনভার্সন ফাংশনসমূহ।
+3. **`src/components/finance/FeeCategoryManagerModal.tsx`**: ক্যাটাগরি তৈরি, এডিট ও তালিকা প্রদর্শনের মার্জিত মডাল।
+4. **`src/components/finance/FeeCategoryMigrationModal.tsx`**: বিদ্যমান বিভিন্ন নামের ফিগুলোকে স্বয়ংক্রিয়ভাবে যাচাই করে এক ক্লিকে ক্যাটাগরিতে রূপান্তর করার মডাল।
+5. **`src/components/finance/SchoolFeeEngine.tsx` & `QawmiFeeEngine.tsx`**:
+   - ফি সেটিংসে ক্যাটাগরি ট্যাব ও কনভার্ট বাটন সংযুক্তিকরণ।
+   - ফি স্ট্রাকচার তৈরি/এডিটে ক্যাটাগরি ড্রপডাউন ও অটো-ফ্রিকোয়েন্সি সেট করা।
+   - স্ট্রাকচার তালিকায় ক্যাটাগরি ট্যাগ প্রদর্শন।
+6. **`src/components/finance/StudentAccountingDetail.tsx`**:
+   - ক্যাটাগরি অনুযায়ী ফি পৃথকীকরণ (যেমন: মাসিক বেতন প্রতি মাসে প্রযোজ্য হওয়া এবং ভর্তি ফি শুরুতে এককালীন থাকা)।
+7. **`src/components/finance/ThermalReceiptPreviewModal.tsx` & ভাউচার প্রিন্ট**:
+   - মানি রিসিটে ক্যাটাগরি অনুযায়ী সুন্দর সাব-হেডার ও বিবরণ উপস্থাপন।
 
-2. **Dynamic Class Selection**:
-   - When user clicks a class in `Exams.tsx`:
-     `const targetEngine = madrasah?.config_json?.class_result_engines?.[cls.id] || madrasah?.config_json?.result_engine || 'school';`
-   - Sets `selectedClassId = cls.id` and `activeEngine = targetEngine`.
-   - Renders the chosen engine with `initialClassId={cls.id}` and `onBack={() => setSelectedClassId(null)}`.
+---
+
+### ৫. Verification & Testing Checklist
+
+- [ ] ফি সেটিংসে ডিফল্ট ৫টি ক্যাটাগরি সঠিকভাবে দেখাচ্ছে কি না।
+- [ ] ব্যবহারকারী নতুন কাস্টম ক্যাটাগরি যোগ ও এডিট করতে পারছে কি না।
+- [ ] নতুন ফি স্ট্রাকচার তৈরির সময় ক্যাটাগরি সিলেক্ট করলে তার ফ্রিকোয়েন্সি স্বয়ংক্রিয়ভাবে সক্রিয় হচ্ছে কি না।
+- [ ] বিদ্যমান বিভিন্ন নামের পুরনো ফিগুলোকে অটো-সাজেস্ট সহ এক ক্লিকে কনভার্ট করা যাচ্ছে কি না।
+- [ ] শিক্ষার্থীর মাসিক ফি ও ভর্তি ফি সঠিক ক্যাটাগরি ফিল্টার অনুযায়ী প্রসেস হচ্ছে কি না।
+- [ ] মানি রিসিট ও স্টেটমেন্ট প্রিন্টে ক্যাটাগরি অনুযায়ী তথ্য প্রদর্শিত হচ্ছে কি না।

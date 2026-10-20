@@ -132,7 +132,16 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
             <tbody className="divide-y divide-slate-100">
               {feeItems.map((item: any, idx: number) => (
                 <tr key={idx} className="bg-white">
-                  <td className="py-1 px-3 text-[11px] font-bold text-slate-700">{item.name}</td>
+                  <td className="py-1 px-3 text-[11px] font-bold text-slate-700">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{item.name}</span>
+                      {item.category_name && item.category_name !== item.name && (
+                        <span className="text-[9px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">
+                          {item.category_name}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-1 px-3 text-right text-[11px] font-bold text-slate-900">{t.currency}{Number(item.amount).toLocaleString()}</td>
                 </tr>
               ))}

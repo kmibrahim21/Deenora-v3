@@ -9,6 +9,8 @@ import { generateStudentListPDF } from 'utils/pdfGenerator';
 import { 
   initAuth, 
   googleSignIn, 
+  googleSignInRedirect,
+  getFriendlyAuthErrorMessage,
   logoutGoogle, 
   encryptData, 
   decryptData, 
@@ -52,6 +54,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [gdriveBackups, setGdriveBackups] = useState<any[]>([]);
   const [gdriveLoading, setGdriveLoading] = useState(false);
   const [gdriveActionLoading, setGdriveActionLoading] = useState(false);
+  const [showRedirectOption, setShowRedirectOption] = useState<boolean>(false);
 
   // Load Google Drive backups once token is available
   const loadGDriveBackups = async (token: string) => {
@@ -105,6 +108,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       if (res) {
         setGoogleUser(res.user);
         setGdriveToken(res.accessToken);
+        setShowRedirectOption(false);
         await loadGDriveBackups(res.accessToken);
         setStatus({
           type: 'success',
@@ -115,13 +119,30 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       }
     } catch (err: any) {
       console.error('Google connect error:', err);
+      const friendly = getFriendlyAuthErrorMessage(err, lang);
+      if (friendly.isPopupBlockedOrClosed) {
+        setShowRedirectOption(true);
+      }
       setStatus({
         type: 'error',
-        message: lang === 'bn' 
-          ? `গুগল অ্যাকাউন্ট যুক্ত করতে ব্যর্থ হয়েছে: ${err.message}` 
-          : `Failed to connect Google account: ${err.message}`
+        message: friendly.message
       });
     } finally {
+      setGdriveLoading(false);
+    }
+  };
+
+  const handleGoogleConnectRedirect = async () => {
+    setGdriveLoading(true);
+    try {
+      await googleSignInRedirect();
+    } catch (err: any) {
+      console.error('Google connect redirect error:', err);
+      const friendly = getFriendlyAuthErrorMessage(err, lang);
+      setStatus({
+        type: 'error',
+        message: friendly.message
+      });
       setGdriveLoading(false);
     }
   };
@@ -160,9 +181,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         }
       } catch (err: any) {
         console.error('Auto login failed:', err);
+        const friendly = getFriendlyAuthErrorMessage(err, lang);
+        if (friendly.isPopupBlockedOrClosed) {
+          setShowRedirectOption(true);
+        }
         setStatus({
           type: 'error',
-          message: lang === 'bn' ? 'ড্রাইভ সেশন সক্রিয় করতে অনুগ্রহ করে গুগল সাইন-ইন সম্পন্ন করুন।' : 'Please sign in to Google to activate your drive session.'
+          message: friendly.message
         });
         setGdriveActionLoading(false);
         return;
@@ -275,9 +300,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         }
       } catch (err: any) {
         console.error('Auto login failed:', err);
+        const friendly = getFriendlyAuthErrorMessage(err, lang);
+        if (friendly.isPopupBlockedOrClosed) {
+          setShowRedirectOption(true);
+        }
         setStatus({
           type: 'error',
-          message: lang === 'bn' ? 'ড্রাইভ সেশন সক্রিয় করতে অনুগ্রহ করে গুগল সাইন-ইন সম্পন্ন করুন।' : 'Please sign in to Google to activate your drive session.'
+          message: friendly.message
         });
         setGdriveActionLoading(false);
         return;
@@ -316,9 +345,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         }
       } catch (err: any) {
         console.error('Auto login failed:', err);
+        const friendly = getFriendlyAuthErrorMessage(err, lang);
+        if (friendly.isPopupBlockedOrClosed) {
+          setShowRedirectOption(true);
+        }
         setStatus({
           type: 'error',
-          message: lang === 'bn' ? 'ড্রাইভ সেশন সক্রিয় করতে অনুগ্রহ করে গুগল সাইন-ইন সম্পন্ন করুন।' : 'Please sign in to Google to activate your drive session.'
+          message: friendly.message
         });
         setGdriveActionLoading(false);
         return;
@@ -1472,6 +1505,17 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                   </svg>
                   <span>{lang === 'bn' ? 'গুগল দিয়ে সাইন ইন করুন' : 'Sign in with Google'}</span>
                 </button>
+
+                {showRedirectOption && (
+                  <button 
+                    onClick={handleGoogleConnectRedirect}
+                    disabled={gdriveLoading}
+                    className={`flex items-center justify-center gap-3 px-6 h-12 ${isDark ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'bg-emerald-50 text-emerald-700 border-emerald-100'} font-bold text-sm rounded-xl border shadow-sm transition-all active:scale-[0.98] w-full max-w-xs cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300`}
+                  >
+                    <Loader2 className={`w-4 h-4 ${gdriveLoading ? 'animate-spin' : 'hidden'}`} />
+                    <span>{lang === 'bn' ? 'রিডাইরেক্ট করে সাইন ইন করুন' : 'Sign in with Redirect'}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>

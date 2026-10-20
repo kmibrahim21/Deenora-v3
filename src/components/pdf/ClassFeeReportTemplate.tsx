@@ -81,9 +81,10 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
         <table className="w-full border-collapse rounded-xl overflow-hidden shadow-sm border border-slate-200">
           <thead>
             <tr className="bg-slate-900 text-white">
-              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-center w-12">{t.sl}</th>
-              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-center w-16">{t.roll}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-center w-10">{t.sl}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-center w-12">{t.roll}</th>
               <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-left">{t.studentName}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-left w-24">{t.class}</th>
               <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-right">{t.totalPayable}</th>
               <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-right">{t.totalPaid}</th>
               <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-right">{t.balanceDue}</th>
@@ -101,6 +102,7 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
                   <td className="border-r border-slate-100 p-2 text-xs font-bold text-center text-slate-400">{startIndex + index + 1}</td>
                   <td className="border-r border-slate-100 p-2 text-xs font-black text-center text-blue-600">{student.roll}</td>
                   <td className="border-r border-slate-100 p-2 text-xs font-black text-slate-700">{student.student_name}</td>
+                  <td className="border-r border-slate-100 p-2 text-[11px] font-bold text-slate-600">{student.class_name || className}</td>
                   <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{Number(student.total_payable || 0).toLocaleString()}</td>
                   <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">
                     ৳{Number(student.total_paid || 0).toLocaleString()}
@@ -122,7 +124,7 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 font-black">
-              <td colSpan={3} className="p-4 text-right text-xs uppercase tracking-widest text-slate-500">Total / মোট:</td>
+              <td colSpan={4} className="p-4 text-right text-xs uppercase tracking-widest text-slate-500">Total / মোট:</td>
               <td className="p-4 text-right text-sm text-slate-900">৳{displayPayable.toLocaleString()}</td>
               <td className="p-4 text-right text-sm text-emerald-600">৳{displayPaid.toLocaleString()}</td>
               <td className="p-4 text-right text-sm text-red-600">৳{displayDue.toLocaleString()}</td>
