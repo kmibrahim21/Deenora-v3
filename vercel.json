@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://*.google.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss: ws: https://*.googleapis.com https://api.aladhan.com https: http: stun: turn: turns:; img-src 'self' data: blob: https: http:; media-src 'self' data: blob: mediastream: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://*.google.com https://accounts.google.com https://apis.google.com https://*.gstatic.com; frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://firebaseapp.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss: ws: https://*.googleapis.com https://accounts.google.com https://*.firebaseapp.com https://api.aladhan.com https: http: stun: turn: turns:; img-src 'self' data: blob: https: http:; media-src 'self' data: blob: mediastream: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
         },
         {
           "key": "Permissions-Policy",
