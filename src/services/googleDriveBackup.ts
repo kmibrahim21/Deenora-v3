@@ -91,10 +91,21 @@ function loadGsiScript(): Promise<void> {
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
-    const existing = document.getElementById('google-gsi-client');
+    if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
+      resolve();
+      return;
+    }
+    const existing = document.getElementById('google-gsi-client') || document.querySelector('script[src*="accounts.google.com/gsi/client"]');
     if (existing) {
+      if ((window as any).google?.accounts?.oauth2) {
+        resolve();
+        return;
+      }
       existing.addEventListener('load', () => resolve());
       existing.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services library.')));
+      setTimeout(() => {
+        if ((window as any).google?.accounts?.oauth2) resolve();
+      }, 500);
       return;
     }
     const script = document.createElement('script');
@@ -178,11 +189,13 @@ export function decryptData(base64: string): string {
  * Friendly error message parser for Google/Firebase authentication with explicit domain advice
  */
 export function getFriendlyAuthErrorMessage(err: any, lang: 'bn' | 'en' = 'bn'): { message: string; isPopupBlockedOrClosed: boolean; isDomainError: boolean } {
-  const code = err?.code || '';
-  const rawMsg = (err?.message || '').toLowerCase();
+  const code = err?.code || err?.type || err?.error || '';
+  const rawMsg = (err?.message || err?.error_description || err?.error || '').toLowerCase();
   
   const isDomainError = 
     code === 'auth/unauthorized-domain' || 
+    code === 'origin_mismatch' || 
+    code === 'redirect_uri_mismatch' || 
     rawMsg.includes('unauthorized domain') || 
     rawMsg.includes('origin_mismatch') || 
     rawMsg.includes('redirect_uri_mismatch') ||
@@ -191,43 +204,30 @@ export function getFriendlyAuthErrorMessage(err: any, lang: 'bn' | 'en' = 'bn'):
   const isPopupBlockedOrClosed = 
     code === 'auth/popup-closed-by-user' || 
     code === 'auth/popup-blocked' || 
+    code === 'popup_closed' || 
+    code === 'popup_blocked' || 
+    code === 'access_denied' || 
     code === 'auth/cancelled-popup-request' ||
-    rawMsg.includes('popup');
+    rawMsg.includes('popup') ||
+    rawMsg.includes('closed');
   
   if (isDomainError) {
     const domain = typeof window !== 'undefined' ? window.location.hostname : 'deenora.app';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://deenora.app';
     return {
       message: lang === 'bn'
-        ? `ডোমেন অনুমোদন প্রয়োজন: "${domain}" ডোমেনটি Firebase Console (Authentication > Settings > Authorized Domains) তালিকায় যুক্ত থাকতে হবে। নিচের "deenora.app / Vercel ডোমেন ও ক্লাউড কনফিগারেশন" নির্দেশিকা দেখুন।`
-        : `Domain authorization required: "${domain}" is not in Firebase Authorized Domains. Check the setup guide below.`,
+        ? `ডোমেন অনুমোদন প্রয়োজন: Google Cloud Console-এ "${origin}" ডোমেনটি Authorized JavaScript origins তালিকায় এবং Firebase Console-এ "${domain}" Authorized domains তালিকায় যুক্ত করুন। অথবা নিচের "রিডাইরেক্ট করে সাইন ইন" বোতাম ব্যবহার করুন।`
+        : `Domain authorization required: Add "${origin}" to Google Cloud Console and "${domain}" to Firebase Console. Or use "Sign in with Redirect" below.`,
       isPopupBlockedOrClosed: false,
       isDomainError: true
     };
   }
 
-  if (code === 'auth/popup-closed-by-user') {
+  if (isPopupBlockedOrClosed) {
     return {
       message: lang === 'bn'
-        ? 'গুগল সাইন-ইন পপআপ উইন্ডোটি বন্ধ করা হয়েছে বা ব্রাউজার কর্তৃক আটকে দেওয়া হয়েছে। আপনি সরাসরি "রিডাইরেক্ট করে সাইন ইন করুন" বোতাম ব্যবহার করতে পারেন।'
-        : 'Google Sign-In popup was closed or blocked. You can use "Sign in with Redirect" instead.',
-      isPopupBlockedOrClosed: true,
-      isDomainError: false
-    };
-  }
-  if (code === 'auth/popup-blocked') {
-    return {
-      message: lang === 'bn'
-        ? 'আপনার ব্রাউজার গুগল সাইন-ইন পপআপ ব্লক করেছে। অনুগ্রহ করে ব্রাউজার অ্যাড্রেস বার থেকে পপআপ এলাউ (Allow) করুন অথবা "রিডাইরেক্ট করে সাইন ইন করুন" বোতাম ব্যবহার করুন।'
-        : 'Your browser blocked the Google Sign-In popup. Please allow popups or use "Sign in with Redirect".',
-      isPopupBlockedOrClosed: true,
-      isDomainError: false
-    };
-  }
-  if (code === 'auth/cancelled-popup-request') {
-    return {
-      message: lang === 'bn'
-        ? 'পূর্বের সাইন-ইন অনুরোধটি বাতিল হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।'
-        : 'Previous sign-in request was cancelled. Please try again.',
+        ? 'গুগল সাইন-ইন পপআপ ব্রাউজার কর্তৃক আটকে দেওয়া হয়েছে বা বন্ধ হয়েছে। নিচে থাকা "রিডাইরেক্ট করে সাইন ইন করুন (ফুল পেজ)" বোতামটি ব্যবহার করুন (এতে কোনো পপআপ ব্লকিং সমস্যা হয় না)।'
+        : 'Google Sign-In popup was closed or blocked. Please use the "Sign in with Redirect (Full Page)" button below.',
       isPopupBlockedOrClosed: true,
       isDomainError: false
     };
@@ -241,39 +241,55 @@ export function getFriendlyAuthErrorMessage(err: any, lang: 'bn' | 'en' = 'bn'):
 }
 
 /**
+ * Standalone helper to parse and consume OAuth access token from window.location.hash.
+ * Can be called anywhere (e.g. at app boot in index.tsx or App.tsx).
+ */
+export function checkOAuthRedirectToken(
+  onSuccess?: (user: GoogleDriveUser, token: string) => void
+): boolean {
+  if (typeof window === 'undefined') return false;
+
+  if (window.location.hash && window.location.hash.includes('access_token=')) {
+    try {
+      const hash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
+      const params = new URLSearchParams(hash);
+      const token = params.get('access_token');
+      const expiresIn = params.get('expires_in') || '3599';
+
+      if (token) {
+        // Clean URL cleanly without triggering page reload
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+        // Fetch user profile from Google and cache
+        fetchGoogleUserInfo(token).then((user) => {
+          saveTokenAndUser(token, user, expiresIn);
+          if (onSuccess) onSuccess(user, token);
+        }).catch(() => {
+          const fallbackUser: GoogleDriveUser = { displayName: 'Google Drive User', email: '' };
+          saveTokenAndUser(token, fallbackUser, expiresIn);
+          if (onSuccess) onSuccess(fallbackUser, token);
+        });
+        return true;
+      }
+    } catch (e) {
+      console.error('Error parsing OAuth redirect hash:', e);
+    }
+  }
+  return false;
+}
+
+/**
  * Initialize OAuth Auth state listener and resolve any pending redirect sign-in.
  * Handles both Direct Google OAuth URL redirect and Firebase redirect.
  */
 export const initAuth = (
   onAuthChange?: (user: GoogleDriveUser | null, token: string | null) => void
 ) => {
-  // 1. Check for Direct Google OAuth 2.0 Redirect Hash in URL bar:
-  // e.g. https://deenora.app/settings#access_token=ya29...&token_type=Bearer&expires_in=3599
-  if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token=')) {
-    try {
-      const hash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
-      const params = new URLSearchParams(hash);
-      const token = params.get('access_token');
-      const expiresIn = params.get('expires_in') || '3599';
-      
-      if (token) {
-        // Clean URL cleanly without triggering page reload
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        
-        // Fetch user profile from Google
-        fetchGoogleUserInfo(token).then((user) => {
-          saveTokenAndUser(token, user, expiresIn);
-          if (onAuthChange) onAuthChange(user, token);
-        }).catch(() => {
-          const fallbackUser: GoogleDriveUser = { displayName: 'Google Drive User', email: '' };
-          saveTokenAndUser(token, fallbackUser, expiresIn);
-          if (onAuthChange) onAuthChange(fallbackUser, token);
-        });
-        return () => {};
-      }
-    } catch (e) {
-      console.error('Error parsing OAuth redirect hash:', e);
-    }
+  // 1. Check for Direct Google OAuth 2.0 Redirect Hash in URL bar
+  if (checkOAuthRedirectToken((user, token) => {
+    if (onAuthChange) onAuthChange(user, token);
+  })) {
+    return () => {};
   }
 
   // 2. Check for Firebase getRedirectResult fallback
@@ -379,13 +395,27 @@ export const signInWithGis = async (): Promise<{ user: GoogleDriveUser; accessTo
 
 /**
  * Unified Google Sign-In with Popup.
- * Tries Google Identity Services (GIS) first for maximum domain compatibility.
- * Falls back to Firebase Auth popup if GIS is not supported.
+ * Strategy 1: Google Identity Services (GIS) Token Client (Direct popup, no cross-site iframe, works on custom domains).
+ * Strategy 2: Firebase Auth popup fallback.
  */
 export const googleSignIn = async (): Promise<{ user: GoogleDriveUser; accessToken: string } | null> => {
   isSigningIn = true;
   
-  // Strategy 1: Firebase Auth Popup directly (synchronous user gesture, never blocked by browser popup blocker)
+  // Strategy 1: Google Identity Services (GIS) Token Client
+  try {
+    const res = await signInWithGis();
+    isSigningIn = false;
+    return res;
+  } catch (gisError: any) {
+    console.warn('GIS Token Client encountered an issue, trying Firebase popup fallback:', gisError);
+    // If it was an explicit origin mismatch, rethrow to give immediate domain guidance
+    if (gisError?.type === 'origin_mismatch' || (gisError?.message && gisError.message.toLowerCase().includes('origin'))) {
+      isSigningIn = false;
+      throw gisError;
+    }
+  }
+
+  // Strategy 2: Firebase Auth Popup fallback
   try {
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -403,20 +433,7 @@ export const googleSignIn = async (): Promise<{ user: GoogleDriveUser; accessTok
     
     return { user, accessToken: credential.accessToken };
   } catch (error: any) {
-    console.warn('Firebase popup sign-in encountered an issue:', error);
-    
-    // If it's a domain error or popup blocked, attempt GIS Token Client as secondary alternative
-    const code = error?.code || '';
-    if (code === 'auth/unauthorized-domain' || code === 'auth/popup-blocked') {
-      try {
-        console.info('Attempting Google Identity Services (GIS) fallback...');
-        const res = await signInWithGis();
-        return res;
-      } catch (gisError) {
-        console.warn('GIS Token Client fallback failed:', gisError);
-      }
-    }
-
+    console.error('Google sign-in error:', error);
     throw error;
   } finally {
     isSigningIn = false;
@@ -425,15 +442,19 @@ export const googleSignIn = async (): Promise<{ user: GoogleDriveUser; accessTok
 
 /**
  * Direct Google OAuth 2.0 Web Redirect Flow.
- * Cleans the redirect URI and triggers direct Google OAuth URL.
+ * Cleans the redirect URI, saves return view, and triggers direct Google OAuth URL.
  */
 export const googleSignInDirectRedirect = (): void => {
   const clientId = getGoogleClientId();
-  // Clear any hash and trailing slash to produce a clean redirect URI
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('deenora_gdrive_return_view', 'data-management');
+  }
+
+  // Clean URI without hash and trailing slash
   const cleanPath = typeof window !== 'undefined' 
-    ? (window.location.pathname.replace(/\/$/, '') || '/')
-    : '/';
-  const redirectUri = window.location.origin + cleanPath;
+    ? (window.location.pathname.replace(/\/$/, '') || '')
+    : '';
+  const redirectUri = window.location.origin + (cleanPath ? cleanPath : '');
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.searchParams.set('client_id', clientId);
@@ -448,16 +469,14 @@ export const googleSignInDirectRedirect = (): void => {
 
 /**
  * Full Page Redirect for Google Sign-in.
- * Primary: Firebase Auth signInWithRedirect (uses verified Firebase auth handler).
- * Fallback: Direct OAuth redirect if Firebase redirect throws.
+ * Saves navigation state and invokes Direct Google OAuth 2.0 Redirect.
+ * 100% reliable on custom domains and mobile devices with zero popup blockers.
  */
 export const googleSignInRedirect = async (): Promise<void> => {
-  try {
-    await signInWithRedirect(auth, provider);
-  } catch (err: any) {
-    console.warn('Firebase signInWithRedirect failed, attempting direct Google OAuth redirect:', err);
-    googleSignInDirectRedirect();
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('deenora_gdrive_return_view', 'data-management');
   }
+  googleSignInDirectRedirect();
 };
 
 /**

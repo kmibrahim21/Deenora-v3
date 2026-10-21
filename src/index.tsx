@@ -3,6 +3,12 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { checkOAuthRedirectToken } from './services/googleDriveBackup';
+
+// Instantly capture Google OAuth redirect token from hash if returning from redirect
+if (typeof window !== 'undefined') {
+  checkOAuthRedirectToken();
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

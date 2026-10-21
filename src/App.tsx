@@ -94,7 +94,16 @@ const App: React.FC = () => {
     activeBranchId,
     switchBranch
   } = useAuth();
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>(() => {
+    try {
+      const returnView = sessionStorage.getItem('deenora_gdrive_return_view');
+      if (returnView) {
+        sessionStorage.removeItem('deenora_gdrive_return_view');
+        return returnView as View;
+      }
+    } catch (e) {}
+    return "home";
+  });
   const [isMobileChatActive, setIsMobileChatActive] = useState(false);
   useAndroidBackHandler(view, setView);
   const [walletTab, setWalletTab] = useState<
