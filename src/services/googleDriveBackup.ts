@@ -212,12 +212,10 @@ export function getFriendlyAuthErrorMessage(err: any, lang: 'bn' | 'en' = 'bn'):
     rawMsg.includes('closed');
   
   if (isDomainError) {
-    const domain = typeof window !== 'undefined' ? window.location.hostname : 'deenora.app';
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://deenora.app';
     return {
       message: lang === 'bn'
-        ? `ডোমেন অনুমোদন প্রয়োজন: Google Cloud Console-এ "${origin}" ডোমেনটি Authorized JavaScript origins তালিকায় এবং Firebase Console-এ "${domain}" Authorized domains তালিকায় যুক্ত করুন। অথবা নিচের "রিডাইরেক্ট করে সাইন ইন" বোতাম ব্যবহার করুন।`
-        : `Domain authorization required: Add "${origin}" to Google Cloud Console and "${domain}" to Firebase Console. Or use "Sign in with Redirect" below.`,
+        ? 'গুগল ক্লাউড অনুমোদন সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
+        : 'Google authorization issue. Please try again.',
       isPopupBlockedOrClosed: false,
       isDomainError: true
     };
@@ -226,8 +224,8 @@ export function getFriendlyAuthErrorMessage(err: any, lang: 'bn' | 'en' = 'bn'):
   if (isPopupBlockedOrClosed) {
     return {
       message: lang === 'bn'
-        ? 'গুগল সাইন-ইন পপআপ ব্রাউজার কর্তৃক আটকে দেওয়া হয়েছে বা বন্ধ হয়েছে। নিচে থাকা "রিডাইরেক্ট করে সাইন ইন করুন (ফুল পেজ)" বোতামটি ব্যবহার করুন (এতে কোনো পপআপ ব্লকিং সমস্যা হয় না)।'
-        : 'Google Sign-In popup was closed or blocked. Please use the "Sign in with Redirect (Full Page)" button below.',
+        ? 'গুগল সাইন-ইন সম্পন্ন হয়নি বা উইন্ডোটি বন্ধ হয়ে গেছে। আবার চেষ্টা করুন।'
+        : 'Google Sign-In was not completed or the window was closed. Please try again.',
       isPopupBlockedOrClosed: true,
       isDomainError: false
     };

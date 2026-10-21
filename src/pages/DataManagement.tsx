@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet, FileText, Database, Mail, Copy, Check, Settings, Globe, ExternalLink, RefreshCw, Key, Info } from 'lucide-react';
+import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet, FileText, Database, Mail } from 'lucide-react';
 import { supabase } from 'supabase';
 import { requestManager } from 'services/RequestManager';
 import { Institution, Language } from 'types';
@@ -9,7 +9,6 @@ import { generateStudentListPDF } from 'utils/pdfGenerator';
 import { 
   initAuth, 
   googleSignIn, 
-  googleSignInRedirect,
   googleSignInDirectRedirect,
   getFriendlyAuthErrorMessage,
   logoutGoogle, 
@@ -20,10 +19,7 @@ import {
   uploadBackupToDrive, 
   downloadBackupFromDrive, 
   deleteBackupFromDrive,
-  GoogleDriveUser,
-  getGoogleClientId,
-  setCustomGoogleClientId,
-  signInWithGis
+  GoogleDriveUser
 } from 'services/googleDriveBackup';
 
 
@@ -58,20 +54,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [gdriveBackups, setGdriveBackups] = useState<any[]>([]);
   const [gdriveLoading, setGdriveLoading] = useState(false);
   const [gdriveActionLoading, setGdriveActionLoading] = useState(false);
-  const [showRedirectOption, setShowRedirectOption] = useState<boolean>(false);
-  const [showGdriveConfig, setShowGdriveConfig] = useState<boolean>(false);
-  const [customClientIdInput, setCustomClientIdInput] = useState<string>(() => getGoogleClientId());
-  const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const copyToClipboard = (text: string, fieldId: string) => {
-    try {
-      navigator.clipboard.writeText(text);
-      setCopiedField(fieldId);
-      setTimeout(() => setCopiedField(null), 2000);
-    } catch (e) {
-      console.warn('Clipboard copy failed:', e);
-    }
-  };
 
   // Load Google Drive backups once token is available
   const loadGDriveBackups = async (token: string) => {
@@ -125,7 +108,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       if (res) {
         setGoogleUser(res.user);
         setGdriveToken(res.accessToken);
-        setShowRedirectOption(false);
         await loadGDriveBackups(res.accessToken);
         setStatus({
           type: 'success',
@@ -135,58 +117,18 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         });
       }
     } catch (err: any) {
-      console.error('Google connect error:', err);
-      const friendly = getFriendlyAuthErrorMessage(err, lang);
-      if (friendly.isPopupBlockedOrClosed) {
-        setShowRedirectOption(true);
-      }
-      setStatus({
-        type: 'error',
-        message: friendly.message
-      });
-    } finally {
-      setGdriveLoading(false);
-    }
-  };
-
-  const handleGoogleConnectRedirect = async () => {
-    setGdriveLoading(true);
-    try {
-      await googleSignInRedirect();
-    } catch (err: any) {
-      console.error('Google connect redirect error:', err);
-      const friendly = getFriendlyAuthErrorMessage(err, lang);
-      setStatus({
-        type: 'error',
-        message: friendly.message
-      });
-      setGdriveLoading(false);
-    }
-  };
-
-  const handleGoogleConnectGis = async () => {
-    setGdriveLoading(true);
-    try {
-      const res = await signInWithGis();
-      if (res) {
-        setGoogleUser(res.user);
-        setGdriveToken(res.accessToken);
-        setShowRedirectOption(false);
-        await loadGDriveBackups(res.accessToken);
+      console.warn('Google connect popup failed, attempting direct redirect:', err);
+      try {
+        googleSignInDirectRedirect();
+        return;
+      } catch (redirectErr) {
+        console.error('Redirect failed:', redirectErr);
+        const friendly = getFriendlyAuthErrorMessage(err, lang);
         setStatus({
-          type: 'success',
-          message: lang === 'bn' 
-            ? 'গুগল ড্রাইভ সফলভাবে যুক্ত হয়েছে (GIS)!' 
-            : 'Google Drive successfully connected via GIS!'
+          type: 'error',
+          message: friendly.message
         });
       }
-    } catch (err: any) {
-      console.error('GIS connect error:', err);
-      const friendly = getFriendlyAuthErrorMessage(err, lang);
-      setStatus({
-        type: 'error',
-        message: friendly.message
-      });
     } finally {
       setGdriveLoading(false);
     }
@@ -225,17 +167,19 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           activeToken = res.accessToken;
         }
       } catch (err: any) {
-        console.error('Auto login failed:', err);
-        const friendly = getFriendlyAuthErrorMessage(err, lang);
-        if (friendly.isPopupBlockedOrClosed) {
-          setShowRedirectOption(true);
+        console.warn('Auto login failed, attempting direct redirect:', err);
+        try {
+          googleSignInDirectRedirect();
+          return;
+        } catch (redirectErr) {
+          const friendly = getFriendlyAuthErrorMessage(err, lang);
+          setStatus({
+            type: 'error',
+            message: friendly.message
+          });
+          setGdriveActionLoading(false);
+          return;
         }
-        setStatus({
-          type: 'error',
-          message: friendly.message
-        });
-        setGdriveActionLoading(false);
-        return;
       }
     }
 
@@ -344,17 +288,19 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           activeToken = res.accessToken;
         }
       } catch (err: any) {
-        console.error('Auto login failed:', err);
-        const friendly = getFriendlyAuthErrorMessage(err, lang);
-        if (friendly.isPopupBlockedOrClosed) {
-          setShowRedirectOption(true);
+        console.warn('Auto login failed, attempting direct redirect:', err);
+        try {
+          googleSignInDirectRedirect();
+          return;
+        } catch (redirectErr) {
+          const friendly = getFriendlyAuthErrorMessage(err, lang);
+          setStatus({
+            type: 'error',
+            message: friendly.message
+          });
+          setGdriveActionLoading(false);
+          return;
         }
-        setStatus({
-          type: 'error',
-          message: friendly.message
-        });
-        setGdriveActionLoading(false);
-        return;
       }
     }
 
@@ -389,17 +335,19 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           activeToken = res.accessToken;
         }
       } catch (err: any) {
-        console.error('Auto login failed:', err);
-        const friendly = getFriendlyAuthErrorMessage(err, lang);
-        if (friendly.isPopupBlockedOrClosed) {
-          setShowRedirectOption(true);
+        console.warn('Auto login failed, attempting direct redirect:', err);
+        try {
+          googleSignInDirectRedirect();
+          return;
+        } catch (redirectErr) {
+          const friendly = getFriendlyAuthErrorMessage(err, lang);
+          setStatus({
+            type: 'error',
+            message: friendly.message
+          });
+          setGdriveActionLoading(false);
+          return;
         }
-        setStatus({
-          type: 'error',
-          message: friendly.message
-        });
-        setGdriveActionLoading(false);
-        return;
       }
     }
 
@@ -1536,138 +1484,26 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 </div>
               </div>
             ) : (
-              <div className="py-6 flex flex-col items-center justify-center text-center space-y-3.5">
-                {/* Primary Button: Direct Popup Google Sign-In */}
+              <div className="py-8 flex flex-col items-center justify-center text-center">
                 <button 
                   onClick={handleGoogleConnect}
                   disabled={gdriveLoading}
-                  className="flex items-center justify-center gap-3 px-6 h-12 bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-sm rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] w-full max-w-sm cursor-pointer"
+                  className="flex items-center justify-center gap-3 px-8 h-12 bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-sm rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] cursor-pointer"
                 >
-                  <svg viewBox="0 0 48 48" className="w-5 h-5 shrink-0 bg-white rounded-full p-0.5">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                  </svg>
-                  <span>{lang === 'bn' ? 'গুগল ড্রাইভ কানেক্ট (পপআপ)' : 'Connect Google Drive (Popup)'}</span>
-                </button>
-
-                {/* Secondary Button: Redirect Sign-In (Full Page) */}
-                <button 
-                  onClick={handleGoogleConnectRedirect}
-                  disabled={gdriveLoading}
-                  className={`flex items-center justify-center gap-2 px-6 h-11 ${isDark ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'} font-bold text-xs rounded-xl border shadow-xs transition-all active:scale-[0.98] w-full max-w-sm cursor-pointer`}
-                >
-                  <ExternalLink size={14} className="text-slate-400" />
-                  <span>{lang === 'bn' ? 'রিডাইরেক্ট করে সাইন ইন করুন (ফুল পেজ)' : 'Sign in with Redirect (Full Page)'}</span>
-                </button>
-
-                {/* Alternative Button: Direct GIS Token Client */}
-                <button 
-                  onClick={handleGoogleConnectGis}
-                  disabled={gdriveLoading}
-                  className="text-[11px] font-bold text-slate-500 hover:text-blue-500 flex items-center justify-center gap-1.5 transition-colors cursor-pointer py-0.5"
-                >
-                  <Key size={12} />
-                  <span>{lang === 'bn' ? 'বিকল্প: Google Identity Services (GIS) দিয়ে ট্রাই করুন' : 'Alternative: Try Google Identity Services (GIS)'}</span>
-                </button>
-
-                {/* Domain & Cloud Configuration Guide Toggle */}
-                <div className="w-full max-w-sm pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowGdriveConfig(!showGdriveConfig)}
-                    className="text-[11px] font-bold text-blue-500 hover:underline flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
-                  >
-                    <Settings size={13} />
-                    <span>{lang === 'bn' ? 'deenora.app / Vercel ডোমেন ও ক্লাউড কনফিগারেশন নির্দেশিকা' : 'deenora.app / Vercel Domain Setup Guide'}</span>
-                  </button>
-
-                  {showGdriveConfig && (
-                    <div className={`mt-3 p-4 rounded-2xl text-left border ${isDark ? 'bg-slate-800/80 border-slate-700 text-slate-300' : 'bg-blue-50/70 border-blue-200/80 text-slate-700'} text-xs space-y-3.5 animate-in fade-in duration-200`}>
-                      <div className="flex items-center gap-2 font-black text-blue-600 dark:text-blue-400">
-                        <Globe size={15} />
-                        <span>ডোমেইন ও গুগল ক্লাউড অনুমোদন নির্দেশিকা</span>
-                      </div>
-                      
-                      <p className="text-[11px] leading-relaxed">
-                        গুগল ড্রাইভ ব্যাকআপ <strong>deenora.app</strong> ও <strong>Vercel</strong> ডোমেনে সক্রিয় রাখতে নিচের ধাপগুলো নিশ্চিত করুন:
-                      </p>
-
-                      {/* Step 1: Firebase Authorized Domains */}
-                      <div className="p-2.5 rounded-xl bg-slate-900 text-slate-200 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-[11px] text-amber-400">১. Firebase Authorized Domains:</span>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(typeof window !== 'undefined' ? window.location.hostname : 'deenora.app', 'domain')}
-                            className="px-2 py-0.5 text-[9px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center gap-1 cursor-pointer"
-                          >
-                            {copiedField === 'domain' ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
-                            {copiedField === 'domain' ? 'কপি হয়েছে' : 'ডোমেন কপি'}
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400">
-                          Firebase Console &gt; Project (deenora-3c9ca) &gt; Authentication &gt; Settings &gt; Authorized domains-এ গিয়ে এই ডোমেনটি যুক্ত করুন:
-                        </p>
-                        <code className="text-emerald-400 font-mono text-[11px] block bg-black/40 p-1.5 rounded">
-                          {typeof window !== 'undefined' ? window.location.hostname : 'deenora.app'}
-                        </code>
-                      </div>
-
-                      {/* Step 2: Google Cloud Console */}
-                      <div className="p-2.5 rounded-xl bg-slate-900 text-slate-200 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-[11px] text-blue-400">২. Google Cloud Console (OAuth Client):</span>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(typeof window !== 'undefined' ? window.location.origin : 'https://deenora.app', 'origin')}
-                            className="px-2 py-0.5 text-[9px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center gap-1 cursor-pointer"
-                          >
-                            {copiedField === 'origin' ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
-                            {copiedField === 'origin' ? 'কপি হয়েছে' : 'Origin কপি'}
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400">
-                          Google Cloud Console &gt; APIs & Services &gt; Credentials-এ OAuth 2.0 Web Client-এর Authorized JavaScript origins এবং Redirect URIs-এ যুক্ত করুন:
-                        </p>
-                        <div className="font-mono text-[10px] space-y-1 bg-black/40 p-2 rounded">
-                          <p className="text-slate-400">// Authorized JavaScript origins:</p>
-                          <p className="text-emerald-400">https://deenora.app</p>
-                          <p className="text-emerald-400">https://www.deenora.app</p>
-                          <p className="text-emerald-400">{typeof window !== 'undefined' ? window.location.origin : 'https://deenora.app'}</p>
-                          <p className="text-slate-400 mt-2">// Authorized redirect URIs:</p>
-                          <p className="text-sky-300">https://deenora-3c9ca.firebaseapp.com/__/auth/handler</p>
-                          <p className="text-sky-300">{typeof window !== 'undefined' ? window.location.origin + window.location.pathname.replace(/\/$/, '') : 'https://deenora.app/data-management'}</p>
-                        </div>
-                      </div>
-
-                      {/* Step 3: Custom Google Client ID */}
-                      <div className="space-y-1.5 pt-1">
-                        <label className="text-[10px] font-black uppercase text-slate-400 block">৩. কাস্টম Google Client ID (যদি নিজস্ব GCP প্রজেক্ট থাকে):</label>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            value={customClientIdInput}
-                            onChange={(e) => setCustomClientIdInput(e.target.value)}
-                            placeholder="your-client-id.apps.googleusercontent.com"
-                            className={`flex-1 h-9 px-3 rounded-xl border text-xs font-mono outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomGoogleClientId(customClientIdInput);
-                              setStatus({ type: 'success', message: 'Google Client ID সফলভাবে সংরক্ষিত হয়েছে!' });
-                            }}
-                            className="px-3 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer"
-                          >
-                            সংরক্ষণ
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                  {gdriveLoading ? (
+                    <Loader2 className="animate-spin" size={18} />
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 48 48" className="w-5 h-5 shrink-0 bg-white rounded-full p-0.5">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                      </svg>
+                      <span>{lang === 'bn' ? 'গুগল ড্রাইভ কানেক্ট' : 'Connect Google Drive'}</span>
+                    </>
                   )}
-                </div>
+                </button>
               </div>
             )}
           </div>
