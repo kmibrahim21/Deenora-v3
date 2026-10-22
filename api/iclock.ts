@@ -53,7 +53,7 @@ export default async function handler(req: any, res: any) {
   console.log(`[ZKteco ADMS API] ${method} ${urlPath} | SN: "${SN}"`);
 
   // 1. Browser / Diagnostic GET check
-  const isDiagnosticTest = method === 'GET' && !SN && !urlPath.includes('/cdata') && !urlPath.includes('/getrequest');
+  const isDiagnosticTest = method === 'GET' && (!urlPath.includes('/cdata') && !urlPath.includes('/getrequest'));
   if (isDiagnosticTest) {
     try {
       const { data: institutions } = await supabase
@@ -62,6 +62,8 @@ export default async function handler(req: any, res: any) {
         .eq('is_active', true);
 
       const registeredDevices: any[] = [];
+      let searchedDeviceDiagnostic: any = null;
+
       if (institutions) {
         for (const inst of institutions) {
           const devices = (inst.config_json as any)?.biometric_devices || [];
@@ -69,15 +71,54 @@ export default async function handler(req: any, res: any) {
           for (const dev of devicesList) {
             const snVal = typeof dev === 'string' ? dev : (dev.sn || dev.id);
             if (snVal) {
-              registeredDevices.push({
+              const matched = SN && String(snVal).trim().toUpperCase() === SN;
+              const devInfo = {
                 sn: snVal,
                 name: dev.name || `ZKteco Device ${snVal}`,
                 institution_id: inst.id,
                 institution_name: inst.name
-              });
+              };
+              registeredDevices.push(devInfo);
+
+              if (matched) {
+                searchedDeviceDiagnostic = devInfo;
+              }
             }
           }
         }
+      }
+
+      // If user queried a specific SN in browser (e.g. /api/iclock?sn=UEED262800196)
+      if (SN && searchedDeviceDiagnostic) {
+        const instId = searchedDeviceDiagnostic.institution_id;
+        const [{ data: students }, { data: teachers }, { data: recentLogs }] = await Promise.all([
+          supabase.from('students').select('id, name, full_name, biometric_id, roll').eq('institution_id', instId),
+          supabase.from('teachers').select('id, teacher_name, permissions').eq('institution_id', instId),
+          supabase.from('attendance').select('id, student_id, created_at, notes, date').eq('institution_id', instId).order('created_at', { ascending: false }).limit(5)
+        ]);
+
+        const bioStudents = (students || []).filter(s => Boolean(s.biometric_id || s.roll));
+        const bioTeachers = (teachers || []).filter(t => Boolean(t.permissions?.biometric_id || t.biometric_id));
+
+        return res.status(200).json({
+          success: true,
+          status: 'REGISTERED_AND_ACTIVE',
+          device_sn: SN,
+          institution: searchedDeviceDiagnostic.institution_name,
+          institution_id: instId,
+          biometric_students_count: bioStudents.length,
+          biometric_teachers_count: bioTeachers.length,
+          recent_punches_logged: recentLogs || [],
+          recommendation: bioStudents.length === 0 
+            ? 'WARNING: No students have Biometric IDs configured in this institution. Please edit student profiles and enter Biometric IDs.'
+            : 'READY: Device is linked and students are ready for punch attendance.'
+        });
+      }
+
+      // If machine sends GET /iclock/cdata?SN=... handshake request
+      if (SN && (urlPath.includes('/cdata') || urlPath.includes('/getrequest'))) {
+        res.setHeader('Content-Type', 'text/plain');
+        return res.status(200).send('OK');
       }
 
       return res.status(200).json({
