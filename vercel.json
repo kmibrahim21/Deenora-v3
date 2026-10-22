@@ -16,6 +16,14 @@
   ],
   "rewrites": [
     {
+      "source": "/iclock/:path*",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/iclock",
+      "destination": "/api/iclock.ts"
+    },
+    {
       "source": "/api/agent/:path*",
       "destination": "/api/agent.ts"
     },

@@ -72,6 +72,66 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [isDeletingRegNo, setIsDeletingRegNo] = useState(false);
   const [showDeleteRegConfirm, setShowDeleteRegConfirm] = useState(false);
   const [classesList, setClassesList] = useState<any[]>([]);
+  const [testingDevice, setTestingDevice] = useState(false);
+  const [deviceStatusResult, setDeviceStatusResult] = useState<{
+    status: 'success' | 'warning' | 'error';
+    message: string;
+    lastPunch?: string;
+  } | null>(null);
+
+  const handleTestDeviceConnection = async () => {
+    if (!madrasah?.id) return;
+    setTestingDevice(true);
+    setDeviceStatusResult(null);
+
+    try {
+      const snList = biometricDevicesStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (snList.length === 0) {
+        setDeviceStatusResult({
+          status: 'warning',
+          message: lang === 'bn' 
+            ? 'অনুগ্রহ করে প্রথমে মেশিনের সিরিয়াল নাম্বার (SN) ঘরটিতে লিখুন এবং সেভ করুন।' 
+            : 'Please enter machine Serial Number (SN) first and save.'
+        });
+        return;
+      }
+
+      // Check recent attendance punches for this institution
+      const { data: recentLogs } = await supabase
+        .from('attendance')
+        .select('created_at, notes, event_date')
+        .eq('institution_id', madrasah.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      const latestBiometricLog = (recentLogs || []).find(l => (l.notes || '').includes('ZKteco') || (l.notes || '').includes('SN:'));
+
+      if (latestBiometricLog) {
+        const punchTime = new Date(latestBiometricLog.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US');
+        setDeviceStatusResult({
+          status: 'success',
+          message: lang === 'bn'
+            ? `সফল! আপনার মেশিন থেকে লাইভ পাঞ্চের ডাটা Deenora সার্ভারে সফলভাবে পৌঁছাচ্ছে।`
+            : `Success! Live biometric punch data is reaching Deenora server properly.`,
+          lastPunch: punchTime
+        });
+      } else {
+        setDeviceStatusResult({
+          status: 'success',
+          message: lang === 'bn'
+            ? `মেশিনের সিরিয়াল নাম্বার (${snList.join(', ')}) সার্ভারে রেজিস্টার্ড রয়েছে। মেশিনে আঙ্গুল ছুঁইয়ে (Punch) টেস্ট করুন, উপস্থিতিতে সাথে সাথে যুক্ত হবে।`
+            : `Serial Number (${snList.join(', ')}) is registered on server. Perform a test punch on the machine now.`
+        });
+      }
+    } catch (err: any) {
+      setDeviceStatusResult({
+        status: 'error',
+        message: err.message || 'Connection test failed.'
+      });
+    } finally {
+      setTestingDevice(false);
+    }
+  };
 
   useEffect(() => {
     if (!madrasah?.id) return;
@@ -784,26 +844,65 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   </>
                 )}
 
-                {modules?.biometric_device_sync && (
-                  <div className="space-y-1.5 mt-4">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex justify-between items-center">
-                      <span>{lang === 'bn' ? 'হাজিরা মেশিনের সিরিয়াল নাম্বার' : 'Biometric Machine SNs'}</span>
-                      <span className="text-[9px] font-normal lowercase bg-blue-100 text-blue-600 px-1.5 rounded">Optional</span>
-                    </label>
-                    <div className="relative group">
-                      <input 
-                        type="text" 
-                        className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
-                        value={biometricDevicesStr} 
-                        onChange={(e) => setBiometricDevicesStr(e.target.value)} 
-                        placeholder={lang === 'bn' ? 'যেমন: ABCD12345, XYZ987' : 'e.g. ABCD12345, XYZ987'}
-                      />
-                    </div>
-                    <p className={`text-[10px] mt-1 ml-1 leading-snug ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                      {lang === 'bn' ? 'একাধিক মেশিন থাকলে কমা (,) দিয়ে সিরিয়াল নাম্বারগুলো লিখুন। মেশিনের Cloud/ADMS সেটিংসে সার্ভার লিংক হিসেবে আপনার বর্তমান ডোমেইনের সাথে /iclock/cdata যুক্ত করে ব্যবহার করুন।' : 'Comma separated machine Serial Numbers. Use your current domain with /iclock/cdata as ADMS Server URL.'}
-                    </p>
+                <div className="space-y-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold">
+                      <Zap size={14} />
+                      {lang === 'bn' ? 'হাজিরা মেশিনের সিরিয়াল নাম্বার (Serial Number / SN)' : 'Biometric Machine SNs'}
+                    </span>
+                    <span className="text-[9px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      ZKteco ADMS / SDK
+                    </span>
+                  </label>
+                  <div className="relative group">
+                    <input 
+                      type="text" 
+                      className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
+                      value={biometricDevicesStr} 
+                      onChange={(e) => setBiometricDevicesStr(e.target.value)} 
+                      placeholder={lang === 'bn' ? 'যেমন: ZYTH09089351 (কমা দিয়ে একাধিক)' : 'e.g. ZYTH09089351'}
+                    />
                   </div>
-                )}
+                  <p className={`text-[10px] ml-1 leading-snug ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {lang === 'bn' 
+                      ? 'মেশিনের পিছনে থাকা Serial Number (SN) টি এখানে লিখুন। একাধিক থাকলে কমা (,) দিয়ে বসান।' 
+                      : 'Comma separated machine Serial Numbers (SN).'}
+                  </p>
+
+                  <div className="pt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={handleTestDeviceConnection}
+                      disabled={testingDevice}
+                      className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {testingDevice ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                      {lang === 'bn' ? 'মেশিন কানেকশন টেস্ট করুন' : 'Test Machine Connection'}
+                    </button>
+
+                    {deviceStatusResult && (
+                      <div className={`p-3 rounded-xl border text-xs font-medium space-y-1 ${
+                        deviceStatusResult.status === 'success' 
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200'
+                          : deviceStatusResult.status === 'warning'
+                          ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
+                          : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200'
+                      }`}>
+                        <div className="flex items-start gap-2">
+                          <Zap size={15} className="mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-bold">{deviceStatusResult.message}</p>
+                            {deviceStatusResult.lastPunch && (
+                              <p className="text-[11px] opacity-90 mt-1">
+                                🕒 {lang === 'bn' ? 'সর্বশেষ প্রাপ্ত পাঞ্চ:' : 'Last received punch:'} <span className="font-bold">{deviceStatusResult.lastPunch}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </motion.div>
 

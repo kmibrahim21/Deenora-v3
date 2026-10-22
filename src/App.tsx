@@ -96,6 +96,9 @@ const App: React.FC = () => {
   } = useAuth();
   const [view, setView] = useState<View>(() => {
     try {
+      if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+        return "data-management";
+      }
       const returnView = sessionStorage.getItem('deenora_gdrive_return_view');
       if (returnView) {
         sessionStorage.removeItem('deenora_gdrive_return_view');

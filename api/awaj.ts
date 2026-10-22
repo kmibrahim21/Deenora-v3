@@ -379,13 +379,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(response.status).json(responseData);
       }
 
-      // Voice uploaded - set status to approved for auto-approval
+      // Voice uploaded successfully (storage is on audio server)
+      const fileUrl = responseData.file_url || responseData.preview_url || responseData.url || (responseData.data && (responseData.data.file_url || responseData.data.url)) || '';
+      const providerVoiceId = responseData.id || responseData.voice_id || responseData.data?.id || responseData.result?.id || '';
+      const providerVoiceName = responseData.name || responseData.title || voiceName;
+
+      let savedTemplate: any = null;
+      const targetInstId = body.institution_id || req.query.institution_id;
+      if (targetInstId) {
+        try {
+          const isSuper = body.is_super_admin === true || body.is_super_admin === 'true';
+          const initStatus = isSuper ? 'approved' : 'pending';
+          const { data: dbItem, error: dbErr } = await supabase.from('voice_templates').insert({
+            institution_id: targetInstId,
+            title: voiceName,
+            file_url: fileUrl,
+            admin_status: initStatus,
+            provider_status: initStatus,
+            provider_voice_name: providerVoiceName,
+            provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
+          }).select().single();
+
+          if (dbErr) {
+            console.error('Error auto-inserting voice_template in api/awaj:', dbErr);
+          } else {
+            savedTemplate = dbItem;
+            console.log('Successfully saved voice_template:', dbItem.id, 'status:', initStatus);
+          }
+        } catch (dbEx) {
+          console.error('Exception inserting voice_template in api/awaj:', dbEx);
+        }
+      }
+
       return res.status(201).json({
         ...responseData,
-        status: 'approved',
-        provider_status: 'approved',
-        message: responseData.message || 'Voice uploaded and auto-approved successfully'
+        file_url: fileUrl,
+        voice_template: savedTemplate,
+        message: 'Voice uploaded successfully'
       });
+    }
+
+    // LIST DATABASE VOICE TEMPLATES
+    if (action === 'templates' || action === 'list_templates') {
+      const instId = (req.query.institution_id || req.body?.institution_id || '') as string;
+      const isSuper = req.query.is_super_admin === 'true' || req.body?.is_super_admin === true;
+
+      let query = supabase.from('voice_templates').select('*');
+      if (!isSuper && instId) {
+        query = query.eq('institution_id', instId);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      return res.status(200).json({ success: true, templates: data || [] });
     }
 
     // VOICES LIST & DELETE
@@ -397,27 +442,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
         }
         const data = await response.json();
-        // Auto-approve voice list items so all uploaded voices show as approved in UI
-        const mapApproved = (v: any) => ({
-          ...v,
-          status: 'approved',
-          provider_status: 'approved'
-        });
-
-        if (Array.isArray(data)) {
-          return res.status(200).json(data.map(mapApproved));
-        } else if (data && typeof data === 'object') {
-          if (Array.isArray(data.voices)) {
-            data.voices = data.voices.map(mapApproved);
-          }
-          if (Array.isArray(data.data)) {
-            data.data = data.data.map(mapApproved);
-          }
-          if (Array.isArray(data.result)) {
-            data.result = data.result.map(mapApproved);
-          }
-          return res.status(200).json(data);
-        }
         return res.status(200).json(data);
       }
       if (req.method === 'DELETE') {

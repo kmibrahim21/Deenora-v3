@@ -147,6 +147,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       return status === voiceStatusFilter;
     });
   }, [voices, voiceStatusFilter]);
+
+  const selectableVoices = useMemo(() => {
+    if (isSuperAdmin) return voices;
+    return voices.filter(v => (v.admin_status || v.provider_status || 'approved') === 'approved');
+  }, [voices, isSuperAdmin]);
+
+  const pendingVoicesCount = useMemo(() => {
+    return voices.filter(v => (v.admin_status || v.provider_status) === 'pending').length;
+  }, [voices]);
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Transaction state
@@ -580,38 +589,46 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     try {
       setApiError(null);
 
-      // First, get local voices (Database-First)
-      let systemId = null;
-      try {
-        const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
-        if (sysInst && sysInst.length > 0) systemId = sysInst[0].id;
-      } catch (e) {
-        console.warn("Could not fetch system institution ID:", e);
+      if (isSuperAdmin && allInstitutions.length === 0) {
+        const { data: insts } = await supabase.from('institutions').select('*').neq('name', 'SYSTEM_GLOBAL_INTERNAL');
+        if (insts) setAllInstitutions(insts);
       }
 
-      let templateQuery = supabase.from('voice_templates').select('*');
-      
-      if (isSuperAdmin) {
-        // Super Admin can see system, their own, and unassigned templates
-        if (systemId && madrasah?.id && madrasah.id !== systemId) {
-          templateQuery = templateQuery.or(`institution_id.eq.${systemId},institution_id.eq.${madrasah.id},institution_id.is.null`);
-        } else if (madrasah?.id) {
-          templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.is.null`);
-        } else {
-          templateQuery = templateQuery.is('institution_id', null);
+      let fetchedVoices: any[] = [];
+      let fetchSuccess = false;
+
+      // 1. Fetch via backend service-role endpoint (immune to client-side RLS filtering)
+      try {
+        const params = new URLSearchParams({
+          action: 'templates',
+          institution_id: madrasah?.id || '',
+          is_super_admin: isSuperAdmin ? 'true' : 'false'
+        });
+        const res = await fetch(`/api/awaj?${params.toString()}`);
+        if (res.ok) {
+          const resJson = await res.json();
+          if (resJson.templates && Array.isArray(resJson.templates)) {
+            fetchedVoices = resJson.templates;
+            fetchSuccess = true;
+          }
         }
-      } else {
-        // Regular institutions see ONLY their own assigned templates
-        if (madrasah?.id) {
+      } catch (backendErr) {
+        console.warn('Backend templates fetch fallback:', backendErr);
+      }
+
+      // 2. Fallback to direct client query if backend endpoint was not available
+      if (!fetchSuccess) {
+        let templateQuery = supabase.from('voice_templates').select('*');
+        if (!isSuperAdmin && madrasah?.id) {
           templateQuery = templateQuery.eq('institution_id', madrasah.id);
         }
+        const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
+        if (localVoices) {
+          fetchedVoices = localVoices;
+        }
       }
 
-      const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
-      
-      if (localVoices) {
-        setVoices(localVoices);
-      }
+      setVoices(fetchedVoices);
 
       // Only query Awaj API if forceSync is explicitly requested
       if (forceSync) {
@@ -620,18 +637,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         if (response.ok) {
           const data = await response.json();
           apiVoices = Array.isArray(data) ? data : (data.voices || data.data || []);
-          console.log('Awaj Voices List:', apiVoices);
         } else {
           const errData = await response.json().catch(() => ({}));
-          setApiError(errData.error || `Awaj API Error: ${response.status}`);
+          setApiError(errData.error || (lang === 'bn' ? 'ভয়েস তালিকা সিঙ্ক করা সম্ভব হয়নি।' : 'Failed to sync voice list'));
         }
 
-        if (localVoices && apiVoices.length > 0) {
+        if (fetchedVoices && fetchedVoices.length > 0 && apiVoices.length > 0) {
           const syncedVoices = [];
-          for (const localVoice of localVoices) {
-            // If local voice was approved by admin or assigned, preserve approval
-            const isAssignedOrApproved = localVoice.admin_status === 'approved' || localVoice.provider_status === 'approved';
-
+          for (const localVoice of fetchedVoices) {
             // Try to find matching voice in API by ID or Name
             const awajVoice = apiVoices.find(v => 
               (localVoice.provider_voice_id && v.id && v.id.toString() === localVoice.provider_voice_id.toString()) || 
@@ -642,25 +655,19 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
             const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
             
-            let awajStatus = isAssignedOrApproved ? 'approved' : 'pending';
-            if (awajVoice) {
-              awajStatus = (awajVoice.status === 'approved' || awajVoice.status === 'active' || awajVoice.is_approved || awajVoice.status === 'ready' || awajVoice.status === 'success') ? 'approved' : 'pending';
-              if (isAssignedOrApproved) awajStatus = 'approved';
+            // Sync provider metadata only without overwriting admin_status
+            const updatesToApply: any = {};
+            if (newProviderId && localVoice.provider_voice_id !== newProviderId) {
+              updatesToApply.provider_voice_id = newProviderId;
+              localVoice.provider_voice_id = newProviderId;
             }
-            
-            // Sync voice locally and in DB
-            if (localVoice.provider_status !== awajStatus || localVoice.admin_status !== 'approved' || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
-              await supabase.from('voice_templates').update({ 
-                admin_status: 'approved',
-                provider_status: 'approved',
-                provider_voice_id: newProviderId || localVoice.provider_voice_id,
-                provider_voice_name: newProviderName || localVoice.provider_voice_name
-              }).eq('id', localVoice.id);
-              
-              localVoice.admin_status = 'approved';
-              localVoice.provider_status = 'approved';
-              localVoice.provider_voice_id = newProviderId || localVoice.provider_voice_id;
-              localVoice.provider_voice_name = newProviderName || localVoice.provider_voice_name;
+            if (newProviderName && localVoice.provider_voice_name !== newProviderName) {
+              updatesToApply.provider_voice_name = newProviderName;
+              localVoice.provider_voice_name = newProviderName;
+            }
+
+            if (Object.keys(updatesToApply).length > 0) {
+              await supabase.from('voice_templates').update(updatesToApply).eq('id', localVoice.id);
             }
             syncedVoices.push(localVoice);
           }
@@ -750,7 +757,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           {
             id: '9610993084',
             callingNumber: '09610993084',
-            name: 'Awaj Digital (09610993084)'
+            name: 'Official Sender (09610993084)'
           }
         ];
       }
@@ -784,7 +791,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         {
           id: '9610993084',
           callingNumber: '09610993084',
-          name: 'Awaj Digital (09610993084)'
+          name: 'Official Sender (09610993084)'
         }
       ];
       if (madrasah?.voice_sender_id) {
@@ -1564,6 +1571,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const voice = voices.find(v => v.id === selectedVoiceId);
       if (!voice) throw new Error('Selected voice not found.');
 
+      if (!isSuperAdmin) {
+        const voiceStatus = voice.admin_status || voice.provider_status || 'approved';
+        if (voiceStatus !== 'approved') {
+          throw new Error(lang === 'bn' 
+            ? 'এই ভয়েস বার্তাটি এখনো পেন্ডিং আছে। সুপার এডমিন অনুমোদন করার পরেই ব্রডকাস্ট করা সম্ভব।' 
+            : 'This voice message is pending Super Admin approval.');
+        }
+      }
+
       // 1. Send to Awaj Digital API
       const requestId = crypto.randomUUID();
       
@@ -1786,42 +1802,68 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           voice_name: cleanTitle,
           title: cleanTitle,
           audio_base64: base64Audio,
-          filename: uploadFile.name
+          filename: uploadFile.name,
+          institution_id: madrasah.id,
+          is_super_admin: isSuperAdmin
         })
       });
 
       const resData = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(resData.message || resData.error || 'Failed to upload voice to Awaj Digital server.');
+        throw new Error(resData.message || resData.error || (lang === 'bn' ? 'ভয়েস ফাইল আপলোড করতে সমস্যা হয়েছে।' : 'Failed to upload voice audio.'));
       }
 
       const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
       const providerVoiceName = resData.name || resData.title || cleanTitle;
-
       const initialStatus = isSuperAdmin ? 'approved' : 'pending';
 
-      const { error: dbError } = await supabase.from('voice_templates').insert({
-        institution_id: madrasah.id,
-        title: cleanTitle,
-        file_url: audioUrl,
-        admin_status: initialStatus,
-        provider_status: initialStatus,
-        is_active: true,
-        provider_voice_name: providerVoiceName,
-        provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
-      });
+      let newVoiceRecord = resData.voice_template;
 
-      if (dbError) console.warn('Warning saving template metadata:', dbError.message);
+      // Fallback: if not saved by backend endpoint, save directly
+      if (!newVoiceRecord) {
+        const { data: dbItem, error: dbError } = await supabase.from('voice_templates').insert({
+          institution_id: madrasah.id,
+          title: cleanTitle,
+          file_url: audioUrl,
+          admin_status: initialStatus,
+          provider_status: initialStatus,
+          provider_voice_name: providerVoiceName,
+          provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
+        }).select().single();
+
+        if (dbError) {
+          console.warn('Direct template save warning:', dbError.message);
+        } else if (dbItem) {
+          newVoiceRecord = dbItem;
+        }
+      }
+
+      if (!newVoiceRecord) {
+        newVoiceRecord = {
+          id: crypto.randomUUID(),
+          institution_id: madrasah.id,
+          title: cleanTitle,
+          file_url: audioUrl,
+          admin_status: initialStatus,
+          provider_status: initialStatus,
+          provider_voice_name: providerVoiceName,
+          provider_voice_id: providerVoiceId ? String(providerVoiceId) : null,
+          created_at: new Date().toISOString()
+        };
+      }
+
+      // Immediately add to local state so user sees it right away!
+      setVoices(prev => [newVoiceRecord, ...prev.filter(v => v.id !== newVoiceRecord.id)]);
 
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
         message: isSuperAdmin 
-          ? (lang === 'bn' ? 'ভয়েস Awaj Digital সার্ভারে আপলোড ও সরাসরি অনুমোদন হয়েছে।' : 'Voice uploaded to Awaj Digital server and approved.')
-          : (lang === 'bn' ? 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড হয়েছে! এটি এখন পেন্ডিং অবস্থায় আছে। সুপার অ্যাডমিন অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Voice uploaded successfully to Awaj Digital! Pending approval from Super Admin.')
+          ? (lang === 'bn' ? 'ভয়েস সফলভাবে সংরক্ষিত ও সরাসরি অনুমোদন হয়েছে।' : 'Voice uploaded and approved.')
+          : (lang === 'bn' ? 'ভয়েস সফলভাবে সংরক্ষিত হয়েছে! এটি এখন পেন্ডিং অবস্থায় আছে। সুপার এডমিন অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Voice uploaded successfully! Pending approval from Super Admin.')
       });
 
       setUploadName('');
@@ -1842,20 +1884,42 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   const handleApproveVoice = async (voiceId: string) => {
     try {
+      let isSuccess = false;
       const { error } = await supabase.from('voice_templates').update({
         admin_status: 'approved',
         provider_status: 'approved'
       }).eq('id', voiceId);
 
-      if (error) throw error;
+      if (!error) {
+        isSuccess = true;
+      } else {
+        // Fallback to service role admin API
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ action: 'approve_voice', id: voiceId })
+        });
+        if (res.ok) {
+          isSuccess = true;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || error.message || 'Failed to approve voice');
+        }
+      }
 
-      setStatusModal({
-        show: true,
-        type: 'success',
-        title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'ভয়েস সফলভাবে অনুমোদন করা হয়েছে।' : 'Voice approved successfully.'
-      });
-      fetchVoices();
+      if (isSuccess) {
+        setStatusModal({
+          show: true,
+          type: 'success',
+          title: lang === 'bn' ? 'সফল' : 'Success',
+          message: lang === 'bn' ? 'ভয়েস সফলভাবে অনুমোদন করা হয়েছে।' : 'Voice approved successfully.'
+        });
+        fetchVoices();
+      }
     } catch (err: any) {
       setStatusModal({
         show: true,
@@ -1868,20 +1932,42 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   const handleRejectVoice = async (voiceId: string) => {
     try {
+      let isSuccess = false;
       const { error } = await supabase.from('voice_templates').update({
         admin_status: 'rejected',
         provider_status: 'rejected'
       }).eq('id', voiceId);
 
-      if (error) throw error;
+      if (!error) {
+        isSuccess = true;
+      } else {
+        // Fallback to service role admin API
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ action: 'reject_voice', id: voiceId })
+        });
+        if (res.ok) {
+          isSuccess = true;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || error.message || 'Failed to reject voice');
+        }
+      }
 
-      setStatusModal({
-        show: true,
-        type: 'success',
-        title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'ভয়েসটি বাতিল করা হয়েছে।' : 'Voice rejected successfully.'
-      });
-      fetchVoices();
+      if (isSuccess) {
+        setStatusModal({
+          show: true,
+          type: 'success',
+          title: lang === 'bn' ? 'সফল' : 'Success',
+          message: lang === 'bn' ? 'ভয়েসটি বাতিল করা হয়েছে।' : 'Voice rejected successfully.'
+        });
+        fetchVoices();
+      }
     } catch (err: any) {
       setStatusModal({
         show: true,
@@ -2241,29 +2327,52 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">{t('select_voice', lang)}</h4>
+                    <div className="flex items-center justify-between px-1">
+                      <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest">{t('select_voice', lang)}</h4>
+                      {pendingVoicesCount > 0 && !isSuperAdmin && (
+                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Clock size={10} /> {pendingVoicesCount} টি অপেক্ষমাণ
+                        </span>
+                      )}
+                    </div>
                     <div className="relative">
                       <button onClick={() => setShowVoiceDropdown(!showVoiceDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
                         <span className="text-base font-black font-noto text-[#1E3A8A]">
-                          {selectedVoiceId ? voices.find(v => v.id === selectedVoiceId)?.title : t('select_voice', lang)}
+                          {selectedVoiceId ? selectableVoices.find(v => v.id === selectedVoiceId)?.title : t('select_voice', lang)}
                         </span>
                         <ChevronDown className={`text-slate-300 transition-all ${showVoiceDropdown ? 'rotate-180' : ''}`} size={20} />
                       </button>
                       {showVoiceDropdown && (
                         <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                          {voices.map(v => (
-                            <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                              <span className="font-black font-noto">{v.title}</span>
-                              {voiceDurations[v.id] ? (
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                  {voiceDurations[v.id]}s ({getPulsesForVoice(v.id)} {getPulsesForVoice(v.id) === 1 ? 'Pulse' : 'Pulses'})
-                                </span>
-                              ) : null}
-                            </button>
-                          ))}
+                          {selectableVoices.length > 0 ? (
+                            selectableVoices.map(v => (
+                              <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                <span className="font-black font-noto">{v.title}</span>
+                                {voiceDurations[v.id] ? (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                    {voiceDurations[v.id]}s ({getPulsesForVoice(v.id)} {getPulsesForVoice(v.id) === 1 ? 'Pulse' : 'Pulses'})
+                                  </span>
+                                ) : null}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center">
+                              <p className="text-xs font-bold text-slate-400 font-noto">
+                                {pendingVoicesCount > 0 
+                                  ? (lang === 'bn' ? 'আপনার আপলোডকৃত ভয়েসটি সুপার এডমিনের অনুমোদনের অপেক্ষায় আছে।' : 'Your voice is pending Super Admin approval.')
+                                  : (lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস পাওয়া যায়নি।' : 'No approved voices found.')}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
+                    {pendingVoicesCount > 0 && !isSuperAdmin && (
+                      <p className="text-[10px] font-bold text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-center gap-1.5 font-noto">
+                        <Info size={12} className="shrink-0 text-amber-600" />
+                        <span>{lang === 'bn' ? `${pendingVoicesCount} টি ভয়েস বার্তা পেন্ডিং অবস্থায় রয়েছে। সুপার এডমিন অনুমোদন দিলে এখানে ব্যবহারের জন্য আসবে।` : `${pendingVoicesCount} voice(s) pending Super Admin approval.`}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -2393,19 +2502,27 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                </div>
                                <div>
                                  <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
-                                 {isPending ? (
-                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 w-fit">
-                                     <Clock size={10} /> {lang === 'bn' ? 'অপেক্ষমাণ (পেন্ডিং)' : 'Pending'}
-                                   </span>
-                                 ) : isRejected ? (
-                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 flex items-center gap-1 w-fit">
-                                     <XCircle size={10} /> {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
-                                   </span>
-                                 ) : (
-                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit">
-                                     <CheckCircle2 size={10} /> {lang === 'bn' ? 'অনুমোদিত' : 'Approved'}
-                                   </span>
-                                 )}
+                                 <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                   {isPending ? (
+                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 w-fit">
+                                       <Clock size={10} /> {lang === 'bn' ? 'অপেক্ষমাণ (পেন্ডিং)' : 'Pending'}
+                                     </span>
+                                   ) : isRejected ? (
+                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 flex items-center gap-1 w-fit">
+                                       <XCircle size={10} /> {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
+                                     </span>
+                                   ) : (
+                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit">
+                                       <CheckCircle2 size={10} /> {lang === 'bn' ? 'অনুমোদিত' : 'Approved'}
+                                     </span>
+                                   )}
+                                   {isSuperAdmin && (
+                                     <span className="text-[9px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                                       <Building2 size={10} className="text-blue-500" />
+                                       {allInstitutions.find(i => i.id === v.institution_id)?.name || 'সিস্টেম / গ্লোবাল'}
+                                     </span>
+                                   )}
+                                 </div>
                                </div>
                             </div>
                             <div className="flex items-center gap-1.5">
@@ -2448,6 +2565,19 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                            </div>
                          )}
 
+
+                         {/* Super Admin Re-approve Action if Rejected */}
+                         {isRejected && isSuperAdmin && (
+                           <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                             <button
+                               onClick={() => handleApproveVoice(v.id)}
+                               className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                             >
+                               <CheckCircle2 size={14} />
+                               <span>{lang === 'bn' ? 'পুনরায় অনুমোদন দিন' : 'Re-Approve'}</span>
+                             </button>
+                           </div>
+                         )}
                          {/* Info note for regular user when pending */}
                          {isPending && !isSuperAdmin && (
                            <p className="text-[10px] font-bold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100 flex items-center gap-1.5 font-noto">
