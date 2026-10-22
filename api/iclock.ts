@@ -1,5 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
-import { getSupabaseAdmin } from '../lib/supabase-admin.js';
+
+// Self-contained Supabase Admin helper (avoids Vercel ESM relative module import resolution issues)
+function createSupabaseAdminClient() {
+  const supabaseUrl = 
+    process.env.SUPABASE_URL || 
+    process.env.VITE_SUPABASE_URL || 
+    'https://wafcgdcgqkmsngwqhded.supabase.co';
+
+  const supabaseServiceKey = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    '';
+
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+}
 
 export default async function handler(req: any, res: any) {
   try {
@@ -11,19 +33,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send('OK');
     }
 
-    // Safely get Supabase Admin client or fallback
-    let supabase: any = null;
-    try {
-      supabase = getSupabaseAdmin();
-    } catch (e) {
-      console.warn('[ZKteco ADMS API] getSupabaseAdmin failed, using fallback createClient:', e);
-    }
-
-    if (!supabase) {
-      const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://wafcgdcgqkmsngwqhded.supabase.co';
-      const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-      supabase = createClient(url, key);
-    }
+    const supabase = createSupabaseAdminClient();
 
   const urlPath = (req.originalUrl || req.url || '').toLowerCase();
   const query = req.query || {};
@@ -376,17 +386,13 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({ success: true, processed: processedCount });
       }
     } catch (err: any) {
-      console.error('[ZKteco ADMS/SDK] Exception in handler:', err);
+      console.error('[ZKteco ADMS/SDK] Exception in POST handler:', err);
     }
-
-    // Standard ADMS protocol response
-    return res.status(200).send('OK');
-  }
 
     return res.status(200).send('OK');
   } catch (globalErr: any) {
     console.error('[ZKteco ADMS API] Global Handler Catch:', globalErr);
-    if (req.headers['accept']?.includes('json') || req.headers['content-type']?.includes('json')) {
+    if (req.headers?.['accept']?.includes('json') || req.headers?.['content-type']?.includes('json')) {
       return res.status(200).json({
         success: true,
         message: 'Deenora ZKteco ADMS / Biometric Machine API Active',
