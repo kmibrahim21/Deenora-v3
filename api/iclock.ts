@@ -29,17 +29,20 @@ export default async function handler(req: any, res: any) {
   const query = req.query || {};
   const method = req.method;
 
-  // Extract Serial Number (SN) from query, body, or headers
+  // Extract Serial Number (SN) from URL query regex, query object, body, or headers
+  const urlSnMatch = (req.originalUrl || req.url || '').match(/[?&]sn=([^&]+)/i);
+  const snFromUrl = urlSnMatch ? decodeURIComponent(urlSnMatch[1]) : '';
+
   const rawSN = (
-    query.SN || query.sn || query.device_sn ||
-    (typeof req.body === 'object' && (req.body?.SN || req.body?.sn)) ||
+    query.SN || query.sn || query.device_sn || query.sn_number || snFromUrl ||
+    (typeof req.body === 'object' && req.body !== null && (req.body?.SN || req.body?.sn)) ||
     req.headers['x-device-sn'] || ''
   ).toString().trim();
   const SN = rawSN.toUpperCase();
 
   console.log(`[ZKteco ADMS API] ${method} ${urlPath} | SN: "${SN}"`);
 
-  // 1. Browser / Diagnostic GET check (if user tests URL in browser/Postman without ZKteco SN query)
+  // 1. Browser / Diagnostic GET check
   const isDiagnosticTest = method === 'GET' && !SN && !urlPath.includes('/cdata') && !urlPath.includes('/getrequest');
   if (isDiagnosticTest) {
     try {
@@ -52,13 +55,17 @@ export default async function handler(req: any, res: any) {
       if (institutions) {
         for (const inst of institutions) {
           const devices = (inst.config_json as any)?.biometric_devices || [];
-          for (const dev of devices) {
-            registeredDevices.push({
-              sn: dev.sn || dev.id,
-              name: dev.name || 'ZKteco Biometric Device',
-              institution_id: inst.id,
-              institution_name: inst.name
-            });
+          const devicesList = Array.isArray(devices) ? devices : [devices];
+          for (const dev of devicesList) {
+            const snVal = typeof dev === 'string' ? dev : (dev.sn || dev.id);
+            if (snVal) {
+              registeredDevices.push({
+                sn: snVal,
+                name: dev.name || `ZKteco Device ${snVal}`,
+                institution_id: inst.id,
+                institution_name: inst.name
+              });
+            }
           }
         }
       }
@@ -73,9 +80,8 @@ export default async function handler(req: any, res: any) {
         instructions: {
           zkteco_menu: 'Go to Menu -> Communication -> ADMS / Cloud Server Settings on your ZKteco machine',
           enable_domain: 'Enable Domain Name: ON',
-          server_address: 'Server Address: deenora.app (or your app URL)',
-          server_port: 'Server Port: 443 (or 80)',
-          enable_proxy: 'HTTPS / ADMS Enabled: ON'
+          server_address: 'Server Address: deenora.app',
+          server_port: 'Server Port: 443 (or 80)'
         }
       });
     } catch (err: any) {
@@ -84,7 +90,6 @@ export default async function handler(req: any, res: any) {
   }
 
   // 2. ADMS Handshake / Heartbeat GET requests
-  // ZKteco devices send GET /iclock/cdata?SN=... or GET /iclock/getrequest?SN=...
   if (method === 'GET') {
     res.setHeader('Content-Type', 'text/plain');
     return res.status(200).send('OK');
@@ -96,31 +101,32 @@ export default async function handler(req: any, res: any) {
 
     let rawData = req.body;
 
-    // Handle JSON payload from SDK Desktop Sync Agents / zklib / C# scripts
+    // Handle JSON payload or form-urlencoded text lines
     if (typeof rawData === 'object' && rawData !== null) {
-      if (Array.isArray(rawData)) {
-        // Body is array of log objects: [{ userId: "1001", checkTime: "2026-10-21 08:30:00" }, ...]
+      if (Buffer.isBuffer(rawData)) {
+        rawData = rawData.toString('utf-8');
+      } else if (Array.isArray(rawData)) {
         rawData = rawData.map((item: any) => {
           const uId = item.userId || item.user_id || item.pin || item.id || '';
           const cTime = item.checkTime || item.check_time || item.time || item.timestamp || '';
           return `${uId}\t${cTime}`;
         }).join('\n');
       } else if (rawData.logs && Array.isArray(rawData.logs)) {
-        // Body is object with logs array: { sn: "...", logs: [{ userId: "1001", checkTime: "..." }] }
         rawData = rawData.logs.map((item: any) => {
           const uId = item.userId || item.user_id || item.pin || item.id || '';
           const cTime = item.checkTime || item.check_time || item.time || item.timestamp || '';
           return `${uId}\t${cTime}`;
         }).join('\n');
       } else if (rawData.userId || rawData.user_id || rawData.pin) {
-        // Body is single log object: { userId: "1001", checkTime: "2026-10-21 08:30:00" }
         const uId = rawData.userId || rawData.user_id || rawData.pin || '';
         const cTime = rawData.checkTime || rawData.check_time || rawData.time || rawData.timestamp || '';
         rawData = `${uId}\t${cTime}`;
       } else if (rawData.table === 'ATTLOG' && rawData.data) {
         rawData = rawData.data;
       } else {
-        rawData = Object.keys(rawData)[0] || JSON.stringify(rawData);
+        // Express / Vercel form parser turns text lines into object keys
+        const keys = Object.keys(rawData);
+        rawData = keys.join('\n');
       }
     } else if (Buffer.isBuffer(rawData)) {
       rawData = rawData.toString('utf-8');
@@ -143,11 +149,16 @@ export default async function handler(req: any, res: any) {
       let matchedInstitution: any = null;
 
       if (institutions && institutions.length > 0) {
-        // Match by device SN
         if (SN) {
           for (const inst of institutions) {
             const devices = (inst.config_json as any)?.biometric_devices || [];
-            if (devices.some((d: any) => String(d.sn || d.id || '').trim().toUpperCase() === SN)) {
+            const devicesList = Array.isArray(devices) ? devices : [devices];
+            const match = devicesList.some((d: any) => {
+              const snVal = typeof d === 'string' ? d : (d.sn || d.id || d.device_sn || '');
+              return String(snVal).trim().toUpperCase() === SN;
+            }) || JSON.stringify(inst.config_json || {}).toUpperCase().includes(SN);
+
+            if (match) {
               matchedInstitution = inst;
               break;
             }
@@ -159,7 +170,7 @@ export default async function handler(req: any, res: any) {
           matchedInstitution = institutions.find(inst => (inst.config_json as any)?.modules?.biometric_device_sync === true);
         }
 
-        // Fallback 2: If only 1 institution exists in database, use it for testing
+        // Fallback 2: If only 1 institution exists in database, use it
         if (!matchedInstitution && institutions.length === 1) {
           matchedInstitution = institutions[0];
         }
@@ -192,22 +203,33 @@ export default async function handler(req: any, res: any) {
       let processedCount = 0;
 
       for (const line of lines) {
-        // ZKTeco Format: USERID\tCheckTime\tCheckType\tVerifyCode
-        // Example: 1001\t2026-10-21 08:30:00\t0\t1
-        let parts = line.split('\t');
-        if (parts.length < 2) parts = line.split(',');
-        if (parts.length < 2) parts = line.split(/\s+/);
+        let userId = '';
+        let checkTime = '';
 
-        if (parts.length >= 2) {
-          const userId = parts[0].trim();
-          const checkTime = parts[1].trim();
+        if (line.includes('\t')) {
+          const parts = line.split('\t');
+          userId = (parts[0] || '').trim();
+          checkTime = (parts[1] || '').trim();
+        } else if (line.includes(',')) {
+          const parts = line.split(',');
+          userId = (parts[0] || '').trim();
+          checkTime = (parts[1] || '').trim();
+        } else {
+          const parts = line.split(/\s+/);
+          userId = (parts[0] || '').trim();
+          if (parts.length >= 3 && parts[1]?.length === 10 && parts[2]?.includes(':')) {
+            checkTime = `${parts[1]} ${parts[2]}`;
+          } else {
+            checkTime = (parts[1] || '').trim();
+          }
+        }
 
-          if (!userId || !checkTime || userId === 'USERID' || userId === 'PIN') continue;
-          
-          const date = checkTime.substring(0, 10);
-          const time = checkTime.length >= 16 ? checkTime.substring(11, 16) : null;
+        if (!userId || !checkTime || userId.toUpperCase() === 'USERID' || userId.toUpperCase() === 'PIN') continue;
 
-          if (!date || date.length !== 10) continue;
+        const date = checkTime.substring(0, 10);
+        const time = checkTime.length >= 16 ? checkTime.substring(11, 16) : (checkTime.length > 10 ? checkTime.substring(11) : null);
+
+        if (!date || date.length !== 10) continue;
 
           const numUserId = Number(userId);
 
