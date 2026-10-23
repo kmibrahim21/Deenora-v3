@@ -379,8 +379,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(response.status).json(responseData);
       }
 
-      // Voice uploaded successfully (storage is on audio server)
-      const fileUrl = responseData.file_url || responseData.preview_url || responseData.url || (responseData.data && (responseData.data.file_url || responseData.data.url)) || '';
+      // Voice uploaded successfully
+      let rawFileUrl = responseData.file_url || responseData.preview_url || responseData.url || (responseData.data && (responseData.data.file_url || responseData.data.url)) || '';
+      if (rawFileUrl && !rawFileUrl.startsWith('http') && !rawFileUrl.startsWith('data:')) {
+        const cleanPath = rawFileUrl.startsWith('/') ? rawFileUrl : `/${rawFileUrl}`;
+        rawFileUrl = `https://api.awajdigital.com${cleanPath}`;
+      }
+
+      let supabaseFileUrl = '';
+      if (fileBuffer && fileBuffer.length > 0) {
+        try {
+          try {
+            await supabase.storage.createBucket('voice-templates', { public: true });
+          } catch (bErr) {
+            // Bucket already exists
+          }
+
+          const storagePath = `voices/${Date.now()}_${cleanFilename}`;
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from('voice-templates')
+            .upload(storagePath, fileBuffer, {
+              contentType: finalContentType,
+              upsert: true
+            });
+
+          if (!uploadErr && uploadData) {
+            const { data: publicUrlData } = supabase.storage
+              .from('voice-templates')
+              .getPublicUrl(storagePath);
+            if (publicUrlData?.publicUrl) {
+              supabaseFileUrl = publicUrlData.publicUrl;
+            }
+          } else if (uploadErr) {
+            console.warn('Supabase storage upload error:', uploadErr.message);
+          }
+        } catch (sErr) {
+          console.warn('Supabase storage upload fallback warning:', sErr);
+        }
+      }
+
+      let dataUrlFallback = '';
+      if (body.audio_base64 || body.audioBase64 || body.audio) {
+        const rawB64 = body.audio_base64 || body.audioBase64 || body.audio;
+        if (typeof rawB64 === 'string') {
+          if (rawB64.startsWith('data:audio/')) {
+            dataUrlFallback = rawB64;
+          } else {
+            dataUrlFallback = `data:${finalContentType};base64,${rawB64}`;
+          }
+        }
+      }
+
+      const fileUrl = supabaseFileUrl || rawFileUrl || dataUrlFallback;
       const providerVoiceId = responseData.id || responseData.voice_id || responseData.data?.id || responseData.result?.id || '';
       const providerVoiceName = responseData.name || responseData.title || voiceName;
 
@@ -390,6 +440,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           const isSuper = body.is_super_admin === true || body.is_super_admin === 'true';
           const initStatus = isSuper ? 'approved' : 'pending';
+          const inputDuration = body.duration ? Number(body.duration) : null;
           const { data: dbItem, error: dbErr } = await supabase.from('voice_templates').insert({
             institution_id: targetInstId,
             title: voiceName,
@@ -397,14 +448,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             admin_status: initStatus,
             provider_status: initStatus,
             provider_voice_name: providerVoiceName,
-            provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
+            provider_voice_id: providerVoiceId ? String(providerVoiceId) : null,
+            duration: inputDuration
           }).select().single();
 
           if (dbErr) {
             console.error('Error auto-inserting voice_template in api/awaj:', dbErr);
           } else {
             savedTemplate = dbItem;
-            console.log('Successfully saved voice_template:', dbItem.id, 'status:', initStatus);
+            console.log('Successfully saved voice_template:', dbItem.id, 'status:', initStatus, 'url:', fileUrl);
           }
         } catch (dbEx) {
           console.error('Exception inserting voice_template in api/awaj:', dbEx);

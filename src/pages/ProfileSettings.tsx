@@ -72,6 +72,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [isDeletingRegNo, setIsDeletingRegNo] = useState(false);
   const [showDeleteRegConfirm, setShowDeleteRegConfirm] = useState(false);
   const [classesList, setClassesList] = useState<any[]>([]);
+  const [showSyncAgentModal, setShowSyncAgentModal] = useState(false);
   const [testingDevice, setTestingDevice] = useState(false);
   const [deviceStatusResult, setDeviceStatusResult] = useState<{
     status: 'success' | 'warning' | 'error';
@@ -880,6 +881,15 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       {lang === 'bn' ? 'মেশিন কানেকশন টেস্ট করুন' : 'Test Machine Connection'}
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => setShowSyncAgentModal(true)}
+                      className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 active:scale-95 transition-all mt-1"
+                    >
+                      <Smartphone size={14} />
+                      {lang === 'bn' ? '💻 পিসি সিংক এজেন্ট গাইড ও ডাউনলোড (Non-ADMS)' : '💻 PC Sync Agent Setup'}
+                    </button>
+
                     {deviceStatusResult && (
                       <div className={`p-3 rounded-xl border text-xs font-medium space-y-1 ${
                         deviceStatusResult.status === 'success' 
@@ -905,6 +915,95 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                 </div>
               </div>
             </motion.div>
+
+            {showSyncAgentModal && (
+              <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                <div className={`w-full max-w-2xl p-6 rounded-3xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-900'}`}>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                        ⚡
+                      </div>
+                      <div>
+                        <h3 className="font-black text-base">Deenora ZKTeco PC Auto-Sync Agent</h3>
+                        <p className="text-[11px] text-slate-400">Non-ADMS (ZKTeco K40, K14, etc.) এর জন্য ১-ক্লিক সিংক সেটআপ</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setShowSyncAgentModal(false)}
+                      className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 text-xs leading-relaxed">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300">
+                      <strong>💡 কিভাবে কাজ করবে:</strong> আপনার অফিসের যে পিসি/ল্যাপটপটি ZKTeco K40 মেশিনের সাথে একই WiFi Router-এ যুক্ত, সেখানে নিচের ১-ফাইলের পাইথন বা নোডJS স্ক্রিপ্টটি চালু রাখলে তা স্বয়ংক্রিয়ভাবে মেশিনের পাঞ্চ রিড করে Deenora অ্যাপে সকল হাজিরা পাঠিয়ে দেবে।
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-700 dark:text-slate-300">সহজ পাইথন ফাইল পদ্ধতি (Python Agent):</p>
+                      <ol className="list-decimal pl-5 space-y-1 text-[11px]">
+                        <li>কম্পিউটারে Python ইন্সটল করুন (যদি না থাকে)।</li>
+                        <li>কমান্ড প্রম্পটে টার্মিনাল খুলে লিখুন: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono">pip install zk requests</code></li>
+                        <li>কম্পিউটারে <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono">deenora_sync.py</code> নামে একটি ফাইল বানিয়ে নিচের কোডটুকু পেস্ট করে রান করুন:</li>
+                      </ol>
+
+                      <pre className="p-3 bg-slate-950 text-emerald-400 rounded-xl font-mono text-[10px] overflow-x-auto select-all">
+{`from zk import ZK
+import requests
+import time
+
+MACHINE_IP = '172.31.6.208'
+MACHINE_PORT = 4370
+DEVICE_SN = '${biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230'}'
+DEENORA_API = 'https://deenora.app/api/iclock'
+
+print(f"Connecting to ZKTeco Machine at {MACHINE_IP}:{MACHINE_PORT}...")
+zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=5)
+
+try:
+    conn = zk.connect()
+    print("✓ Successfully connected to ZKTeco K40 Machine!")
+    
+    while True:
+        attendances = conn.get_attendance()
+        if attendances:
+            logs = []
+            for att in attendances:
+                logs.append({
+                    "userId": str(att.user_id),
+                    "checkTime": str(att.timestamp)
+                })
+            
+            payload = {"sn": DEVICE_SN, "logs": logs}
+            res = requests.post(DEENORA_API, json=payload)
+            print(f"Syncing {len(logs)} logs to Deenora -> Status: {res.status_code}")
+        
+        time.sleep(3) # Check every 3 seconds
+
+except Exception as e:
+    print("Error:", e)`}
+                      </pre>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`from zk import ZK\nimport requests\nimport time\n\nMACHINE_IP = '172.31.6.208'\nMACHINE_PORT = 4370\nDEVICE_SN = '${biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230'}'\nDEENORA_API = 'https://deenora.app/api/iclock'\n\nprint(f"Connecting to ZKTeco Machine at {MACHINE_IP}:{MACHINE_PORT}...")\nzk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=5)\n\ntry:\n    conn = zk.connect()\n    print("✓ Successfully connected to ZKTeco K40 Machine!")\n    while True:\n        attendances = conn.get_attendance()\n        if attendances:\n            logs = [{"userId": str(att.user_id), "checkTime": str(att.timestamp)} for att in attendances]\n            res = requests.post(DEENORA_API, json={"sn": DEVICE_SN, "logs": logs})\n            print(f"Syncing {len(logs)} logs -> Status: {res.status_code}")\n        time.sleep(3)\nexcept Exception as e:\n    print("Error:", e)`);
+                          alert('পাইথন স্ক্রিপ্টের কোড কপি করা হয়েছে!');
+                        }}
+                        className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                      >
+                        📋 পাইথন কোড কপি করুন (Copy Code)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Account & Security Card */}
             <motion.div 

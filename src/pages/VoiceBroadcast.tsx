@@ -32,7 +32,8 @@ import {
   ShieldCheck,
   Info,
   Plus,
-  Square
+  Square,
+  Edit2
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
@@ -95,7 +96,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }), [madrasah?.config_json?.modules]);
 
   const availableTabs = useMemo(() => {
-    return (['templates', 'broadcast', 'history', 'recharge'] as const).filter(tab => {
+    const rawTabs = (['broadcast', 'templates', 'history', 'recharge'] as const);
+
+    return rawTabs.filter(tab => {
       if (tab === 'recharge' && role === 'teacher') return false;
       if (tab === 'templates' || tab === 'broadcast') return modules.voice_broadcast !== false;
       return true;
@@ -116,13 +119,64 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   
   // Voices state
   const [voices, setVoices] = useState<any[]>([]);
-  const [voiceStatusFilter, setVoiceStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [voiceStatusFilter, setVoiceStatusFilter] = useState<'pending' | 'approved' | 'awaj'>('pending');
+  const [editingVoice, setEditingVoice] = useState<{ id: string; title: string } | null>(null);
+  const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
   const [voiceDurations, setVoiceDurations] = useState<{ [id: string]: number }>({});
+
+  // Upload & Preview & Recording state
+  const [uploadName, setUploadName] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<any>(null);
+
+  // Audio Preview & Speed Control state in modal
+  const [previewSpeed, setPreviewSpeed] = useState<number>(1.0);
+  const [previewAudioPlaying, setPreviewAudioPlaying] = useState<boolean>(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [uploadedFileDuration, setUploadedFileDuration] = useState<number>(0);
+
+  const previewObjectUrl = useMemo(() => {
+    if (!uploadFile) return null;
+    return URL.createObjectURL(uploadFile);
+  }, [uploadFile]);
+
+  useEffect(() => {
+    if (uploadFile && previewObjectUrl) {
+      const audio = new Audio(previewObjectUrl);
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+          setUploadedFileDuration(Math.ceil(audio.duration));
+        }
+      };
+    } else {
+      setUploadedFileDuration(0);
+    }
+  }, [uploadFile, previewObjectUrl]);
+
+  const originalDuration = useMemo(() => {
+    if (recordingTime > 0) return recordingTime;
+    return uploadedFileDuration;
+  }, [recordingTime, uploadedFileDuration]);
+
+  const effectiveDuration = useMemo(() => {
+    if (!originalDuration) return 0;
+    return Math.round(originalDuration / previewSpeed);
+  }, [originalDuration, previewSpeed]);
 
   useEffect(() => {
     voices.forEach((v) => {
-      if (v.id && v.file_url && !voiceDurations[v.id]) {
-        const audio = new Audio(v.file_url);
+      const audioUrl = v.file_url || v.preview_url || v.url;
+      if (v.id && audioUrl && !voiceDurations[v.id]) {
+        const audio = new Audio(audioUrl);
         audio.onloadedmetadata = () => {
           if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
             setVoiceDurations(prev => ({ ...prev, [v.id]: Math.ceil(audio.duration) }));
@@ -132,8 +186,43 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     });
   }, [voices]);
 
+  const handleUpdateVoiceTitle = async () => {
+    if (!editingVoice || !editingVoice.title.trim()) return;
+    setIsUpdatingTitle(true);
+    try {
+      const cleanTitle = editingVoice.title.trim();
+      const { error } = await supabase
+        .from('voice_templates')
+        .update({ title: cleanTitle })
+        .eq('id', editingVoice.id);
+
+      if (error) throw error;
+
+      setVoices(prev => prev.map(v => v.id === editingVoice.id ? { ...v, title: cleanTitle } : v));
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'সফল' : 'Success',
+        message: lang === 'bn' ? 'ভয়েসের নাম সফলভাবে পরিবর্তন করা হয়েছে।' : 'Voice title updated successfully.'
+      });
+      setEditingVoice(null);
+    } catch (err: any) {
+      console.error('Error updating voice title:', err);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ' : 'Failed',
+        message: err.message || 'ভয়েসের নাম পরিবর্তন করতে সমস্যা হয়েছে।'
+      });
+    } finally {
+      setIsUpdatingTitle(false);
+    }
+  };
+
   const getPulsesForVoice = (voiceId: string) => {
-    const duration = voiceDurations[voiceId] || 0;
+    const vObj = voices.find(v => v.id === voiceId);
+    const duration = vObj?.duration || voiceDurations[voiceId] || 0;
     if (duration > 30) {
       return Math.min(2, Math.ceil(duration / 30));
     }
@@ -141,10 +230,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const filteredVoices = useMemo(() => {
-    if (voiceStatusFilter === 'all') return voices;
     return voices.filter(v => {
       const status = v.admin_status || v.provider_status || 'approved';
-      return status === voiceStatusFilter;
+      if (voiceStatusFilter === 'pending') {
+        return status === 'pending';
+      }
+      if (voiceStatusFilter === 'awaj') {
+        return Boolean(v.provider_voice_id || v.provider_voice_name || !v.institution_id);
+      }
+      return status === 'approved';
     });
   }, [voices, voiceStatusFilter]);
 
@@ -390,17 +484,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  // Upload state
-  const [uploadName, setUploadName] = useState('');
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<any>(null);
-
   // Recharge state
   const [rechargeAmount, setRechargeAmount] = useState('');
   const IS_VOICE_BROADCAST_DISABLED = false;
@@ -472,36 +555,57 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }, [madrasah?.id]);
 
   const handleAssignVoiceToBranches = async () => {
-    if (!assignModalVoice || selectedBranchIds.length === 0 || !madrasah?.id) return;
+    if (!assignModalVoice || selectedBranchIds.length === 0) return;
 
     setAssigningVoiceModal(true);
     setAssignVoiceError('');
     setAssignVoiceSuccess('');
 
     try {
-      const res = await fetch('/api/branches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'assign-voice-template',
-          parent_institution_id: madrasah.id,
-          voice_template_id: assignModalVoice.id,
-          target_branch_ids: selectedBranchIds
-        })
-      });
+      if (isSuperAdmin) {
+        const targetId = selectedBranchIds[0];
+        const { error } = await supabase.from('voice_templates').update({
+          institution_id: targetId,
+          admin_status: 'approved',
+          provider_status: 'approved'
+        }).eq('id', assignModalVoice.id);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to assign voice to branches');
+        if (error) throw error;
 
-      setAssignVoiceSuccess(data.message || 'ভয়েস মেসেজটি সফলভাবে শাখায় এসাইন করা হয়েছে!');
-      setTimeout(() => {
-        setAssignModalVoice(null);
-        setSelectedBranchIds([]);
-        setAssignVoiceSuccess('');
-      }, 1500);
+        setAssignVoiceSuccess('ভয়েস বার্তাটি সফলভাবে প্রতিষ্ঠানে এসাইন করা হয়েছে!');
+        setTimeout(() => {
+          setAssignModalVoice(null);
+          setSelectedBranchIds([]);
+          setAssignVoiceSuccess('');
+          fetchVoices();
+        }, 1200);
+      } else {
+        if (!madrasah?.id) return;
+        const res = await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'assign-voice-template',
+            parent_institution_id: madrasah.id,
+            voice_template_id: assignModalVoice.id,
+            target_branch_ids: selectedBranchIds
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to assign voice to branches');
+
+        setAssignVoiceSuccess(data.message || 'ভয়েস মেসেজটি সফলভাবে শাখায় এসাইন করা হয়েছে!');
+        setTimeout(() => {
+          setAssignModalVoice(null);
+          setSelectedBranchIds([]);
+          setAssignVoiceSuccess('');
+          fetchVoices();
+        }, 1500);
+      }
     } catch (err: any) {
       console.error('Error assigning voice to branches:', err);
-      setAssignVoiceError(err.message || 'শাখায় এসাইন করতে সমস্যা হয়েছে');
+      setAssignVoiceError(err.message || 'এসাইন করতে সমস্যা হয়েছে');
     } finally {
       setAssigningVoiceModal(false);
     }
@@ -654,8 +758,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
             const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
             const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
+            const awajUrl = awajVoice?.file_url || awajVoice?.preview_url || awajVoice?.url || awajVoice?.path || '';
             
-            // Sync provider metadata only without overwriting admin_status
+            // Sync provider metadata and file_url without overwriting admin_status
             const updatesToApply: any = {};
             if (newProviderId && localVoice.provider_voice_id !== newProviderId) {
               updatesToApply.provider_voice_id = newProviderId;
@@ -664,6 +769,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             if (newProviderName && localVoice.provider_voice_name !== newProviderName) {
               updatesToApply.provider_voice_name = newProviderName;
               localVoice.provider_voice_name = newProviderName;
+            }
+            if (awajUrl && (!localVoice.file_url || localVoice.file_url.trim() === '')) {
+              let cleanAwajUrl = awajUrl.trim();
+              if (!cleanAwajUrl.startsWith('http') && !cleanAwajUrl.startsWith('data:')) {
+                const cleanPath = cleanAwajUrl.startsWith('/') ? cleanAwajUrl : `/${cleanAwajUrl}`;
+                cleanAwajUrl = `https://api.awajdigital.com${cleanPath}`;
+              }
+              updatesToApply.file_url = cleanAwajUrl;
+              localVoice.file_url = cleanAwajUrl;
             }
 
             if (Object.keys(updatesToApply).length > 0) {
@@ -1804,7 +1918,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           audio_base64: base64Audio,
           filename: uploadFile.name,
           institution_id: madrasah.id,
-          is_super_admin: isSuperAdmin
+          is_super_admin: isSuperAdmin,
+          duration: effectiveDuration
         })
       });
 
@@ -1814,12 +1929,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         throw new Error(resData.message || resData.error || (lang === 'bn' ? 'ভয়েস ফাইল আপলোড করতে সমস্যা হয়েছে।' : 'Failed to upload voice audio.'));
       }
 
-      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
+      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || base64Audio || '';
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
       const providerVoiceName = resData.name || resData.title || cleanTitle;
       const initialStatus = isSuperAdmin ? 'approved' : 'pending';
 
       let newVoiceRecord = resData.voice_template;
+      if (newVoiceRecord) {
+        if (!newVoiceRecord.file_url) newVoiceRecord.file_url = audioUrl;
+        if (!newVoiceRecord.duration) newVoiceRecord.duration = effectiveDuration;
+      }
 
       // Fallback: if not saved by backend endpoint, save directly
       if (!newVoiceRecord) {
@@ -1830,7 +1949,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           admin_status: initialStatus,
           provider_status: initialStatus,
           provider_voice_name: providerVoiceName,
-          provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
+          provider_voice_id: providerVoiceId ? String(providerVoiceId) : null,
+          duration: effectiveDuration
         }).select().single();
 
         if (dbError) {
@@ -1850,6 +1970,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           provider_status: initialStatus,
           provider_voice_name: providerVoiceName,
           provider_voice_id: providerVoiceId ? String(providerVoiceId) : null,
+          duration: effectiveDuration,
           created_at: new Date().toISOString()
         };
       }
@@ -2123,7 +2244,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         </div>
       </div>
 
-      <div className="relative h-[60px] bg-white rounded-[2.5rem] p-1.5 shadow-bubble border border-slate-100 flex items-center mb-8">
+      <div className="relative h-[60px] bg-white rounded-[2.5rem] p-1.5 shadow-bubble border border-slate-100 flex items-center mb-8 overflow-hidden">
         <div 
           className="absolute h-[48px] bg-[#2563EB] rounded-[2.5rem] transition-all duration-500 shadow-premium"
           style={{ 
@@ -2133,12 +2254,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           }}
         />
         {availableTabs.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`relative flex-1 h-full rounded-[2.5rem] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 transition-all z-10 ${activeTab === tab ? 'text-white' : 'text-slate-400'}`}>
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`relative flex-1 h-full rounded-[2.5rem] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all z-10 ${activeTab === tab ? 'text-white' : 'text-slate-400'}`}>
             {tab === 'broadcast' ? <Send size={16} /> : 
              tab === 'templates' ? <Mic size={16} /> : 
              tab === 'history' ? <History size={16} /> :
              <CreditCard size={16} />}
-            <span className="font-noto">
+            <span className="font-noto truncate">
               {tab === 'broadcast' ? t('broadcast', lang) : 
                tab === 'templates' ? t('voice', lang) : 
                tab === 'history' ? t('history', lang) :
@@ -2450,29 +2571,60 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               </div>
             </div>
 
+            {/* Super Admin Pending Voices Alert Banner */}
+            {isSuperAdmin && pendingVoicesCount > 0 && (
+              <div className="bg-amber-500/10 border-2 border-amber-500/30 p-4 sm:p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 shadow-sm">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Mic size={22} className="animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-amber-900 dark:text-amber-300 text-sm font-noto flex items-center gap-2">
+                      <span>{pendingVoicesCount} টি নতুন ভয়েস বার্তা অনুমোদনের অপেক্ষায় জমা হয়েছে!</span>
+                    </h4>
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 font-noto mt-0.5">
+                      ইউজারদের পাঠানো অডিওগুলো প্লে করে শুনুন এবং অনুমোদন বা নির্দিষ্ট প্রতিষ্ঠানে এসাইন করুন।
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setVoiceStatusFilter('pending')}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all shrink-0 active:scale-95 cursor-pointer flex items-center justify-center gap-2 font-noto"
+                >
+                  <Clock size={15} />
+                  <span>পেন্ডিং ভয়েস পর্যালোচনা করুন ({pendingVoicesCount})</span>
+                </button>
+              </div>
+            )}
+
             {/* Voice Status Filter Tabs */}
             <div className="flex items-center gap-2 px-1 overflow-x-auto py-1">
-              {(['all', 'approved', 'pending', 'rejected'] as const).map(statusKey => {
-                const count = statusKey === 'all' 
-                  ? voices.length 
-                  : voices.filter(v => (v.admin_status || v.provider_status || 'approved') === statusKey).length;
+              {(isSuperAdmin ? (['pending', 'approved', 'awaj'] as const) : (['pending', 'approved'] as const)).map(statusKey => {
+                const count = voices.filter(v => {
+                  const status = v.admin_status || v.provider_status || 'approved';
+                  if (statusKey === 'pending') return status === 'pending';
+                  if (statusKey === 'approved') return status === 'approved';
+                  return Boolean(v.provider_voice_id || v.provider_voice_name || !v.institution_id);
+                }).length;
+
                 return (
                   <button
                     key={statusKey}
                     onClick={() => setVoiceStatusFilter(statusKey)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 font-noto ${
                       voiceStatusFilter === statusKey 
-                        ? 'bg-[#1E3A8A] text-white shadow-sm' 
+                        ? 'bg-[#1E3A8A] text-white shadow-md' 
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
                     <span>
-                      {statusKey === 'all' ? (lang === 'bn' ? 'সকল' : 'All') :
-                       statusKey === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
-                       statusKey === 'pending' ? (lang === 'bn' ? 'পেন্ডিং (অপেক্ষমাণ)' : 'Pending') :
-                       (lang === 'bn' ? 'বাতিলকৃত' : 'Rejected')}
+                      {statusKey === 'pending' 
+                        ? (isSuperAdmin ? (lang === 'bn' ? 'ইউজার পেন্ডিং ভয়েস' : 'User Pending') : (lang === 'bn' ? 'পেন্ডিং (অপেক্ষমাণ)' : 'Pending'))
+                        : statusKey === 'approved' 
+                        ? (lang === 'bn' ? 'অনুমোদিত ভয়েস' : 'Approved') 
+                        : (lang === 'bn' ? 'আওয়াজ রেজিস্টার্ড ভয়েস' : 'Awaj Register')}
                     </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${voiceStatusFilter === statusKey ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${voiceStatusFilter === statusKey ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>
                       {count}
                     </span>
                   </button>
@@ -2488,6 +2640,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                     const status = v.admin_status || v.provider_status || 'approved';
                     const isPending = status === 'pending';
                     const isRejected = status === 'rejected';
+                    const audioTargetUrl = v.file_url || v.preview_url || v.url;
 
                     return (
                       <div key={v.id} className="bg-white p-5 rounded-[2.2rem] border border-slate-100 shadow-bubble space-y-3">
@@ -2501,23 +2654,36 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                   <Mic size={18} />
                                </div>
                                <div>
-                                 <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
+                                 <div className="flex items-center gap-1.5">
+                                   <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
+                                   <button
+                                     onClick={() => setEditingVoice({ id: v.id, title: v.title })}
+                                     className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                                     title={lang === 'bn' ? 'ভয়েস নাম এডিট করুন' : 'Edit Title'}
+                                   >
+                                     <Edit2 size={13} />
+                                   </button>
+                                 </div>
                                  <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                                    {isPending ? (
-                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 w-fit">
+                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 w-fit font-noto">
                                        <Clock size={10} /> {lang === 'bn' ? 'অপেক্ষমাণ (পেন্ডিং)' : 'Pending'}
                                      </span>
                                    ) : isRejected ? (
-                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 flex items-center gap-1 w-fit">
+                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 flex items-center gap-1 w-fit font-noto">
                                        <XCircle size={10} /> {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
                                      </span>
                                    ) : (
-                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit">
+                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit font-noto">
                                        <CheckCircle2 size={10} /> {lang === 'bn' ? 'অনুমোদিত' : 'Approved'}
                                      </span>
                                    )}
+                                   <span className="text-[9px] font-black text-[#2563EB] bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit font-noto">
+                                     <Clock size={10} className="text-blue-500" />
+                                     {v.duration || voiceDurations[v.id] ? `${v.duration || voiceDurations[v.id]} সেকেন্ড` : 'ডিউরেশন...' }
+                                   </span>
                                    {isSuperAdmin && (
-                                     <span className="text-[9px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                                     <span className="text-[9px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit font-noto">
                                        <Building2 size={10} className="text-blue-500" />
                                        {allInstitutions.find(i => i.id === v.institution_id)?.name || 'সিস্টেম / গ্লোবাল'}
                                      </span>
@@ -2526,11 +2692,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                </div>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {v.file_url && (
+                              {audioTargetUrl && (
                                 <button 
-                                  onClick={() => togglePlay(v.id, v.file_url)}
-                                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
-                                  title="শুনুন"
+                                  onClick={() => togglePlay(v.id, audioTargetUrl)}
+                                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
+                                  title={lang === 'bn' ? 'প্লে করে শুনুন' : 'Play Audio'}
                                 >
                                   {playingId === v.id ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
                                 </button>
@@ -3328,35 +3494,43 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
-                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                  {lang === 'bn' ? 'শাখা নির্বাচন করুন' : 'Select Target Branches'}
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest font-noto">
+                  {isSuperAdmin 
+                    ? (lang === 'bn' ? 'প্রতিষ্ঠান নির্বাচন করুন' : 'Select Target Institution') 
+                    : (lang === 'bn' ? 'শাখা নির্বাচন করুন' : 'Select Target Branches')}
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedBranchIds.length === childBranches.length) {
-                      setSelectedBranchIds([]);
-                    } else {
-                      setSelectedBranchIds(childBranches.map(b => b.id));
-                    }
-                  }}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 cursor-pointer"
-                >
-                  {selectedBranchIds.length === childBranches.length ? (lang === 'bn' ? 'সব আনসেলেক্ট করুন' : 'Deselect All') : (lang === 'bn' ? 'সবগুলো সিলেক্ট করুন' : 'Select All')}
-                </button>
+                {!isSuperAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedBranchIds.length === childBranches.length) {
+                        setSelectedBranchIds([]);
+                      } else {
+                        setSelectedBranchIds(childBranches.map(b => b.id));
+                      }
+                    }}
+                    className="text-xs font-bold text-purple-600 hover:text-purple-700 cursor-pointer font-noto"
+                  >
+                    {selectedBranchIds.length === childBranches.length ? (lang === 'bn' ? 'সব আনসেলেক্ট করুন' : 'Deselect All') : (lang === 'bn' ? 'সবগুলো সিলেক্ট করুন' : 'Select All')}
+                  </button>
+                )}
               </div>
 
               <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                {childBranches.map(branch => {
-                  const isChecked = selectedBranchIds.includes(branch.id);
+                {(isSuperAdmin ? allInstitutions : childBranches).map(inst => {
+                  const isChecked = selectedBranchIds.includes(inst.id);
                   return (
                     <div
-                      key={branch.id}
+                      key={inst.id}
                       onClick={() => {
-                        if (isChecked) {
-                          setSelectedBranchIds(selectedBranchIds.filter(id => id !== branch.id));
+                        if (isSuperAdmin) {
+                          setSelectedBranchIds([inst.id]);
                         } else {
-                          setSelectedBranchIds([...selectedBranchIds, branch.id]);
+                          if (isChecked) {
+                            setSelectedBranchIds(selectedBranchIds.filter(id => id !== inst.id));
+                          } else {
+                            setSelectedBranchIds([...selectedBranchIds, inst.id]);
+                          }
                         }
                       }}
                       className={`p-3.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
@@ -3368,12 +3542,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           {isChecked && <Check size={14} strokeWidth={3} />}
                         </div>
                         <div>
-                          <p className="text-xs font-black font-noto">{branch.name}</p>
-                          <p className="text-[10px] font-bold text-slate-400">{branch.phone || branch.address || 'শাখা একাউন্ট'}</p>
+                          <p className="text-xs font-black font-noto">{inst.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400">{inst.phone || inst.address || 'প্রতিষ্ঠান'}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500">
-                        {lang === 'bn' ? 'শাখা' : 'Branch'}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500 font-noto">
+                        {isSuperAdmin ? (lang === 'bn' ? 'প্রতিষ্ঠান' : 'Portal') : (lang === 'bn' ? 'শাখা' : 'Branch')}
                       </span>
                     </div>
                   );
@@ -3449,25 +3623,26 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
               <div className="space-y-3">
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 block font-noto">
-                  {lang === 'bn' ? 'অডিও রেকর্ড বা ফাইল নির্বাচন' : 'Audio Input Method'}
+                  {lang === 'bn' ? 'অডিও ইনপুট বা সরাসরি রেকর্ড করুন *' : 'Audio Input or Live Record *'}
                 </label>
 
-                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center space-y-4">
+                {/* Sleek Recording & Upload Zone Card */}
+                <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 p-5 rounded-[2rem] border-2 border-dashed border-blue-200/80 text-center space-y-4 shadow-xs">
                   <div className="flex items-center justify-center gap-3">
                     {!isRecording ? (
                       <button 
                         type="button" 
                         onClick={startRecording}
-                        className="px-5 py-3 rounded-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs flex items-center gap-2 active:scale-95 transition-all cursor-pointer font-noto"
+                        className="px-6 py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-xs flex items-center gap-2.5 active:scale-95 transition-all shadow-md shadow-red-200 cursor-pointer font-noto"
                       >
                         <Mic size={18} className="animate-pulse" />
-                        <span>{lang === 'bn' ? 'লাইভ রেকর্ড শুরু করুন' : 'Start Recording'}</span>
+                        <span>{lang === 'bn' ? 'মাইক্রোফোনে রেকর্ড শুরু করুন' : 'Start Live Recording'}</span>
                       </button>
                     ) : (
                       <button 
                         type="button" 
                         onClick={stopRecording}
-                        className="px-5 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-xs flex items-center gap-2 active:scale-95 transition-all cursor-pointer animate-pulse font-noto"
+                        className="px-6 py-3.5 rounded-full bg-red-700 hover:bg-red-800 text-white font-black text-xs flex items-center gap-2.5 active:scale-95 transition-all cursor-pointer animate-pulse font-noto shadow-lg shadow-red-300"
                       >
                         <Square size={16} />
                         <span>{lang === 'bn' ? `রেকর্ডিং থামান (${Math.floor(recordingTime / 60)}:${('0' + (recordingTime % 60)).slice(-2)})` : `Stop Recording (${recordingTime}s)`}</span>
@@ -3475,41 +3650,154 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                     )}
                   </div>
 
-                  <div className="relative flex items-center justify-center my-2">
-                    <div className="border-t border-slate-200 w-full" />
-                    <span className="bg-slate-50 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest absolute font-noto">
-                      {lang === 'bn' ? 'অথবা ফাইল সিলেক্ট করুন' : 'OR Select Audio File'}
-                    </span>
-                  </div>
-
-                  <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 text-slate-700 font-bold text-xs shadow-sm transition-all w-full mt-2 font-noto">
-                    <Upload size={16} className="text-blue-500" />
-                    <span>{uploadFile ? uploadFile.name : (lang === 'bn' ? 'অডিও ফাইল বাছুন (MP3, M4A, WAV)' : 'Choose Audio File (MP3, M4A, WAV)')}</span>
-                    <input 
-                      type="file" 
-                      accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setUploadFile(e.target.files[0]);
-                        }
-                      }} 
-                    />
-                  </label>
-
-                  {uploadFile && (
-                    <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-100 flex items-center justify-between text-left">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <Mic size={16} className="text-[#2563EB] shrink-0" />
-                        <span className="text-xs font-bold text-slate-700 truncate font-noto">{uploadFile.name}</span>
+                  {!uploadFile && (
+                    <>
+                      <div className="relative flex items-center justify-center my-2">
+                        <div className="border-t border-slate-200 w-full" />
+                        <span className="bg-slate-50 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest absolute font-noto">
+                          {lang === 'bn' ? 'অথবা অডিও ফাইল আপলোড করুন' : 'OR Upload Audio File'}
+                        </span>
                       </div>
-                      <button 
-                        type="button" 
-                        onClick={() => setUploadFile(null)} 
-                        className="text-red-500 hover:text-red-700 p-1 rounded-lg text-xs shrink-0 cursor-pointer"
-                      >
-                        <X size={16} />
-                      </button>
+
+                      <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white border-2 border-blue-100 hover:border-blue-400 text-slate-700 font-bold text-xs shadow-sm transition-all w-full font-noto group">
+                        <Upload size={18} className="text-[#2563EB] group-hover:scale-110 transition-transform" />
+                        <span>{lang === 'bn' ? 'কম্পিউটার/মোবাইল থেকে বাছুন (MP3, WAV, M4A, OGG)' : 'Choose Audio File (MP3, WAV, M4A, OGG)'}</span>
+                        <input 
+                          type="file" 
+                          accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac,.webm" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              setUploadFile(e.target.files[0]);
+                            }
+                          }} 
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  {/* Recorded / Selected Audio Live Preview Player */}
+                  {uploadFile && (
+                    <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50/80 rounded-3xl border-2 border-blue-300/80 space-y-3 shadow-sm text-left animate-in fade-in zoom-in-95">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <div className="w-9 h-9 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-md">
+                            <Mic size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-800 truncate font-noto">{uploadFile.name}</p>
+                            <p className="text-[10px] font-bold text-slate-500 font-noto">
+                              {(uploadFile.size / (1024 * 1024)).toFixed(2)} MB • {recordingTime > 0 ? `${recordingTime}s Recorded` : 'Audio File Loaded'}
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => { setUploadFile(null); setPreviewAudioPlaying(false); }} 
+                          className="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                          title="বাতিল করুন"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      {/* Audio Player & Speed Controller */}
+                      {previewObjectUrl && (
+                        <div className="bg-white p-3.5 rounded-2xl border border-blue-100/90 space-y-3 shadow-xs">
+                          <div className="flex items-center justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (previewAudioRef.current) {
+                                  if (previewAudioPlaying) {
+                                    previewAudioRef.current.pause();
+                                    setPreviewAudioPlaying(false);
+                                  } else {
+                                    previewAudioRef.current.playbackRate = previewSpeed;
+                                    previewAudioRef.current.play();
+                                    setPreviewAudioPlaying(true);
+                                  }
+                                }
+                              }}
+                              className="w-10 h-10 rounded-full bg-[#2563EB] hover:bg-blue-700 text-white flex items-center justify-center shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"
+                            >
+                              {previewAudioPlaying ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                            </button>
+
+                            {/* Simulated Waveform Visualizer */}
+                            <div className="flex-1 flex items-center gap-1 h-6 px-2 overflow-hidden">
+                              {[40, 70, 30, 90, 60, 100, 45, 80, 50, 95, 35, 75, 65, 85, 40, 90, 50].map((h, i) => (
+                                <div 
+                                  key={i} 
+                                  className={`flex-1 rounded-full transition-all duration-300 ${previewAudioPlaying ? 'bg-blue-600 animate-pulse' : 'bg-slate-300'}`}
+                                  style={{ height: previewAudioPlaying ? `${h}%` : '25%' }}
+                                />
+                              ))}
+                            </div>
+
+                            <audio 
+                              ref={previewAudioRef}
+                              src={previewObjectUrl}
+                              onEnded={() => setPreviewAudioPlaying(false)}
+                              onPause={() => setPreviewAudioPlaying(false)}
+                              onPlay={() => setPreviewAudioPlaying(true)}
+                              className="hidden"
+                            />
+                          </div>
+
+                          {/* Speed Adjustment Badges & Duration Summary */}
+                          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-noto flex items-center gap-1">
+                                <Zap size={12} className="text-amber-500" />
+                                <span>প্লেব্যাক গতি (Speed):</span>
+                              </span>
+
+                              <div className="flex items-center gap-1">
+                                {[0.75, 1.0, 1.25, 1.5, 2.0].map(speedVal => (
+                                  <button
+                                    key={speedVal}
+                                    type="button"
+                                    onClick={() => {
+                                      setPreviewSpeed(speedVal);
+                                      if (previewAudioRef.current) {
+                                        previewAudioRef.current.playbackRate = speedVal;
+                                      }
+                                    }}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer font-noto ${
+                                      previewSpeed === speedVal 
+                                        ? 'bg-[#1E3A8A] text-white shadow-xs' 
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {speedVal}x
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Live Duration Summary Cards */}
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <div className="bg-blue-50/90 p-2.5 rounded-2xl border border-blue-100 text-center space-y-0.5">
+                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-wider block font-noto">
+                                  মূল সময়
+                                </span>
+                                <span className="text-xs font-black text-[#1E3A8A] font-noto">
+                                  {originalDuration} সেকেন্ড
+                                </span>
+                              </div>
+                              <div className="bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200/80 text-center space-y-0.5">
+                                <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider block font-noto">
+                                  গতি পরিবর্তনের পর
+                                </span>
+                                <span className="text-xs font-black text-amber-900 font-noto">
+                                  {effectiveDuration} সেকেন্ড
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3535,6 +3823,65 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               >
                 {isUploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
                 <span>{lang === 'bn' ? 'জমা দিন' : 'Upload Voice'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {editingVoice && createPortal(
+        <div className="modal-overlay bg-[#080A12]/40 backdrop-blur-md animate-in fade-in duration-300 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 sm:p-8 shadow-bubble border border-slate-100 space-y-5 animate-in zoom-in-95 duration-300 relative">
+            <button 
+              onClick={() => setEditingVoice(null)} 
+              className="absolute top-6 right-6 w-9 h-9 bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center border border-blue-100">
+                <Edit2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-800 font-noto">
+                  {lang === 'bn' ? 'ভয়েস বার্তার নাম পরিবর্তন' : 'Edit Voice Title'}
+                </h3>
+                <p className="text-xs font-bold text-slate-400 font-noto">
+                  {lang === 'bn' ? 'নতুন শিরোনাম দিয়ে সেভ করুন' : 'Enter new title and save'}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 mb-1.5 block font-noto">
+                {lang === 'bn' ? 'ভয়েস এর শিরোনাম / নাম' : 'Voice Title'}
+              </label>
+              <input 
+                type="text" 
+                value={editingVoice.title}
+                onChange={(e) => setEditingVoice({ ...editingVoice, title: e.target.value })}
+                className="w-full h-12 px-4 rounded-2xl bg-slate-50 border border-slate-200 font-bold text-sm text-slate-800 focus:outline-none focus:border-blue-500 transition-all font-noto"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingVoice(null)}
+                className="w-1/3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-xs transition-all cursor-pointer font-noto"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateVoiceTitle}
+                disabled={isUpdatingTitle || !editingVoice.title.trim()}
+                className="w-2/3 py-3 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-2xl text-xs shadow-lg shadow-blue-200 flex items-center justify-center gap-2 transition-all cursor-pointer font-noto"
+              >
+                {isUpdatingTitle ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                <span>{lang === 'bn' ? 'সেভ করুন' : 'Save Title'}</span>
               </button>
             </div>
           </div>

@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye, Clock, Pause, XCircle, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { linkifyMarkdown, getMarkdownComponents } from 'utils/markdownUtils';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, SubscriptionPackage, SmsProviderConfig } from 'types';
 import { t } from 'translations';
+import { globalAudioPlayer } from '../utils/audioPlayer';
 
 interface SuperAccountProps {
   lang: Language;
@@ -89,10 +90,180 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     }
   }, [madrasah]);
 
+  // Voice Pending state
+  const [isEditingPendingVoices, setIsEditingPendingVoices] = useState(false);
+  const [pendingVoices, setPendingVoices] = useState<any[]>([]);
+  const [loadingPendingVoices, setLoadingPendingVoices] = useState(false);
+  const [allInstitutions, setAllInstitutions] = useState<any[]>([]);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [playingAudio, setPlayingAudio] = useState<HTMLAudioElement | null>(null);
+  const [playbackSpeeds, setPlaybackSpeeds] = useState<{ [id: string]: number }>({});
+  const [editingVoiceTitle, setEditingVoiceTitle] = useState<{ id: string; title: string } | null>(null);
+  const [voiceDurations, setVoiceDurations] = useState<{ [id: string]: number }>({});
+
+  useEffect(() => {
+    pendingVoices.forEach((v) => {
+      const audioUrl = v.file_url || v.preview_url || v.url;
+      if (v.id && audioUrl && !voiceDurations[v.id] && !v.duration) {
+        const audio = new Audio(audioUrl);
+        audio.onloadedmetadata = () => {
+          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+            setVoiceDurations(prev => ({ ...prev, [v.id]: Math.ceil(audio.duration) }));
+          }
+        };
+      }
+    });
+  }, [pendingVoices]);
+
   useEffect(() => {
     fetchGlobalSettings();
     fetchPackages();
+    fetchPendingVoices();
   }, []);
+
+  const fetchPendingVoices = async () => {
+    setLoadingPendingVoices(true);
+    try {
+      const { data: insts } = await supabase.from('institutions').select('id, name');
+      if (insts) setAllInstitutions(insts);
+
+      const { data, error } = await supabase
+        .from('voice_templates')
+        .select('*')
+        .or('admin_status.eq.pending,provider_status.eq.pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPendingVoices(data || []);
+    } catch (err) {
+      console.error('Error fetching pending voices:', err);
+    } finally {
+      setLoadingPendingVoices(false);
+    }
+  };
+
+  const handleApproveVoice = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('voice_templates')
+        .update({
+          admin_status: 'approved',
+          provider_status: 'approved'
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPendingVoices(prev => prev.filter(v => v.id !== id));
+      if (playingVoiceId === id && playingAudio) {
+        playingAudio.pause();
+        setPlayingVoiceId(null);
+      }
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'অনুমোদিত' : 'Approved',
+        message: lang === 'bn' ? 'ভয়েস মেসেজটি সফলভাবে অনুমোদন করা হয়েছে।' : 'Voice message approved successfully.'
+      });
+      if (triggerRefresh) triggerRefresh();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ' : 'Failed',
+        message: err.message || 'Error approving voice'
+      });
+    }
+  };
+
+  const handleRejectVoice = async (id: string) => {
+    if (!confirm(lang === 'bn' ? 'আপনি কি এই ভয়েস বার্তাটি বাতিল করতে চান?' : 'Are you sure you want to reject this voice message?')) return;
+    try {
+      const { error } = await supabase
+        .from('voice_templates')
+        .update({
+          admin_status: 'rejected',
+          provider_status: 'rejected'
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPendingVoices(prev => prev.filter(v => v.id !== id));
+      if (playingVoiceId === id && playingAudio) {
+        playingAudio.pause();
+        setPlayingVoiceId(null);
+      }
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'বাতিল করা হয়েছে' : 'Rejected',
+        message: lang === 'bn' ? 'ভয়েস মেসেজটি বাতিল করা হয়েছে।' : 'Voice message rejected.'
+      });
+      if (triggerRefresh) triggerRefresh();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ' : 'Failed',
+        message: err.message || 'Error rejecting voice'
+      });
+    }
+  };
+
+  const togglePlayVoice = (id: string, rawUrl: string) => {
+    if (!rawUrl) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'অডিও পাওয়া যায়নি' : 'Audio Not Found',
+        message: lang === 'bn' ? 'এই অডিও ফাইল পাওয়া যায়নি।' : 'No audio file found.'
+      });
+      return;
+    }
+
+    globalAudioPlayer.toggle(
+      id,
+      rawUrl,
+      (isPlaying) => {
+        setPlayingVoiceId(isPlaying ? id : null);
+      },
+      (err) => {
+        console.error('Audio playback error:', err);
+        setPlayingVoiceId(null);
+        setStatusModal({
+          show: true,
+          type: 'error',
+          title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
+          message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে। ফাইল ফরম্যাট বা ইউআরএল চেক করুন।' : 'Failed to play audio.'
+        });
+      }
+    );
+  };
+
+  const changeSpeed = (id: string, speed: number) => {
+    setPlaybackSpeeds(prev => ({ ...prev, [id]: speed }));
+    if (playingVoiceId === id && playingAudio) {
+      playingAudio.playbackRate = speed;
+    }
+  };
+
+  const handleSaveVoiceTitle = async () => {
+    if (!editingVoiceTitle || !editingVoiceTitle.title.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('voice_templates')
+        .update({ title: editingVoiceTitle.title.trim() })
+        .eq('id', editingVoiceTitle.id);
+
+      if (error) throw error;
+
+      setPendingVoices(prev => prev.map(v => v.id === editingVoiceTitle.id ? { ...v, title: editingVoiceTitle.title.trim() } : v));
+      setEditingVoiceTitle(null);
+    } catch (err: any) {
+      alert(err.message || 'Title update error');
+    }
+  };
 
   const fetchPackages = async () => {
     try {
@@ -568,6 +739,27 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mx-1">
+        <button 
+          onClick={() => {
+            fetchPendingVoices();
+            setIsEditingPendingVoices(true);
+          }}
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 relative ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          {pendingVoices.length > 0 && (
+            <span className="absolute top-4 right-4 bg-amber-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full shadow-sm animate-pulse font-mono">
+              {pendingVoices.length}
+            </span>
+          )}
+          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Mic size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ভয়েস পেন্ডিং' : 'Voice Pending'}</h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Pending Approvals</p>
+          </div>
+        </button>
+
         <button 
           onClick={() => setView('admin-panel')} 
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
@@ -1731,6 +1923,201 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                        {saving ? <Loader2 className="animate-spin" size={22} /> : <>Save Settings</>}
                     </button>
                  </div>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
+
+      {isEditingPendingVoices && createPortal(
+        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className={`w-full max-w-2xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="p-5 shrink-0 relative overflow-hidden border-b border-slate-100 dark:border-slate-800">
+                 <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                         <Mic size={20} strokeWidth={2.5} />
+                       </div>
+                       <div>
+                         <h3 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                           {lang === 'bn' ? 'ভয়েস পেন্ডিং অনুমোদন' : 'Pending Voice Approvals'}
+                         </h3>
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                           {pendingVoices.length} {lang === 'bn' ? 'টি পেন্ডিং ভয়েস বার্তা' : 'Pending Voices'}
+                         </p>
+                       </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={fetchPendingVoices} 
+                        disabled={loadingPendingVoices}
+                        className={`p-2 rounded-xl border flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
+                        title="রিফ্রেশ"
+                      >
+                        <RefreshCw size={16} className={loadingPendingVoices ? 'animate-spin' : ''} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (playingAudio) playingAudio.pause();
+                          setPlayingVoiceId(null);
+                          setIsEditingPendingVoices(false);
+                        }} 
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 border-slate-700' : 'bg-slate-50 text-slate-300 border-slate-100'}`}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1 relative z-10">
+                {loadingPendingVoices ? (
+                  <div className="p-12 text-center text-slate-400 font-noto flex flex-col items-center gap-3">
+                    <Loader2 size={32} className="animate-spin text-[#2563EB]" />
+                    <p className="text-xs font-bold font-noto">ডাটা লোড হচ্ছে...</p>
+                  </div>
+                ) : pendingVoices.length === 0 ? (
+                  <div className="p-12 rounded-[2rem] bg-slate-50 dark:bg-slate-800/50 border-2 border-dashed border-slate-200 dark:border-slate-700 text-center font-noto space-y-3">
+                    <CheckCircle2 className="mx-auto text-emerald-500" size={40} />
+                    <h3 className="text-base font-black text-slate-700 dark:text-slate-200">
+                      কোনো পেন্ডিং ভয়েস নেই!
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      বর্তমানে সকল ভয়েস অনুমোদিত অবস্থায় রয়েছে।
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingVoices.map((v) => {
+                      const audioTargetUrl = v.file_url || v.preview_url || v.url;
+                      const instName = allInstitutions.find(i => i.id === v.institution_id)?.name || 'সিস্টেম / অজানা প্রতিষ্ঠান';
+                      const isPlaying = playingVoiceId === v.id;
+                      const currentSpeed = playbackSpeeds[v.id] || 1.0;
+
+                      return (
+                        <div 
+                          key={v.id}
+                          className={`p-5 rounded-[2rem] border shadow-sm space-y-3 transition-all ${
+                            madrasah?.theme === 'dark' 
+                              ? 'bg-slate-800/90 border-slate-700' 
+                              : 'bg-white border-amber-200/80'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1 flex-1 min-w-0">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50 font-noto">
+                                <Clock size={11} /> পেন্ডিং
+                              </span>
+                              <div className="flex items-center gap-2 pt-1">
+                                {editingVoiceTitle?.id === v.id ? (
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <input 
+                                      type="text" 
+                                      value={editingVoiceTitle.title}
+                                      onChange={(e) => setEditingVoiceTitle({ ...editingVoiceTitle, title: e.target.value })}
+                                      className="px-3 py-1.5 text-xs font-bold rounded-xl border border-blue-300 dark:bg-slate-900 dark:text-white flex-1"
+                                    />
+                                    <button 
+                                      onClick={handleSaveVoiceTitle}
+                                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl"
+                                    >
+                                      সেভ
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <h4 className={`font-black text-base font-noto truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                                      {v.title || 'শিরোনামহীন ভয়েস'}
+                                    </h4>
+                                    <button
+                                      onClick={() => setEditingVoiceTitle({ id: v.id, title: v.title })}
+                                      className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
+                                      title="শিরোনাম সম্পাদন করুন"
+                                    >
+                                      <Edit2 size={13} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {audioTargetUrl && (
+                              <button
+                                onClick={() => togglePlayVoice(v.id, audioTargetUrl)}
+                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm ${
+                                  isPlaying
+                                    ? 'bg-amber-500 text-white shadow-amber-500/30 animate-pulse'
+                                    : 'bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] dark:text-blue-400 hover:bg-blue-100'
+                                }`}
+                                title={isPlaying ? 'পজ করুন' : 'প্লে করে শুনুন'}
+                              >
+                                {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" fill="currentColor" />}
+                              </button>
+                            )}
+                          </div>
+
+                          <div className={`p-3 rounded-2xl border space-y-1.5 text-xs ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700/50' : 'bg-slate-50 border-slate-100'}`}>
+                            <p className="font-bold text-slate-700 dark:text-slate-300 font-noto flex items-center gap-1.5">
+                              <Building2 size={14} className="text-blue-500 shrink-0" />
+                              <span className="truncate">{instName}</span>
+                            </p>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[10px] font-bold text-slate-400 font-mono">
+                                তারিখ: {new Date(v.created_at).toLocaleDateString('bn-BD')}
+                              </p>
+                              <p className="text-xs font-black text-blue-600 dark:text-blue-400 font-noto flex items-center gap-1">
+                                <Clock size={12} />
+                                <span>সময়কাল: {v.duration || voiceDurations[v.id] || 0} সেকেন্ড</span>
+                                {currentSpeed !== 1.0 && (
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                    ({currentSpeed}x: {Math.round((v.duration || voiceDurations[v.id] || 0) / currentSpeed)} সে.)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                            
+                            {/* Speed controls */}
+                            {audioTargetUrl && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/50 dark:border-slate-800">
+                                <span className="text-[10px] font-bold text-slate-400 font-noto">গতি:</span>
+                                {[1.0, 1.25, 1.5, 2.0].map((s) => (
+                                  <button
+                                    key={s}
+                                    onClick={() => changeSpeed(v.id, s)}
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                                      currentSpeed === s
+                                        ? 'bg-blue-600 text-white shadow-xs'
+                                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-300'
+                                    }`}
+                                  >
+                                    {s}x
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={() => handleApproveVoice(v.id)}
+                              className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 font-noto active:scale-95 cursor-pointer"
+                            >
+                              <CheckCircle2 size={15} />
+                              <span>অনুমোদন করুন</span>
+                            </button>
+                            <button
+                              onClick={() => handleRejectVoice(v.id)}
+                              className="py-3 px-4 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-black text-xs rounded-xl border border-red-200 dark:border-red-800/50 transition-all flex items-center justify-center gap-1 font-noto cursor-pointer active:scale-95"
+                            >
+                              <XCircle size={15} />
+                              <span>বাতিল</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
            </div>
         </div>,

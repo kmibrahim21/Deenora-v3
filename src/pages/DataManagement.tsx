@@ -903,13 +903,90 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     }
   };
 
-  const excelDateToISO = (serial: any) => {
-    if (!serial) return null;
-    if (typeof serial === 'string' && serial.includes('-')) return serial;
-    const num = parseFloat(serial);
-    if (isNaN(num)) return null;
-    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
-    return date.toISOString().split('T')[0];
+  const excelDateToISO = (serial: any): string | null => {
+    if (serial === null || serial === undefined) return null;
+
+    if (serial instanceof Date) {
+      if (isNaN(serial.getTime())) return null;
+      const year = serial.getFullYear();
+      const month = String(serial.getMonth() + 1).padStart(2, '0');
+      const day = String(serial.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    let str = String(serial);
+
+    // Clean invisible zero-width space/control characters and whitespace
+    str = str
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/[\u00A0]/g, ' ')
+      .trim();
+
+    if (!str) return null;
+
+    // Convert Bengali numerals to English numerals
+    const bnToEnMap: Record<string, string> = {
+      '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+      '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+    };
+    str = str.replace(/[০-৯]/g, (m) => bnToEnMap[m] || m);
+
+    // Strip time portions if present
+    if (str.includes('T')) {
+      str = str.split('T')[0].trim();
+    } else if (str.includes(' ')) {
+      str = str.split(' ')[0].trim();
+    }
+
+    // YYYY-MM-DD or YYYY/MM/DD
+    const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    if (ymdMatch) {
+      const y = parseInt(ymdMatch[1], 10);
+      const m = parseInt(ymdMatch[2], 10);
+      const d = parseInt(ymdMatch[3], 10);
+      if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+    }
+
+    // DD-MM-YYYY or DD/MM/YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (dmyMatch) {
+      const d = parseInt(dmyMatch[1], 10);
+      const m = parseInt(dmyMatch[2], 10);
+      const y = parseInt(dmyMatch[3], 10);
+      if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+    }
+
+    // Excel numeric serial number
+    const num = Number(str);
+    if (!isNaN(num) && num > 1000 && num < 100000) {
+      const utcDays = Math.floor(num - 25569);
+      const dateUtc = new Date(utcDays * 86400 * 1000);
+      if (!isNaN(dateUtc.getTime())) {
+        const year = dateUtc.getUTCFullYear();
+        const month = String(dateUtc.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dateUtc.getUTCDate()).padStart(2, '0');
+        if (year >= 1900 && year <= 2100) {
+          return `${year}-${month}-${day}`;
+        }
+      }
+    }
+
+    // Fallback Date parser
+    const parsedDate = new Date(str);
+    if (!isNaN(parsedDate.getTime())) {
+      const y = parsedDate.getFullYear();
+      const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+      const d = String(parsedDate.getDate()).padStart(2, '0');
+      if (y >= 1900 && y <= 2100) {
+        return `${y}-${m}-${d}`;
+      }
+    }
+
+    return null;
   };
 
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {

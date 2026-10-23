@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng, toJpeg } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
@@ -181,6 +181,101 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [smsEnabledMap, setSmsEnabledMap] = useState<{ [key: string]: boolean }>({});
   const [smsRatesTypeMap, setSmsRatesTypeMap] = useState<{ [key: string]: 'masking' | 'non_masking' }>({});
   const [systemGlobalSettings, setSystemGlobalSettings] = useState<SystemSettings | null>(null);
+
+  // User-uploaded Pending Voice Templates State & Handlers
+  const [pendingVoiceTemplates, setPendingVoiceTemplates] = useState<any[]>([]);
+  const [isFetchingPendingVoices, setIsFetchingPendingVoices] = useState(false);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const voiceAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  const fetchPendingVoiceTemplates = useCallback(async () => {
+    setIsFetchingPendingVoices(true);
+    try {
+      const { data, error } = await supabase
+        .from('voice_templates')
+        .select('*, institutions(id, name, phone, config_json)')
+        .or('admin_status.eq.pending,provider_status.eq.pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPendingVoiceTemplates(data || []);
+    } catch (err: any) {
+      console.error('Error fetching pending voice templates:', err);
+    } finally {
+      setIsFetchingPendingVoices(false);
+    }
+  }, []);
+
+  const togglePlayAdminVoice = (voiceId: string, url: string) => {
+    if (!url) return;
+    if (playingVoiceId === voiceId) {
+      if (voiceAudioPlayerRef.current) {
+        voiceAudioPlayerRef.current.pause();
+      }
+      setPlayingVoiceId(null);
+    } else {
+      if (voiceAudioPlayerRef.current) {
+        voiceAudioPlayerRef.current.pause();
+      }
+      const audio = new Audio(url);
+      voiceAudioPlayerRef.current = audio;
+      audio.onended = () => setPlayingVoiceId(null);
+      audio.play();
+      setPlayingVoiceId(voiceId);
+    }
+  };
+
+  const handleApproveVoiceTemplate = async (voiceId: string) => {
+    try {
+      const { error } = await supabase
+        .from('voice_templates')
+        .update({ admin_status: 'approved', provider_status: 'approved' })
+        .eq('id', voiceId);
+
+      if (error) throw error;
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'ভয়েস বার্তাটি সফলভাবে অনুমোদন করা হয়েছে।'
+      });
+      fetchPendingVoiceTemplates();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'অনুমোদন করতে সমস্যা হয়েছে'
+      });
+    }
+  };
+
+  const handleRejectVoiceTemplate = async (voiceId: string) => {
+    try {
+      const { error } = await supabase
+        .from('voice_templates')
+        .update({ admin_status: 'rejected', provider_status: 'rejected' })
+        .eq('id', voiceId);
+
+      if (error) throw error;
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'ভয়েস বার্তাটি বাতিল করা হয়েছে।'
+      });
+      fetchPendingVoiceTemplates();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'বাতিল করতে সমস্যা হয়েছে'
+      });
+    }
+  };
 
   const [rejectConfirm, setRejectConfirm] = useState<Transaction | null>(null);
   const [bulkDeleteTab, setBulkDeleteTab] = useState<string | null>(null);
@@ -1535,6 +1630,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         }
       }
       if (view === 'approvals') {
+        fetchPendingVoiceTemplates();
         const [pTrans, tHist, gSettings] = await Promise.all([
           fetchPendingTransactions(),
           fetchTransactionHistory(), // Fetch all requests from last 30 days
@@ -3564,11 +3660,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </button>
               </div>
               
+              {paymentTab === 'voice' && (
+                <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${madrasah?.theme === 'dark' ? 'bg-amber-900/20 border-amber-800/40 text-amber-200' : 'bg-amber-50 border-amber-200/80 text-amber-900'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                      <Mic size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black font-noto">ইউজারদের রেকর্ডকৃত ভয়েস অডিও ফাইলস</h4>
+                      <p className="text-[11px] font-bold opacity-80 font-noto">ইউজারদের রেকর্ড করা ভয়েস বার্তা প্লে করে শুনতে ও এপ্রুভ করতে ভয়েস মডিউলে যান।</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onNavigateToVoiceBroadcast?.([])}
+                    className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-sm transition-all shrink-0 active:scale-95 cursor-pointer flex items-center justify-center gap-2 font-noto"
+                  >
+                    <Mic size={14} />
+                    <span>ভয়েস বার্তা রিভিউ করুন</span>
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-6">
-                <div className="flex items-center justify-between px-2">
-                  <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                     <AlertCircle size={14} className="text-amber-400" /> Pending Requests ({paymentTab === 'sms' ? 'SMS' : paymentTab === 'voice' ? 'Voice' : 'Subscription'})
-                  </h2>
+                  <div className="flex items-center justify-between px-2">
+                    <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                       <AlertCircle size={14} className="text-amber-400" /> Pending Requests ({paymentTab === 'sms' ? 'SMS' : paymentTab === 'voice' ? 'Voice' : 'Subscription'})
+                    </h2>
                   {pendingTrans.filter(tr => filterTransactionByTab(tr, paymentTab)).length > 0 && (
                     <button
                       onClick={() => setBulkDeleteTab(paymentTab)}

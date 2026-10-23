@@ -98,7 +98,7 @@ export default async function handler(req: any, res: any) {
         ]);
 
         const bioStudents = (students || []).filter(s => Boolean(s.biometric_id || s.roll));
-        const bioTeachers = (teachers || []).filter(t => Boolean(t.permissions?.biometric_id || t.biometric_id));
+        const bioTeachers = (teachers || []).filter((t: any) => Boolean(t.permissions?.biometric_id || t.biometric_id));
 
         return res.status(200).json({
           success: true,
@@ -420,17 +420,17 @@ export default async function handler(req: any, res: any) {
             }
           }
         }
-      }
 
-      console.log(`[ZKteco ADMS/SDK] Finished processing payload. Logged ${processedCount} present records.`);
-      if (req.headers['content-type']?.includes('application/json')) {
-        return res.status(200).json({ success: true, processed: processedCount });
-      }
+        console.log(`[ZKteco ADMS/SDK] Finished processing payload. Logged ${processedCount} present records.`);
+        if (req.headers['content-type']?.includes('application/json')) {
+          return res.status(200).json({ success: true, processed: processedCount });
+        }
     } catch (err: any) {
       console.error('[ZKteco ADMS/SDK] Exception in POST handler:', err);
     }
 
     return res.status(200).send('OK');
+  }
   } catch (globalErr: any) {
     console.error('[ZKteco ADMS API] Global Handler Catch:', globalErr);
     if (req.headers?.['accept']?.includes('json') || req.headers?.['content-type']?.includes('json')) {

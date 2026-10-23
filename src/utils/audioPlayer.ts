@@ -27,9 +27,30 @@ class UniversalAudioPlayer {
   public getProxiedUrl(url: string): string {
     if (!url || typeof url !== 'string') return '';
     const trimmed = url.trim();
-    // Return original URL directly, completely bypassing /api/proxy-audio
-    // to save massive Vercel Fast Origin Transfer bandwidth and proxy overhead.
-    return trimmed;
+    if (!trimmed) return '';
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+      return trimmed;
+    }
+
+    if (
+      trimmed.startsWith('storage/') || 
+      trimmed.startsWith('/storage/') || 
+      trimmed.startsWith('voices/') || 
+      trimmed.startsWith('/voices/') ||
+      trimmed.startsWith('uploads/') ||
+      trimmed.startsWith('/uploads/')
+    ) {
+      const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      return `https://api.awajdigital.com${cleanPath}`;
+    }
+
+    if (trimmed.startsWith('/') && !trimmed.startsWith('/storage') && !trimmed.startsWith('/voices')) {
+      return trimmed;
+    }
+
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `https://api.awajdigital.com${cleanPath}`;
   }
 
   public async play(
