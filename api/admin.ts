@@ -1245,28 +1245,103 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, data });
     }
 
+    if (action === 'get_staff') {
+      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').maybeSingle();
+      const sysId = sysInst?.id;
+
+      let profilesQuery = supabase.from('profiles').select('*').in('role', ['manager', 'super_admin']);
+      if (sysId) {
+        profilesQuery = profilesQuery.or(`institution_id.eq.${sysId},role.eq.manager,role.eq.super_admin`);
+      }
+      const { data: profileList, error: pError } = await profilesQuery;
+      if (pError) throw pError;
+
+      // Enrich with emails from Supabase Auth admin
+      let userMap = new Map<string, string>();
+      try {
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        if (authUsers?.users) {
+          authUsers.users.forEach(u => {
+            if (u.id && u.email) userMap.set(u.id, u.email);
+          });
+        }
+      } catch (authListErr) {
+        console.warn('Could not list auth users in get_staff:', authListErr);
+      }
+
+      const enrichedStaff = (profileList || []).map(p => ({
+        ...p,
+        email: userMap.get(p.id) || p.email || ''
+      }));
+
+      return res.status(200).json({ success: true, staff: enrichedStaff });
+    }
+
     if (action === 'create_staff') {
       const { name, email, password, role, permissions } = body;
 
       if (!name || !email || !password || !role) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return res.status(400).json({ error: 'সকল ঘর পূরণ করুন (Missing required fields)' });
       }
 
       const trimmedEmail = email.trim().toLowerCase();
-      
-      // 1. Create auth user
+      const trimmedPassword = password.trim();
+
+      if (trimmedPassword.length < 6) {
+        return res.status(400).json({ error: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে (Password must be at least 6 characters)' });
+      }
+
+      let userId: string = '';
+
+      // 1. Create auth user or update password if email already registered
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: trimmedEmail,
-        password: password.trim(),
+        password: trimmedPassword,
         email_confirm: true,
         user_metadata: { name: name.trim() }
       });
 
-      if (authError) throw authError;
-      const userId = authData.user.id;
+      if (authError) {
+        const errMsg = authError.message?.toLowerCase() || '';
+        const isAlreadyRegistered = errMsg.includes('already') || 
+                                    errMsg.includes('exists') || 
+                                    errMsg.includes('registered') ||
+                                    (authError as any).status === 422;
+
+        if (isAlreadyRegistered) {
+          // Find existing user by email
+          const { data: userList } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+          const existingUser = userList?.users?.find(u => u.email?.trim().toLowerCase() === trimmedEmail);
+          
+          if (existingUser) {
+            userId = existingUser.id;
+            const { error: updateErr } = await supabase.auth.admin.updateUserById(userId, {
+              password: trimmedPassword,
+              email_confirm: true,
+              user_metadata: { name: name.trim() }
+            });
+            if (updateErr) throw updateErr;
+          } else {
+            throw authError;
+          }
+        } else {
+          throw authError;
+        }
+      } else {
+        userId = authData.user.id;
+      }
+
+      // Ensure user email is confirmed
+      try {
+        await supabase.auth.admin.updateUserById(userId, {
+          email_confirm: true
+        });
+      } catch (e) {
+        console.warn('Could not confirm email for new staff:', e);
+      }
 
       // 2. Find system institution ID
-      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').single();
+      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').maybeSingle();
       let sysId = sysInst?.id;
 
       if (!sysId) {
@@ -1281,7 +1356,7 @@ export default async function handler(req, res) {
         sysId = newSys?.id;
       }
 
-      // 3. Create profile with assigned permissions
+      // 3. Create or update profile with assigned permissions
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: userId,
         institution_id: sysId,
@@ -1293,7 +1368,78 @@ export default async function handler(req, res) {
 
       if (profileError) throw profileError;
 
-      return res.status(200).json({ success: true, user_id: userId });
+      return res.status(200).json({ success: true, user_id: userId, email: trimmedEmail });
+    }
+
+    if (action === 'update_staff') {
+      const { id, name, role, permissions, is_active, password } = body;
+
+      if (!id) {
+        return res.status(400).json({ error: 'Staff ID is required' });
+      }
+
+      // 1. If password is provided, update password in Auth
+      if (password && typeof password === 'string' && password.trim().length > 0) {
+        const trimmedPassword = password.trim();
+        if (trimmedPassword.length < 6) {
+          return res.status(400).json({ error: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে (Password must be at least 6 characters)' });
+        }
+
+        const { error: passError } = await supabase.auth.admin.updateUserById(id, {
+          password: trimmedPassword,
+          email_confirm: true
+        });
+
+        if (passError) {
+          console.error('Error updating staff password in Auth:', passError);
+          throw new Error(`পাসওয়ার্ড আপডেট করতে সমস্যা হয়েছে: ${passError.message}`);
+        }
+      }
+
+      // 2. Update user_metadata in Auth if name provided
+      if (name && typeof name === 'string' && name.trim()) {
+        try {
+          await supabase.auth.admin.updateUserById(id, {
+            user_metadata: { name: name.trim() }
+          });
+        } catch (e) {
+          console.warn('Could not update Auth user_metadata:', e);
+        }
+      }
+
+      // 3. Update profile record
+      const updateData: any = {};
+      if (name !== undefined) updateData.full_name = name.trim();
+      if (role !== undefined) updateData.role = role;
+      if (permissions !== undefined) updateData.permissions = permissions;
+      if (is_active !== undefined) updateData.is_active = is_active;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', id);
+
+      if (profileError) throw profileError;
+
+      return res.status(200).json({ success: true, message: 'ম্যানেজার তথ্য ও পাসওয়ার্ড সফলভাবে আপডেট হয়েছে।' });
+    }
+
+    if (action === 'delete_staff') {
+      const { id } = body;
+      if (!id) return res.status(400).json({ error: 'Staff ID is required' });
+
+      // Delete from Auth
+      try {
+        await supabase.auth.admin.deleteUser(id);
+      } catch (authDelErr) {
+        console.warn('Could not delete user from Auth:', authDelErr);
+      }
+
+      // Delete from profiles
+      const { error: profDelErr } = await supabase.from('profiles').delete().eq('id', id);
+      if (profDelErr) throw profDelErr;
+
+      return res.status(200).json({ success: true, message: 'স্টাফ মেম্বার সফলভাবে ডিলিট করা হয়েছে।' });
     }
 
     return res.status(404).json({ error: 'Action not found' });

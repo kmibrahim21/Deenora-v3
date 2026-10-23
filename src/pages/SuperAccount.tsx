@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye, Clock, Pause, XCircle, RefreshCw } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye, EyeOff, Clock, Pause, XCircle, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { linkifyMarkdown, getMarkdownComponents } from 'utils/markdownUtils';
 import { supabase, smsApi } from 'supabase';
@@ -576,18 +576,37 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '', role: 'manager' as any });
   const [editingStaff, setEditingStaff] = useState<any | null>(null);
   const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
+  const [showNewStaffPassword, setShowNewStaffPassword] = useState(false);
+  const [showEditStaffPassword, setShowEditStaffPassword] = useState(false);
 
   const fetchStaff = async () => {
     try {
-      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').single();
-      if (!sysInst) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'get_staff' })
+        });
+        if (res.ok) {
+          const result = await res.json();
+          if (result.staff) {
+            setStaff(result.staff);
+            return;
+          }
+        }
+      }
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('institution_id', sysInst.id)
-        .in('role', ['manager', 'super_admin']);
-      
+      // Fallback direct query
+      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').maybeSingle();
+      let query = supabase.from('profiles').select('*').in('role', ['manager', 'super_admin']);
+      if (sysInst?.id) {
+        query = query.or(`institution_id.eq.${sysInst.id},role.eq.manager,role.eq.super_admin`);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       setStaff(data || []);
     } catch (err) {
@@ -602,7 +621,30 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   }, [isEditingStaff]);
 
   const handleCreateStaff = async () => {
-    if (!newStaff.name || !newStaff.email || !newStaff.password) return;
+    const trimmedName = (newStaff.name || '').trim();
+    const trimmedEmail = (newStaff.email || '').trim().toLowerCase();
+    const trimmedPassword = (newStaff.password || '').trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedPassword) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'তথ্য অসম্পূর্ণ',
+        message: 'নাম, ইমেইল এবং পাসওয়ার্ড আবশ্যক।'
+      });
+      return;
+    }
+
+    if (trimmedPassword.length < 6) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'দুর্বল পাসওয়ার্ড',
+        message: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -614,18 +656,31 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         },
         body: JSON.stringify({
           action: 'create_staff',
-          ...newStaff
+          name: trimmedName,
+          email: trimmedEmail,
+          password: trimmedPassword,
+          role: newStaff.role
         })
       });
       const result = await res.json();
-      if (result.error) throw new Error(result.error);
+      if (!res.ok || result.error) throw new Error(result.error || 'Failed to create staff');
 
       setShowStaffForm(false);
       setNewStaff({ name: '', email: '', password: '', role: 'manager' });
       fetchStaff();
-      setShowSuccessModal({ show: true, title: 'স্টাফ তৈরি', message: 'নতুন স্টাফ সফলভাবে তৈরি হয়েছে।' });
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'স্টাফ তৈরি সফল',
+        message: `নতুন স্টাফ (${trimmedName}) সফলভাবে তৈরি হয়েছে। লগইন ইমেইল: ${trimmedEmail}`
+      });
     } catch (err: any) {
-      alert(err.message);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'স্টাফ তৈরি করা যায়নি।'
+      });
     } finally {
       setSaving(false);
     }
@@ -633,6 +688,16 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
 
   const handleUpdateStaff = async () => {
     if (!editingStaff) return;
+
+    if (editingStaff.password && editingStaff.password.trim().length > 0 && editingStaff.password.trim().length < 6) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'দুর্বল পাসওয়ার্ড',
+        message: 'পাসওয়ার্ড পরিবর্তন করতে চাইলে কমপক্ষে ৬ অক্ষরের হতে হবে।'
+      });
+      return;
+    }
     
     setIsUpdatingStaff(true);
     try {
@@ -646,21 +711,24 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         body: JSON.stringify({
           action: 'update_staff',
           id: editingStaff.id,
-          name: editingStaff.full_name,
+          name: (editingStaff.full_name || '').trim(),
           role: editingStaff.role,
           permissions: editingStaff.permissions,
-          is_active: editingStaff.is_active
+          is_active: editingStaff.is_active,
+          password: editingStaff.password ? editingStaff.password.trim() : undefined
         })
       });
 
       const result = await res.json();
-      if (result.error) throw new Error(result.error);
+      if (!res.ok || result.error) throw new Error(result.error || 'Failed to update staff');
 
       setStatusModal({
         show: true,
         type: 'success',
         title: 'সফল',
-        message: 'ম্যানেজার তথ্য আপডেট করা হয়েছে।'
+        message: editingStaff.password?.trim()
+          ? 'ম্যানেজার তথ্য ও পাসওয়ার্ড সফলভাবে আপডেট করা হয়েছে।'
+          : 'ম্যানেজার তথ্য সফলভাবে আপডেট করা হয়েছে।'
       });
       setEditingStaff(null);
       fetchStaff();
@@ -676,6 +744,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       setIsUpdatingStaff(false);
     }
   };
+
   const handleDeleteStaff = async (id: string) => {
     if (!confirm('আপনি কি এই স্টাফ মেম্বারকে ডিলিট করতে চান?')) return;
     try {
@@ -693,11 +762,22 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       });
 
       const result = await res.json();
-      if (result.error) throw new Error(result.error);
+      if (!res.ok || result.error) throw new Error(result.error || 'Failed to delete staff');
 
       fetchStaff();
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'স্টাফ মেম্বার সফলভাবে ডিলিট করা হয়েছে।'
+      });
     } catch (err: any) {
-      alert(err.message);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'ডিলিট করতে সমস্যা হয়েছে।'
+      });
     }
   };
 
@@ -1075,12 +1155,15 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
               <div className="space-y-3">
                 {staff.map(s => (
                   <div key={s.id} className={`p-4 rounded-2xl border flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold text-lg">
-                        {s.full_name?.charAt(0)}
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold text-lg shrink-0">
+                        {s.full_name?.charAt(0) || 'M'}
                       </div>
-                      <div>
-                        <h5 className={`font-bold font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{s.full_name}</h5>
+                      <div className="min-w-0">
+                        <h5 className={`font-bold font-noto truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{s.full_name}</h5>
+                        {s.email && (
+                          <p className="text-[11px] font-mono text-slate-400 font-semibold truncate mt-0.5">{s.email}</p>
+                        )}
                         <div className="flex items-center gap-2 mt-1">
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${s.role === 'super_admin' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
                             {s.role}
@@ -1093,16 +1176,21 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button 
-                        onClick={() => setEditingStaff(s)}
-                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-95"
+                        onClick={() => {
+                          setEditingStaff({ ...s, password: '' });
+                          setShowEditStaffPassword(false);
+                        }}
+                        title={lang === 'bn' ? 'এডিট ও পাসওয়ার্ড পরিবর্তন' : 'Edit & Change Password'}
+                        className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-xl transition-all active:scale-95"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button 
                         onClick={() => handleDeleteStaff(s.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                        title={lang === 'bn' ? 'ডিলিট করুন' : 'Delete'}
+                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-xl transition-all active:scale-95"
                       >
                         <Trash size={18} />
                       </button>
@@ -1128,8 +1216,12 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
           <div className={`relative w-full max-w-2xl max-h-[90vh] overflow-y-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in-95 slide-in-from-bottom-10 duration-300`}>
             <div className="flex items-center justify-between mb-8">
               <div className="space-y-1">
-                <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Edit Staff Member</h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Update permissions and details</p>
+                <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {lang === 'bn' ? 'ম্যানেজার তথ্য ও পাসওয়ার্ড এডিট' : 'Edit Manager & Password'}
+                </h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                  {lang === 'bn' ? 'পারমিশন এবং পাসওয়ার্ড পরিবর্তন করুন' : 'Update permissions and credentials'}
+                </p>
               </div>
               <button 
                 onClick={() => setEditingStaff(null)}
@@ -1147,7 +1239,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                   <input 
                     type="text" 
                     className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
-                    value={editingStaff.full_name}
+                    value={editingStaff.full_name || ''}
                     onChange={e => setEditingStaff({...editingStaff, full_name: e.target.value})}
                   />
                 </div>
@@ -1161,6 +1253,57 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     <option value="manager">Manager</option>
                     <option value="super_admin">Super Admin</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Email & Password Change Field */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 flex justify-between items-center">
+                    <span>{lang === 'bn' ? 'লগইন ইমেইল (Login Email)' : 'Login Email'}</span>
+                    <span className="text-[9px] text-slate-400 lowercase bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">read-only</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    readOnly
+                    disabled
+                    className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/30 border-slate-800 text-slate-400' : 'bg-slate-100/80 border-slate-200 text-slate-500'} border rounded-2xl px-5 font-mono text-sm outline-none cursor-not-allowed`}
+                    value={editingStaff.email || 'N/A'}
+                  />
+                  <p className="text-[10px] text-slate-400 px-2">
+                    {lang === 'bn' ? 'ম্যানেজার এই ইমেইলটি দিয়ে লগইন করবেন' : 'Manager logs in using this email'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 flex justify-between items-center">
+                    <span className="text-blue-600 dark:text-blue-400 font-black">
+                      {lang === 'bn' ? 'নতুন পাসওয়ার্ড (Change Password)' : 'New Password'}
+                    </span>
+                    <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider">
+                      {lang === 'bn' ? 'ঐচ্ছিক' : 'Optional'}
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type={showEditStaffPassword ? "text" : "password"} 
+                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'} border-2 rounded-2xl pl-5 pr-12 font-bold text-sm outline-none transition-all shadow-inner`}
+                      value={editingStaff.password || ''}
+                      placeholder={lang === 'bn' ? 'নতুন পাসওয়ার্ড লিখুন (কমপক্ষে ৬ অক্ষর)' : 'Enter new password (min 6 chars)'}
+                      onChange={e => setEditingStaff({...editingStaff, password: e.target.value})}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEditStaffPassword(!showEditStaffPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      title={showEditStaffPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showEditStaffPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 px-2">
+                    {lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন না করতে চাইলে ঘরটি খালি রাখুন।' : 'Leave empty if you do not want to change the password.'}
+                  </p>
                 </div>
               </div>
 
@@ -1298,7 +1441,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                 ) : (
                   <>
                     <Save size={20} />
-                    Update Manager Details
+                    {lang === 'bn' ? 'ম্যানেজার ও পাসওয়ার্ড আপডেট করুন' : 'Update Manager Details'}
                   </>
                 )}
               </button>
@@ -1325,24 +1468,33 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">Email Address</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">Email Address (Login)</label>
                     <input 
                       type="email" 
                       value={newStaff.email}
                       onChange={e => setNewStaff({...newStaff, email: e.target.value})}
                       className={`w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
-                      placeholder="Enter email"
+                      placeholder="e.g. manager@deenora.com"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">Password</label>
-                    <input 
-                      type="password" 
-                      value={newStaff.password}
-                      onChange={e => setNewStaff({...newStaff, password: e.target.value})}
-                      className={`w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
-                      placeholder="Min 6 characters"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showNewStaffPassword ? "text" : "password"} 
+                        value={newStaff.password}
+                        onChange={e => setNewStaff({...newStaff, password: e.target.value})}
+                        className={`w-full p-4 pr-12 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                        placeholder="Min 6 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewStaffPassword(!showNewStaffPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showNewStaffPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">System Role</label>

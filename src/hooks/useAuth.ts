@@ -137,8 +137,27 @@ export const useAuth = () => {
         setProfile(finalProfile);
         OfflineService.setCache('user_profile', finalProfile);
         
+        const isSystemStaff = finalProfile.role === 'super_admin' || finalProfile.role === 'manager';
+
         // 2. Get the institution (Cached)
-        if (isValidUUID(finalProfile.institution_id)) {
+        if (isSystemStaff) {
+          const localTheme = localStorage.getItem('super_admin_theme') || 'default';
+          const sysInst: Institution = {
+            id: finalProfile.institution_id || '00000000-0000-0000-0000-000000000000',
+            name: finalProfile.role === 'super_admin' ? 'Super Admin' : (finalProfile.full_name || 'Manager'),
+            institution_type: 'system',
+            theme: localTheme,
+            config_json: { modules: {} },
+            is_active: true,
+            status: 'active',
+            balance: 0,
+            sms_balance: 0,
+            is_super_admin: finalProfile.role === 'super_admin',
+            created_at: new Date().toISOString()
+          } as Institution;
+          setMadrasah(sysInst);
+          OfflineService.setCache('profile', sysInst);
+        } else if (isValidUUID(finalProfile.institution_id)) {
           const activeBranchId = typeof window !== 'undefined' ? (sessionStorage.getItem('active_branch_id') || localStorage.getItem('active_branch_id')) : null;
           const targetInstId = (activeBranchId && isValidUUID(activeBranchId)) ? activeBranchId : finalProfile.institution_id;
 
@@ -227,43 +246,46 @@ export const useAuth = () => {
               }
             }
 
-            if (finalProfile.role === 'super_admin') {
-              singleInstitution.theme = localStorage.getItem('super_admin_theme') || 'default';
-            }
             setMadrasah(singleInstitution);
             OfflineService.setCache('profile', singleInstitution);
             await fetchActiveYear(singleInstitution.id);
           } else {
             setMadrasah(null);
           }
-        } else if (finalProfile.role === 'super_admin' || finalProfile.role === 'manager') {
-          const localTheme = localStorage.getItem('super_admin_theme') || 'default';
-          setMadrasah({
-            id: 'super_admin',
-            name: finalProfile.role === 'super_admin' ? 'Super Admin' : 'Manager',
-            institution_type: 'system',
-            theme: localTheme,
-            config_json: { modules: {} },
-            is_active: true,
-            status: 'active',
-            balance: 0,
-            sms_balance: 0,
-            is_super_admin: finalProfile.role === 'super_admin',
-            created_at: new Date().toISOString()
-          } as Institution);
         }
       } else {
-        // ... existing bootstrap logic ...
+        // Profile record not found in profiles table
         if (isSuperAdminEmail) {
           console.log("Super admin profile missing, bootstrapping...");
           await supabase.rpc('bootstrap_super_admin', { 
             p_uid: userId, 
             p_email: userEmail 
           });
-          // Clear request manager cache so it fetches the new profile
           requestManager.invalidate(`profile:${userId}`);
           return fetchUserProfile(userId, email, retryCount);
         }
+
+        // Resilient fallback: Check if userId matches an institution record directly
+        const { data: directInst } = await supabase.from('institutions').select('*').eq('id', userId).maybeSingle();
+        if (directInst) {
+          console.log("Direct institution found for user, synthesizing admin profile...");
+          const syntheticProfile: Profile = {
+            id: userId,
+            institution_id: directInst.id,
+            full_name: directInst.name || 'Admin',
+            role: 'madrasah_admin',
+            is_active: directInst.is_active ?? true,
+            created_at: directInst.created_at || new Date().toISOString(),
+            permissions: {}
+          };
+          setProfile(syntheticProfile);
+          setMadrasah(directInst);
+          OfflineService.setCache('user_profile', syntheticProfile);
+          OfflineService.setCache('profile', directInst);
+          await fetchActiveYear(directInst.id);
+          return;
+        }
+
         setAuthError("Profile not found in database. Please check if SQL triggers are running.");
       }
     } catch (err: any) {
@@ -468,7 +490,7 @@ export const useAuth = () => {
       console.log("Auth Event Triggered:", event);
       if (event === 'SIGNED_OUT') {
         const hasSession = !!session;
-        if (!hasSession) {
+        if (!hasSession && typeof navigator !== 'undefined' && navigator.onLine) {
           console.log("Legitimate signed out event.");
           setSession(null); 
           setMadrasah(null); 

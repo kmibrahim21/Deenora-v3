@@ -175,13 +175,27 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     try {
       localStorage.removeItem('teacher_session');
       localStorage.removeItem('parent_session');
-      const { data, error: signInError } = await (supabase.auth as any).signInWithPassword({ 
-        email: email.trim(), 
-        password: code 
+
+      const { data, error } = await (supabase.auth as any).signInWithPassword({
+        email: email.trim(),
+        password: code,
       });
-      if (signInError) throw signInError;
+
+      if (error) {
+        console.error('Sign in error:', error);
+        const errMsg = error.message || '';
+        if (errMsg.includes('Invalid login credentials')) {
+          throw new Error(lang === 'bn' ? 'ভুল পাসওয়ার্ড অথবা ইমেইল দিয়েছেন।' : 'Invalid credentials.');
+        } else if (errMsg.includes('Email not confirmed')) {
+          throw new Error(lang === 'bn' ? 'ইমেইল এখনও ভেরিফাই করা হয়নি।' : 'Email not confirmed.');
+        } else {
+          throw error;
+        }
+      }
+
       if (data.user) {
-        if (email.trim() === 'thedevomix@gmail.com' || email.trim() === 'kmibrahim@gmail.com' || email.trim() === 'ibrahimkhan269596@gmail.com') {
+        const userEmailLower = (data.user.email || email).toLowerCase();
+        if (userEmailLower === 'thedevomix@gmail.com' || userEmailLower === 'kmibrahim@gmail.com' || userEmailLower === 'ibrahimkhan269596@gmail.com') {
           try {
             await supabase.rpc('bootstrap_super_admin', {
               p_uid: data.user.id,
@@ -202,7 +216,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         }
       }
     } catch (err: any) { 
-      setError(t('login_error', lang)); 
+      setError(err.message || t('login_error', lang)); 
     } finally { 
       setLoading(false); 
     }
@@ -215,14 +229,21 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     
     try {
       localStorage.removeItem('parent_session');
+      const cleanPhone = phone.trim();
+      const cleanPin = pin.trim();
+
+      if (!cleanPhone || !cleanPin) {
+        throw new Error(lang === 'bn' ? 'ফোন নম্বর ও পিন আবশ্যক।' : 'Phone and PIN are required.');
+      }
+
       const response = await fetch('/api/teachers/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          mobile: phone.trim(),
-          password: pin.trim()
+          mobile: cleanPhone,
+          password: cleanPin
         })
       });
 
@@ -251,19 +272,18 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         if (signInError) throw signInError;
 
         localStorage.setItem('teacher_session', JSON.stringify(data.user));
-        registerNativePushToken(undefined, phone.trim(), data.user?.institution_id, data.user?.id);
+        registerNativePushToken(undefined, cleanPhone, data.user?.institution_id, data.user?.id);
         hardReload();
       } else {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
       }
     } catch (err: any) {
       console.error('Teacher login error:', err);
-      const msg = err.message || '';
-      if (msg.includes('Invalid mobile number or password')) {
-        setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
-      } else {
-        setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${msg}` : `Error logging in: ${msg}`);
+      let errorMsg = err.message || '';
+      if (errorMsg.includes('Invalid mobile number or password')) {
+        errorMsg = lang === 'bn' ? 'ভুল মোবাইল নম্বর অথবা পিন দেওয়া হয়েছে।' : 'Invalid phone number or PIN';
       }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -694,6 +714,9 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="email"
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="ইমেইল এড্রেস"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={email}
@@ -705,6 +728,9 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type={showAdminPassword ? "text" : "password"}
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="পাসওয়ার্ড"
                     className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={code}
@@ -795,10 +821,13 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="tel"
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="ফোন নম্বর (01...)"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(toEnDigits(e.target.value))}
                   />
                 </div>
                 <div className="group relative">
@@ -806,10 +835,13 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type={showTeacherPin ? "text" : "password"}
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="লগইন পিন"
                     className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={pin}
-                    onChange={(e) => setPin(e.target.value)}
+                    onChange={(e) => setPin(toEnDigits(e.target.value))}
                   />
                   <button
                     type="button"

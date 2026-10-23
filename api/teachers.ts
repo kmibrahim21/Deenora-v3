@@ -39,11 +39,15 @@ export default async function handler(req, res) {
       if (!mobile || !password) {
         return res.status(400).json({ error: 'Mobile and password are required' });
       }
-      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+
+      const cleanMobile = String(mobile || '').trim();
+      const passwordHash = crypto.createHash('sha256').update(String(password).trim()).digest('hex');
+
       const { data: teacher, error } = await supabase.rpc('check_teacher_login', { 
-        p_mobile: mobile, 
+        p_mobile: cleanMobile, 
         p_password_hash: passwordHash 
       });
+
       if (error) throw error;
       if (!teacher || teacher.length === 0) {
         return res.status(401).json({ error: 'Invalid mobile number or password' });

@@ -849,7 +849,7 @@ const App: React.FC = () => {
           <AcademicCalendarPage
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             role={role}
           />
         );
@@ -868,7 +868,7 @@ const App: React.FC = () => {
             madrasah={madrasah}
             role={role}
             profile={profile}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             onNavigate={(newView) => setView(newView)}
             onUpgradeClick={() => {
               setView(role === 'teacher' ? 'teacheraccount' : 'account');
@@ -971,7 +971,7 @@ const App: React.FC = () => {
           <ProfileSettings
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             onProfileUpdate={refreshMadrasah}
             setStatusModal={setStatusModal}
           />
