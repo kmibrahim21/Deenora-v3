@@ -96,6 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         theme: b.theme || 'default',
         status: b.status || 'active',
         is_active: b.is_active,
+        config_json: b.config_json || {},
         studentCount: studentCountMap[b.id] || 0,
         teacherCount: teacherCountMap[b.id] || 0,
         sms_balance: b.sms_balance || 0,
@@ -115,6 +116,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         branchLimit,
         branches: formattedBranches
       });
+    }
+
+    // UPDATE INSTITUTION SETTINGS (Branch or Main)
+    if (action === 'update-settings') {
+      const { institutionId, name, address, phone, contact_email, voice_sender_id, logo_url, config_json } = req.body;
+      if (!institutionId) {
+        return res.status(400).json({ error: 'institutionId is required' });
+      }
+
+      const updatePayload: any = {};
+      if (name !== undefined) updatePayload.name = String(name).trim();
+      if (address !== undefined) updatePayload.address = address ? String(address).trim() : null;
+      if (phone !== undefined) updatePayload.phone = String(phone).trim();
+      if (contact_email !== undefined) updatePayload.contact_email = contact_email ? String(contact_email).trim() : null;
+      if (voice_sender_id !== undefined) updatePayload.voice_sender_id = voice_sender_id ? String(voice_sender_id).trim() : null;
+      if (logo_url !== undefined) updatePayload.logo_url = logo_url;
+      if (config_json !== undefined) updatePayload.config_json = config_json;
+
+      const { data, error } = await supabase
+        .from('institutions')
+        .update(updatePayload)
+        .eq('id', institutionId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating institution settings via API:', error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.status(200).json({ success: true, institution: data });
     }
 
     // UPDATE INSTITUTION THEME (Branch or Main)

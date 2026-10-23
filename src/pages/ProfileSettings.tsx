@@ -464,12 +464,48 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     });
   };
 
+  useEffect(() => {
+    if (!madrasah) return;
+    const parsedConfig = typeof madrasah.config_json === 'string'
+      ? (() => { try { return JSON.parse(madrasah.config_json); } catch (e) { return {}; } })()
+      : (madrasah.config_json || {});
+
+    setNewName(madrasah.name || '');
+    setNewAddress(madrasah.address || '');
+    setNewPhone(madrasah.phone || '');
+    setNewContactEmail(madrasah.contact_email || '');
+    setLogoUrl(madrasah.logo_url || '');
+    setArabicCalligraphyUrl(parsedConfig.arabic_calligraphy_url || '');
+    setArabicCalligraphyWidth(parsedConfig.arabic_calligraphy_width || 100);
+    setVoiceSenderId(madrasah.voice_sender_id || '');
+    setNewPin(parsedConfig.user_pin || '');
+    setSignatureUrl(parsedConfig.signature_url || '');
+    setSignatureHeight(parsedConfig.signature_height || 30);
+    setNameEnglish(parsedConfig.name_english || '');
+    setBiometricDevicesStr((parsedConfig.biometric_devices || []).map((d: any) => d.sn).join(', '));
+
+    const feats = parsedConfig.features || {};
+    setFeatureStudentAttSms(feats.student_attendance_sms ?? false);
+    setFeatureFeeSms(feats.fee_collection_sms ?? false);
+    setFeatureTeacherSalarySms(feats.teacher_salary_sms ?? false);
+    setFeatureTeacherDeduction(feats.teacher_attendance_deduction ?? false);
+    setReceiptPrintMode(feats.receipt_print_mode ?? false);
+    setPrinterPaperSize(feats.printer_paper_size ?? 'A4');
+
+    setFeatureDeleteClass(feats.delete_class ?? false);
+    setFeatureDeleteAccounting(feats.delete_accounting ?? false);
+  }, [madrasah]);
+
   const handleUpdate = async () => {
     if (!madrasah) return;
     setSaving(true);
     try {
+      const currentConfigObj = typeof madrasah.config_json === 'string'
+        ? (() => { try { return JSON.parse(madrasah.config_json); } catch (e) { return {}; } })()
+        : (madrasah.config_json || {});
+
       const updatedConfig = { 
-        ...madrasah.config_json, 
+        ...currentConfigObj, 
         user_pin: newPin.trim(), 
         signature_url: signatureUrl,
         signature_height: signatureHeight,
@@ -478,7 +514,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         name_english: nameEnglish.trim(),
         biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ sn, name: "Device " + sn })),
         features: {
-          ...((madrasah.config_json as any)?.features || {}),
+          ...(currentConfigObj.features || {}),
           student_attendance_sms: featureStudentAttSms,
           fee_collection_sms: featureFeeSms,
           teacher_salary_sms: featureTeacherSalarySms,
@@ -491,18 +527,48 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       };
       
       requestManager.invalidatePattern(`institution:${madrasah.id}`);
+      requestManager.invalidatePattern('institution');
       
-      const { error } = await supabase.from('institutions').update({ 
-        name: newName.trim(), 
-        address: newAddress.trim() || null,
-        phone: newPhone.trim(), 
-        contact_email: newContactEmail.trim() || null,
-        voice_sender_id: voiceSenderId.trim() || null,
-        logo_url: logoUrl,
-        config_json: updatedConfig
-      }).eq('id', madrasah.id);
-      
-      if (error) throw error;
+      let updateSuccess = false;
+      try {
+        const res = await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-settings',
+            institutionId: madrasah.id,
+            name: newName.trim(),
+            address: newAddress.trim() || null,
+            phone: newPhone.trim(),
+            contact_email: newContactEmail.trim() || null,
+            voice_sender_id: voiceSenderId.trim() || null,
+            logo_url: logoUrl,
+            config_json: updatedConfig
+          })
+        });
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.success) {
+            updateSuccess = true;
+          }
+        }
+      } catch (e) {
+        console.warn('API update-settings failed, falling back to client Supabase:', e);
+      }
+
+      if (!updateSuccess) {
+        const { error } = await supabase.from('institutions').update({ 
+          name: newName.trim(), 
+          address: newAddress.trim() || null,
+          phone: newPhone.trim(), 
+          contact_email: newContactEmail.trim() || null,
+          voice_sender_id: voiceSenderId.trim() || null,
+          logo_url: logoUrl,
+          config_json: updatedConfig
+        }).eq('id', madrasah.id);
+        
+        if (error) throw error;
+      }
       
       // Update local cache so UI doesn't bounce
       try {
@@ -514,7 +580,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       } catch(e) {}
 
       if (onProfileUpdate) onProfileUpdate();
-      setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: 'Profile updated successfully' });
+      setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: lang === 'bn' ? 'প্রোফাইল সেটিংস সফলভাবে সেভ হয়েছে' : 'Profile updated successfully' });
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
 

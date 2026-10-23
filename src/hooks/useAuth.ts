@@ -179,7 +179,10 @@ export const useAuth = () => {
                       voice_sender_id: found.voice_sender_id,
                       voice_rate: found.voice_rate,
                       theme: found.theme || 'default',
-                      config_json: { parent_institution_id: found.isMain ? null : bData.rootId },
+                      config_json: {
+                        ...(typeof found.config_json === 'string' ? JSON.parse(found.config_json) : (found.config_json || {})),
+                        parent_institution_id: found.isMain ? null : bData.rootId
+                      },
                       created_at: found.created_at
                     };
                   }
