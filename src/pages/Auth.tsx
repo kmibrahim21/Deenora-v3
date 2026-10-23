@@ -175,16 +175,13 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     try {
       localStorage.removeItem('teacher_session');
       localStorage.removeItem('parent_session');
-      const cleanEmail = toEnDigits(email).trim().toLowerCase();
-      const cleanCode = code.trim();
-      
       const { data, error: signInError } = await (supabase.auth as any).signInWithPassword({ 
-        email: cleanEmail, 
-        password: cleanCode 
+        email: email.trim(), 
+        password: code 
       });
       if (signInError) throw signInError;
       if (data.user) {
-        if (cleanEmail === 'thedevomix@gmail.com' || cleanEmail === 'kmibrahim@gmail.com' || cleanEmail === 'ibrahimkhan269596@gmail.com') {
+        if (email.trim() === 'thedevomix@gmail.com' || email.trim() === 'kmibrahim@gmail.com' || email.trim() === 'ibrahimkhan269596@gmail.com') {
           try {
             await supabase.rpc('bootstrap_super_admin', {
               p_uid: data.user.id,
@@ -218,17 +215,14 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     
     try {
       localStorage.removeItem('parent_session');
-      const cleanPhone = toEnDigits(phone).trim();
-      const cleanPin = toEnDigits(pin).trim();
-
       const response = await fetch('/api/teachers/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          mobile: cleanPhone,
-          password: cleanPin
+          mobile: phone.trim(),
+          password: pin.trim()
         })
       });
 
@@ -257,7 +251,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         if (signInError) throw signInError;
 
         localStorage.setItem('teacher_session', JSON.stringify(data.user));
-        registerNativePushToken(undefined, cleanPhone, data.user?.institution_id, data.user?.id);
+        registerNativePushToken(undefined, phone.trim(), data.user?.institution_id, data.user?.id);
         hardReload();
       } else {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
@@ -282,8 +276,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
 
     try {
       localStorage.removeItem('teacher_session');
-      const cleanPhone = toEnDigits(phone).trim();
-      const cleanRegNo = toEnDigits(regNo).trim();
       
       const response = await fetch('/api/parents/login', {
         method: 'POST',
@@ -291,8 +283,8 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          phone: cleanPhone,
-          reg_no: cleanRegNo
+          phone: phone.trim(),
+          reg_no: regNo.trim()
         })
       });
 
@@ -702,9 +694,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="email"
                     required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="ইমেইল এড্রেস"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={email}
@@ -716,9 +705,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type={showAdminPassword ? "text" : "password"}
                     required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="পাসওয়ার্ড"
                     className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={code}
@@ -809,9 +795,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="tel"
                     required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="ফোন নম্বর (01...)"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={phone}
@@ -823,9 +806,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type={showTeacherPin ? "text" : "password"}
                     required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="লগইন পিন"
                     className="w-full pl-14 pr-14 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={pin}
@@ -912,9 +892,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="tel"
                     required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="অভিভাবকের ফোন নম্বর"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={phone}
@@ -926,9 +903,6 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="text"
                     required
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="রেজিস্ট্রেশন নম্বর (Reg. No)"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={regNo}
