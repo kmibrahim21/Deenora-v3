@@ -135,6 +135,11 @@ export default async function handler(req, res) {
       userProfile = up;
     }
 
+    if (!userProfile && userEmail) {
+      const { data: upByEmail } = await supabase.from('profiles').select('role').eq('email', userEmail).maybeSingle();
+      if (upByEmail) userProfile = upByEmail;
+    }
+
     const roleStr = (userProfile?.role || user.user_metadata?.role || user.app_metadata?.role || '').toString().toLowerCase();
     const isSuperAdmin = isSuperAdminEmail || !!adminProfile?.is_super_admin || roleStr === 'super_admin';
     const isManager = roleStr === 'manager';
@@ -1037,8 +1042,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'approve_voice') {
-      const { voice_id } = body;
-      if (!voice_id) return res.status(400).json({ error: 'Voice ID is required' });
+      const targetId = body.id || body.voice_id;
+      if (!targetId) return res.status(400).json({ error: 'Voice ID is required' });
 
       const { data, error } = await supabase
         .from('voice_templates')
@@ -1047,7 +1052,7 @@ export default async function handler(req, res) {
           provider_status: 'approved',
           is_active: true
         })
-        .eq('id', voice_id)
+        .eq('id', targetId)
         .select()
         .single();
 
@@ -1056,8 +1061,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'reject_voice') {
-      const { voice_id } = body;
-      if (!voice_id) return res.status(400).json({ error: 'Voice ID is required' });
+      const targetId = body.id || body.voice_id;
+      if (!targetId) return res.status(400).json({ error: 'Voice ID is required' });
 
       const { data, error } = await supabase
         .from('voice_templates')
@@ -1065,12 +1070,50 @@ export default async function handler(req, res) {
           admin_status: 'rejected',
           provider_status: 'rejected'
         })
-        .eq('id', voice_id)
+        .eq('id', targetId)
         .select()
         .single();
 
       if (error) throw error;
       return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'update_voice_title') {
+      const targetId = body.id || body.voice_id;
+      const title = body.title ? body.title.toString().trim() : '';
+      if (!targetId || !title) return res.status(400).json({ error: 'Voice ID and title are required' });
+
+      const { data, error } = await supabase
+        .from('voice_templates')
+        .update({
+          title: title
+        })
+        .eq('id', targetId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'get_pending_voices') {
+      const [voicesRes, instsRes] = await Promise.all([
+        supabase
+          .from('voice_templates')
+          .select('*')
+          .or('admin_status.eq.pending,provider_status.eq.pending')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('institutions')
+          .select('id, name, phone')
+      ]);
+
+      if (voicesRes.error) throw voicesRes.error;
+      return res.status(200).json({
+        success: true,
+        voices: voicesRes.data || [],
+        institutions: instsRes.data || []
+      });
     }
 
     if (action === 'payment_update') {
@@ -1207,43 +1250,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    if (action === 'approve_voice') {
-      const { voice_id, id } = body;
-      const targetId = id || voice_id;
-      if (!targetId) return res.status(400).json({ error: 'Voice ID is required' });
-
-      const { data, error } = await supabase
-        .from('voice_templates')
-        .update({
-          admin_status: 'approved',
-          provider_status: 'approved'
-        })
-        .eq('id', targetId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(200).json({ success: true, data });
-    }
-
-    if (action === 'reject_voice') {
-      const { voice_id, id } = body;
-      const targetId = id || voice_id;
-      if (!targetId) return res.status(400).json({ error: 'Voice ID is required' });
-
-      const { data, error } = await supabase
-        .from('voice_templates')
-        .update({
-          admin_status: 'rejected',
-          provider_status: 'rejected'
-        })
-        .eq('id', targetId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(200).json({ success: true, data });
-    }
 
     if (action === 'get_staff') {
       const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').maybeSingle();

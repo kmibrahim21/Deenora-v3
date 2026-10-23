@@ -191,6 +191,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const fetchPendingVoiceTemplates = useCallback(async () => {
     setIsFetchingPendingVoices(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'get_pending_voices' })
+        });
+        if (res.ok) {
+          const resData = await res.json();
+          if (Array.isArray(resData.voices)) {
+            setPendingVoiceTemplates(resData.voices);
+            setIsFetchingPendingVoices(false);
+            return;
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('voice_templates')
         .select('*, institutions(id, name, phone, config_json)')
@@ -227,12 +247,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const handleApproveVoiceTemplate = async (voiceId: string) => {
     try {
-      const { error } = await supabase
-        .from('voice_templates')
-        .update({ admin_status: 'approved', provider_status: 'approved' })
-        .eq('id', voiceId);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('সেশন পাওয়া যায়নি। অনুগ্রহ করে আবার লগইন করুন।');
+      }
 
-      if (error) throw error;
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ action: 'approve_voice', id: voiceId, voice_id: voiceId })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || 'অনুমোদন করতে ব্যর্থ হয়েছে');
+      }
 
       setStatusModal({
         show: true,
@@ -253,12 +285,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const handleRejectVoiceTemplate = async (voiceId: string) => {
     try {
-      const { error } = await supabase
-        .from('voice_templates')
-        .update({ admin_status: 'rejected', provider_status: 'rejected' })
-        .eq('id', voiceId);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('সেশন পাওয়া যায়নি। অনুগ্রহ করে আবার লগইন করুন।');
+      }
 
-      if (error) throw error;
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ action: 'reject_voice', id: voiceId, voice_id: voiceId })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || 'বাতিল করতে ব্যর্থ হয়েছে');
+      }
 
       setStatusModal({
         show: true,

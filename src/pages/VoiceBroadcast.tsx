@@ -2006,30 +2006,29 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const handleApproveVoice = async (voiceId: string) => {
     try {
       let isSuccess = false;
-      const { error } = await supabase.from('voice_templates').update({
-        admin_status: 'approved',
-        provider_status: 'approved'
-      }).eq('id', voiceId);
-
-      if (!error) {
-        isSuccess = true;
-      } else {
-        // Fallback to service role admin API
-        const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
         const res = await fetch('/api/admin', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
+            'Authorization': `Bearer ${session.access_token}`
           },
-          body: JSON.stringify({ action: 'approve_voice', id: voiceId })
+          body: JSON.stringify({ action: 'approve_voice', id: voiceId, voice_id: voiceId })
         });
         if (res.ok) {
           isSuccess = true;
         } else {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || error.message || 'Failed to approve voice');
+          throw new Error(errData.error || 'Failed to approve voice');
         }
+      } else {
+        const { error } = await supabase.from('voice_templates').update({
+          admin_status: 'approved',
+          provider_status: 'approved'
+        }).eq('id', voiceId);
+        if (error) throw error;
+        isSuccess = true;
       }
 
       if (isSuccess) {
@@ -2054,30 +2053,29 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const handleRejectVoice = async (voiceId: string) => {
     try {
       let isSuccess = false;
-      const { error } = await supabase.from('voice_templates').update({
-        admin_status: 'rejected',
-        provider_status: 'rejected'
-      }).eq('id', voiceId);
-
-      if (!error) {
-        isSuccess = true;
-      } else {
-        // Fallback to service role admin API
-        const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
         const res = await fetch('/api/admin', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
+            'Authorization': `Bearer ${session.access_token}`
           },
-          body: JSON.stringify({ action: 'reject_voice', id: voiceId })
+          body: JSON.stringify({ action: 'reject_voice', id: voiceId, voice_id: voiceId })
         });
         if (res.ok) {
           isSuccess = true;
         } else {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || error.message || 'Failed to reject voice');
+          throw new Error(errData.error || 'Failed to reject voice');
         }
+      } else {
+        const { error } = await supabase.from('voice_templates').update({
+          admin_status: 'rejected',
+          provider_status: 'rejected'
+        }).eq('id', voiceId);
+        if (error) throw error;
+        isSuccess = true;
       }
 
       if (isSuccess) {

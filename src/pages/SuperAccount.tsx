@@ -124,6 +124,27 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const fetchPendingVoices = async () => {
     setLoadingPendingVoices(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'get_pending_voices' })
+        });
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.institutions) setAllInstitutions(resData.institutions);
+          if (Array.isArray(resData.voices)) {
+            setPendingVoices(resData.voices);
+            setLoadingPendingVoices(false);
+            return;
+          }
+        }
+      }
+
       const { data: insts } = await supabase.from('institutions').select('id, name');
       if (insts) setAllInstitutions(insts);
 
@@ -144,15 +165,28 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
 
   const handleApproveVoice = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('voice_templates')
-        .update({
-          admin_status: 'approved',
-          provider_status: 'approved'
-        })
-        .eq('id', id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error(lang === 'bn' ? 'সেশন পাওয়া যায়নি। পুনরায় লগইন করুন।' : 'No session found. Please re-login.');
+      }
 
-      if (error) throw error;
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'approve_voice',
+          id: id,
+          voice_id: id
+        })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || (lang === 'bn' ? 'অনুমোদন করতে ব্যর্থ হয়েছে' : 'Error approving voice'));
+      }
 
       setPendingVoices(prev => prev.filter(v => v.id !== id));
       if (playingVoiceId === id && playingAudio) {
@@ -167,11 +201,12 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       });
       if (triggerRefresh) triggerRefresh();
     } catch (err: any) {
+      console.error('Voice approval error:', err);
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ব্যর্থ' : 'Failed',
-        message: err.message || 'Error approving voice'
+        message: err.message || (lang === 'bn' ? 'অনুমোদন করতে সমস্যা হয়েছে' : 'Error approving voice')
       });
     }
   };
@@ -179,15 +214,28 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleRejectVoice = async (id: string) => {
     if (!confirm(lang === 'bn' ? 'আপনি কি এই ভয়েস বার্তাটি বাতিল করতে চান?' : 'Are you sure you want to reject this voice message?')) return;
     try {
-      const { error } = await supabase
-        .from('voice_templates')
-        .update({
-          admin_status: 'rejected',
-          provider_status: 'rejected'
-        })
-        .eq('id', id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error(lang === 'bn' ? 'সেশন পাওয়া যায়নি। পুনরায় লগইন করুন।' : 'No session found. Please re-login.');
+      }
 
-      if (error) throw error;
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'reject_voice',
+          id: id,
+          voice_id: id
+        })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || (lang === 'bn' ? 'বাতিল করতে ব্যর্থ হয়েছে' : 'Error rejecting voice'));
+      }
 
       setPendingVoices(prev => prev.filter(v => v.id !== id));
       if (playingVoiceId === id && playingAudio) {
@@ -202,11 +250,12 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       });
       if (triggerRefresh) triggerRefresh();
     } catch (err: any) {
+      console.error('Voice rejection error:', err);
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ব্যর্থ' : 'Failed',
-        message: err.message || 'Error rejecting voice'
+        message: err.message || (lang === 'bn' ? 'বাতিল করতে সমস্যা হয়েছে' : 'Error rejecting voice')
       });
     }
   };
@@ -251,12 +300,33 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSaveVoiceTitle = async () => {
     if (!editingVoiceTitle || !editingVoiceTitle.title.trim()) return;
     try {
-      const { error } = await supabase
-        .from('voice_templates')
-        .update({ title: editingVoiceTitle.title.trim() })
-        .eq('id', editingVoiceTitle.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            action: 'update_voice_title',
+            id: editingVoiceTitle.id,
+            voice_id: editingVoiceTitle.id,
+            title: editingVoiceTitle.title.trim()
+          })
+        });
+        if (!res.ok) {
+          const resData = await res.json().catch(() => ({}));
+          throw new Error(resData.error || 'Failed to update title');
+        }
+      } else {
+        const { error } = await supabase
+          .from('voice_templates')
+          .update({ title: editingVoiceTitle.title.trim() })
+          .eq('id', editingVoiceTitle.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       setPendingVoices(prev => prev.map(v => v.id === editingVoiceTitle.id ? { ...v, title: editingVoiceTitle.title.trim() } : v));
       setEditingVoiceTitle(null);
