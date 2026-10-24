@@ -119,40 +119,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const searchPhone = normalizePhone(phone);
     const last10Digits = searchPhone.slice(-10);
+    const last8Digits = searchPhone.slice(-8);
 
     if (searchPhone.length < 10) {
       return res.status(400).json({ error: 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017...)' });
     }
 
-    let userId: string | null = null;
-    let institutionId: string | null = null;
-    let userEmail: string | null = null;
+    let adminMatch = null;
 
-    // Search institution by phone (Only Admin account)
-    const { data: inst } = await supabase
+    // 1. Search in institutions table
+    const { data: insts } = await supabase
       .from('institutions')
       .select('id, phone, name')
-      .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%`)
+      .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
 
-    if (inst) {
-      institutionId = inst.id;
-      const { data: profile } = await supabase
+    if (insts && insts.length > 0) {
+      const instIds = insts.map(i => i.id);
+      const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, role')
-        .eq('institution_id', inst.id)
+        .select('id, role, institution_id')
+        .in('institution_id', instIds)
         .in('role', ['madrasah_admin', 'super_admin'])
-        .maybeSingle();
-      if (profile) {
-        userId = profile.id;
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (profiles && profiles.length > 0) {
+        const profile = profiles[0];
+        const inst = insts.find(i => i.id === profile.institution_id) || insts[0];
         const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
-        if (authUser?.user?.email) userEmail = authUser.user.email;
+        adminMatch = {
+          userId: profile.id,
+          institutionId: inst.id,
+          userEmail: authUser?.user?.email || null
+        };
       }
     }
 
-    if (!userId) {
+    // 2. Direct fallback: Search in profiles table if phone column exists in profiles
+    if (!adminMatch) {
+      try {
+        const { data: directProfiles } = await supabase
+          .from('profiles')
+          .select('id, role, institution_id')
+          .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
+          .in('role', ['madrasah_admin', 'super_admin'])
+          .limit(1);
+
+        if (directProfiles && directProfiles.length > 0) {
+          const profile = directProfiles[0];
+          const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
+          adminMatch = {
+            userId: profile.id,
+            institutionId: profile.institution_id,
+            userEmail: authUser?.user?.email || null
+          };
+        }
+      } catch (e) {
+        // Safe catch if phone column does not exist on profiles table
+      }
+    }
+
+    if (!adminMatch) {
       return res.status(404).json({ error: 'এই ফোন নম্বরের সাথে কোনো নিবন্ধিত অ্যাডমিন অ্যাকাউন্ট পাওয়া যায়নি।' });
     }
 
@@ -170,7 +199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Bengali OTP SMS strictly under 70 characters (Single SMS Unicode)
     const smsText = `দ্বীনোরা পাসওয়ার্ড রিসেট ওটিপি: ${otp}। মেয়াদ ১৫ মিনিট।`;
-    const smsRes = await sendSMS(searchPhone, smsText, institutionId || undefined);
+    const smsRes = await sendSMS(searchPhone, smsText, adminMatch.institutionId || undefined);
 
     if (!smsRes.success) {
       console.error('SMS Gateway Failure:', smsRes.error);
@@ -241,34 +270,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await supabase.from('otp_verifications').update({ verified_at: new Date().toISOString() }).eq('identifier', searchPhone).is('verified_at', null);
 
     const last10Digits = searchPhone.slice(-10);
+    const last8Digits = searchPhone.slice(-8);
     let resetDone = false;
     let adminEmail = '';
 
     // Reset Admin Account
-    const { data: inst } = await supabase
+    let targetProfileId: string | null = null;
+
+    const { data: insts } = await supabase
       .from('institutions')
       .select('id')
-      .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%`)
+      .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
 
-    if (inst) {
-      const { data: profile } = await supabase
+    if (insts && insts.length > 0) {
+      const instIds = insts.map(i => i.id);
+      const { data: profiles } = await supabase
         .from('profiles')
         .select('id')
-        .eq('institution_id', inst.id)
+        .in('institution_id', instIds)
         .in('role', ['madrasah_admin', 'super_admin'])
-        .maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      if (profile) {
-        const updateRes = await supabase.auth.admin.updateUserById(profile.id, { password: newPassword });
-        if (!updateRes.error) {
-          resetDone = true;
-          adminEmail = updateRes.data.user.email || '';
-        } else {
-          console.error('Failed to update Supabase admin auth:', updateRes.error);
+      if (profiles && profiles.length > 0) {
+        targetProfileId = profiles[0].id;
+      }
+    }
+
+    if (!targetProfileId) {
+      try {
+        const { data: directProfiles } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
+          .in('role', ['madrasah_admin', 'super_admin'])
+          .limit(1);
+        if (directProfiles && directProfiles.length > 0) {
+          targetProfileId = directProfiles[0].id;
         }
+      } catch (e) {}
+    }
+
+    if (targetProfileId) {
+      const updateRes = await supabase.auth.admin.updateUserById(targetProfileId, { password: newPassword });
+      if (!updateRes.error) {
+        resetDone = true;
+        adminEmail = updateRes.data.user.email || '';
+      } else {
+        console.error('Failed to update Supabase admin auth:', updateRes.error);
       }
     }
 
