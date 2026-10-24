@@ -87,12 +87,16 @@ export const useAuth = () => {
       const cachedProfile = OfflineService.getCache('user_profile');
       const cachedMadrasah = OfflineService.getCache('profile');
       
-      if (cachedProfile && (cachedProfile.id === userId || isSuperAdminEmail)) {
+      if (cachedProfile && cachedProfile.id === userId) {
         setProfile(cachedProfile);
-        if (cachedMadrasah) {
+        if (cachedMadrasah && (cachedMadrasah.id === cachedProfile.institution_id || cachedProfile.role === 'super_admin' || isSuperAdminEmail)) {
           setMadrasah(cachedMadrasah);
           setLoading(false); // Hide splash if we have cached data
         }
+      } else if (cachedProfile && cachedProfile.id !== userId) {
+        // Clear stale cached profile belonging to another user
+        OfflineService.removeCache('user_profile');
+        OfflineService.removeCache('profile');
       }
 
       // 1. Get the profile (Cached with Revalidation)
@@ -380,10 +384,27 @@ export const useAuth = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {}
+
     localStorage.removeItem('teacher_session');
     localStorage.removeItem('parent_session');
+    localStorage.removeItem('active_branch_id');
+    localStorage.removeItem('m_name');
+    localStorage.removeItem('selected_viewing_year');
+
+    try {
+      sessionStorage.clear();
+    } catch (e) {}
+
     OfflineService.removeCache('profile');
+    OfflineService.removeCache('user_profile');
+
+    try {
+      requestManager.invalidate();
+    } catch (e) {}
+
     hardReload();
   };
 
@@ -425,7 +446,8 @@ export const useAuth = () => {
           if (teacherSessionStr) {
             try {
               const teacherData = JSON.parse(teacherSessionStr);
-              if (teacherData && teacherData.id) {
+              // Strictly verify teacher session belongs to current authenticated user ID
+              if (teacherData && teacherData.id && teacherData.id === currentSession.user.id) {
                 const { data: latestTeacher } = await supabase.from('teachers').select('*').eq('id', teacherData.id).maybeSingle();
                 if (latestTeacher && latestTeacher.is_active) {
                   let parsedPermissions = latestTeacher.permissions || {};
@@ -453,9 +475,18 @@ export const useAuth = () => {
                   setLoading(false);
                   return;
                 }
+              } else {
+                // Remove mismatched teacher session
+                localStorage.removeItem('teacher_session');
               }
-            } catch (e) {}
+            } catch (e) {
+              localStorage.removeItem('teacher_session');
+            }
           }
+
+          // Clear parent session if an active authenticated Supabase user session exists
+          localStorage.removeItem('parent_session');
+
           await fetchUserProfile(currentSession.user.id, currentSession.user.email);
         } else if (parentSessionStr) {
           try {
@@ -470,6 +501,7 @@ export const useAuth = () => {
                 created_at: new Date().toISOString()
               };
               setProfile(profileObj);
+              OfflineService.setCache('user_profile', profileObj);
               const { data: inst } = await supabase.from('institutions').select('*').eq('id', parentData.institution_id).maybeSingle();
               if (inst) setMadrasah(inst);
               setLoading(false);

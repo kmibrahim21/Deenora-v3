@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase, offlineApi } from 'supabase';
+import { supabase } from 'lib/supabase';
+import { OfflineService } from 'services/OfflineService';
+import { requestManager } from 'services/RequestManager';
 import { Mail, Lock, Loader2, BookOpen, AlertCircle, Smartphone, Key, Moon, Star, Sparkles, ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Language } from 'types';
@@ -167,48 +169,105 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     }
   };
 
+  const clearAllLoginSessions = () => {
+    localStorage.removeItem('teacher_session');
+    localStorage.removeItem('parent_session');
+    localStorage.removeItem('active_branch_id');
+    localStorage.removeItem('m_name');
+    localStorage.removeItem('selected_viewing_year');
+    try { sessionStorage.clear(); } catch (e) {}
+    OfflineService.removeCache('profile');
+    OfflineService.removeCache('user_profile');
+    try { requestManager.invalidate(); } catch (e) {}
+  };
+
   const handleAdminAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     
     try {
-      localStorage.removeItem('teacher_session');
-      localStorage.removeItem('parent_session');
+      clearAllLoginSessions();
 
-      const { data, error } = await (supabase.auth as any).signInWithPassword({
-        email: email.trim(),
-        password: code,
-      });
+      const cleanEmail = email.trim();
+      let authUser: any = null;
 
-      if (error) {
-        console.error('Sign in error:', error);
-        const errMsg = error.message || '';
-        if (errMsg.includes('Invalid login credentials')) {
-          throw new Error(lang === 'bn' ? 'ভুল পাসওয়ার্ড অথবা ইমেইল দিয়েছেন।' : 'Invalid credentials.');
-        } else if (errMsg.includes('Email not confirmed')) {
-          throw new Error(lang === 'bn' ? 'ইমেইল এখনও ভেরিফাই করা হয়নি।' : 'Email not confirmed.');
+      // 1. Attempt direct client-side Supabase login
+      try {
+        const { data, error } = await (supabase.auth as any).signInWithPassword({
+          email: cleanEmail,
+          password: code,
+        });
+
+        if (error) {
+          const errMsg = error.message || '';
+          if (errMsg.includes('Invalid login credentials')) {
+            throw new Error(lang === 'bn' ? 'ভুল পাসওয়ার্ড অথবা ইমেইল দিয়েছেন।' : 'Invalid credentials.');
+          } else if (errMsg.includes('Email not confirmed')) {
+            throw new Error(lang === 'bn' ? 'ইমেইল এখনও ভেরিফাই করা হয়নি।' : 'Email not confirmed.');
+          } else if (errMsg.includes('Failed to fetch') || errMsg.includes('fetch') || error.name === 'TypeError') {
+            throw new Error('FALLBACK_TO_SERVER');
+          } else {
+            throw error;
+          }
+        }
+
+        authUser = data.user;
+      } catch (clientErr: any) {
+        if (clientErr.message === 'FALLBACK_TO_SERVER' || clientErr.message?.includes('Failed to fetch') || clientErr.name === 'TypeError') {
+          console.warn('Client-side login encountered network error, attempting server-side auth proxy fallback...');
+          
+          // 2. Server-side login fallback via /api/auth
+          const proxyRes = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'admin-login',
+              email: cleanEmail,
+              password: code
+            })
+          });
+
+          let proxyData: any = {};
+          try {
+            proxyData = await proxyRes.json();
+          } catch (e) {
+            proxyData = {};
+          }
+
+          if (!proxyRes.ok || !proxyData.session) {
+            throw new Error(proxyData.error || (lang === 'bn' ? 'ভুল পাসওয়ার্ড অথবা ইমেইল দিয়েছেন।' : 'Login failed. Please check credentials.'));
+          }
+
+          if (proxyData.session) {
+            await supabase.auth.setSession({
+              access_token: proxyData.session.access_token,
+              refresh_token: proxyData.session.refresh_token
+            });
+          }
+
+          authUser = proxyData.user;
         } else {
-          throw error;
+          throw clientErr;
         }
       }
 
-      if (data.user) {
-        const userEmailLower = (data.user.email || email).toLowerCase();
+      if (authUser) {
+        const userEmailLower = (authUser.email || cleanEmail).toLowerCase();
         if (userEmailLower === 'thedevomix@gmail.com' || userEmailLower === 'kmibrahim@gmail.com' || userEmailLower === 'ibrahimkhan269596@gmail.com') {
           try {
             await supabase.rpc('bootstrap_super_admin', {
-              p_uid: data.user.id,
-              p_email: data.user.email
+              p_uid: authUser.id,
+              p_email: authUser.email
             });
           } catch (bootstrapErr) {
             console.error('Bootstrap error:', bootstrapErr);
           }
         }
 
-        offlineApi.removeCache('profile');
-        if (isValidUUID(data.user.id)) {
-          const { data: profile } = await supabase.from('institutions').select('name').eq('id', data.user.id).maybeSingle();
+        OfflineService.removeCache('profile');
+        if (isValidUUID(authUser.id)) {
+          const { data: profile } = await supabase.from('institutions').select('name').eq('id', authUser.id).maybeSingle();
           if (profile) localStorage.setItem('m_name', profile.name);
           else localStorage.setItem('m_name', 'সুপার অ্যাডমিন');
         } else {
@@ -216,6 +275,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         }
       }
     } catch (err: any) { 
+      console.error('Admin login error:', err);
       setError(err.message || t('login_error', lang)); 
     } finally { 
       setLoading(false); 
@@ -228,7 +288,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     setError('');
     
     try {
-      localStorage.removeItem('parent_session');
+      clearAllLoginSessions();
       const cleanPhone = phone.trim();
       const cleanPin = pin.trim();
 
@@ -295,7 +355,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     setError('');
 
     try {
-      localStorage.removeItem('teacher_session');
+      clearAllLoginSessions();
       
       const response = await fetch('/api/parents/login', {
         method: 'POST',

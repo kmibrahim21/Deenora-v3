@@ -283,5 +283,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  if (action === 'admin-login' || action === 'login') {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'ইমেইল এবং পাসওয়ার্ড দেওয়া আবশ্যক।' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: String(password)
+      });
+
+      if (authError || !authData?.user) {
+        console.error('Server-side auth login error:', authError);
+        const errMsg = authError?.message || '';
+        if (errMsg.includes('Invalid login credentials')) {
+          return res.status(400).json({ error: 'ভুল পাসওয়ার্ড অথবা ইমেইল দিয়েছেন।' });
+        }
+        if (errMsg.includes('Email not confirmed')) {
+          return res.status(400).json({ error: 'ইমেইল এখনও ভেরিফাই করা হয়নি।' });
+        }
+        return res.status(400).json({ error: authError?.message || 'লগইন ফেইল্ড হয়েছে।' });
+      }
+
+      return res.status(200).json({
+        success: true,
+        user: authData.user,
+        session: authData.session
+      });
+    } catch (err: any) {
+      console.error('Auth handler login exception:', err);
+      return res.status(500).json({ error: err.message || 'সার্ভারে সমস্যা হচ্ছে, অনুগ্রহ করে পরে চেষ্টা করুন।' });
+    }
+  }
+
   return res.status(404).json({ error: 'Action not found' });
 }

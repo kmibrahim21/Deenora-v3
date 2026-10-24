@@ -22,15 +22,13 @@ console.log("Supabase Client Init:", {
  */
 export const supabase = createClient(finalUrl, finalKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage,
+    persistSession: typeof window !== 'undefined',
+    autoRefreshToken: typeof window !== 'undefined',
+    detectSessionInUrl: typeof window !== 'undefined',
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'madrasah_auth_token',
     flowType: 'pkce',
-    lock: (name, acquireTimeout, fn) => {
-      // By directly executing the function, we bypass the lock manager completely.
-      // This eliminates the 10000ms timeout error on devices where navigator.locks is buggy.
+    lock: <R>(name: string, acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
       return fn();
     }
   }
