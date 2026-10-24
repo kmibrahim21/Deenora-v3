@@ -403,7 +403,16 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   };
 
   const isDark = madrasah?.theme === 'dark';
-  const modules = (madrasah?.config_json as any)?.modules || {};
+  const parsedConfig = React.useMemo(() => {
+    if (!madrasah?.config_json) return {};
+    if (typeof madrasah.config_json === 'string') {
+      try { return JSON.parse(madrasah.config_json); } catch (e) { return {}; }
+    }
+    return (madrasah.config_json as any) || {};
+  }, [madrasah?.config_json]);
+
+  const modules = parsedConfig?.modules || (madrasah?.config_json as any)?.modules || {};
+  const isBiometricEnabled = Boolean(madrasah?.is_super_admin || modules.biometric_device_sync === true);
   const packageRaw = madrasah?.config_json?.package_name || madrasah?.config_json?.subscription?.package_name || '1';
   const packageNumber = String(packageRaw);
 
@@ -512,7 +521,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         arabic_calligraphy_url: arabicCalligraphyUrl,
         arabic_calligraphy_width: arabicCalligraphyWidth,
         name_english: nameEnglish.trim(),
-        biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ sn, name: "Device " + sn })),
+        ...(isBiometricEnabled
+          ? { biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ sn, name: "Device " + sn })) }
+          : (currentConfigObj.biometric_devices ? { biometric_devices: currentConfigObj.biometric_devices } : {})
+        ),
         features: {
           ...(currentConfigObj.features || {}),
           student_attendance_sms: featureStudentAttSms,
@@ -911,78 +923,80 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   </>
                 )}
 
-                <div className="space-y-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex justify-between items-center">
-                    <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold">
-                      <Zap size={14} />
-                      {lang === 'bn' ? 'হাজিরা মেশিনের সিরিয়াল নাম্বার (Serial Number / SN)' : 'Biometric Machine SNs'}
-                    </span>
-                    <span className="text-[9px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                      ZKteco ADMS / SDK
-                    </span>
-                  </label>
-                  <div className="relative group">
-                    <input 
-                      type="text" 
-                      className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
-                      value={biometricDevicesStr} 
-                      onChange={(e) => setBiometricDevicesStr(e.target.value)} 
-                      placeholder={lang === 'bn' ? 'যেমন: ZYTH09089351 (কমা দিয়ে একাধিক)' : 'e.g. ZYTH09089351'}
-                    />
-                  </div>
-                  <p className={`text-[10px] ml-1 leading-snug ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                    {lang === 'bn' 
-                      ? 'মেশিনের পিছনে থাকা Serial Number (SN) টি এখানে লিখুন। একাধিক থাকলে কমা (,) দিয়ে বসান।' 
-                      : 'Comma separated machine Serial Numbers (SN).'}
-                  </p>
+                {isBiometricEnabled && (
+                  <div className="space-y-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex justify-between items-center">
+                      <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold">
+                        <Zap size={14} />
+                        {lang === 'bn' ? 'হাজিরা মেশিনের সিরিয়াল নাম্বার (Serial Number / SN)' : 'Biometric Machine SNs'}
+                      </span>
+                      <span className="text-[9px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                        ZKteco ADMS / SDK
+                      </span>
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="text" 
+                        className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
+                        value={biometricDevicesStr} 
+                        onChange={(e) => setBiometricDevicesStr(e.target.value)} 
+                        placeholder={lang === 'bn' ? 'যেমন: ZYTH09089351 (কমা দিয়ে একাধিক)' : 'e.g. ZYTH09089351'}
+                      />
+                    </div>
+                    <p className={`text-[10px] ml-1 leading-snug ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {lang === 'bn' 
+                        ? 'মেশিনের পিছনে থাকা Serial Number (SN) টি এখানে লিখুন। একাধিক থাকলে কমা (,) দিয়ে বসান।' 
+                        : 'Comma separated machine Serial Numbers (SN).'}
+                    </p>
 
-                  <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={handleTestDeviceConnection}
-                      disabled={testingDevice}
-                      className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {testingDevice ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
-                      {lang === 'bn' ? 'মেশিন কানেকশন টেস্ট করুন' : 'Test Machine Connection'}
-                    </button>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestDeviceConnection}
+                        disabled={testingDevice}
+                        className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {testingDevice ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                        {lang === 'bn' ? 'মেশিন কানেকশন টেস্ট করুন' : 'Test Machine Connection'}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowSyncAgentModal(true)}
-                      className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 active:scale-95 transition-all mt-1"
-                    >
-                      <Smartphone size={14} />
-                      {lang === 'bn' ? '💻 পিসি সিংক এজেন্ট গাইড ও ডাউনলোড (Non-ADMS)' : '💻 PC Sync Agent Setup'}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSyncAgentModal(true)}
+                        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 active:scale-95 transition-all mt-1"
+                      >
+                        <Smartphone size={14} />
+                        {lang === 'bn' ? '💻 পিসি সিংক এজেন্ট গাইড ও ডাউনলোড (Non-ADMS)' : '💻 PC Sync Agent Setup'}
+                      </button>
 
-                    {deviceStatusResult && (
-                      <div className={`p-3 rounded-xl border text-xs font-medium space-y-1 ${
-                        deviceStatusResult.status === 'success' 
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200'
-                          : deviceStatusResult.status === 'warning'
-                          ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
-                          : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200'
-                      }`}>
-                        <div className="flex items-start gap-2">
-                          <Zap size={15} className="mt-0.5 shrink-0" />
-                          <div>
-                            <p className="font-bold">{deviceStatusResult.message}</p>
-                            {deviceStatusResult.lastPunch && (
-                              <p className="text-[11px] opacity-90 mt-1">
-                                🕒 {lang === 'bn' ? 'সর্বশেষ প্রাপ্ত পাঞ্চ:' : 'Last received punch:'} <span className="font-bold">{deviceStatusResult.lastPunch}</span>
-                              </p>
-                            )}
+                      {deviceStatusResult && (
+                        <div className={`p-3 rounded-xl border text-xs font-medium space-y-1 ${
+                          deviceStatusResult.status === 'success' 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200'
+                            : deviceStatusResult.status === 'warning'
+                            ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
+                            : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200'
+                        }`}>
+                          <div className="flex items-start gap-2">
+                            <Zap size={15} className="mt-0.5 shrink-0" />
+                            <div>
+                              <p className="font-bold">{deviceStatusResult.message}</p>
+                              {deviceStatusResult.lastPunch && (
+                                <p className="text-[11px] opacity-90 mt-1">
+                                  🕒 {lang === 'bn' ? 'সর্বশেষ প্রাপ্ত পাঞ্চ:' : 'Last received punch:'} <span className="font-bold">{deviceStatusResult.lastPunch}</span>
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </motion.div>
 
-            {showSyncAgentModal && (
+            {isBiometricEnabled && showSyncAgentModal && (
               <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
                 <div className={`w-full max-w-2xl p-6 rounded-3xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-900'}`}>
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
