@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff, UserCheck, Banknote, Settings, Edit3 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
@@ -854,6 +854,42 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                     onClick={() => setView('academic-calendar')}
                     dark={isDark}
                   />
+
+                  {/* Teacher Management Card for permitted staff */}
+                  {teacherInfo?.permissions?.can_manage_teachers && (
+                    <ActionCard
+                      icon={UserCheck}
+                      title={lang === 'bn' ? 'শিক্ষক ব্যবস্থাপনা' : 'Teacher Management'}
+                      subtitle={lang === 'bn' ? 'শিক্ষক ও স্টাফ' : 'Teachers & Staff'}
+                      colorClass="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+                      onClick={() => setView('teachers')}
+                      dark={isDark}
+                    />
+                  )}
+
+                  {/* Accounting Card for permitted staff */}
+                  {teacherInfo?.permissions?.can_manage_accounting && (
+                    <ActionCard
+                      icon={Banknote}
+                      title={lang === 'bn' ? 'ফি ও হিসাব' : 'Fees & Accounts'}
+                      subtitle={lang === 'bn' ? 'আয়, ব্যয় ও শিক্ষার্থী ফি' : 'Income, Expense & Fees'}
+                      colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                      onClick={() => setView('accounting')}
+                      dark={isDark}
+                    />
+                  )}
+
+                  {/* Profile Settings Card for permitted staff */}
+                  {teacherInfo?.permissions?.can_manage_settings && (
+                    <ActionCard
+                      icon={Edit3}
+                      title={t('profile_settings', lang)}
+                      subtitle={t('branding', lang)}
+                      colorClass="bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400"
+                      onClick={() => setView('profile-settings')}
+                      dark={isDark}
+                    />
+                  )}
 
                   {/* Class Routine Card (Conditional) */}
                   {modules.class_routine && (

@@ -135,6 +135,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const allowedClasses = profile?.permissions?.allowed_classes;
       const isTeacher = role === 'teacher';
 
+      const targetInstIds = [institutionId];
+
       // 1. Students Count (Cached)
       const stdProm = requestManager.cachedFetch(
         'students',
@@ -258,10 +260,32 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
 
       const singleInst = Array.isArray(mRes.data) ? mRes.data[0] : mRes.data;
 
+      let totalTeachers = teacherRes.count || 0;
+      if (totalTeachers === 0) {
+        if (typeof (madrasah as any)?.teacherCount === 'number' && (madrasah as any).teacherCount > 0) {
+          totalTeachers = (madrasah as any).teacherCount;
+        } else {
+          try {
+            const tRes = await fetch(`/api/teachers/list?institute_id=${institutionId}`);
+            if (tRes.ok) {
+              const tData = await tRes.json();
+              if (tData.teachers && Array.isArray(tData.teachers)) {
+                totalTeachers = tData.teachers.length;
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
+      let totalStudents = stdRes.count || 0;
+      if (totalStudents === 0 && typeof (madrasah as any)?.studentCount === 'number' && (madrasah as any).studentCount > 0) {
+        totalStudents = (madrasah as any).studentCount;
+      }
+
       const newStats = {
-        totalStudents: stdRes.count || 0,
+        totalStudents,
         totalClasses: clsRes.count || allClasses.length || 0,
-        totalTeachers: teacherRes.count || 0,
+        totalTeachers,
         smsBalance: singleInst?.sms_balance || 0,
         voiceBalance: singleInst?.balance || 0,
         attendanceToday: attendanceTodayCount,

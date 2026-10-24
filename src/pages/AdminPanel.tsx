@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng, toJpeg } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff, GitFork } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
@@ -21,6 +21,11 @@ import { elementToImageDataUrl } from '../utils/admissionFormPdf';
 interface InstitutionWithStats extends Institution {
   student_count?: number;
   class_count?: number;
+  teacher_count?: number;
+  direct_student_count?: number;
+  direct_teacher_count?: number;
+  direct_sms_balance?: number;
+  direct_voice_balance?: number;
 }
 
 interface AdminPanelProps {
@@ -2018,6 +2023,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     });
   }, [madrasahs, searchTerm, instFilterMonth, instPaymentFilter]);
 
+  const selectedUserChildBranches = useMemo(() => {
+    if (!selectedUser) return [];
+    return madrasahs.filter(m => (m.config_json as any)?.parent_institution_id === selectedUser.id);
+  }, [madrasahs, selectedUser]);
+
   // Fix: Add missing handleUserClick function to manage details view and stats
   const handleUserClick = async (user: InstitutionWithStats) => {
     setSelectedUser(user);
@@ -3271,13 +3281,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           </button>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">Code: {(m.config_json as any)?.institute_code || 'N/A'}</p>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none">Code: {(m.config_json as any)?.institute_code || 'N/A'}</p>
+                          </div>
                           <h3 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} truncate font-noto text-lg leading-tight`}>{m.name}</h3>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 truncate">{m.phone || 'No Phone'}</p>
                         </div>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${m.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                        {m.is_active ? 'Active' : 'Blocked'}
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        {Boolean((m.config_json as any)?.parent_institution_id || (m.config_json as any)?.is_branch) && (
+                          <span className="px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-300/80 dark:border-purple-800/60 flex items-center gap-1">
+                            <GitFork size={10} />
+                            <span>শাখা</span>
+                          </span>
+                        )}
+                        <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${m.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                          {m.is_active ? 'Active' : 'Blocked'}
+                        </div>
                       </div>
                     </div>
                     
@@ -3289,14 +3309,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
                           {m.student_count || 0} Students
                         </span>
-                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600">
-                          {m.balance || 0} ৳
-                        </span>
-                        {m.config_json?.modules?.voice_broadcast !== false && (
-                          <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-500">
-                            Voice
+                        {(m.teacher_count || 0) > 0 && (
+                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
+                            {m.teacher_count} Teachers
                           </span>
                         )}
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600">
+                          SMS: {m.sms_balance || 0}
+                        </span>
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 font-mono">
+                          Voice: ৳{Number(m.balance || 0).toFixed(2)}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2 relative z-10">
@@ -3991,6 +4014,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       <div className="flex-1 space-y-4">
                         <h2 className={`text-3xl md:text-4xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight tracking-tight`}>{selectedUser.name}</h2>
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                          {Boolean((selectedUser.config_json as any)?.parent_institution_id || (selectedUser.config_json as any)?.is_branch) && (
+                            <div className="px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-300 dark:border-purple-800">
+                               <GitFork size={14} className="text-purple-600 dark:text-purple-400" />
+                               <span>শাখা অ্যাকাউন্ট (Branch)</span>
+                            </div>
+                          )}
                           <div className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${editActive ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-red-50 text-red-600 border-red-200')}`}>
                              <Activity size={14} /> {editActive ? 'Active Portal' : 'Access Restricted'}
                           </div>
@@ -4004,22 +4033,165 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    {/* Stats Grid */}
                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/30 transition-all`}>
-                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Students</p>
-                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{userStats.students}</h5>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                           {selectedUserChildBranches.length > 0 ? 'Total Students (সকল শাখা সহ)' : 'Students'}
+                         </p>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                           {selectedUserChildBranches.length > 0 ? ((selectedUser.student_count ?? userStats.students) || 0) : userStats.students}
+                         </h5>
+                         {selectedUserChildBranches.length > 0 && (
+                           <p className="text-[9px] font-bold text-slate-400 mt-1">
+                             মেইন ক্যাম্পাস: {selectedUser.direct_student_count ?? userStats.students} জন | শাখাগুলো: {Math.max(0, ((selectedUser.student_count ?? userStats.students) - (selectedUser.direct_student_count ?? userStats.students)))} জন
+                           </p>
+                         )}
                       </div>
                       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/30 transition-all`}>
-                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Classes</p>
-                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{userStats.classes}</h5>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                           {selectedUserChildBranches.length > 0 ? 'Total Teachers (সকল শাখা সহ)' : 'Classes'}
+                         </p>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                           {selectedUserChildBranches.length > 0 ? (selectedUser.teacher_count ?? 'N/A') : userStats.classes}
+                         </h5>
+                         {selectedUserChildBranches.length > 0 && (
+                           <p className="text-[9px] font-bold text-slate-400 mt-1">
+                             মেইন ক্যাম্পাস: {selectedUser.direct_teacher_count ?? 'N/A'} জন | শ্রেণি: {userStats.classes}
+                           </p>
+                         )}
                       </div>
                       <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/50 transition-all`}>
                          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">SMS Balance</p>
                          <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{selectedUser.sms_balance || 0}</h5>
+                         {selectedUserChildBranches.length > 0 && (
+                           <p className="text-[9px] font-bold text-blue-400 mt-1">
+                             সকল শাখার জন্য শেয়ার্ড
+                           </p>
+                         )}
                       </div>
                       <div className={`${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-emerald-500/50 transition-all`}>
                          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Voice Balance</p>
                          <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>৳ {Number(selectedUser.balance || 0).toFixed(2)}</h5>
+                         {selectedUserChildBranches.length > 0 && (
+                           <p className="text-[9px] font-bold text-emerald-500 mt-1">
+                             সকল শাখার জন্য শেয়ার্ড
+                           </p>
+                         )}
                       </div>
                    </div>
+
+                   {/* Branch Accounts List Section for Main Account */}
+                   {selectedUserChildBranches.length > 0 && (
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-purple-50/40 border-purple-100 shadow-sm'} p-6 rounded-[2.5rem] border space-y-6`}>
+                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                               <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                                  <GitFork size={20} />
+                               </div>
+                               <div>
+                                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto flex items-center gap-2`}>
+                                     শাখা অ্যাকাউন্টসমূহ (Child Branches)
+                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                        {selectedUserChildBranches.length} টি শাখা
+                                     </span>
+                                  </h3>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                     এই মেইন অ্যাকাউন্টের সকল শাখার ডাটা ও বিস্তারিত তালিকা
+                                  </p>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                               <span className="text-xs font-black text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800">
+                                  মোট শাখা শিক্ষার্থী: {selectedUserChildBranches.reduce((sum, b) => sum + (b.student_count || b.direct_student_count || 0), 0).toLocaleString('bn-BD')} জন
+                               </span>
+                            </div>
+                         </div>
+
+                         {/* Branch Cards Grid */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {selectedUserChildBranches.map((branch) => {
+                               const bCode = (branch.config_json as any)?.institute_code || branch.id.slice(0, 8);
+                               const bStudents = branch.student_count ?? branch.direct_student_count ?? 0;
+                               const bTeachers = branch.teacher_count ?? branch.direct_teacher_count ?? 0;
+
+                               return (
+                                  <div
+                                     key={branch.id}
+                                     className={`${
+                                        madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700/80 hover:border-purple-500/50' : 'bg-white border-purple-100 shadow-sm hover:border-purple-300'
+                                     } p-5 rounded-[2rem] border transition-all duration-300 flex flex-col justify-between space-y-4`}
+                                  >
+                                     <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                           <div className={`w-12 h-12 rounded-2xl shrink-0 flex items-center justify-center border overflow-hidden ${
+                                              madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-purple-50 border-purple-100'
+                                           }`}>
+                                              {branch.logo_url ? (
+                                                 <img src={branch.logo_url} alt={branch.name} className="w-full h-full object-contain" />
+                                              ) : (
+                                                 <Building2 size={22} className="text-purple-500" />
+                                              )}
+                                           </div>
+                                           <div className="min-w-0">
+                                              <div className="flex items-center gap-2">
+                                                 <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-md font-mono border border-purple-200 dark:border-purple-800">
+                                                    [{bCode}]
+                                                 </span>
+                                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                                    branch.is_active ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                 }`}>
+                                                    {branch.is_active ? 'Active' : 'Restricted'}
+                                                 </span>
+                                              </div>
+                                              <h4 className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto truncate mt-0.5`}>
+                                                 {branch.name}
+                                              </h4>
+                                              <p className="text-[10px] font-bold text-slate-400 truncate">
+                                                 {branch.phone || 'ফোন নম্বর নেই'}
+                                              </p>
+                                           </div>
+                                        </div>
+
+                                        <button
+                                           onClick={() => handleUserClick(branch)}
+                                           className="shrink-0 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                           <Eye size={13} />
+                                           <span>ভিউ প্রোফাইল</span>
+                                        </button>
+                                     </div>
+
+                                     {/* Stats Row */}
+                                     <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100 dark:border-slate-700/50 text-center">
+                                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                                           <p className="text-[8px] font-black text-slate-400 uppercase">শিক্ষার্থী</p>
+                                           <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                              {bStudents.toLocaleString('bn-BD')}
+                                           </p>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                                           <p className="text-[8px] font-black text-slate-400 uppercase">শিক্ষক</p>
+                                           <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                              {bTeachers.toLocaleString('bn-BD')}
+                                           </p>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                                           <p className="text-[8px] font-black text-blue-500 uppercase">SMS</p>
+                                           <p className="text-sm font-black text-blue-600 dark:text-blue-400">
+                                              {branch.sms_balance || 0}
+                                           </p>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-emerald-50/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800">
+                                           <p className="text-[8px] font-black text-emerald-500 uppercase">Voice</p>
+                                           <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                                              ৳{Number(branch.balance || 0).toFixed(1)}
+                                           </p>
+                                        </div>
+                                     </div>
+                                  </div>
+                               );
+                            })}
+                         </div>
+                      </div>
+                   )}
 
                    {/* Tab Navigation */}
                    <div className="flex items-center gap-2 overflow-x-auto pb-4 custom-scrollbar -mx-6 px-6 md:mx-0 md:px-0">

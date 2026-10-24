@@ -135,6 +135,35 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   };
 
   useEffect(() => {
+    if (madrasah) {
+      setNewName(madrasah.name || '');
+      setNewAddress(madrasah.address || '');
+      setNewPhone(madrasah.phone || '');
+      setNewContactEmail(madrasah.contact_email || '');
+      setLogoUrl(madrasah.logo_url || '');
+      setVoiceSenderId(madrasah.voice_sender_id || '');
+      const config = typeof madrasah.config_json === 'string'
+        ? (() => { try { return JSON.parse(madrasah.config_json); } catch(e) { return {}; } })()
+        : (madrasah.config_json || {});
+      setArabicCalligraphyUrl(config.arabic_calligraphy_url || '');
+      setArabicCalligraphyWidth(config.arabic_calligraphy_width || 100);
+      setNewPin(config.user_pin || '');
+      setSignatureUrl(config.signature_url || '');
+      setSignatureHeight(config.signature_height || 30);
+      setNameEnglish(config.name_english || '');
+      setBiometricDevicesStr((config.biometric_devices || []).map((d: any) => d.sn).join(', '));
+      setFeatureStudentAttSms(config.features?.student_attendance_sms ?? false);
+      setFeatureFeeSms(config.features?.fee_collection_sms ?? false);
+      setFeatureTeacherSalarySms(config.features?.teacher_salary_sms ?? false);
+      setFeatureTeacherDeduction(config.features?.teacher_attendance_deduction ?? false);
+      setReceiptPrintMode(config.features?.receipt_print_mode ?? false);
+      setPrinterPaperSize(config.features?.printer_paper_size ?? 'A4');
+      setFeatureDeleteClass(config.features?.delete_class ?? false);
+      setFeatureDeleteAccounting(config.features?.delete_accounting ?? false);
+    }
+  }, [madrasah]);
+
+  useEffect(() => {
     if (!madrasah?.id) return;
     supabase
       .from('classes')
@@ -636,8 +665,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       
       // Auto-save the URL to database to prevent loss on refresh
       try {
-        const { data: currentData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
-        const currentConfig = (typeof currentData?.config_json === 'string' ? JSON.parse(currentData.config_json) : currentData?.config_json) || {};
+        const currentConfig = (typeof madrasah.config_json === 'string' ? JSON.parse(madrasah.config_json) : madrasah.config_json) || {};
         
         let updatedConfig = { ...currentConfig };
         let updateData: any = {};
@@ -650,9 +678,32 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           updateData.config_json = updatedConfig;
         }
 
-        const { error: autoSaveError } = await supabase.from('institutions').update(updateData).eq('id', madrasah.id);
+        let autoSaveSuccess = false;
+        try {
+          const res = await fetch('/api/branches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update-settings',
+              institutionId: madrasah.id,
+              ...(type === 'logo' ? { logo_url: publicUrl } : { config_json: updatedConfig })
+            })
+          });
+          if (res.ok) {
+            autoSaveSuccess = true;
+          }
+        } catch (apiErr) {
+          console.warn('API update-settings failed for asset upload, falling back to direct update:', apiErr);
+        }
+
+        if (!autoSaveSuccess) {
+          const { error: autoSaveError } = await supabase.from('institutions').update(updateData).eq('id', madrasah.id);
+          if (!autoSaveError) {
+            autoSaveSuccess = true;
+          }
+        }
         
-        if (!autoSaveError) {
+        if (autoSaveSuccess) {
           // Update local cache so refresh doesn't show old data
           try {
             const { OfflineService } = await import('../services/OfflineService');

@@ -190,6 +190,7 @@ export const useAuth = () => {
                       address: found.address,
                       phone: found.phone,
                       contact_email: found.contact_email,
+                      logo_url: found.logo_url || null,
                       institution_type: found.institution_type,
                       status: found.status,
                       is_active: found.is_active,
@@ -198,6 +199,8 @@ export const useAuth = () => {
                       voice_sender_id: found.voice_sender_id,
                       voice_rate: found.voice_rate,
                       theme: found.theme || 'default',
+                      teacherCount: found.teacherCount || 0,
+                      studentCount: found.studentCount || 0,
                       config_json: {
                         ...(typeof found.config_json === 'string' ? JSON.parse(found.config_json) : (found.config_json || {})),
                         parent_institution_id: found.isMain ? null : bData.rootId

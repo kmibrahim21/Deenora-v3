@@ -408,19 +408,65 @@ export default async function handler(req, res) {
 
     if (action === 'get_all_institutions') {
       const { data, error } = await supabase.from('institutions')
-        .select('*, student_count:students(count), class_count:classes(count)')
+        .select('*, student_count:students(count), class_count:classes(count), teacher_count:teachers(count)')
         .eq('is_super_admin', false)
         .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
-      // Flatten counts for frontend ease of use
-      const flattened = (data || []).map(inst => ({
-        ...inst,
-        student_count: inst.student_count?.[0]?.count || 0,
-        class_count: inst.class_count?.[0]?.count || 0
-      }));
+      const directCounts: Record<string, { students: number; classes: number; teachers: number; sms_balance: number; balance: number }> = {};
+      const parentMap: Record<string, string> = {};
+
+      (data || []).forEach(inst => {
+        const sCount = inst.student_count?.[0]?.count || 0;
+        const cCount = inst.class_count?.[0]?.count || 0;
+        const tCount = inst.teacher_count?.[0]?.count || 0;
+        const smsBal = Number(inst.sms_balance || 0);
+        const voiceBal = Number(inst.balance || 0);
+
+        directCounts[inst.id] = { students: sCount, classes: cCount, teachers: tCount, sms_balance: smsBal, balance: voiceBal };
+
+        const config = typeof inst.config_json === 'string' ? (() => { try { return JSON.parse(inst.config_json); } catch(e) { return {}; } })() : (inst.config_json || {});
+        if (config?.parent_institution_id) {
+          parentMap[inst.id] = config.parent_institution_id;
+        }
+      });
+
+      // Aggregate child counts and balances into parent main institution
+      const aggregateCounts: Record<string, { students: number; classes: number; teachers: number; sms_balance: number; balance: number }> = {};
+      Object.keys(directCounts).forEach(id => {
+        aggregateCounts[id] = { ...directCounts[id] };
+      });
+
+      Object.entries(parentMap).forEach(([childId, parentId]) => {
+        if (aggregateCounts[parentId] && directCounts[childId]) {
+          aggregateCounts[parentId].students += directCounts[childId].students;
+          aggregateCounts[parentId].classes += directCounts[childId].classes;
+          aggregateCounts[parentId].teachers += directCounts[childId].teachers;
+          aggregateCounts[parentId].sms_balance += directCounts[childId].sms_balance;
+          aggregateCounts[parentId].balance = Number((aggregateCounts[parentId].balance + directCounts[childId].balance).toFixed(2));
+        }
+      });
+
+      // Flatten counts and balances for Super Admin panel frontend
+      const flattened = (data || []).map(inst => {
+        const isBranch = !!parentMap[inst.id];
+        const counts = isBranch ? (directCounts[inst.id] || { students: 0, classes: 0, teachers: 0, sms_balance: 0, balance: 0 }) : (aggregateCounts[inst.id] || { students: 0, classes: 0, teachers: 0, sms_balance: 0, balance: 0 });
+
+        return {
+          ...inst,
+          sms_balance: counts.sms_balance,
+          balance: counts.balance,
+          student_count: counts.students,
+          class_count: counts.classes,
+          teacher_count: counts.teachers,
+          direct_student_count: directCounts[inst.id]?.students || 0,
+          direct_teacher_count: directCounts[inst.id]?.teachers || 0,
+          direct_sms_balance: directCounts[inst.id]?.sms_balance || 0,
+          direct_voice_balance: directCounts[inst.id]?.balance || 0
+        };
+      });
       
       return res.status(200).json({ institutions: flattened });
     }
@@ -428,18 +474,56 @@ export default async function handler(req, res) {
     if (action === 'get_recent_institutions') {
       const limit = Number(body.limit) || 5;
       const { data, error } = await supabase.from('institutions')
-        .select('*, student_count:students(count)')
+        .select('*, student_count:students(count), teacher_count:teachers(count)')
         .eq('is_super_admin', false)
         .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .limit(limit * 3);
       
       if (error) throw error;
       
-      const flattened = (data || []).map(inst => ({
-        ...inst,
-        student_count: inst.student_count?.[0]?.count || 0
-      }));
+      const directCounts: Record<string, { students: number; teachers: number; sms_balance: number; balance: number }> = {};
+      const parentMap: Record<string, string> = {};
+
+      (data || []).forEach(inst => {
+        directCounts[inst.id] = {
+          students: inst.student_count?.[0]?.count || 0,
+          teachers: inst.teacher_count?.[0]?.count || 0,
+          sms_balance: Number(inst.sms_balance || 0),
+          balance: Number(inst.balance || 0)
+        };
+        const config = typeof inst.config_json === 'string' ? (() => { try { return JSON.parse(inst.config_json); } catch(e) { return {}; } })() : (inst.config_json || {});
+        if (config?.parent_institution_id) {
+          parentMap[inst.id] = config.parent_institution_id;
+        }
+      });
+
+      const aggregateCounts: Record<string, { students: number; teachers: number; sms_balance: number; balance: number }> = {};
+      Object.keys(directCounts).forEach(id => {
+        aggregateCounts[id] = { ...directCounts[id] };
+      });
+
+      Object.entries(parentMap).forEach(([childId, parentId]) => {
+        if (aggregateCounts[parentId] && directCounts[childId]) {
+          aggregateCounts[parentId].students += directCounts[childId].students;
+          aggregateCounts[parentId].teachers += directCounts[childId].teachers;
+          aggregateCounts[parentId].sms_balance += directCounts[childId].sms_balance;
+          aggregateCounts[parentId].balance = Number((aggregateCounts[parentId].balance + directCounts[childId].balance).toFixed(2));
+        }
+      });
+
+      const flattened = (data || []).slice(0, limit).map(inst => {
+        const isBranch = !!parentMap[inst.id];
+        const counts = isBranch ? (directCounts[inst.id] || { students: 0, teachers: 0, sms_balance: 0, balance: 0 }) : (aggregateCounts[inst.id] || { students: 0, teachers: 0, sms_balance: 0, balance: 0 });
+
+        return {
+          ...inst,
+          sms_balance: counts.sms_balance,
+          balance: counts.balance,
+          student_count: counts.students,
+          teacher_count: counts.teachers
+        };
+      });
       
       return res.status(200).json({ institutions: flattened });
     }

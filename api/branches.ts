@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check current institution to determine root
       const { data: currentInst, error: currErr } = await supabase
         .from('institutions')
-        .select('id, name, address, phone, contact_email, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
+        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
         .eq('id', institutionId)
         .single();
 
@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fetch Root Institution
       const { data: rootInst } = await supabase
         .from('institutions')
-        .select('id, name, address, phone, contact_email, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
+        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
         .eq('id', rootId)
         .single();
 
@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fetch Child Branches
       const { data: childBranches } = await supabase
         .from('institutions')
-        .select('id, name, address, phone, contact_email, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
+        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
         .filter('config_json->>parent_institution_id', 'eq', rootId);
 
       const allBranchRecords = [
@@ -85,6 +85,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         teacherCountMap[t.institution_id] = (teacherCountMap[t.institution_id] || 0) + 1;
       });
 
+      const totalStudentsAllBranches = (students || []).length;
+      const totalTeachersAllBranches = (teachers || []).length;
+
       const formattedBranches = allBranchRecords.map(b => ({
         id: b.id,
         name: b.name,
@@ -92,6 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         address: b.address || '',
         phone: b.phone || '',
         contact_email: b.contact_email || '',
+        logo_url: b.logo_url || null,
         institution_type: b.institution_type || 'madrasah',
         theme: b.theme || 'default',
         status: b.status || 'active',
@@ -99,6 +103,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         config_json: b.config_json || {},
         studentCount: studentCountMap[b.id] || 0,
         teacherCount: teacherCountMap[b.id] || 0,
+        directStudentCount: studentCountMap[b.id] || 0,
+        directTeacherCount: teacherCountMap[b.id] || 0,
         sms_balance: b.sms_balance || 0,
         balance: b.balance || 0,
         voice_sender_id: (b as any).voice_sender_id || '',
@@ -113,6 +119,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rootId,
         sharedSmsBalance: rootInst.sms_balance || 0,
         sharedVoiceBalance: rootInst.balance || 0,
+        totalStudentsAllBranches,
+        totalTeachersAllBranches,
         branchLimit,
         branches: formattedBranches
       });

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart, Eye, EyeOff, Building2 } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart, Eye, EyeOff, Building2, Banknote } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -668,13 +668,42 @@ const Account: React.FC<AccountProps> = ({
     setLoadingStats(true);
     try {
       const { data: profile } = await supabase.from('institutions').select('*').eq('id', initialMadrasah.id).maybeSingle();
-      if (profile) setMadrasah(profile);
+      if (profile) {
+        setMadrasah(profile);
+        if (profile.logo_url) setLogoUrl(profile.logo_url);
+      }
+
       const [stdRes, clsRes, teacherRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id),
         supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id),
         supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id)
       ]);
-      setStats({ students: stdRes.count || 0, classes: clsRes.count || 0, teachers: teacherRes.count || 0 });
+
+      let teacherCount = teacherRes.count || 0;
+      if (teacherCount === 0) {
+        if (typeof (initialMadrasah as any)?.teacherCount === 'number' && (initialMadrasah as any).teacherCount > 0) {
+          teacherCount = (initialMadrasah as any).teacherCount;
+        } else {
+          try {
+            const tRes = await fetch(`/api/teachers/list?institute_id=${initialMadrasah.id}`);
+            if (tRes.ok) {
+              const tData = await tRes.json();
+              if (tData.success && Array.isArray(tData.teachers)) {
+                teacherCount = tData.teachers.length;
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      let studentCount = stdRes.count || 0;
+      if (studentCount === 0 && typeof (initialMadrasah as any)?.studentCount === 'number' && (initialMadrasah as any).studentCount > 0) {
+        studentCount = (initialMadrasah as any).studentCount;
+      }
+
+      setStats({ students: studentCount, classes: clsRes.count || 0, teachers: teacherCount });
     } catch (e) { console.error(e); } finally { setLoadingStats(false); }
   };
 
@@ -814,7 +843,7 @@ const Account: React.FC<AccountProps> = ({
       const { error: err1 } = await supabase.storage.from('madrasah-assets').upload(`logos/${fileName}`, compressedBlob, {
         cacheControl: '3600',
         contentType: 'image/webp',
-        upsert: false
+        upsert: true
       });
 
       if (err1) {
@@ -822,7 +851,7 @@ const Account: React.FC<AccountProps> = ({
         const { error: err2 } = await supabase.storage.from('voice-templates').upload(`logos/${fileName}`, compressedBlob, {
           cacheControl: '3600',
           contentType: 'image/webp',
-          upsert: false
+          upsert: true
         });
         uploadError = err2;
         if (!err2) {
@@ -836,7 +865,6 @@ const Account: React.FC<AccountProps> = ({
 
       if (uploadError && uploadError.message !== 'Bucket not found') throw uploadError;
       
-      // If both failed due to bucket issues, we might need to inform the user or use a different strategy
       if (!publicUrl) throw new Error('Could not upload logo. Please ensure storage buckets are configured.');
 
       if (madrasah?.id) {
@@ -844,8 +872,42 @@ const Account: React.FC<AccountProps> = ({
         requestManager.invalidatePattern('dashboard_');
       }
 
-      const { error: updateErr } = await supabase.from('institutions').update({ logo_url: publicUrl }).eq('id', madrasah.id);
-      if (updateErr) throw updateErr;
+      let updateSuccess = false;
+      try {
+        const res = await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-settings',
+            institutionId: madrasah.id,
+            logo_url: publicUrl
+          })
+        });
+        if (res.ok) {
+          updateSuccess = true;
+        }
+      } catch (apiErr) {
+        console.error('API update-settings failed for logo:', apiErr);
+      }
+
+      if (!updateSuccess) {
+        try {
+          const { error: updateErr } = await supabase.from('institutions').update({ logo_url: publicUrl }).eq('id', madrasah.id);
+          if (!updateErr) {
+            updateSuccess = true;
+          }
+        } catch (err) {
+          console.warn('Direct Supabase update failed:', err);
+        }
+      }
+
+      try {
+        const { OfflineService } = await import('../services/OfflineService');
+        const cachedMadrasah = OfflineService.getCache('profile');
+        if (cachedMadrasah && cachedMadrasah.id === madrasah.id) {
+          OfflineService.setCache('profile', { ...cachedMadrasah, logo_url: publicUrl });
+        }
+      } catch (e) {}
 
       setLogoUrl(publicUrl);
       setMadrasah(prev => prev ? { ...prev, logo_url: publicUrl } : null);
@@ -1816,6 +1878,18 @@ const Account: React.FC<AccountProps> = ({
               onClick={() => setView('teachers')}
               dark={madrasah?.theme === 'dark'}
             />
+
+            {/* Accounting / Fees Card */}
+            {((madrasah?.config_json as any)?.modules?.accounting !== false || isSuperAdmin) && (
+              <ActionCard
+                icon={Banknote}
+                title={lang === 'bn' ? 'ফি ও হিসাব' : 'Fees & Accounts'}
+                subtitle={lang === 'bn' ? 'আয়, ব্যয় ও শিক্ষার্থী ফি' : 'Income, Expense & Fees'}
+                colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                onClick={() => setView('accounting')}
+                dark={madrasah?.theme === 'dark'}
+              />
+            )}
 
             {/* Multi-Branch Management Card */}
             <ActionCard
