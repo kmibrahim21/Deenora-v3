@@ -109,6 +109,148 @@ async function sendSMS(phone: string, text: string, institutionId?: string): Pro
   }
 }
 
+interface AdminAccountMatch {
+  userId: string;
+  institutionId: string;
+  userEmail: string | null;
+  institutionName: string;
+}
+
+async function findAdminAccountByPhone(inputPhone: string): Promise<AdminAccountMatch | null> {
+  const supabase = getSupabaseAdmin();
+  const searchPhone = normalizePhone(inputPhone);
+  const last10Digits = searchPhone.slice(-10);
+  const last8Digits = searchPhone.slice(-8);
+  const last6Digits = searchPhone.slice(-6);
+
+  if (searchPhone.length < 10) return null;
+
+  console.log(`[Admin Account Search] Looking up phone: "${inputPhone}", normalized: "${searchPhone}", last10: "${last10Digits}"`);
+
+  // 1. Fetch Candidate Institutions
+  // To avoid PostgREST .or() URL percent-encoding bugs where % followed by digits is treated as hex escape,
+  // we do a direct safe ilike search using the last 6 digits, or query all institutions if small table.
+  let candidateInsts: any[] = [];
+  try {
+    const { data: byLike, error: likeErr } = await supabase
+      .from('institutions')
+      .select('id, name, phone, email, contact_email')
+      .ilike('phone', `%${last6Digits}%`)
+      .limit(50);
+    
+    if (!likeErr && byLike) {
+      candidateInsts.push(...byLike);
+    }
+  } catch (e) {
+    console.warn('[Admin Account Search] ilike phone error:', e);
+  }
+
+  // Also query recent institutions just in case phone has spaces or formatting that broke the substring
+  if (candidateInsts.length === 0) {
+    try {
+      const { data: allInsts } = await supabase
+        .from('institutions')
+        .select('id, name, phone, email, contact_email')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (allInsts) candidateInsts.push(...allInsts);
+    } catch (e) {}
+  }
+
+  // Filter candidate institutions in JavaScript with full normalization
+  const matchedInsts = candidateInsts.filter(inst => {
+    if (!inst.phone) return false;
+    const clean = normalizePhone(String(inst.phone));
+    return clean === searchPhone ||
+           clean.endsWith(last10Digits) ||
+           clean.includes(last10Digits) ||
+           clean.endsWith(last8Digits);
+  });
+
+  console.log(`[Admin Account Search] Found ${matchedInsts.length} matching institutions for ${searchPhone}`);
+
+  for (const inst of matchedInsts) {
+    // Check A: Profile with institution_id
+    try {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, role, institution_id')
+        .eq('institution_id', inst.id)
+        .order('created_at', { ascending: false });
+
+      if (profiles && profiles.length > 0) {
+        const adminProfile = profiles.find(p => ['madrasah_admin', 'super_admin', 'admin', 'manager'].includes(p.role)) || profiles[0];
+        const { data: authUser } = await supabase.auth.admin.getUserById(adminProfile.id);
+        return {
+          userId: adminProfile.id,
+          institutionId: inst.id,
+          userEmail: authUser?.user?.email || inst.email || null,
+          institutionName: inst.name || 'Institution'
+        };
+      }
+    } catch (e) {}
+
+    // Check B: Direct institution ID as User ID
+    try {
+      const { data: authUser } = await supabase.auth.admin.getUserById(inst.id);
+      if (authUser?.user?.id) {
+        return {
+          userId: authUser.user.id,
+          institutionId: inst.id,
+          userEmail: authUser.user.email || inst.email || null,
+          institutionName: inst.name || 'Institution'
+        };
+      }
+    } catch (e) {}
+
+    // Check C: Institution email matched to Auth User
+    if (inst.email) {
+      try {
+        const { data: userList } = await supabase.auth.admin.listUsers();
+        const matchedUser = userList?.users?.find(u => u.email?.trim().toLowerCase() === inst.email.trim().toLowerCase());
+        if (matchedUser) {
+          return {
+            userId: matchedUser.id,
+            institutionId: inst.id,
+            userEmail: matchedUser.email || null,
+            institutionName: inst.name || 'Institution'
+          };
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. Direct Fallback: Check Profiles table directly by phone
+  try {
+    const { data: candidateProfiles } = await supabase
+      .from('profiles')
+      .select('id, role, institution_id, phone')
+      .limit(100);
+
+    if (candidateProfiles) {
+      const matchedProfile = candidateProfiles.find((p: any) => {
+        if (!p.phone) return false;
+        const clean = normalizePhone(String(p.phone));
+        return clean === searchPhone || clean.endsWith(last10Digits);
+      });
+
+      if (matchedProfile) {
+        const { data: authUser } = await supabase.auth.admin.getUserById(matchedProfile.id);
+        return {
+          userId: matchedProfile.id,
+          institutionId: matchedProfile.institution_id || matchedProfile.id,
+          userEmail: authUser?.user?.email || null,
+          institutionName: 'Admin Account'
+        };
+      }
+    }
+  } catch (e) {
+    // phone column might not exist in profiles
+  }
+
+  return null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { action } = req.body || {};
   const supabase = getSupabaseAdmin();
@@ -118,68 +260,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!phone) return res.status(400).json({ error: 'ফোন নম্বর দেওয়া আবশ্যক।' });
 
     const searchPhone = normalizePhone(phone);
-    const last10Digits = searchPhone.slice(-10);
-    const last8Digits = searchPhone.slice(-8);
-
     if (searchPhone.length < 10) {
       return res.status(400).json({ error: 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017...)' });
     }
 
-    let adminMatch = null;
-
-    // 1. Search in institutions table
-    const { data: insts } = await supabase
-      .from('institutions')
-      .select('id, phone, name')
-      .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (insts && insts.length > 0) {
-      const instIds = insts.map(i => i.id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, role, institution_id')
-        .in('institution_id', instIds)
-        .in('role', ['madrasah_admin', 'super_admin'])
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (profiles && profiles.length > 0) {
-        const profile = profiles[0];
-        const inst = insts.find(i => i.id === profile.institution_id) || insts[0];
-        const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
-        adminMatch = {
-          userId: profile.id,
-          institutionId: inst.id,
-          userEmail: authUser?.user?.email || null
-        };
-      }
-    }
-
-    // 2. Direct fallback: Search in profiles table if phone column exists in profiles
-    if (!adminMatch) {
-      try {
-        const { data: directProfiles } = await supabase
-          .from('profiles')
-          .select('id, role, institution_id')
-          .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
-          .in('role', ['madrasah_admin', 'super_admin'])
-          .limit(1);
-
-        if (directProfiles && directProfiles.length > 0) {
-          const profile = directProfiles[0];
-          const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
-          adminMatch = {
-            userId: profile.id,
-            institutionId: profile.institution_id,
-            userEmail: authUser?.user?.email || null
-          };
-        }
-      } catch (e) {
-        // Safe catch if phone column does not exist on profiles table
-      }
-    }
+    const adminMatch = await findAdminAccountByPhone(phone);
 
     if (!adminMatch) {
       return res.status(404).json({ error: 'এই ফোন নম্বরের সাথে কোনো নিবন্ধিত অ্যাডমিন অ্যাকাউন্ট পাওয়া যায়নি।' });
@@ -269,63 +354,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Mark all pending OTPs for this phone as verified upon successful reset
     await supabase.from('otp_verifications').update({ verified_at: new Date().toISOString() }).eq('identifier', searchPhone).is('verified_at', null);
 
-    const last10Digits = searchPhone.slice(-10);
-    const last8Digits = searchPhone.slice(-8);
-    let resetDone = false;
-    let adminEmail = '';
+    const adminMatch = await findAdminAccountByPhone(phone);
 
-    // Reset Admin Account
-    let targetProfileId: string | null = null;
-
-    const { data: insts } = await supabase
-      .from('institutions')
-      .select('id')
-      .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (insts && insts.length > 0) {
-      const instIds = insts.map(i => i.id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id')
-        .in('institution_id', instIds)
-        .in('role', ['madrasah_admin', 'super_admin'])
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (profiles && profiles.length > 0) {
-        targetProfileId = profiles[0].id;
-      }
+    if (!adminMatch?.userId) {
+      return res.status(404).json({ error: 'অ্যাডমিন অ্যাকাউন্ট খুঁজে পাওয়া যায়নি।' });
     }
 
-    if (!targetProfileId) {
-      try {
-        const { data: directProfiles } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`phone.eq.${searchPhone},phone.ilike.%${last10Digits}%,phone.ilike.%${last8Digits}%`)
-          .in('role', ['madrasah_admin', 'super_admin'])
-          .limit(1);
-        if (directProfiles && directProfiles.length > 0) {
-          targetProfileId = directProfiles[0].id;
-        }
-      } catch (e) {}
-    }
-
-    if (targetProfileId) {
-      const updateRes = await supabase.auth.admin.updateUserById(targetProfileId, { password: newPassword });
-      if (!updateRes.error) {
-        resetDone = true;
-        adminEmail = updateRes.data.user.email || '';
-      } else {
-        console.error('Failed to update Supabase admin auth:', updateRes.error);
-      }
-    }
-
-    if (!resetDone) {
+    const updateRes = await supabase.auth.admin.updateUserById(adminMatch.userId, { password: newPassword });
+    if (updateRes.error) {
+      console.error('Failed to update Supabase admin auth:', updateRes.error);
       return res.status(500).json({ error: 'অ্যাডমিন পাসওয়ার্ড আপডেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' });
     }
+
+    const adminEmail = updateRes.data.user.email || adminMatch.userEmail || '';
 
     return res.status(200).json({
       success: true,
