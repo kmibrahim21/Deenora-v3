@@ -386,51 +386,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rawFileUrl = `https://api.awajdigital.com${cleanPath}`;
       }
 
-      let supabaseFileUrl = '';
-      if (fileBuffer && fileBuffer.length > 0) {
-        try {
-          try {
-            await supabase.storage.createBucket('voice-templates', { public: true });
-          } catch (bErr) {
-            // Bucket already exists
-          }
-
-          const storagePath = `voices/${Date.now()}_${cleanFilename}`;
-          const { data: uploadData, error: uploadErr } = await supabase.storage
-            .from('voice-templates')
-            .upload(storagePath, fileBuffer, {
-              contentType: finalContentType,
-              upsert: true
-            });
-
-          if (!uploadErr && uploadData) {
-            const { data: publicUrlData } = supabase.storage
-              .from('voice-templates')
-              .getPublicUrl(storagePath);
-            if (publicUrlData?.publicUrl) {
-              supabaseFileUrl = publicUrlData.publicUrl;
-            }
-          } else if (uploadErr) {
-            console.warn('Supabase storage upload error:', uploadErr.message);
-          }
-        } catch (sErr) {
-          console.warn('Supabase storage upload fallback warning:', sErr);
-        }
-      }
-
-      let dataUrlFallback = '';
-      if (body.audio_base64 || body.audioBase64 || body.audio) {
-        const rawB64 = body.audio_base64 || body.audioBase64 || body.audio;
-        if (typeof rawB64 === 'string') {
-          if (rawB64.startsWith('data:audio/')) {
-            dataUrlFallback = rawB64;
-          } else {
-            dataUrlFallback = `data:${finalContentType};base64,${rawB64}`;
-          }
-        }
-      }
-
-      const fileUrl = supabaseFileUrl || rawFileUrl || dataUrlFallback;
+      // Awaj Digital audio URL directly (not stored in Supabase storage as requested)
+      const fileUrl = rawFileUrl || '';
       const providerVoiceId = responseData.id || responseData.voice_id || responseData.data?.id || responseData.result?.id || '';
       const providerVoiceName = responseData.name || responseData.title || voiceName;
 
@@ -439,7 +396,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (targetInstId) {
         try {
           const isSuper = body.is_super_admin === true || body.is_super_admin === 'true';
-          const initStatus = isSuper ? 'approved' : 'pending';
+          const isManager = body.is_manager === true || body.is_manager === 'true';
+          const initStatus = (isSuper || isManager) ? 'approved' : 'pending';
           const inputDuration = body.duration ? Number(body.duration) : null;
           const { data: dbItem, error: dbErr } = await supabase.from('voice_templates').insert({
             institution_id: targetInstId,
@@ -475,9 +433,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'templates' || action === 'list_templates') {
       const instId = (req.query.institution_id || req.body?.institution_id || '') as string;
       const isSuper = req.query.is_super_admin === 'true' || req.body?.is_super_admin === true;
+      const isManager = req.query.is_manager === 'true' || req.body?.is_manager === true;
 
       let query = supabase.from('voice_templates').select('*');
-      if (!isSuper && instId) {
+      if (!isSuper && !isManager && instId) {
         query = query.eq('institution_id', instId);
       }
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -554,7 +513,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           try {
             const { data: dbVoices } = await supabase
               .from('voice_templates')
-              .select('id, file_url, title, provider_voice_name, provider_voice_id, is_active, admin_status, provider_status')
+              .select('id, file_url, title, provider_voice_name, provider_voice_id, status, admin_status, provider_status')
               .or(`id.eq.${vKeyStr},provider_voice_id.eq.${vKeyStr},title.eq.${vKeyStr},provider_voice_name.eq.${vKeyStr},title.ilike.%${vKeyStr}%,provider_voice_name.ilike.%${vKeyStr}%`)
               .limit(1);
             if (dbVoices && dbVoices[0]) {

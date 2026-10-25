@@ -1175,7 +1175,7 @@ export default async function handler(req, res) {
         .update({
           admin_status: 'approved',
           provider_status: 'approved',
-          is_active: true
+          status: 'approved'
         })
         .eq('id', targetId)
         .select()
@@ -1193,7 +1193,8 @@ export default async function handler(req, res) {
         .from('voice_templates')
         .update({
           admin_status: 'rejected',
-          provider_status: 'rejected'
+          provider_status: 'rejected',
+          status: 'rejected'
         })
         .eq('id', targetId)
         .select()

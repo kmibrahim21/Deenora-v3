@@ -67,6 +67,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const isPreSelected = preSelectedStudentIds.length > 0;
   const isInstPreSelected = preSelectedInstitutionIds.length > 0;
   const isSuperAdmin = role === 'super_admin';
+  const isManager = role === 'manager' || profile?.role === 'manager';
+  const canApproveVoice = isSuperAdmin || isManager;
 
   if (!canUseVoice) {
     return (
@@ -243,9 +245,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }, [voices, voiceStatusFilter]);
 
   const selectableVoices = useMemo(() => {
-    if (isSuperAdmin) return voices;
+    if (canApproveVoice) return voices;
     return voices.filter(v => (v.admin_status || v.provider_status || 'approved') === 'approved');
-  }, [voices, isSuperAdmin]);
+  }, [voices, canApproveVoice]);
 
   const pendingVoicesCount = useMemo(() => {
     return voices.filter(v => (v.admin_status || v.provider_status) === 'pending').length;
@@ -693,7 +695,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     try {
       setApiError(null);
 
-      if (isSuperAdmin && allInstitutions.length === 0) {
+      if (canApproveVoice && allInstitutions.length === 0) {
         const { data: insts } = await supabase.from('institutions').select('*').neq('name', 'SYSTEM_GLOBAL_INTERNAL');
         if (insts) setAllInstitutions(insts);
       }
@@ -706,7 +708,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         const params = new URLSearchParams({
           action: 'templates',
           institution_id: madrasah?.id || '',
-          is_super_admin: isSuperAdmin ? 'true' : 'false'
+          is_super_admin: isSuperAdmin ? 'true' : 'false',
+          is_manager: isManager ? 'true' : 'false'
         });
         const res = await fetch(`/api/awaj?${params.toString()}`);
         if (res.ok) {
@@ -723,7 +726,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // 2. Fallback to direct client query if backend endpoint was not available
       if (!fetchSuccess) {
         let templateQuery = supabase.from('voice_templates').select('*');
-        if (!isSuperAdmin && madrasah?.id) {
+        if (!canApproveVoice && madrasah?.id) {
           templateQuery = templateQuery.eq('institution_id', madrasah.id);
         }
         const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
@@ -1685,12 +1688,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const voice = voices.find(v => v.id === selectedVoiceId);
       if (!voice) throw new Error('Selected voice not found.');
 
-      if (!isSuperAdmin) {
+      if (!canApproveVoice) {
         const voiceStatus = voice.admin_status || voice.provider_status || 'approved';
         if (voiceStatus !== 'approved') {
           throw new Error(lang === 'bn' 
-            ? 'এই ভয়েস বার্তাটি এখনো পেন্ডিং আছে। সুপার এডমিন অনুমোদন করার পরেই ব্রডকাস্ট করা সম্ভব।' 
-            : 'This voice message is pending Super Admin approval.');
+            ? 'এই ভয়েস বার্তাটি এখনো পেন্ডিং আছে। এডমিন বা ম্যানেজার অনুমোদন করার পরেই ব্রডকাস্ট করা সম্ভব।' 
+            : 'This voice message is pending Admin/Manager approval.');
         }
       }
 
@@ -1919,6 +1922,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           filename: uploadFile.name,
           institution_id: madrasah.id,
           is_super_admin: isSuperAdmin,
+          is_manager: isManager,
           duration: effectiveDuration
         })
       });
@@ -1929,10 +1933,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         throw new Error(resData.message || resData.error || (lang === 'bn' ? 'ভয়েস ফাইল আপলোড করতে সমস্যা হয়েছে।' : 'Failed to upload voice audio.'));
       }
 
-      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || base64Audio || '';
+      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
       const providerVoiceName = resData.name || resData.title || cleanTitle;
-      const initialStatus = isSuperAdmin ? 'approved' : 'pending';
+      const initialStatus = canApproveVoice ? 'approved' : 'pending';
 
       let newVoiceRecord = resData.voice_template;
       if (newVoiceRecord) {
@@ -1982,9 +1986,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
-        message: isSuperAdmin 
+        message: canApproveVoice 
           ? (lang === 'bn' ? 'ভয়েস সফলভাবে সংরক্ষিত ও সরাসরি অনুমোদন হয়েছে।' : 'Voice uploaded and approved.')
-          : (lang === 'bn' ? 'ভয়েস সফলভাবে সংরক্ষিত হয়েছে! এটি এখন পেন্ডিং অবস্থায় আছে। সুপার এডমিন অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Voice uploaded successfully! Pending approval from Super Admin.')
+          : (lang === 'bn' ? 'ভয়েস সফলভাবে সংরক্ষিত হয়েছে! এটি এখন পেন্ডিং অবস্থায় আছে। এডমিন / ম্যানেজার অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Voice uploaded successfully! Pending approval from Admin / Manager.')
       });
 
       setUploadName('');
@@ -2448,7 +2452,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   <div className="space-y-4">
                     <div className="flex items-center justify-between px-1">
                       <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest">{t('select_voice', lang)}</h4>
-                      {pendingVoicesCount > 0 && !isSuperAdmin && (
+                      {pendingVoicesCount > 0 && !canApproveVoice && (
                         <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
                           <Clock size={10} /> {pendingVoicesCount} টি অপেক্ষমাণ
                         </span>
@@ -2468,9 +2472,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                               <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
                                 <span className="font-black font-noto">{v.title}</span>
                                 {voiceDurations[v.id] ? (
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                    {voiceDurations[v.id]}s ({getPulsesForVoice(v.id)} {getPulsesForVoice(v.id) === 1 ? 'Pulse' : 'Pulses'})
-                                  </span>
+                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                     {voiceDurations[v.id]}s ({getPulsesForVoice(v.id)} {getPulsesForVoice(v.id) === 1 ? 'Pulse' : 'Pulses'})
+                                   </span>
                                 ) : null}
                               </button>
                             ))
@@ -2478,7 +2482,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                             <div className="p-4 text-center">
                               <p className="text-xs font-bold text-slate-400 font-noto">
                                 {pendingVoicesCount > 0 
-                                  ? (lang === 'bn' ? 'আপনার আপলোডকৃত ভয়েসটি সুপার এডমিনের অনুমোদনের অপেক্ষায় আছে।' : 'Your voice is pending Super Admin approval.')
+                                  ? (lang === 'bn' ? 'আপনার আপলোডকৃত ভয়েসটি এডমিন / ম্যানেজারের অনুমোদনের অপেক্ষায় আছে।' : 'Your voice is pending Admin / Manager approval.')
                                   : (lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস পাওয়া যায়নি।' : 'No approved voices found.')}
                               </p>
                             </div>
@@ -2486,10 +2490,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                         </div>
                       )}
                     </div>
-                    {pendingVoicesCount > 0 && !isSuperAdmin && (
+                    {pendingVoicesCount > 0 && !canApproveVoice && (
                       <p className="text-[10px] font-bold text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-center gap-1.5 font-noto">
                         <Info size={12} className="shrink-0 text-amber-600" />
-                        <span>{lang === 'bn' ? `${pendingVoicesCount} টি ভয়েস বার্তা পেন্ডিং অবস্থায় রয়েছে। সুপার এডমিন অনুমোদন দিলে এখানে ব্যবহারের জন্য আসবে।` : `${pendingVoicesCount} voice(s) pending Super Admin approval.`}</span>
+                        <span>{lang === 'bn' ? `${pendingVoicesCount} টি ভয়েস বার্তা পেন্ডিং অবস্থায় রয়েছে। এডমিন / ম্যানেজার অনুমোদন দিলে এখানে ব্যবহারের জন্য আসবে।` : `${pendingVoicesCount} voice(s) pending Admin / Manager approval.`}</span>
                       </p>
                     )}
                   </div>
@@ -2569,8 +2573,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               </div>
             </div>
 
-            {/* Super Admin Pending Voices Alert Banner */}
-            {isSuperAdmin && pendingVoicesCount > 0 && (
+            {/* Super Admin / Manager Pending Voices Alert Banner */}
+            {canApproveVoice && pendingVoicesCount > 0 && (
               <div className="bg-amber-500/10 border-2 border-amber-500/30 p-4 sm:p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 shadow-sm">
                 <div className="flex items-center gap-3.5">
                   <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
@@ -2597,7 +2601,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
             {/* Voice Status Filter Tabs */}
             <div className="flex items-center gap-2 px-1 overflow-x-auto py-1">
-              {(isSuperAdmin ? (['pending', 'approved', 'awaj'] as const) : (['pending', 'approved'] as const)).map(statusKey => {
+              {(canApproveVoice ? (['pending', 'approved', 'awaj'] as const) : (['pending', 'approved'] as const)).map(statusKey => {
                 const count = voices.filter(v => {
                   const status = v.admin_status || v.provider_status || 'approved';
                   if (statusKey === 'pending') return status === 'pending';
@@ -2617,7 +2621,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   >
                     <span>
                       {statusKey === 'pending' 
-                        ? (isSuperAdmin ? (lang === 'bn' ? 'ইউজার পেন্ডিং ভয়েস' : 'User Pending') : (lang === 'bn' ? 'পেন্ডিং (অপেক্ষমাণ)' : 'Pending'))
+                        ? (canApproveVoice ? (lang === 'bn' ? 'ইউজার পেন্ডিং ভয়েস' : 'User Pending') : (lang === 'bn' ? 'পেন্ডিং (অপেক্ষমাণ)' : 'Pending'))
                         : statusKey === 'approved' 
                         ? (lang === 'bn' ? 'অনুমোদিত ভয়েস' : 'Approved') 
                         : (lang === 'bn' ? 'আওয়াজ রেজিস্টার্ড ভয়েস' : 'Awaj Register')}
@@ -2680,7 +2684,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                      <Clock size={10} className="text-blue-500" />
                                      {v.duration || voiceDurations[v.id] ? `${v.duration || voiceDurations[v.id]} সেকেন্ড` : 'ডিউরেশন...' }
                                    </span>
-                                   {isSuperAdmin && (
+                                   {canApproveVoice && (
                                      <span className="text-[9px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit font-noto">
                                        <Building2 size={10} className="text-blue-500" />
                                        {allInstitutions.find(i => i.id === v.institution_id)?.name || 'সিস্টেম / গ্লোবাল'}
@@ -2709,8 +2713,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                             </div>
                          </div>
 
-                         {/* Super Admin Approval Action Buttons if Pending */}
-                         {isPending && isSuperAdmin && (
+                         {/* Admin / Manager Approval Action Buttons if Pending */}
+                         {isPending && canApproveVoice && (
                            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                              <button
                                onClick={() => handleApproveVoice(v.id)}
@@ -2730,8 +2734,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                          )}
 
 
-                         {/* Super Admin Re-approve Action if Rejected */}
-                         {isRejected && isSuperAdmin && (
+                         {/* Admin / Manager Re-approve Action if Rejected */}
+                         {isRejected && canApproveVoice && (
                            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                              <button
                                onClick={() => handleApproveVoice(v.id)}
@@ -2743,10 +2747,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                            </div>
                          )}
                          {/* Info note for regular user when pending */}
-                         {isPending && !isSuperAdmin && (
+                         {isPending && !canApproveVoice && (
                            <p className="text-[10px] font-bold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100 flex items-center gap-1.5 font-noto">
                              <Info size={13} className="shrink-0 text-amber-600" />
-                             <span>{lang === 'bn' ? 'এটি এখন পেন্ডিং অবস্থায় আছে। সুপার এডমিন অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Pending approval from Super Admin.'}</span>
+                             <span>{lang === 'bn' ? 'এটি এখন পেন্ডিং অবস্থায় আছে। এডমিন / ম্যানেজার অনুমোদন দিলেই ব্রডকাস্টে ব্যবহার করা যাবে।' : 'Pending approval from Admin / Manager.'}</span>
                            </p>
                          )}
 
