@@ -1,8 +1,26 @@
 
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
+let lastVoiceRefundAudit = 0;
+const serverAdminCache = {
+  globalStats: { data: null as any, timestamp: 0 },
+  institutions: { data: null as any, timestamp: 0 },
+  invalidate() {
+    this.globalStats.data = null;
+    this.globalStats.timestamp = 0;
+    this.institutions.data = null;
+    this.institutions.timestamp = 0;
+  }
+};
+const SERVER_CACHE_TTL = 45 * 1000; // 45 seconds TTL to prevent statement timeout & connection pool exhaustion
+
 async function autoFixVoiceRefunds(supabase: any) {
   try {
+    const now = Date.now();
+    // Throttle: Only run at most once per hour to avoid locking Postgres on every admin call
+    if (now - lastVoiceRefundAudit < 60 * 60 * 1000) return;
+    lastVoiceRefundAudit = now;
+
     const { data: broadcasts } = await supabase
       .from('voice_broadcasts')
       .select('id, institution_id, estimated_cost, refunded_amount')
@@ -148,15 +166,25 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Forbidden: Requires Super Admin or Manager role' });
     }
 
+    // Invalidate cache if action is a mutation/write action
+    if (action && typeof action === 'string' && !action.startsWith('get_') && !action.startsWith('audit_') && !action.startsWith('check_')) {
+      serverAdminCache.invalidate();
+    }
+
     // Auto-fix any voice balance overflow issues transparently in background
     await autoFixVoiceRefunds(supabase);
 
     if (action === 'get_global_stats') {
+      const now = Date.now();
+      if (serverAdminCache.globalStats.data && (now - serverAdminCache.globalStats.timestamp < SERVER_CACHE_TTL)) {
+        return res.status(200).json(serverAdminCache.globalStats.data);
+      }
+
       const [studentsRes, classesRes, teachersRes, transactionsRes, instsRes, stockRes, pendingRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('teachers').select('*', { count: 'exact', head: true }),
-        supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(10000),
+        supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(2500),
         supabase.from('institutions').select('sms_balance, balance, is_active, institution_type, config_json').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL'),
         supabase.from('admin_sms_stock').select('remaining_sms').single(),
         supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending').not('transaction_id', 'like', 'PENDING_%')
@@ -206,7 +234,7 @@ export default async function handler(req, res) {
       // But instsRes currently doesn't have it.
       // We'll rely on the head:true counts for totals.
 
-      return res.status(200).json({
+      const globalStatsResult = {
         totalStudents: studentsRes.count || 0,
         totalClasses: classesRes.count || 0,
         totalTeachers: teachersRes.count || 0,
@@ -224,7 +252,12 @@ export default async function handler(req, res) {
         totalVoiceBalance,
         adminSMSStock: adminStock,
         typeBreakdown
-      });
+      };
+
+      serverAdminCache.globalStats.data = globalStatsResult;
+      serverAdminCache.globalStats.timestamp = now;
+
+      return res.status(200).json(globalStatsResult);
     }
 
     if (action === 'audit_voice_balances') {
@@ -407,6 +440,11 @@ export default async function handler(req, res) {
     }
 
     if (action === 'get_all_institutions') {
+      const now = Date.now();
+      if (serverAdminCache.institutions.data && (now - serverAdminCache.institutions.timestamp < SERVER_CACHE_TTL)) {
+        return res.status(200).json({ institutions: serverAdminCache.institutions.data });
+      }
+
       const { data, error } = await supabase.from('institutions')
         .select('*, student_count:students(count), class_count:classes(count), teacher_count:teachers(count)')
         .eq('is_super_admin', false)
@@ -467,7 +505,10 @@ export default async function handler(req, res) {
           direct_voice_balance: directCounts[inst.id]?.balance || 0
         };
       });
-      
+
+      serverAdminCache.institutions.data = flattened;
+      serverAdminCache.institutions.timestamp = now;
+
       return res.status(200).json({ institutions: flattened });
     }
 
