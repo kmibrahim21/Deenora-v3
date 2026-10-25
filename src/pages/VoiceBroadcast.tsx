@@ -2246,29 +2246,35 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         </div>
       </div>
 
-      <div className="relative h-[60px] bg-white rounded-[2.5rem] p-1.5 shadow-bubble border border-slate-100 flex items-center mb-8 overflow-hidden">
-        <div 
-          className="absolute h-[48px] bg-[#2563EB] rounded-[2.5rem] transition-all duration-500 shadow-premium"
-          style={{ 
-            width: availableTabs.length > 0 ? `${100 / availableTabs.length}%` : '0',
-            left: availableTabs.length > 0 ? `${(Math.max(0, availableTabs.indexOf(activeTab)) * 100) / availableTabs.length}%` : '0',
-            transform: 'translateX(0)'
-          }}
-        />
-        {availableTabs.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`relative flex-1 h-full rounded-[2.5rem] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all z-10 ${activeTab === tab ? 'text-white' : 'text-slate-400'}`}>
-            {tab === 'broadcast' ? <Send size={16} /> : 
-             tab === 'templates' ? <Mic size={16} /> : 
-             tab === 'history' ? <History size={16} /> :
-             <CreditCard size={16} />}
-            <span className="font-noto truncate">
-              {tab === 'broadcast' ? t('broadcast', lang) : 
-               tab === 'templates' ? t('voice', lang) : 
-               tab === 'history' ? t('history', lang) :
-               t('recharge', lang)}
-            </span>
-          </button>
-        ))}
+      {/* Mobile-Responsive Navigation Tabs */}
+      <div className="bg-white rounded-2xl sm:rounded-[2.5rem] p-1.5 shadow-bubble border border-slate-100 mb-6 sm:mb-8">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+          {availableTabs.map(tab => {
+            const isActive = activeTab === tab;
+            return (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)} 
+                className={`flex-1 min-w-[85px] sm:min-w-0 h-11 sm:h-12 rounded-xl sm:rounded-[2rem] font-black text-xs sm:text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer shrink-0 sm:shrink ${
+                  isActive 
+                    ? 'bg-[#2563EB] text-white shadow-md shadow-blue-500/20' 
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {tab === 'broadcast' ? <Send size={15} className="shrink-0" /> : 
+                 tab === 'templates' ? <Mic size={15} className="shrink-0" /> : 
+                 tab === 'history' ? <History size={15} className="shrink-0" /> :
+                 <CreditCard size={15} className="shrink-0" />}
+                <span className="font-noto truncate">
+                  {tab === 'broadcast' ? t('broadcast', lang) : 
+                   tab === 'templates' ? t('voice', lang) : 
+                   tab === 'history' ? t('history', lang) :
+                   t('recharge', lang)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -2556,17 +2562,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   {lang === 'bn' ? 'ব্রডকাস্টে ব্যবহারের জন্য অনুমোদিত ও পেন্ডিং ভয়েস বার্তা তালিকা' : 'List of approved and pending voice templates'}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button 
                   onClick={() => setShowUploadModal(true)} 
-                  className="bg-[#2563EB] hover:bg-blue-700 text-white px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200 cursor-pointer"
+                  className="bg-[#2563EB] hover:bg-blue-700 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200 cursor-pointer font-noto"
                 >
-                  <Plus size={16} /> <span>{lang === 'bn' ? 'নতুন ভয়েস আপলোড / রেকর্ড' : 'Upload / Record Voice'}</span>
+                  <Plus size={16} /> <span>{canApproveVoice ? (lang === 'bn' ? 'নতুন ভয়েস আপলোড / রেকর্ড' : 'Upload / Record Voice') : (lang === 'bn' ? 'নতুন ভয়েস আপলোড' : 'Upload Voice')}</span>
                 </button>
                 <button 
                   onClick={() => fetchVoices(true)} 
                   disabled={loading} 
-                  className="bg-blue-50 text-[#2563EB] px-3.5 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 hover:bg-blue-100 cursor-pointer"
+                  className="bg-blue-50 text-[#2563EB] px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 hover:bg-blue-100 cursor-pointer font-noto"
                 >
                   {loading ? <Loader2 className="animate-spin" size={14} /> : <History size={14} />} {t('sync_voices', lang)}
                 </button>
@@ -2645,22 +2651,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                     const audioTargetUrl = v.file_url || v.preview_url || v.url;
 
                     return (
-                      <div key={v.id} className="bg-white p-5 rounded-[2.2rem] border border-slate-100 shadow-bubble space-y-3">
-                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                      <div key={v.id} className="bg-white p-4 sm:p-5 rounded-[2.2rem] border border-slate-100 shadow-bubble space-y-3 min-w-0">
+                         <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 mt-0.5 ${
                                  isPending ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                  isRejected ? 'bg-red-50 text-red-600 border-red-100' :
                                  'bg-emerald-50 text-emerald-600 border-emerald-100'
                                }`}>
                                   <Mic size={18} />
                                </div>
-                               <div>
-                                 <div className="flex items-center gap-1.5">
-                                   <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
+                               <div className="min-w-0 flex-1">
+                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                   <h4 className="font-black text-[#1E3A8A] text-sm sm:text-[15px] font-noto break-words">{v.title}</h4>
                                    <button
                                      onClick={() => setEditingVoice({ id: v.id, title: v.title })}
-                                     className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                                     className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer shrink-0"
                                      title={lang === 'bn' ? 'ভয়েস নাম এডিট করুন' : 'Edit Title'}
                                    >
                                      <Edit2 size={13} />
@@ -2691,13 +2697,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                      </span>
                                    )}
                                  </div>
-                               </div>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               {audioTargetUrl && (
                                 <button 
                                   onClick={() => togglePlay(v.id, audioTargetUrl)}
-                                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
+                                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
                                   title={lang === 'bn' ? 'প্লে করে শুনুন' : 'Play Audio'}
                                 >
                                   {playingId === v.id ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
@@ -2705,7 +2711,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                               )}
                               <button 
                                 onClick={() => setShowDeleteConfirm({ id: v.id, providerId: v.provider_voice_id, fileUrl: v.file_url, title: v.title })}
-                                className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors cursor-pointer"
+                                className="w-9 h-9 sm:w-10 sm:h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors cursor-pointer"
                                 title="মুছে ফেলুন"
                               >
                                 <Trash2 size={16} />
@@ -3083,13 +3089,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                         else if (['failed', 'no answer', 'busy', 'cancelled', 'rejected', 'declined'].includes(status)) statusColor = 'text-red-700 bg-red-100';
                                         
                                         return (
-                                          <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-                                            <div className="flex items-center gap-3">
-                                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${statusColor.replace('text-', 'bg-').replace('700', '100').replace('bg-', 'text-')}`}>
+                                          <div key={idx} className="flex items-center justify-between gap-2.5 bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-100 shadow-sm min-w-0">
+                                            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${statusColor.replace('text-', 'bg-').replace('700', '100').replace('bg-', 'text-')}`}>
                                                 {['answered', 'success', 'completed'].includes(status) ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                                               </div>
                                               <div>
-                                                <p className="font-black text-[#1E3A8A] text-xs">
+                                                <p className="font-black text-[#1E3A8A] text-xs truncate">
                                                   {studentName ? (
                                                     <>
                                                       {studentName}
@@ -3106,7 +3112,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                                 )}
                                               </div>
                                             </div>
-                                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${statusColor}`}>
+                                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 sm:py-1 rounded-full shrink-0 ${statusColor}`}>
                                               {status}
                                             </span>
                                           </div>
@@ -3625,56 +3631,87 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
               <div className="space-y-3">
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 block font-noto">
-                  {lang === 'bn' ? 'অডিও ইনপুট বা সরাসরি রেকর্ড করুন *' : 'Audio Input or Live Record *'}
+                  {canApproveVoice 
+                    ? (lang === 'bn' ? 'অডিও ইনপুট বা সরাসরি রেকর্ড করুন *' : 'Audio Input or Live Record *')
+                    : (lang === 'bn' ? 'অডিও ফাইল নির্বাচন করুন (MP3, WAV, M4A, OGG) *' : 'Select Audio File (MP3, WAV, M4A, OGG) *')}
                 </label>
 
                 {/* Sleek Recording & Upload Zone Card */}
                 <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 p-5 rounded-[2rem] border-2 border-dashed border-blue-200/80 text-center space-y-4 shadow-xs">
-                  <div className="flex items-center justify-center gap-3">
-                    {!isRecording ? (
-                      <button 
-                        type="button" 
-                        onClick={startRecording}
-                        className="px-6 py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-xs flex items-center gap-2.5 active:scale-95 transition-all shadow-md shadow-red-200 cursor-pointer font-noto"
-                      >
-                        <Mic size={18} className="animate-pulse" />
-                        <span>{lang === 'bn' ? 'মাইক্রোফোনে রেকর্ড শুরু করুন' : 'Start Live Recording'}</span>
-                      </button>
-                    ) : (
-                      <button 
-                        type="button" 
-                        onClick={stopRecording}
-                        className="px-6 py-3.5 rounded-full bg-red-700 hover:bg-red-800 text-white font-black text-xs flex items-center gap-2.5 active:scale-95 transition-all cursor-pointer animate-pulse font-noto shadow-lg shadow-red-300"
-                      >
-                        <Square size={16} />
-                        <span>{lang === 'bn' ? `রেকর্ডিং থামান (${Math.floor(recordingTime / 60)}:${('0' + (recordingTime % 60)).slice(-2)})` : `Stop Recording (${recordingTime}s)`}</span>
-                      </button>
-                    )}
-                  </div>
+                  {/* Live Recording: Only visible to Super Admin / Manager; completely hidden in User Panel */}
+                  {canApproveVoice && (
+                    <div className="flex items-center justify-center gap-3">
+                      {!isRecording ? (
+                        <button 
+                          type="button" 
+                          onClick={startRecording}
+                          className="px-6 py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-xs flex items-center gap-2.5 active:scale-95 transition-all shadow-md shadow-red-200 cursor-pointer font-noto"
+                        >
+                          <Mic size={18} className="animate-pulse" />
+                          <span>{lang === 'bn' ? 'মাইক্রোফোনে রেকর্ড শুরু করুন' : 'Start Live Recording'}</span>
+                        </button>
+                      ) : (
+                        <button 
+                          type="button" 
+                          onClick={stopRecording}
+                          className="px-6 py-3.5 rounded-full bg-red-700 hover:bg-red-800 text-white font-black text-xs flex items-center gap-2.5 active:scale-95 transition-all cursor-pointer animate-pulse font-noto shadow-lg shadow-red-300"
+                        >
+                          <Square size={16} />
+                          <span>{lang === 'bn' ? `রেকর্ডিং থামান (${Math.floor(recordingTime / 60)}:${('0' + (recordingTime % 60)).slice(-2)})` : `Stop Recording (${recordingTime}s)`}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {!uploadFile && (
                     <>
-                      <div className="relative flex items-center justify-center my-2">
-                        <div className="border-t border-slate-200 w-full" />
-                        <span className="bg-slate-50 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest absolute font-noto">
-                          {lang === 'bn' ? 'অথবা অডিও ফাইল আপলোড করুন' : 'OR Upload Audio File'}
-                        </span>
-                      </div>
+                      {canApproveVoice && (
+                        <div className="relative flex items-center justify-center my-2">
+                          <div className="border-t border-slate-200 w-full" />
+                          <span className="bg-slate-50 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest absolute font-noto">
+                            {lang === 'bn' ? 'অথবা অডিও ফাইল আপলোড করুন' : 'OR Upload Audio File'}
+                          </span>
+                        </div>
+                      )}
 
-                      <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white border-2 border-blue-100 hover:border-blue-400 text-slate-700 font-bold text-xs shadow-sm transition-all w-full font-noto group">
-                        <Upload size={18} className="text-[#2563EB] group-hover:scale-110 transition-transform" />
-                        <span>{lang === 'bn' ? 'কম্পিউটার/মোবাইল থেকে বাছুন (MP3, WAV, M4A, OGG)' : 'Choose Audio File (MP3, WAV, M4A, OGG)'}</span>
-                        <input 
-                          type="file" 
-                          accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac,.webm" 
-                          className="hidden" 
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              setUploadFile(e.target.files[0]);
-                            }
-                          }} 
-                        />
-                      </label>
+                      {!canApproveVoice ? (
+                        <label className="cursor-pointer flex flex-col items-center justify-center gap-2.5 px-5 py-6 rounded-2xl bg-white border-2 border-blue-100 hover:border-blue-400 text-slate-700 font-bold text-xs shadow-sm transition-all w-full font-noto group hover:shadow-md">
+                          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                            <Upload size={22} />
+                          </div>
+                          <span className="text-sm font-black text-[#1E3A8A]">
+                            {lang === 'bn' ? 'মোবাইল বা কম্পিউটার থেকে অডিও ফাইল বেছে নিন' : 'Choose Audio File from Device'}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-400">
+                            {lang === 'bn' ? 'সাপোর্টেড ফরম্যাট: MP3, WAV, M4A, OGG, AAC' : 'Supported: MP3, WAV, M4A, OGG, AAC'}
+                          </span>
+                          <input 
+                            type="file" 
+                            accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac,.webm" 
+                            className="hidden" 
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                setUploadFile(e.target.files[0]);
+                              }
+                            }} 
+                          />
+                        </label>
+                      ) : (
+                        <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white border-2 border-blue-100 hover:border-blue-400 text-slate-700 font-bold text-xs shadow-sm transition-all w-full font-noto group">
+                          <Upload size={18} className="text-[#2563EB] group-hover:scale-110 transition-transform" />
+                          <span>{lang === 'bn' ? 'কম্পিউটার/মোবাইল থেকে বাছুন (MP3, WAV, M4A, OGG)' : 'Choose Audio File (MP3, WAV, M4A, OGG)'}</span>
+                          <input 
+                            type="file" 
+                            accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac,.webm" 
+                            className="hidden" 
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                setUploadFile(e.target.files[0]);
+                              }
+                            }} 
+                          />
+                        </label>
+                      )}
                     </>
                   )}
 
@@ -3755,26 +3792,43 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                 <span>প্লেব্যাক গতি (Speed):</span>
                               </span>
 
-                              <div className="flex items-center gap-1">
-                                {[0.75, 1.0, 1.25, 1.5, 2.0].map(speedVal => (
-                                  <button
-                                    key={speedVal}
-                                    type="button"
-                                    onClick={() => {
-                                      setPreviewSpeed(speedVal);
-                                      if (previewAudioRef.current) {
-                                        previewAudioRef.current.playbackRate = speedVal;
-                                      }
-                                    }}
-                                    className={`px-2 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer font-noto ${
-                                      previewSpeed === speedVal 
-                                        ? 'bg-[#1E3A8A] text-white shadow-xs' 
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                                  >
-                                    {speedVal}x
-                                  </button>
-                                ))}
+                              <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-2xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextSpeed = Math.max(0.5, Math.round((previewSpeed - 0.05) * 100) / 100);
+                                    setPreviewSpeed(nextSpeed);
+                                    if (previewAudioRef.current) previewAudioRef.current.playbackRate = nextSpeed;
+                                  }}
+                                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-black cursor-pointer active:scale-95 transition-all"
+                                  title="০.০৫ কমান"
+                                >
+                                  -
+                                </button>
+
+                                <span
+                                  onClick={() => {
+                                    setPreviewSpeed(1.0);
+                                    if (previewAudioRef.current) previewAudioRef.current.playbackRate = 1.0;
+                                  }}
+                                  title="স্বাভাবিক গতিতে (১.০০x) রিসেট করতে ক্লিক করুন"
+                                  className="min-w-[44px] text-center text-xs font-black font-mono text-[#1E3A8A] cursor-pointer hover:underline select-none"
+                                >
+                                  {previewSpeed.toFixed(2)}x
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextSpeed = Math.min(2.5, Math.round((previewSpeed + 0.05) * 100) / 100);
+                                    setPreviewSpeed(nextSpeed);
+                                    if (previewAudioRef.current) previewAudioRef.current.playbackRate = nextSpeed;
+                                  }}
+                                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-black cursor-pointer active:scale-95 transition-all"
+                                  title="০.০৫ বাড়ান"
+                                >
+                                  +
+                                </button>
                               </div>
                             </div>
 

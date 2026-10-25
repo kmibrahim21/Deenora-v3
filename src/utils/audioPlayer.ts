@@ -29,7 +29,17 @@ class UniversalAudioPlayer {
     const trimmed = url.trim();
     if (!trimmed) return '';
 
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+    if (trimmed.startsWith('/api/voices/stream')) return trimmed;
+
+    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+      return trimmed;
+    }
+
+    if (trimmed.includes('tenbytecloud.com') || trimmed.includes('awajdigital.com')) {
+      return `/api/voices/stream?url=${encodeURIComponent(trimmed)}`;
+    }
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       return trimmed;
     }
 
@@ -42,7 +52,7 @@ class UniversalAudioPlayer {
       trimmed.startsWith('/uploads/')
     ) {
       const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-      return `https://api.awajdigital.com${cleanPath}`;
+      return `/api/voices/stream?url=${encodeURIComponent(`https://api.awajdigital.com${cleanPath}`)}`;
     }
 
     if (trimmed.startsWith('/') && !trimmed.startsWith('/storage') && !trimmed.startsWith('/voices')) {
@@ -50,7 +60,7 @@ class UniversalAudioPlayer {
     }
 
     const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    return `https://api.awajdigital.com${cleanPath}`;
+    return `/api/voices/stream?url=${encodeURIComponent(`https://api.awajdigital.com${cleanPath}`)}`;
   }
 
   public async play(

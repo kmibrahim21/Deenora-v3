@@ -1235,9 +1235,47 @@ export default async function handler(req, res) {
       ]);
 
       if (voicesRes.error) throw voicesRes.error;
+      const rawVoices = voicesRes.data || [];
+
+      // Check if any voice is missing a playable file_url
+      const missingVoices = rawVoices.filter((v: any) => !v.file_url || !v.file_url.startsWith('http'));
+      if (missingVoices.length > 0 && process.env.AWAJ_API_TOKEN) {
+        try {
+          const awajRes = await fetch('https://api.awajdigital.com/api/v1/voices', {
+            headers: {
+              'Authorization': `Bearer ${process.env.AWAJ_API_TOKEN.trim()}`,
+              'Accept': 'application/json'
+            }
+          });
+          if (awajRes.ok) {
+            const awajData = await awajRes.json();
+            const voiceList = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
+            for (const v of rawVoices) {
+              if (!v.file_url || !v.file_url.startsWith('http')) {
+                const match = voiceList.find((av: any) => 
+                  (v.provider_voice_id && String(av.id) === String(v.provider_voice_id)) ||
+                  (v.provider_voice_name && av.name && av.name.toLowerCase() === v.provider_voice_name.toLowerCase()) ||
+                  (v.title && av.name && (av.name.toLowerCase().includes(v.title.toLowerCase()) || v.title.toLowerCase().includes(av.name.toLowerCase())))
+                );
+                if (match && (match.previewUrl || match.file_url || match.url)) {
+                  v.file_url = match.previewUrl || match.file_url || match.url;
+                  // Persist to database so it stays permanently available
+                  supabase.from('voice_templates').update({ file_url: v.file_url }).eq('id', v.id).then();
+                } else if (v.file_url && (v.file_url.startsWith('/') || v.file_url.startsWith('voices/') || v.file_url.startsWith('uploads/'))) {
+                  const cleanPath = v.file_url.startsWith('/') ? v.file_url : `/${v.file_url}`;
+                  v.file_url = `https://api.awajdigital.com${cleanPath}`;
+                }
+              }
+            }
+          }
+        } catch (awajErr) {
+          console.warn('Could not auto-enrich pending voices from Awaj:', awajErr);
+        }
+      }
+
       return res.status(200).json({
         success: true,
-        voices: voicesRes.data || [],
+        voices: rawVoices,
         institutions: instsRes.data || []
       });
     }

@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye, EyeOff, Clock, Pause, XCircle, RefreshCw } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye, EyeOff, Clock, Pause, XCircle, RefreshCw, Volume2, VolumeX, AlertCircle, FileAudio, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { linkifyMarkdown, getMarkdownComponents } from 'utils/markdownUtils';
 import { supabase, smsApi } from 'supabase';
@@ -96,14 +96,38 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const [loadingPendingVoices, setLoadingPendingVoices] = useState(false);
   const [allInstitutions, setAllInstitutions] = useState<any[]>([]);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
-  const [playingAudio, setPlayingAudio] = useState<HTMLAudioElement | null>(null);
   const [playbackSpeeds, setPlaybackSpeeds] = useState<{ [id: string]: number }>({});
   const [editingVoiceTitle, setEditingVoiceTitle] = useState<{ id: string; title: string } | null>(null);
   const [voiceDurations, setVoiceDurations] = useState<{ [id: string]: number }>({});
+  const [voiceCurrentTimes, setVoiceCurrentTimes] = useState<{ [id: string]: number }>({});
+  const [showNativeAudio, setShowNativeAudio] = useState<{ [id: string]: boolean }>({});
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const resolveAudioUrl = (v: any): string => {
+    if (!v) return '';
+    const raw = v.file_url || v.preview_url || v.previewUrl || v.url || v.audio_url || v.voice_url || v.media_url || v.path || '';
+    if (!raw || typeof raw !== 'string') return '';
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('/') || trimmed.startsWith('voices/') || trimmed.startsWith('uploads/')) {
+      const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      return `https://api.awajdigital.com${cleanPath}`;
+    }
+    return trimmed;
+  };
+
+  const formatAudioTime = (seconds: number): string => {
+    if (!seconds || isNaN(seconds) || seconds < 0) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     pendingVoices.forEach((v) => {
-      const audioUrl = v.file_url || v.preview_url || v.url;
+      const audioUrl = resolveAudioUrl(v);
       if (v.id && audioUrl && !voiceDurations[v.id] && !v.duration) {
         const audio = new Audio(audioUrl);
         audio.onloadedmetadata = () => {
@@ -114,6 +138,16 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       }
     });
   }, [pendingVoices]);
+
+  useEffect(() => {
+    return () => {
+      globalAudioPlayer.stop();
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     fetchGlobalSettings();
@@ -189,10 +223,13 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       }
 
       setPendingVoices(prev => prev.filter(v => v.id !== id));
-      if (playingVoiceId === id && playingAudio) {
-        playingAudio.pause();
-        setPlayingVoiceId(null);
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current = null;
       }
+      globalAudioPlayer.stop();
+      setPlayingVoiceId(null);
+
       setStatusModal({
         show: true,
         type: 'success',
@@ -238,10 +275,13 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       }
 
       setPendingVoices(prev => prev.filter(v => v.id !== id));
-      if (playingVoiceId === id && playingAudio) {
-        playingAudio.pause();
-        setPlayingVoiceId(null);
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current = null;
       }
+      globalAudioPlayer.stop();
+      setPlayingVoiceId(null);
+
       setStatusModal({
         show: true,
         type: 'success',
@@ -261,7 +301,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   };
 
   const togglePlayVoice = (id: string, rawUrl: string) => {
-    if (!rawUrl) {
+    const resolvedUrl = resolveAudioUrl({ file_url: rawUrl, url: rawUrl });
+    if (!resolvedUrl) {
       setStatusModal({
         show: true,
         type: 'error',
@@ -271,29 +312,103 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       return;
     }
 
-    globalAudioPlayer.toggle(
-      id,
-      rawUrl,
-      (isPlaying) => {
-        setPlayingVoiceId(isPlaying ? id : null);
-      },
-      (err) => {
-        console.error('Audio playback error:', err);
-        setPlayingVoiceId(null);
-        setStatusModal({
-          show: true,
-          type: 'error',
-          title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
-          message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে। ফাইল ফরম্যাট বা ইউআরএল চেক করুন।' : 'Failed to play audio.'
-        });
+    if (playingVoiceId === id) {
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
       }
-    );
+      globalAudioPlayer.stop();
+      setPlayingVoiceId(null);
+      return;
+    }
+
+    // Stop currently playing audio
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
+    globalAudioPlayer.stop();
+
+    const speed = playbackSpeeds[id] || 1.0;
+    try {
+      const audio = new Audio(resolvedUrl);
+      activeAudioRef.current = audio;
+      audio.playbackRate = speed;
+
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+          setVoiceDurations(prev => ({ ...prev, [id]: Math.ceil(audio.duration) }));
+        }
+      };
+
+      audio.ontimeupdate = () => {
+        setVoiceCurrentTimes(prev => ({ ...prev, [id]: audio.currentTime }));
+      };
+
+      audio.onended = () => {
+        setPlayingVoiceId(null);
+        setVoiceCurrentTimes(prev => ({ ...prev, [id]: 0 }));
+      };
+
+      audio.onerror = (e) => {
+        console.warn('HTML5 audio error on direct url, trying global fallback:', e);
+        globalAudioPlayer.toggle(
+          id,
+          resolvedUrl,
+          (isPlaying) => {
+            setPlayingVoiceId(isPlaying ? id : null);
+          },
+          (err) => {
+            console.error('All audio playback attempts failed:', err);
+            setPlayingVoiceId(null);
+            setStatusModal({
+              show: true,
+              type: 'error',
+              title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
+              message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে। ফাইল ফরম্যাট বা ইউআরএল চেক করুন।' : 'Failed to play audio.'
+            });
+          }
+        );
+      };
+
+      audio.play().then(() => {
+        setPlayingVoiceId(id);
+      }).catch((playErr) => {
+        console.warn('Direct play() promise rejected, falling back to globalAudioPlayer:', playErr);
+        globalAudioPlayer.toggle(
+          id,
+          resolvedUrl,
+          (isPlaying) => {
+            setPlayingVoiceId(isPlaying ? id : null);
+          },
+          (err) => {
+            console.error('Fallback audio playback error:', err);
+            setPlayingVoiceId(null);
+            setStatusModal({
+              show: true,
+              type: 'error',
+              title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
+              message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে। ফাইল ফরম্যাট বা ইউআরএল চেক করুন।' : 'Failed to play audio.'
+            });
+          }
+        );
+      });
+    } catch (err: any) {
+      console.error('Error starting audio playback:', err);
+    }
+  };
+
+  const handleSeekVoice = (id: string, time: number) => {
+    setVoiceCurrentTimes(prev => ({ ...prev, [id]: time }));
+    if (playingVoiceId === id && activeAudioRef.current) {
+      activeAudioRef.current.currentTime = time;
+    }
   };
 
   const changeSpeed = (id: string, speed: number) => {
-    setPlaybackSpeeds(prev => ({ ...prev, [id]: speed }));
-    if (playingVoiceId === id && playingAudio) {
-      playingAudio.playbackRate = speed;
+    const safeSpeed = Math.round(speed * 100) / 100;
+    setPlaybackSpeeds(prev => ({ ...prev, [id]: safeSpeed }));
+    if (playingVoiceId === id && activeAudioRef.current) {
+      activeAudioRef.current.playbackRate = safeSpeed;
     }
   };
 
@@ -2180,7 +2295,11 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                       </button>
                       <button 
                         onClick={() => {
-                          if (playingAudio) playingAudio.pause();
+                          if (activeAudioRef.current) {
+                            activeAudioRef.current.pause();
+                            activeAudioRef.current = null;
+                          }
+                          globalAudioPlayer.stop();
                           setPlayingVoiceId(null);
                           setIsEditingPendingVoices(false);
                         }} 
@@ -2211,10 +2330,12 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                 ) : (
                   <div className="space-y-4">
                     {pendingVoices.map((v) => {
-                      const audioTargetUrl = v.file_url || v.preview_url || v.url;
+                      const audioTargetUrl = resolveAudioUrl(v);
                       const instName = allInstitutions.find(i => i.id === v.institution_id)?.name || 'সিস্টেম / অজানা প্রতিষ্ঠান';
                       const isPlaying = playingVoiceId === v.id;
                       const currentSpeed = playbackSpeeds[v.id] || 1.0;
+                      const totalDuration = Number(v.duration) || voiceDurations[v.id] || 0;
+                      const currentTime = voiceCurrentTimes[v.id] || 0;
 
                       return (
                         <div 
@@ -2225,10 +2346,11 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                               : 'bg-white border-amber-200/80'
                           }`}
                         >
+                          {/* Header: Title & Pending Badge */}
                           <div className="flex items-start justify-between gap-3">
                             <div className="space-y-1 flex-1 min-w-0">
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50 font-noto">
-                                <Clock size={11} /> পেন্ডিং
+                                <Clock size={11} /> পেন্ডিং ভয়েস
                               </span>
                               <div className="flex items-center gap-2 pt-1">
                                 {editingVoiceTitle?.id === v.id ? (
@@ -2262,22 +2384,9 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                                 )}
                               </div>
                             </div>
-
-                            {audioTargetUrl && (
-                              <button
-                                onClick={() => togglePlayVoice(v.id, audioTargetUrl)}
-                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm ${
-                                  isPlaying
-                                    ? 'bg-amber-500 text-white shadow-amber-500/30 animate-pulse'
-                                    : 'bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] dark:text-blue-400 hover:bg-blue-100'
-                                }`}
-                                title={isPlaying ? 'পজ করুন' : 'প্লে করে শুনুন'}
-                              >
-                                {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" fill="currentColor" />}
-                              </button>
-                            )}
                           </div>
 
+                          {/* Institution & Metadata */}
                           <div className={`p-3 rounded-2xl border space-y-1.5 text-xs ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700/50' : 'bg-slate-50 border-slate-100'}`}>
                             <p className="font-bold text-slate-700 dark:text-slate-300 font-noto flex items-center gap-1.5">
                               <Building2 size={14} className="text-blue-500 shrink-0" />
@@ -2289,32 +2398,165 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                               </p>
                               <p className="text-xs font-black text-blue-600 dark:text-blue-400 font-noto flex items-center gap-1">
                                 <Clock size={12} />
-                                <span>সময়কাল: {v.duration || voiceDurations[v.id] || 0} সেকেন্ড</span>
+                                <span>সময়কাল: {totalDuration} সেকেন্ড</span>
                                 {currentSpeed !== 1.0 && (
-                                  <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                                    ({currentSpeed}x: {Math.round((v.duration || voiceDurations[v.id] || 0) / currentSpeed)} সে.)
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono">
+                                    ({currentSpeed.toFixed(2)}x: {Math.round(totalDuration / currentSpeed)} সে.)
                                   </span>
                                 )}
                               </p>
                             </div>
-                            
-                            {/* Speed controls */}
-                            {audioTargetUrl && (
-                              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/50 dark:border-slate-800">
-                                <span className="text-[10px] font-bold text-slate-400 font-noto">গতি:</span>
-                                {[1.0, 1.25, 1.5, 2.0].map((s) => (
+                          </div>
+
+                          {/* Voice Audio Player Box */}
+                          <div className={`p-3.5 rounded-2xl border transition-all ${
+                            isPlaying 
+                              ? 'bg-blue-50/90 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 shadow-sm' 
+                              : madrasah?.theme === 'dark' 
+                                ? 'bg-slate-900/60 border-slate-700/60' 
+                                : 'bg-slate-50/80 border-slate-200/80'
+                          }`}>
+                            {audioTargetUrl ? (
+                              <div className="space-y-3">
+                                {/* Player Top Bar: Label, status & Speed controls */}
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isPlaying ? 'bg-blue-600 text-white animate-pulse' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'}`}>
+                                      <Volume2 size={16} />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-black font-noto text-slate-800 dark:text-slate-100">
+                                          ভয়েস শুনুন
+                                        </span>
+                                        {isPlaying && (
+                                          <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-bold rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 animate-pulse font-noto">
+                                            প্লে হচ্ছে
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] font-bold text-slate-400 font-mono">
+                                        {formatAudioTime(currentTime)} / {formatAudioTime(totalDuration)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Speed Controls: Clean Stepper [-] 1.05x [+] */}
+                                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                                    <span className="text-[10px] font-black text-slate-400 font-noto">গতি:</span>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => changeSpeed(v.id, Math.max(0.5, currentSpeed - 0.05))}
+                                      className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 flex items-center justify-center text-sm font-black cursor-pointer active:scale-95 transition-all"
+                                      title="০.০৫ কমান"
+                                    >
+                                      -
+                                    </button>
+
+                                    <span 
+                                      onClick={() => changeSpeed(v.id, 1.0)}
+                                      title="স্বাভাবিক গতিতে (১.০০x) রিসেট করতে ক্লিক করুন"
+                                      className="min-w-[44px] text-center text-xs font-black font-mono text-[#2563EB] dark:text-blue-400 cursor-pointer hover:underline select-none"
+                                    >
+                                      {currentSpeed.toFixed(2)}x
+                                    </span>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => changeSpeed(v.id, Math.min(2.5, currentSpeed + 0.05))}
+                                      className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 flex items-center justify-center text-sm font-black cursor-pointer active:scale-95 transition-all"
+                                      title="০.০৫ বাড়ান"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Scrubber & Main Play Button */}
+                                <div className="flex items-center gap-3">
                                   <button
-                                    key={s}
-                                    onClick={() => changeSpeed(v.id, s)}
-                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all ${
-                                      currentSpeed === s
-                                        ? 'bg-blue-600 text-white shadow-xs'
-                                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-300'
+                                    type="button"
+                                    onClick={() => togglePlayVoice(v.id, audioTargetUrl)}
+                                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-md active:scale-95 ${
+                                      isPlaying
+                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/30 animate-pulse'
+                                        : 'bg-[#2563EB] hover:bg-blue-700 text-white shadow-blue-500/20'
                                     }`}
+                                    title={isPlaying ? 'পজ করুন' : 'প্লে করুন'}
                                   >
-                                    {s}x
+                                    {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" fill="currentColor" />}
                                   </button>
-                                ))}
+
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={totalDuration || 60}
+                                      step={0.1}
+                                      value={currentTime}
+                                      onChange={(e) => handleSeekVoice(v.id, parseFloat(e.target.value))}
+                                      className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2563EB] focus:outline-none"
+                                    />
+                                    <div className="flex justify-between text-[10px] font-bold text-slate-400 font-mono">
+                                      <span>{formatAudioTime(currentTime)}</span>
+                                      <span>{formatAudioTime(totalDuration)}</span>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleSeekVoice(v.id, 0);
+                                      if (!isPlaying) togglePlayVoice(v.id, audioTargetUrl);
+                                    }}
+                                    className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                                    title="শুরু থেকে শুনুন"
+                                  >
+                                    <RotateCcw size={16} />
+                                  </button>
+                                </div>
+
+                                {/* Secondary controls: Native player toggle & external link */}
+                                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowNativeAudio(prev => ({ ...prev, [v.id]: !prev[v.id] }))}
+                                    className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-noto"
+                                  >
+                                    <FileAudio size={13} />
+                                    {showNativeAudio[v.id] ? 'স্ট্যান্ডার্ড প্লেয়ার লুকান' : 'স্ট্যান্ডার্ড অডিও প্লেয়ার দেখুন'}
+                                  </button>
+
+                                  <a
+                                    href={audioTargetUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] font-bold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 cursor-pointer font-noto"
+                                  >
+                                    <ExternalLink size={13} />
+                                    নতুন ট্যাবে খুলুন
+                                  </a>
+                                </div>
+
+                                {showNativeAudio[v.id] && (
+                                  <div className="pt-1 animate-in fade-in duration-200">
+                                    <audio
+                                      controls
+                                      src={audioTargetUrl}
+                                      preload="metadata"
+                                      className="w-full h-9 rounded-lg"
+                                      controlsList="nodownload"
+                                    >
+                                      আপনার ব্রাউজারে অডিও প্লেয়ার সাপোর্ট করে না।
+                                    </audio>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-3 text-center rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 text-xs font-bold font-noto flex items-center justify-center gap-2">
+                                <AlertCircle size={16} className="text-amber-500 shrink-0" />
+                                <span>এই বার্তাটির অডিও ফাইল লিংক ডাটাবেসে পাওয়া যায়নি। রিফ্রেশ করে দেখুন।</span>
                               </div>
                             )}
                           </div>

@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng, toJpeg } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff, GitFork } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff, GitFork, ExternalLink } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
@@ -3728,23 +3728,102 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               </div>
               
               {paymentTab === 'voice' && (
-                <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${madrasah?.theme === 'dark' ? 'bg-amber-900/20 border-amber-800/40 text-amber-200' : 'bg-amber-50 border-amber-200/80 text-amber-900'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
-                      <Mic size={20} />
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${madrasah?.theme === 'dark' ? 'bg-amber-900/20 border-amber-800/40 text-amber-200' : 'bg-amber-50 border-amber-200/80 text-amber-900'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                        <Mic size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black font-noto">ইউজারদের রেকর্ডকৃত ভয়েস অডিও ফাইলস</h4>
+                        <p className="text-[11px] font-bold opacity-80 font-noto">ইউজারদের রেকর্ড করা ভয়েস বার্তা প্লে করে শুনে অনুমোদন বা বাতিল করতে পারেন। ({pendingVoiceTemplates.length} টি পেন্ডিং)</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-black font-noto">ইউজারদের রেকর্ডকৃত ভয়েস অডিও ফাইলস</h4>
-                      <p className="text-[11px] font-bold opacity-80 font-noto">ইউজারদের রেকর্ড করা ভয়েস বার্তা প্লে করে শুনতে ও এপ্রুভ করতে ভয়েস মডিউলে যান।</p>
-                    </div>
+                    <button
+                      onClick={() => fetchPendingVoiceTemplates()}
+                      disabled={isFetchingPendingVoices}
+                      className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-sm transition-all shrink-0 active:scale-95 cursor-pointer flex items-center justify-center gap-2 font-noto"
+                    >
+                      <RefreshCw size={14} className={isFetchingPendingVoices ? 'animate-spin' : ''} />
+                      <span>রিফ্রেশ করুন</span>
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onNavigateToVoiceBroadcast?.([])}
-                    className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-sm transition-all shrink-0 active:scale-95 cursor-pointer flex items-center justify-center gap-2 font-noto"
-                  >
-                    <Mic size={14} />
-                    <span>ভয়েস বার্তা রিভিউ করুন</span>
-                  </button>
+
+                  {pendingVoiceTemplates.length > 0 && (
+                    <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-black font-noto text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                          <AlertCircle size={15} className="text-amber-600" />
+                          <span>অনুমোদনের অপেক্ষায় থাকা ভয়েস বার্তাসমূহ ({pendingVoiceTemplates.length})</span>
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {pendingVoiceTemplates.map((pv: any) => {
+                          const pUrl = pv.file_url || pv.preview_url || pv.previewUrl || pv.url || pv.audio_url || '';
+                          const isPPlaying = playingVoiceId === pv.id;
+                          const pInstName = pv.institutions?.name || 'অজানা প্রতিষ্ঠান';
+
+                          return (
+                            <div key={pv.id} className={`p-4 rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200 shadow-sm'} space-y-2.5`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-xs font-black font-noto truncate text-slate-800 dark:text-slate-100">{pv.title || 'শিরোনামহীন ভয়েস'}</h4>
+                                  <p className="text-[10px] font-bold text-slate-400 font-noto truncate">{pInstName}</p>
+                                </div>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">পেন্ডিং</span>
+                              </div>
+
+                              {pUrl ? (
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePlayAdminVoice(pv.id, pUrl)}
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                                      isPPlaying ? 'bg-amber-500 text-white animate-pulse' : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
+                                    title={isPPlaying ? 'পজ' : 'প্লে'}
+                                  >
+                                    {isPPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" fill="currentColor" />}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[11px] font-black font-noto block text-slate-700 dark:text-slate-200">
+                                      {isPPlaying ? 'প্লে হচ্ছে...' : 'ভয়েস শুনুন'}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 font-mono">দৈর্ঘ্য: {pv.duration || 0} সে.</span>
+                                  </div>
+                                  <a href={pUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-600" title="নতুন ট্যাবে খুলুন">
+                                    <ExternalLink size={13} />
+                                  </a>
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-amber-600 font-noto">⚠️ অডিও লিংক পাওয়া যায়নি</p>
+                              )}
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveVoiceTemplate(pv.id)}
+                                  className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1 font-noto cursor-pointer"
+                                >
+                                  <CheckCircle2 size={13} />
+                                  <span>অনুমোদন</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectVoiceTemplate(pv.id)}
+                                  className="py-1.5 px-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1 font-noto cursor-pointer border border-rose-200 dark:border-rose-900"
+                                >
+                                  <XCircle size={13} />
+                                  <span>বাতিল</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -172,11 +172,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let action = '';
   const isDirectRoute = parts.includes('direct');
   if (parts[1] === 'voices' || parts[1] === 'voice') {
-    action = parts[2] === 'upload' ? 'upload' : 'voices';
+    if (parts[2] === 'upload') action = 'upload';
+    else if (parts[2] === 'stream' || parts[2] === 'play') action = 'stream';
+    else action = 'voices';
   } else if (parts[1] === 'awaj') {
     action = (parts[2] || 'voices').toLowerCase().trim();
     if (parts[3] === 'upload') {
       action = 'upload';
+    } else if (parts[3] === 'stream' || parts[2] === 'stream') {
+      action = 'stream';
     }
   } else if (parts[1] === 'voice-refund') {
     action = 'voice-refund';
@@ -199,6 +203,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       req.body = JSON.parse(req.body);
     } catch (e) {
       console.warn('Failed to parse req.body as JSON in awaj API handler:', e);
+    }
+  }
+
+  // AUDIO PROXY STREAM (Direct audio streaming without CORS)
+  if (action === 'stream' || action === 'proxy-audio') {
+    const rawUrl = (req.query.url as string) || (req.body?.url as string) || '';
+    const voiceId = (req.query.id as string) || (req.body?.id as string) || '';
+    let targetUrl = rawUrl;
+
+    if (!targetUrl && voiceId) {
+      try {
+        const { data: v } = await supabase.from('voice_templates').select('file_url').eq('id', voiceId).maybeSingle();
+        if (v?.file_url) targetUrl = v.file_url;
+      } catch (err: any) {
+        console.warn('Could not resolve voice_template URL by id:', err.message);
+      }
+    }
+
+    if (!targetUrl) {
+      return res.status(400).json({ error: 'Audio URL or Voice ID is required' });
+    }
+
+    if (targetUrl.startsWith('/') || targetUrl.startsWith('voices/') || targetUrl.startsWith('uploads/')) {
+      const cleanPath = targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`;
+      targetUrl = `https://api.awajdigital.com${cleanPath}`;
+    }
+
+    try {
+      const audioFetchRes = await fetch(targetUrl);
+      if (!audioFetchRes.ok) {
+        return res.status(audioFetchRes.status).json({ error: 'Failed to fetch audio stream' });
+      }
+
+      const contentType = audioFetchRes.headers.get('content-type') || 'audio/wav';
+      const contentLength = audioFetchRes.headers.get('content-length');
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      if (contentLength) res.setHeader('Content-Length', contentLength);
+
+      const arrayBuffer = await audioFetchRes.arrayBuffer();
+      return res.send(Buffer.from(arrayBuffer));
+    } catch (streamErr: any) {
+      console.error('Audio stream proxy error:', streamErr);
+      return res.status(500).json({ error: streamErr.message });
     }
   }
 
