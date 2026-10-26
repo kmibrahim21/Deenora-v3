@@ -1241,7 +1241,7 @@ export default async function handler(req, res) {
       const missingVoices = rawVoices.filter((v: any) => !v.file_url || !v.file_url.startsWith('http'));
       if (missingVoices.length > 0 && process.env.AWAJ_API_TOKEN) {
         try {
-          const awajRes = await fetch('https://api.awajdigital.com/api/v1/voices', {
+          const awajRes = await fetch('https://api.awajdigital.com/api/voices', {
             headers: {
               'Authorization': `Bearer ${process.env.AWAJ_API_TOKEN.trim()}`,
               'Accept': 'application/json'
@@ -1257,10 +1257,17 @@ export default async function handler(req, res) {
                   (v.provider_voice_name && av.name && av.name.toLowerCase() === v.provider_voice_name.toLowerCase()) ||
                   (v.title && av.name && (av.name.toLowerCase().includes(v.title.toLowerCase()) || v.title.toLowerCase().includes(av.name.toLowerCase())))
                 );
-                if (match && (match.previewUrl || match.file_url || match.url)) {
-                  v.file_url = match.previewUrl || match.file_url || match.url;
-                  // Persist to database so it stays permanently available
-                  supabase.from('voice_templates').update({ file_url: v.file_url }).eq('id', v.id).then();
+                if (match) {
+                  let foundUrl = match.previewUrl || match.file_url || match.preview_url || match.url || '';
+                  if (foundUrl && !foundUrl.startsWith('http') && !foundUrl.startsWith('data:')) {
+                    const cleanPath = foundUrl.startsWith('/') ? foundUrl : `/${foundUrl}`;
+                    foundUrl = `https://api.awajdigital.com${cleanPath}`;
+                  }
+                  if (foundUrl) {
+                    v.file_url = foundUrl;
+                    // Persist to database so it stays permanently available
+                    supabase.from('voice_templates').update({ file_url: foundUrl }).eq('id', v.id).then();
+                  }
                 } else if (v.file_url && (v.file_url.startsWith('/') || v.file_url.startsWith('voices/') || v.file_url.startsWith('uploads/'))) {
                   const cleanPath = v.file_url.startsWith('/') ? v.file_url : `/${v.file_url}`;
                   v.file_url = `https://api.awajdigital.com${cleanPath}`;

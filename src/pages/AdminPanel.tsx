@@ -17,6 +17,7 @@ import { generateSystemPaymentReportPDF, generateSubscriptionMatrixPDF } from '.
 import { saveJsPdf, downloadBlob } from '../utils/fileDownloader';
 import { SOLAIMAN_LIPI_FONT_STYLE, downloadServerPdf, wrapHtmlForPdf } from '../utils/serverPdfHelper';
 import { elementToImageDataUrl } from '../utils/admissionFormPdf';
+import { globalAudioPlayer } from '../utils/audioPlayer';
 
 interface InstitutionWithStats extends Institution {
   student_count?: number;
@@ -232,22 +233,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   }, []);
 
   const togglePlayAdminVoice = (voiceId: string, url: string) => {
-    if (!url) return;
-    if (playingVoiceId === voiceId) {
-      if (voiceAudioPlayerRef.current) {
-        voiceAudioPlayerRef.current.pause();
-      }
-      setPlayingVoiceId(null);
-    } else {
-      if (voiceAudioPlayerRef.current) {
-        voiceAudioPlayerRef.current.pause();
-      }
-      const audio = new Audio(url);
-      voiceAudioPlayerRef.current = audio;
-      audio.onended = () => setPlayingVoiceId(null);
-      audio.play();
-      setPlayingVoiceId(voiceId);
+    if (!url) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'অডিও পাওয়া যায়নি' : 'Audio Not Found',
+        message: lang === 'bn' ? 'এই ভয়েসের কোনো অডিও লিংক পাওয়া যায়নি।' : 'No audio link found for this voice.'
+      });
+      return;
     }
+
+    globalAudioPlayer.toggle(
+      voiceId,
+      url,
+      (isPlaying) => setPlayingVoiceId(isPlaying ? voiceId : null),
+      (err) => {
+        console.error('Admin audio playback error:', err);
+        setPlayingVoiceId(null);
+        setStatusModal({
+          show: true,
+          type: 'error',
+          title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
+          message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে। ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।' : 'Failed to play audio.'
+        });
+      }
+    );
   };
 
   const handleApproveVoiceTemplate = async (voiceId: string) => {

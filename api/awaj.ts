@@ -432,16 +432,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Voice uploaded successfully
-      let rawFileUrl = responseData.file_url || responseData.preview_url || responseData.url || (responseData.data && (responseData.data.file_url || responseData.data.url)) || '';
+      let rawFileUrl = responseData.previewUrl || responseData.file_url || responseData.preview_url || responseData.url || (responseData.data && (responseData.data.previewUrl || responseData.data.file_url || responseData.data.url)) || '';
+      const providerVoiceId = responseData.id || responseData.voice_id || responseData.data?.id || responseData.result?.id || '';
+      const providerVoiceName = responseData.name || responseData.title || voiceName;
+
+      // Fallback: If previewUrl was missing from upload response, query Awaj voice list to find it immediately
+      if (!rawFileUrl && (providerVoiceId || voiceName)) {
+        try {
+          const awajListRes = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
+          if (awajListRes.ok) {
+            const listData = await awajListRes.json();
+            const voiceList = Array.isArray(listData) ? listData : (listData.voices || listData.data || []);
+            const matched = voiceList.find((v: any) => 
+              (providerVoiceId && String(v.id) === String(providerVoiceId)) ||
+              (v.name && v.name.toLowerCase() === voiceName.toLowerCase())
+            );
+            if (matched) {
+              rawFileUrl = matched.previewUrl || matched.file_url || matched.preview_url || matched.url || '';
+            }
+          }
+        } catch (enrichErr) {
+          console.warn('Could not auto-fetch uploaded voice previewUrl from Awaj:', enrichErr);
+        }
+      }
+
       if (rawFileUrl && !rawFileUrl.startsWith('http') && !rawFileUrl.startsWith('data:')) {
         const cleanPath = rawFileUrl.startsWith('/') ? rawFileUrl : `/${rawFileUrl}`;
         rawFileUrl = `https://api.awajdigital.com${cleanPath}`;
       }
 
-      // Awaj Digital audio URL directly (not stored in Supabase storage as requested)
+      // Awaj Digital audio URL directly
       const fileUrl = rawFileUrl || '';
-      const providerVoiceId = responseData.id || responseData.voice_id || responseData.data?.id || responseData.result?.id || '';
-      const providerVoiceName = responseData.name || responseData.title || voiceName;
 
       let savedTemplate: any = null;
       const targetInstId = body.institution_id || req.query.institution_id;
@@ -476,6 +497,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(201).json({
         ...responseData,
         file_url: fileUrl,
+        preview_url: fileUrl,
+        previewUrl: fileUrl,
         voice_template: savedTemplate,
         message: 'Voice uploaded successfully'
       });
@@ -493,7 +516,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      return res.status(200).json({ success: true, templates: data || [] });
+
+      const rawTemplates = data || [];
+      const missingFileUrl = rawTemplates.some(v => !v.file_url || !v.file_url.startsWith('http'));
+
+      if (missingFileUrl) {
+        try {
+          const awajListRes = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
+          if (awajListRes.ok) {
+            const listData = await awajListRes.json();
+            const voiceList = Array.isArray(listData) ? listData : (listData.voices || listData.data || []);
+            for (const v of rawTemplates) {
+              if (!v.file_url || !v.file_url.startsWith('http')) {
+                const match = voiceList.find((av: any) => 
+                  (v.provider_voice_id && String(av.id) === String(v.provider_voice_id)) ||
+                  (v.provider_voice_name && av.name && av.name.toLowerCase() === v.provider_voice_name.toLowerCase()) ||
+                  (v.title && av.name && (av.name.toLowerCase().includes(v.title.toLowerCase()) || v.title.toLowerCase().includes(av.name.toLowerCase())))
+                );
+                if (match) {
+                  let foundUrl = match.previewUrl || match.file_url || match.preview_url || match.url || '';
+                  if (foundUrl && !foundUrl.startsWith('http') && !foundUrl.startsWith('data:')) {
+                    const cleanPath = foundUrl.startsWith('/') ? foundUrl : `/${foundUrl}`;
+                    foundUrl = `https://api.awajdigital.com${cleanPath}`;
+                  }
+                  if (foundUrl) {
+                    v.file_url = foundUrl;
+                    supabase.from('voice_templates').update({ file_url: foundUrl }).eq('id', v.id).then();
+                  }
+                }
+              }
+            }
+          }
+        } catch (enrichErr) {
+          console.warn('Could not enrich templates with missing file_url:', enrichErr);
+        }
+      }
+
+      return res.status(200).json({ success: true, templates: rawTemplates });
     }
 
     // VOICES LIST & DELETE
