@@ -147,34 +147,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const action = req.query.action || req.body?.action;
 
-  // Helper: Find target FCM token by callee_phone or student_id (memory cache first, then Supabase device_tokens)
-  async function findTargetFcmToken(
+  // Helper: Find target FCM tokens by callee_phone or student_id (memory cache + Supabase device_tokens for multi-device support)
+  async function findTargetFcmTokens(
     calleePhone: string | null | undefined,
     studentId: string | null | undefined
-  ): Promise<string | null> {
+  ): Promise<string[]> {
     const rawPhone = calleePhone ? String(calleePhone).trim() : '';
     const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '').slice(-10) : '';
+    const foundTokens = new Set<string>();
 
     // 1. Check in-memory token cache
     if (cleanPhone && memoryTokens[`phone_${cleanPhone}`]) {
-      return memoryTokens[`phone_${cleanPhone}`].token;
+      foundTokens.add(memoryTokens[`phone_${cleanPhone}`].token);
     }
     if (studentId && memoryTokens[`student_${studentId}`]) {
-      return memoryTokens[`student_${studentId}`].token;
+      foundTokens.add(memoryTokens[`student_${studentId}`].token);
     }
 
-    // 2. Query Supabase device_tokens table
+    // 2. Query Supabase device_tokens table (returns up to 5 active devices per recipient)
     if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || rawPhone || studentId)) {
       try {
         const queries: string[] = [];
         if (cleanPhone) {
-          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&phone=ilike.*${cleanPhone}*&order=updated_at.desc&limit=1`);
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&phone=ilike.*${cleanPhone}*&order=updated_at.desc&limit=5`);
         }
         if (rawPhone && rawPhone !== cleanPhone) {
-          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&phone=eq.${encodeURIComponent(rawPhone)}&order=updated_at.desc&limit=1`);
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&phone=eq.${encodeURIComponent(rawPhone)}&order=updated_at.desc&limit=5`);
         }
         if (studentId) {
-          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&student_id=eq.${encodeURIComponent(studentId)}&order=updated_at.desc&limit=1`);
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&student_id=eq.${encodeURIComponent(studentId)}&order=updated_at.desc&limit=5`);
         }
 
         for (const qUrl of queries) {
@@ -186,8 +187,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
           if (tokenRes.ok) {
             const tokenList = await tokenRes.json();
-            if (Array.isArray(tokenList) && tokenList.length > 0 && tokenList[0]?.fcm_token) {
-              return tokenList[0].fcm_token;
+            if (Array.isArray(tokenList)) {
+              tokenList.forEach((t: any) => {
+                if (t?.fcm_token) foundTokens.add(t.fcm_token);
+              });
             }
           }
         }
@@ -196,7 +199,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return null;
+    return Array.from(foundTokens);
+  }
+
+  async function findTargetFcmToken(
+    calleePhone: string | null | undefined,
+    studentId: string | null | undefined
+  ): Promise<string | null> {
+    const tokens = await findTargetFcmTokens(calleePhone, studentId);
+    return tokens[0] || null;
   }
 
   // Helper: Resolve effective service account (env or institution settings)
@@ -244,13 +255,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Try saving to Supabase device_tokens table if available.
-      // IMPORTANT (2026-10-04 fix): only send fields that actually have values.
-      // The native app posts on EVERY launch with phone=null — with
-      // resolution=merge-duplicates that was wiping the phone/student linkage
-      // the web registration had just set. Now nulls never overwrite.
       let dbDebug: any = null;
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
+          const { device_id, device_name } = req.body || {};
           const upsertBody: any = {
             fcm_token: token,
             updated_at: new Date().toISOString(),
@@ -259,10 +267,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (user_id) upsertBody.user_id = user_id;
           if (student_id) upsertBody.student_id = student_id;
           if (institution_id) upsertBody.institution_id = institution_id;
-          // IMPORTANT (2026-10-05 fix): PostgREST needs ?on_conflict=fcm_token —
-          // without it, merge-duplicates only matches the PRIMARY KEY (id),
-          // so every POST tried to INSERT a duplicate fcm_token → 409 silently
-          // caught → phone was NEVER saved. The unique fcm_token IS the conflict target.
+          if (device_id) upsertBody.device_id = device_id;
+          if (device_name) upsertBody.device_name = device_name;
+
           const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?on_conflict=fcm_token`, {
             method: 'POST',
             headers: {
@@ -276,6 +283,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const dbText = await dbRes.text().catch(() => '');
           console.log('[Call API] device_tokens upsert:', dbRes.status, dbText.slice(0, 300));
           dbDebug = { status: dbRes.status, ok: dbRes.ok, body: dbText.slice(0, 300) };
+
+          // Auto-prune stale tokens if more than 5 devices registered for same phone number
+          if (phone) {
+            const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+            fetch(`${SUPABASE_URL}/rest/v1/device_tokens?select=id,fcm_token&phone=ilike.*${cleanPhone}*&order=updated_at.desc`, {
+              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+            }).then(r => r.json()).then(rows => {
+              if (Array.isArray(rows) && rows.length > 5) {
+                const idsToDelete = rows.slice(5).map((r: any) => r.id).filter(Boolean);
+                if (idsToDelete.length > 0) {
+                  fetch(`${SUPABASE_URL}/rest/v1/device_tokens?id=in.(${idsToDelete.join(',')})`, {
+                    method: 'DELETE',
+                    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+                  }).catch(() => {});
+                }
+              }
+            }).catch(() => {});
+          }
         } catch (dbErr: any) {
           console.warn('[Call API] device_tokens table save notice:', dbErr);
           dbDebug = { fetchError: String(dbErr?.message || dbErr) };
@@ -303,11 +328,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callee_phone,
       } = payload;
 
-      // Find token from memory or database
-      const targetToken = await findTargetFcmToken(callee_phone, student_id);
+      // Find all target tokens for multi-device simultaneous ring
+      const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
       console.log('[Call API] initiate_call_push attempt:', JSON.stringify({
-        targetTokenFound: !!targetToken,
-        tokenPrefix: targetToken ? targetToken.slice(0, 12) : null,
+        devicesNotified: targetTokens.length,
         call_id: String(payload.call_id || ''),
       }));
 
@@ -334,7 +358,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timestamp: String(Date.now()),
       };
 
-      if (!targetToken) {
+      if (!targetTokens.length) {
         return res.status(200).json({
           success: true,
           fcmSent: false,
@@ -352,30 +376,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // TASK 1a: DATA-ONLY high-priority push so Android FcmService.onMessageReceived always runs
-      const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${v1AccessToken}`,
-        },
-        body: JSON.stringify({
-          message: {
-            token: targetToken,
-            android: { priority: 'HIGH', ttl: '120s' },
-            data: fcmDataPayload,
-          },
-        }),
-      });
+      // Send call push to ALL active devices for simultaneous ringing
+      const sendResults = await Promise.all(
+        targetTokens.map(async (tok) => {
+          try {
+            const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${v1AccessToken}`,
+              },
+              body: JSON.stringify({
+                message: {
+                  token: tok,
+                  android: { priority: 'HIGH', ttl: '120s' },
+                  data: fcmDataPayload,
+                },
+              }),
+            });
+            const v1Result = await v1Response.json().catch(() => ({}));
+            return { token: tok.slice(0, 10), status: v1Response.status, result: v1Result };
+          } catch (e: any) {
+            return { token: tok.slice(0, 10), error: e.message };
+          }
+        })
+      );
 
-      const v1Result = await v1Response.json().catch(() => ({}));
-      console.log('[Call API] FCM v1 send:', v1Response.status, JSON.stringify(v1Result).slice(0, 300));
       return res.status(200).json({
         success: true,
         fcmSent: true,
         apiType: 'v1',
+        devicesNotified: sendResults.length,
         targetTokenFound: true,
-        fcmResult: v1Result,
+        fcmResults: sendResults,
         payload: fcmDataPayload,
       });
     } catch (err: any) {
@@ -404,12 +437,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const targetToken = await findTargetFcmToken(callee_phone, student_id);
-      if (!targetToken) {
+      const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
+      if (!targetTokens.length) {
         return res.status(200).json({
           success: true,
           fcmSent: false,
-          message: 'No target token found for cancellation',
+          message: 'No target tokens found for cancellation',
         });
       }
 
@@ -426,26 +459,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         call_id: String(call_id || ''),
       };
 
-      const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${v1AccessToken}`,
-        },
-        body: JSON.stringify({
-          message: {
-            token: targetToken,
-            android: { priority: 'HIGH', ttl: '30s' },
-            data: cancelPayload,
-          },
-        }),
-      });
+      const sendResults = await Promise.all(
+        targetTokens.map(async (tok) => {
+          try {
+            const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${v1AccessToken}`,
+              },
+              body: JSON.stringify({
+                message: {
+                  token: tok,
+                  android: { priority: 'HIGH', ttl: '30s' },
+                  data: cancelPayload,
+                },
+              }),
+            });
+            const v1Result = await v1Response.json().catch(() => ({}));
+            return { token: tok.slice(0, 10), status: v1Response.status, result: v1Result };
+          } catch (e: any) {
+            return { token: tok.slice(0, 10), error: e.message };
+          }
+        })
+      );
 
-      const v1Result = await v1Response.json().catch(() => ({}));
       return res.status(200).json({
         success: true,
         fcmSent: true,
-        fcmResult: v1Result,
+        devicesNotified: sendResults.length,
+        cancelResults: sendResults,
       });
     } catch (err: any) {
       console.error('[Call API] cancel_call_push error:', err);

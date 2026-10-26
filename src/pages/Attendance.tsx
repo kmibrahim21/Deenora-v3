@@ -624,7 +624,15 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             }
             
             if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
-               query = query.eq('session', selectedSession);
+               const isMorning = selectedSession === 'morning' || (sessions.length > 0 && selectedSession === sessions[0].id);
+               const isAfternoon = selectedSession === 'afternoon' || (sessions.length > 1 && selectedSession === sessions[1].id);
+               if (isMorning) {
+                 query = query.or(`session.eq.${selectedSession},session.eq.morning,session.is.null`);
+               } else if (isAfternoon) {
+                 query = query.or(`session.eq.${selectedSession},session.eq.afternoon`);
+               } else {
+                 query = query.eq('session', selectedSession);
+               }
             }
             return query.limit(1);
           },

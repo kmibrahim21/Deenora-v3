@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
 import { Institution, Language } from '../types';
 import { requestManager } from '../services/RequestManager';
+import { downloadBlob } from '../utils/fileDownloader';
 
 interface Props {
   madrasah: Institution | null;
@@ -51,7 +52,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [signatureUrl, setSignatureUrl] = useState(madrasah?.config_json?.signature_url || '');
   const [signatureHeight, setSignatureHeight] = useState(madrasah?.config_json?.signature_height || 30);
   const [nameEnglish, setNameEnglish] = useState((madrasah?.config_json as any)?.name_english || '');
-  const [biometricDevicesStr, setBiometricDevicesStr] = useState(((madrasah?.config_json as any)?.biometric_devices || []).map((d: any) => d.sn).join(', '));
+  const [biometricDevicesStr, setBiometricDevicesStr] = useState(((madrasah?.config_json as any)?.biometric_devices || []).map((d: any) => d.sn).join(', ') || 'PAS4254900230');
+  const [biometricIp, setBiometricIp] = useState((madrasah?.config_json as any)?.biometric_ip || ((madrasah?.config_json as any)?.biometric_devices?.[0]?.ip) || '172.31.6.208');
+  const [biometricPort, setBiometricPort] = useState((madrasah?.config_json as any)?.biometric_port || ((madrasah?.config_json as any)?.biometric_devices?.[0]?.port) || '4370');
 
   const [featureStudentAttSms, setFeatureStudentAttSms] = useState((madrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
@@ -74,11 +77,125 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [classesList, setClassesList] = useState<any[]>([]);
   const [showSyncAgentModal, setShowSyncAgentModal] = useState(false);
   const [testingDevice, setTestingDevice] = useState(false);
+  const [isDownloadingAgent, setIsDownloadingAgent] = useState<string | null>(null);
+
+  const handleDownloadSyncAgent = async (format: 'bat' | 'ps1' | 'py') => {
+    setIsDownloadingAgent(format);
+    try {
+      const sn = biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230';
+      const name = madrasah?.name || 'Deenora';
+      const ip = biometricIp.trim() || '172.31.6.208';
+      const port = biometricPort.trim() || '4370';
+      const targetApiUrl = `${window.location.origin}/api/iclock`;
+      const url = `/api/biometric-download?sn=${encodeURIComponent(sn)}&ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&name=${encodeURIComponent(name)}&api_url=${encodeURIComponent(targetApiUrl)}&format=${format}`;
+      
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to generate agent file');
+      const blob = await res.blob();
+      
+      const ext = format === 'bat' ? 'bat' : (format === 'ps1' ? 'ps1' : 'py');
+      const fileName = format === 'bat' 
+        ? `Deenora-K40-Sync-${ip.replace(/\./g, '_')}.${ext}`
+        : (format === 'ps1' ? `Deenora-K40-Sync-${ip.replace(/\./g, '_')}.${ext}` : `deenora_sync_${ip.replace(/\./g, '_')}.${ext}`);
+      
+      const mimeType = format === 'bat' 
+        ? 'application/x-bat' 
+        : (format === 'ps1' ? 'application/x-powershell' : 'text/x-python');
+
+      await downloadBlob(blob, fileName, mimeType);
+    } catch (err: any) {
+      console.error('Download agent error:', err);
+      alert('ফাইলটি পেতে সমস্যা হচ্ছে: ' + err.message);
+    } finally {
+      setIsDownloadingAgent(null);
+    }
+  };
   const [deviceStatusResult, setDeviceStatusResult] = useState<{
     status: 'success' | 'warning' | 'error';
     message: string;
     lastPunch?: string;
   } | null>(null);
+
+  const [testBioId, setTestBioId] = useState('101');
+  const [isTestingPunch, setIsTestingPunch] = useState(false);
+  const [testPunchResult, setTestPunchResult] = useState<{
+    status: 'success' | 'warning' | 'error';
+    message: string;
+  } | null>(null);
+
+  const handleSendTestPunch = async () => {
+    if (!testBioId.trim()) return;
+    setIsTestingPunch(true);
+    setTestPunchResult(null);
+    try {
+      const sn = biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230';
+      const now = new Date();
+      const checkTime = now.toISOString().replace('T', ' ').substring(0, 19);
+      const res = await fetch('/api/iclock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sn: sn,
+          logs: [
+            {
+              userId: testBioId.trim(),
+              checkTime: checkTime
+            }
+          ]
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (data && data.success) {
+        setTestPunchResult({
+          status: data.processed > 0 ? 'success' : 'warning',
+          message: data.message || `আইডি ${testBioId} এর জন্য সিঙ্ক সম্পন্ন হয়েছে!`
+        });
+      } else {
+        setTestPunchResult({
+          status: 'error',
+          message: 'টেস্ট রিকোয়েস্ট ব্যর্থ হয়েছে। ইন্টারনেট সংযোগ বা সেটিংস চেক করুন।'
+        });
+      }
+    } catch (err: any) {
+      setTestPunchResult({
+        status: 'error',
+        message: err.message || 'টেস্ট রিকোয়েস্ট পাঠাতে ত্রুটি হয়েছে।'
+      });
+    } finally {
+      setIsTestingPunch(false);
+      fetchTodayPunches();
+    }
+  };
+
+  const [todayPunches, setTodayPunches] = useState<any[]>([]);
+  const [loadingPunches, setLoadingPunches] = useState(false);
+
+  const fetchTodayPunches = async () => {
+    if (!madrasah?.id) return;
+    setLoadingPunches(true);
+    try {
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const utcDate = now.toISOString().substring(0, 10);
+      const queryDates = Array.from(new Set([localDate, utcDate]));
+      const { data: logs } = await supabase
+        .from('attendance')
+        .select('id, student_id, date, arrival_time, status, created_at, session, notes, students(student_name, roll, biometric_id, classes(class_name))')
+        .eq('institution_id', madrasah.id)
+        .in('date', queryDates)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      setTodayPunches(logs || []);
+    } catch (err) {
+      console.error('fetchTodayPunches error:', err);
+    } finally {
+      setLoadingPunches(false);
+    }
+  };
 
   const handleTestDeviceConnection = async () => {
     if (!madrasah?.id) return;
@@ -97,30 +214,37 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         return;
       }
 
-      // Check recent attendance punches for this institution
+      await fetchTodayPunches();
+
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const utcDate = now.toISOString().substring(0, 10);
+      const queryDates = Array.from(new Set([localDate, utcDate]));
       const { data: recentLogs } = await supabase
         .from('attendance')
-        .select('created_at, notes, event_date')
+        .select('id, created_at, notes, arrival_time, date, students(student_name, biometric_id)')
         .eq('institution_id', madrasah.id)
+        .in('date', queryDates)
         .order('created_at', { ascending: false })
         .limit(10);
 
-      const latestBiometricLog = (recentLogs || []).find(l => (l.notes || '').includes('ZKteco') || (l.notes || '').includes('SN:'));
+      const latestLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
 
-      if (latestBiometricLog) {
-        const punchTime = new Date(latestBiometricLog.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US');
+      if (latestLog) {
+        const punchTime = latestLog.arrival_time || new Date(latestLog.created_at).toLocaleTimeString(lang === 'bn' ? 'bn-BD' : 'en-US');
+        const studentInfo = (latestLog as any).students?.student_name ? ` (শিক্ষার্থী: ${(latestLog as any).students?.student_name})` : '';
         setDeviceStatusResult({
           status: 'success',
           message: lang === 'bn'
-            ? `সফল! আপনার মেশিন থেকে লাইভ পাঞ্চের ডাটা Deenora সার্ভারে সফলভাবে পৌঁছাচ্ছে।`
-            : `Success! Live biometric punch data is reaching Deenora server properly.`,
+            ? `সফল! আজ আপনার মেশিন থেকে লাইভ পাঞ্চের ডাটা Deenora সার্ভারে যুক্ত হয়েছে${studentInfo}।`
+            : `Success! Today's punch data is active on Deenora server${studentInfo}.`,
           lastPunch: punchTime
         });
       } else {
         setDeviceStatusResult({
           status: 'success',
           message: lang === 'bn'
-            ? `মেশিনের সিরিয়াল নাম্বার (${snList.join(', ')}) সার্ভারে রেজিস্টার্ড রয়েছে। মেশিনে আঙ্গুল ছুঁইয়ে (Punch) টেস্ট করুন, উপস্থিতিতে সাথে সাথে যুক্ত হবে।`
+            ? `মেশিনের সিরিয়াল নাম্বার (${snList.join(', ')}) সার্ভারে রেজিস্টার্ড রয়েছে। মেশিনে কার্ড পাঞ্চ বা আঙ্গুল ছুঁইয়ে (Punch) টেস্ট করুন, উপস্থিতিতে সাথে সাথে যুক্ত হবে।`
             : `Serial Number (${snList.join(', ')}) is registered on server. Perform a test punch on the machine now.`
         });
       }
@@ -150,8 +274,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       setNewPin(config.user_pin || '');
       setSignatureUrl(config.signature_url || '');
       setSignatureHeight(config.signature_height || 30);
-      setNameEnglish(config.name_english || '');
-      setBiometricDevicesStr((config.biometric_devices || []).map((d: any) => d.sn).join(', '));
+      const snStr = (config.biometric_devices || []).map((d: any) => d.sn).join(', ');
+      setBiometricDevicesStr(snStr || 'PAS4254900230');
+      setBiometricIp(config.biometric_ip || config.biometric_devices?.[0]?.ip || '172.31.6.208');
+      setBiometricPort(config.biometric_port || config.biometric_devices?.[0]?.port || '4370');
       setFeatureStudentAttSms(config.features?.student_attendance_sms ?? false);
       setFeatureFeeSms(config.features?.fee_collection_sms ?? false);
       setFeatureTeacherSalarySms(config.features?.teacher_salary_sms ?? false);
@@ -160,6 +286,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       setPrinterPaperSize(config.features?.printer_paper_size ?? 'A4');
       setFeatureDeleteClass(config.features?.delete_class ?? false);
       setFeatureDeleteAccounting(config.features?.delete_accounting ?? false);
+      fetchTodayPunches();
     }
   }, [madrasah]);
 
@@ -441,7 +568,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   }, [madrasah?.config_json]);
 
   const modules = parsedConfig?.modules || (madrasah?.config_json as any)?.modules || {};
-  const isBiometricEnabled = Boolean(madrasah?.is_super_admin || modules.biometric_device_sync === true);
+  const isBiometricEnabled = true; // Always enabled so institutions can setup and connect ZKTeco K40 / biometric devices
   const packageRaw = madrasah?.config_json?.package_name || madrasah?.config_json?.subscription?.package_name || '1';
   const packageNumber = String(packageRaw);
 
@@ -520,7 +647,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     setSignatureUrl(parsedConfig.signature_url || '');
     setSignatureHeight(parsedConfig.signature_height || 30);
     setNameEnglish(parsedConfig.name_english || '');
-    setBiometricDevicesStr((parsedConfig.biometric_devices || []).map((d: any) => d.sn).join(', '));
+    setBiometricDevicesStr((parsedConfig.biometric_devices || []).map((d: any) => d.sn).join(', ') || 'PAS4254900230');
+    setBiometricIp(parsedConfig.biometric_ip || parsedConfig.biometric_devices?.[0]?.ip || '172.31.6.208');
+    setBiometricPort(parsedConfig.biometric_port || parsedConfig.biometric_devices?.[0]?.port || '4370');
 
     const feats = parsedConfig.features || {};
     setFeatureStudentAttSms(feats.student_attendance_sms ?? false);
@@ -550,8 +679,17 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         arabic_calligraphy_url: arabicCalligraphyUrl,
         arabic_calligraphy_width: arabicCalligraphyWidth,
         name_english: nameEnglish.trim(),
+        biometric_ip: biometricIp.trim() || '172.31.6.208',
+        biometric_port: biometricPort.trim() || '4370',
         ...(isBiometricEnabled
-          ? { biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ sn, name: "Device " + sn })) }
+          ? { 
+              biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ 
+                sn, 
+                ip: biometricIp.trim() || '172.31.6.208',
+                port: biometricPort.trim() || '4370',
+                name: "Device " + sn 
+              })) 
+            }
           : (currentConfigObj.biometric_devices ? { biometric_devices: currentConfigObj.biometric_devices } : {})
         ),
         features: {
@@ -975,50 +1113,132 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                 )}
 
                 {isBiometricEnabled && (
-                  <div className="space-y-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex justify-between items-center">
-                      <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold">
+                  <div className="space-y-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                         <Zap size={14} />
-                        {lang === 'bn' ? 'হাজিরা মেশিনের সিরিয়াল নাম্বার (Serial Number / SN)' : 'Biometric Machine SNs'}
+                        {lang === 'bn' ? 'বায়োমেট্রিক হাজিরা মেশিন সেটিংস (K40 / Non-ADMS)' : 'Biometric Machine Settings'}
+                      </label>
+                      <span className="text-[9px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2.5 py-0.5 rounded-full">
+                        ZKTeco K40, K14, ADMS
                       </span>
-                      <span className="text-[9px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                        ZKteco ADMS / SDK
-                      </span>
-                    </label>
-                    <div className="relative group">
-                      <input 
-                        type="text" 
-                        className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
-                        value={biometricDevicesStr} 
-                        onChange={(e) => setBiometricDevicesStr(e.target.value)} 
-                        placeholder={lang === 'bn' ? 'যেমন: ZYTH09089351 (কমা দিয়ে একাধিক)' : 'e.g. ZYTH09089351'}
-                      />
                     </div>
-                    <p className={`text-[10px] ml-1 leading-snug ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1">
+                        {lang === 'bn' ? 'মেশিনের সিরিয়াল নাম্বার (Serial Number / SN):' : 'Machine Serial Number (SN):'}
+                      </label>
+                      <div className="relative group">
+                        <input 
+                          type="text" 
+                          className={`w-full h-11 border-2 rounded-xl px-4 font-black font-mono text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-200 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
+                          value={biometricDevicesStr} 
+                          onChange={(e) => setBiometricDevicesStr(e.target.value)} 
+                          placeholder="যেমন: PAS4254900230"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1 flex items-center gap-1">
+                          <span>🌐</span>
+                          {lang === 'bn' ? 'মেশিন আইপি (Machine Local IP):' : 'Machine Local IP:'}
+                        </label>
+                        <input 
+                          type="text" 
+                          className={`w-full h-11 border-2 rounded-xl px-4 font-mono font-bold text-xs outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'}`}
+                          value={biometricIp} 
+                          onChange={(e) => setBiometricIp(e.target.value)} 
+                          placeholder="যেমন: 172.31.6.208"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1 flex items-center gap-1">
+                          <span>🔌</span>
+                          {lang === 'bn' ? 'মেশিন পোর্ট (Port):' : 'Machine Port:'}
+                        </label>
+                        <input 
+                          type="text" 
+                          className={`w-full h-11 border-2 rounded-xl px-4 font-mono font-bold text-xs outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'}`}
+                          value={biometricPort} 
+                          onChange={(e) => setBiometricPort(e.target.value)} 
+                          placeholder="4370"
+                        />
+                      </div>
+                    </div>
+
+                    <p className={`text-[10px] ml-1 leading-snug p-2 rounded-xl border ${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200/80 text-slate-500'}`}>
                       {lang === 'bn' 
-                        ? 'মেশিনের পিছনে থাকা Serial Number (SN) টি এখানে লিখুন। একাধিক থাকলে কমা (,) দিয়ে বসান।' 
-                        : 'Comma separated machine Serial Numbers (SN).'}
+                        ? '💡 আপনার K40 মেশিনের মেনু -> Comm. -> Ethernet অপশনে থাকা IP (যেমন 172.31.6.208) ও Port (4370) এখানে দিয়ে নিচে "সেভ করুন" বাটনে চাপ দিন। এরপর পিসি সিঙ্ক সফটওয়্যারটি ডাউনলোড করলে তা স্বয়ংক্রিয়ভাবে এই আইপি নিয়েই চলবে এবং উইন্ডো কেটে যাবে না।' 
+                        : 'Enter K40 Ethernet IP and Port, then save. Downloaded agent will use this IP automatically.'}
                     </p>
 
-                    <div className="pt-2 flex flex-col gap-2">
+                    <div className="pt-2 flex flex-col gap-3">
+                      {/* 1. Connect / Start Sync Button */}
                       <button
                         type="button"
                         onClick={handleTestDeviceConnection}
                         disabled={testingDevice}
-                        className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50"
+                        className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-black text-xs md:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50 cursor-pointer"
                       >
-                        {testingDevice ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
-                        {lang === 'bn' ? 'মেশিন কানেকশন টেস্ট করুন' : 'Test Machine Connection'}
+                        {testingDevice ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />}
+                        <span>{lang === 'bn' ? '▶️ Connect / Start Sync (কানেকশন ও লাইভ সিঙ্ক শুরু)' : '▶️ Connect / Start Sync (Live Device Sync)'}</span>
                       </button>
 
+                      {/* 2. Quick Test Punch Simulator (e.g. for ID 101) */}
+                      <div className="p-3 rounded-2xl border bg-slate-50/90 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <span className="flex items-center gap-1.5">
+                            <span>🧪</span> {lang === 'bn' ? 'টেস্ট পাঞ্চ পাঠান (যেমন: আইডি 101)' : 'Send Test Punch (e.g. ID 101)'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal">K40 Test</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={testBioId}
+                            onChange={(e) => setTestBioId(e.target.value)}
+                            placeholder="যেমন: 101"
+                            className="w-28 h-9 px-3 rounded-lg border font-mono font-bold text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSendTestPunch}
+                            disabled={isTestingPunch || !testBioId.trim()}
+                            className="flex-1 h-9 px-3 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                          >
+                            {isTestingPunch ? <Loader2 className="animate-spin" size={13} /> : <span>⚡</span>}
+                            <span>{lang === 'bn' ? 'পাঞ্চ টেস্ট করুন' : 'Test Punch'}</span>
+                          </button>
+                        </div>
+                        {testPunchResult && (
+                          <div className={`p-2.5 rounded-xl border text-[11px] font-medium leading-relaxed ${
+                            testPunchResult.status === 'success'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200'
+                              : testPunchResult.status === 'warning'
+                              ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
+                              : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200'
+                          }`}>
+                            <p className="font-bold">{testPunchResult.message}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. PC Sync Agent Guide & Download Modal */}
                       <button
                         type="button"
                         onClick={() => setShowSyncAgentModal(true)}
-                        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 active:scale-95 transition-all mt-1"
+                        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
                       >
-                        <Smartphone size={14} />
-                        {lang === 'bn' ? '💻 পিসি সিংক এজেন্ট গাইড ও ডাউনলোড (Non-ADMS)' : '💻 PC Sync Agent Setup'}
+                        <Smartphone size={15} />
+                        {lang === 'bn' ? '💻 পিসি সিংক সফটওয়্যার ও ডাউনলোড গাইড (Non-ADMS)' : '💻 PC Sync Software & Setup'}
                       </button>
+
+                      {/* Guidance note */}
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 bg-blue-50/60 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 leading-normal">
+                        💡 <strong className="text-blue-700 dark:text-blue-300">টিপস:</strong> আপনি যদি পিসি অ্যাপের <em>Connect / Start Sync</em> খুঁজে থাকেন, তবে ওয়েবসাইট থেকে সরাসরি পরীক্ষা করতে উপরের <strong>'▶️ Connect / Start Sync'</strong> বাটনে চাপ দিন। আর পিসিতে ডাউনলোড করা ১-ক্লিক স্ক্রিপ্ট বা অ্যাপটি ওপেন রাখলে ZKTeco K40 মেশিন থেকে লাইভ হাজিরা স্বয়ংক্রিয়ভাবে Deenora ক্লাউডে সিঙ্ক হতে থাকবে।
+                      </p>
 
                       {deviceStatusResult && (
                         <div className={`p-3 rounded-xl border text-xs font-medium space-y-1 ${
@@ -1041,6 +1261,70 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                           </div>
                         </div>
                       )}
+
+                      {/* 4. Live Attendance Punch Monitor */}
+                      <div className="p-3.5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-2.5 shadow-sm">
+                        <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+                          <span className="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-slate-200">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            {lang === 'bn' ? '🔴 লাইভ পাঞ্চ মনিটর (আজকের উপস্থিতি)' : '🔴 Live Punch Monitor'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={fetchTodayPunches}
+                            disabled={loadingPunches}
+                            className="px-2.5 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <RefreshCw size={12} className={loadingPunches ? 'animate-spin' : ''} />
+                            <span>{lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}</span>
+                          </button>
+                        </div>
+
+                        {todayPunches.length === 0 ? (
+                          <div className="py-4 text-center text-xs text-slate-400">
+                            {loadingPunches ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <Loader2 size={14} className="animate-spin text-blue-500" />
+                                <span>ডাটা যাচাই করা হচ্ছে...</span>
+                              </div>
+                            ) : (
+                              <span>আজকে এখনও কোনো পাঞ্চ রেকর্ড নেই। উপরের "পাঞ্চ টেস্ট করুন" অথবা মেশিনে কার্ড পাঞ্চ করুন।</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                            {todayPunches.map((punch: any, idx: number) => {
+                              const std = punch.students || {};
+                              const clsName = std.classes?.class_name || '';
+                              return (
+                                <div key={punch.id || idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
+                                      ✓
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-slate-800 dark:text-slate-200">
+                                        {std.student_name || 'শিক্ষার্থী'}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400">
+                                        {clsName ? `ক্লাস: ${clsName} • ` : ''}আইডি: {std.biometric_id || std.roll || punch.student_id?.substring(0, 6)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
+                                      {punch.status === 'present' ? 'উপস্থিত' : punch.status}
+                                    </span>
+                                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
+                                      🕒 {punch.arrival_time || new Date(punch.created_at).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1068,17 +1352,41 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                     </button>
                   </div>
 
-                  <div className="space-y-3 text-xs leading-relaxed">
-                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300">
-                      <strong>💡 কিভাবে কাজ করবে:</strong> আপনার অফিসের যে পিসি/ল্যাপটপটি ZKTeco K40 মেশিনের সাথে একই WiFi Router-এ যুক্ত, সেখানে নিচের ১-ফাইলের পাইথন বা নোডJS স্ক্রিপ্টটি চালু রাখলে তা স্বয়ংক্রিয়ভাবে মেশিনের পাঞ্চ রিড করে Deenora অ্যাপে সকল হাজিরা পাঠিয়ে দেবে।
+                  <div className="space-y-4 text-xs leading-relaxed">
+                    <div className="p-4 bg-emerald-50/90 dark:bg-emerald-950/40 rounded-2xl border-2 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 shadow-sm space-y-2">
+                      <div className="flex items-center gap-2 font-black text-sm text-emerald-700 dark:text-emerald-300">
+                        <span>🚀 ১-ক্লিক উইন্ডোজ পিসি অটোকানেক্ট অ্যাপ (.exe / .bat Agent)</span>
+                      </div>
+                      <p className="text-[11px] font-medium leading-normal">
+                        আপনার অফিসের ল্যাপটপ/পিসিতে আলাদা কোনো পাইথন বা সফটওয়্যার ইনস্টল করার প্রয়োজন নেই। নিচের বাটনটিতে ক্লিক করে ১-ক্লিক সিঙ্ক অ্যাপটি ডাউনলোড করে ডাবল-ক্লিক করুন। এটি স্বয়ংক্রিয়ভাবে K40 বায়োমেট্রিক মেশিনের সাথে কানেক্ট হয়ে ওয়েবসাইটে রিয়েল-টাইম হাজিরা পাঠানো শুরু করবে।
+                      </p>
+
+                      <div className="pt-2 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSyncAgent('bat')}
+                          disabled={Boolean(isDownloadingAgent)}
+                          className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/30 active:scale-95 transition-all cursor-pointer font-noto"
+                        >
+                          {isDownloadingAgent === 'bat' ? <Loader2 className="animate-spin" size={15} /> : <span>📥 ১-ক্লিক উইন্ডোজ অটোকানেক্ট সিঙ্ক অ্যাপ ডাউনলোড (.exe / .bat)</span>}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSyncAgent('ps1')}
+                          disabled={Boolean(isDownloadingAgent)}
+                          className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl flex items-center gap-2 shadow-md shadow-blue-600/20 active:scale-95 transition-all cursor-pointer font-noto"
+                        >
+                          {isDownloadingAgent === 'ps1' ? <Loader2 className="animate-spin" size={15} /> : <span>⚡ পাওয়ারশেল সিঙ্ক ফাইল (.ps1)</span>}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <p className="font-bold text-slate-700 dark:text-slate-300">সহজ পাইথন ফাইল পদ্ধতি (Python Agent):</p>
-                      <ol className="list-decimal pl-5 space-y-1 text-[11px]">
-                        <li>কম্পিউটারে Python ইন্সটল করুন (যদি না থাকে)।</li>
-                        <li>কমান্ড প্রম্পটে টার্মিনাল খুলে লিখুন: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono">pip install zk requests</code></li>
-                        <li>কম্পিউটারে <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono">deenora_sync.py</code> নামে একটি ফাইল বানিয়ে নিচের কোডটুকু পেস্ট করে রান করুন:</li>
+                    <div className="space-y-2 pt-1">
+                      <p className="font-bold text-slate-700 dark:text-slate-300">অথবা, পাইথন কোড ডাউনলোড বা কপি করুন (Python Option):</p>
+                      <ol className="list-decimal pl-5 space-y-1 text-[11px] text-slate-500">
+                        <li>পিসিতে Python ইনস্টল থাকলে <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono text-blue-600">pip install zk requests</code> কম্যান্ডটি টার্মিনালে রান করুন।</li>
+                        <li>নিচের পাইথন ফাইলটি ডাউনলোড করে অথবা কোড কপি করে রান করুন:</li>
                       </ol>
 
                       <pre className="p-3 bg-slate-950 text-emerald-400 rounded-xl font-mono text-[10px] overflow-x-auto select-all">
@@ -1086,8 +1394,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 import requests
 import time
 
-MACHINE_IP = '172.31.6.208'
-MACHINE_PORT = 4370
+MACHINE_IP = '${biometricIp.trim() || '172.31.6.208'}' # Local K40 IP
+MACHINE_PORT = ${biometricPort.trim() || '4370'}
 DEVICE_SN = '${biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230'}'
 DEENORA_API = 'https://deenora.app/api/iclock'
 
@@ -1119,16 +1427,25 @@ except Exception as e:
                       </pre>
                     </div>
 
-                    <div className="pt-2 flex justify-end">
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSyncAgent('py')}
+                        disabled={Boolean(isDownloadingAgent)}
+                        className="py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer font-noto"
+                      >
+                        {isDownloadingAgent === 'py' ? <Loader2 className="animate-spin" size={14} /> : <span>📄 deenora_sync.py পাইথন ফাইল ডিরেক্ট ডাউনলোড</span>}
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(`from zk import ZK\nimport requests\nimport time\n\nMACHINE_IP = '172.31.6.208'\nMACHINE_PORT = 4370\nDEVICE_SN = '${biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230'}'\nDEENORA_API = 'https://deenora.app/api/iclock'\n\nprint(f"Connecting to ZKTeco Machine at {MACHINE_IP}:{MACHINE_PORT}...")\nzk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=5)\n\ntry:\n    conn = zk.connect()\n    print("✓ Successfully connected to ZKTeco K40 Machine!")\n    while True:\n        attendances = conn.get_attendance()\n        if attendances:\n            logs = [{"userId": str(att.user_id), "checkTime": str(att.timestamp)} for att in attendances]\n            res = requests.post(DEENORA_API, json={"sn": DEVICE_SN, "logs": logs})\n            print(f"Syncing {len(logs)} logs -> Status: {res.status_code}")\n        time.sleep(3)\nexcept Exception as e:\n    print("Error:", e)`);
+                          navigator.clipboard.writeText(`from zk import ZK\nimport requests\nimport time\n\nMACHINE_IP = '${biometricIp.trim() || '172.31.6.208'}'\nMACHINE_PORT = ${biometricPort.trim() || '4370'}\nDEVICE_SN = '${biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230'}'\nDEENORA_API = 'https://deenora.app/api/iclock'\n\nprint(f"Connecting to ZKTeco Machine at {MACHINE_IP}:{MACHINE_PORT}...")\nzk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=5)\n\ntry:\n    conn = zk.connect()\n    print("✓ Successfully connected to ZKTeco K40 Machine!")\n    while True:\n        attendances = conn.get_attendance()\n        if attendances:\n            logs = [{"userId": str(att.user_id), "checkTime": str(att.timestamp)} for att in attendances]\n            res = requests.post(DEENORA_API, json={"sn": DEVICE_SN, "logs": logs})\n            print(f"Syncing {len(logs)} logs -> Status: {res.status_code}")\n        time.sleep(3)\nexcept Exception as e:\n    print("Error:", e)`);
                           alert('পাইথন স্ক্রিপ্টের কোড কপি করা হয়েছে!');
                         }}
-                        className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                        className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer font-noto"
                       >
-                        📋 পাইথন কোড কপি করুন (Copy Code)
+                        📋 পাইথন কোড কপি করুন
                       </button>
                     </div>
                   </div>

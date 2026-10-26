@@ -1749,7 +1749,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       />
                     </div>
 
-                    {(madrasah?.config_json as any)?.modules?.biometric_device_sync && (
+                    {Boolean((madrasah?.config_json as any)?.modules?.biometric_device_sync !== false) && (
                       <div className="space-y-2">
                         <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
                           <CreditCard size={11} className="text-[#2563EB]" /> 

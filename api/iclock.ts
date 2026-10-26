@@ -13,7 +13,7 @@ function createSupabaseAdminClient() {
     process.env.SUPABASE_SERVICE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_ANON_KEY ||
-    '';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZmNnZGNncWttc25nd3FoZGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjU4ODEsImV4cCI6MjA5MDY0MTg4MX0.KEBjfOmIF5KbEelK--l-r3paOTpBFqlxX8pr4FgtqhY';
 
   return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
@@ -92,9 +92,9 @@ export default async function handler(req: any, res: any) {
       if (SN && searchedDeviceDiagnostic) {
         const instId = searchedDeviceDiagnostic.institution_id;
         const [{ data: students }, { data: teachers }, { data: recentLogs }] = await Promise.all([
-          supabase.from('students').select('id, name, full_name, biometric_id, roll').eq('institution_id', instId),
+          supabase.from('students').select('id, student_name, biometric_id, roll').eq('institution_id', instId),
           supabase.from('teachers').select('id, teacher_name, permissions').eq('institution_id', instId),
-          supabase.from('attendance').select('id, student_id, created_at, notes, date').eq('institution_id', instId).order('created_at', { ascending: false }).limit(5)
+          supabase.from('attendance').select('id, student_id, created_at, date').eq('institution_id', instId).order('created_at', { ascending: false }).limit(5)
         ]);
 
         const bioStudents = (students || []).filter(s => Boolean(s.biometric_id || s.roll));
@@ -243,7 +243,7 @@ export default async function handler(req: any, res: any) {
       const [{ data: studentsList }, { data: teachersList }] = await Promise.all([
         supabase
           .from('students')
-          .select('id, class_id, notes, registration_number, roll, biometric_id, guardian_phone, full_name, name')
+          .select('id, class_id, notes, registration_number, roll, biometric_id, guardian_phone, student_name')
           .eq('institution_id', matchedInstitutionId),
         supabase
           .from('teachers')
@@ -282,84 +282,87 @@ export default async function handler(req: any, res: any) {
 
         if (!date || date.length !== 10) continue;
 
-          const numUserId = Number(userId);
+        const numUserId = Number(userId);
 
-          // 1. Look up student by biometric_id, registration_number, roll, or ID (string or numeric)
-          const student = (studentsList || []).find((s: any) => {
-            const bId = (s.biometric_id || '').toString().trim();
-            const regNo = (s.registration_number || '').toString().trim();
-            const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
-            const sId = (s.id || '').toString().trim();
+        // 1. Look up student by biometric_id, registration_number, roll, or ID (string or numeric)
+        const student = (studentsList || []).find((s: any) => {
+          const bId = (s.biometric_id || '').toString().trim();
+          const regNo = (s.registration_number || '').toString().trim();
+          const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
+          const sId = (s.id || '').toString().trim();
 
-            if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
-            if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
-            if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
-            if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
-            if (rollNo && rollNo === userId) return true;
-            if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
-            if (s.notes && (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`))) return true;
-            if (sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
-            return false;
-          });
+          if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
+          if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
+          if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
+          if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
+          if (rollNo && rollNo === userId) return true;
+          if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
+          if (s.notes && (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`))) return true;
+          if (sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+          return false;
+        });
 
-          if (student) {
-            const { data: existingList } = await supabase
-              .from('attendance')
-              .select('id, status')
-              .eq('institution_id', matchedInstitutionId)
-              .eq('student_id', student.id)
-              .or(`date.eq.${date},event_date.eq.${date}`);
+        if (student) {
+          const settings = instConfig.attendance_settings || {};
+          const classSessions = student.class_id ? settings.class_sessions?.[student.class_id] : null;
+          const sessionsList = (classSessions && classSessions.length > 0) ? classSessions : (settings.sessions || []);
+          const activeSessionId = sessionsList.length > 0 ? sessionsList[0].id : 'morning';
+          const academicYearId = (student as any).academic_year_id || instConfig.active_academic_year_id || null;
 
-            if (!existingList || existingList.length === 0) {
-              const { error: insErr } = await supabase.from('attendance').insert({
-                institution_id: matchedInstitutionId,
-                student_id: student.id,
-                class_id: student.class_id,
-                date: date,
-                event_date: date,
-                status: 'present',
-                event_type: 'daily',
-                session: 'morning',
-                arrival_time: time || '08:30',
-                notes: `ZKteco Biometric Punch at ${time || checkTime} (SN: ${SN || 'AUTO'})`
-              });
+          const { data: existingList } = await supabase
+            .from('attendance')
+            .select('id, status, session')
+            .eq('institution_id', matchedInstitutionId)
+            .eq('student_id', student.id)
+            .eq('date', date);
 
-              if (!insErr) {
-                processedCount++;
-                console.log(`[ZKteco ADMS] Student Attendance Logged: ${student.full_name || student.name || student.id} -> Present on ${date}`);
+          if (!existingList || existingList.length === 0) {
+            const { error: insErr } = await supabase.from('attendance').insert({
+              institution_id: matchedInstitutionId,
+              student_id: student.id,
+              class_id: student.class_id,
+              date: date,
+              status: 'present',
+              session: activeSessionId,
+              arrival_time: time || '08:30',
+              academic_year_id: academicYearId
+            });
 
-                const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
-                if (shouldSendSms && student.guardian_phone) {
-                  try {
-                    await sendAttendanceSmsNotification(supabase, matchedInstitutionId, student, date, time || '08:30');
-                  } catch (smsErr) {
-                    console.warn('[ZKteco ADMS] Attendance SMS failed:', smsErr);
-                  }
+            if (!insErr) {
+              processedCount++;
+              console.log(`[ZKteco ADMS] Student Attendance Logged: ${student.student_name || student.id} -> Present on ${date}`);
+
+              const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
+              if (shouldSendSms && student.guardian_phone) {
+                try {
+                  await sendAttendanceSmsNotification(supabase, matchedInstitutionId, student, date, time || '08:30');
+                } catch (smsErr) {
+                  console.warn('[ZKteco ADMS] Attendance SMS failed:', smsErr);
                 }
-              } else {
-                console.error('[ZKteco ADMS] Student attendance insert error:', insErr);
               }
             } else {
-              const existingRec = existingList[0];
-              const { error: updErr } = await supabase
-                .from('attendance')
-                .update({
-                  date: date,
-                  event_date: date,
-                  status: 'present',
-                  arrival_time: time || '08:30',
-                  notes: `ZKteco Biometric Punch at ${time || checkTime} (SN: ${SN || 'AUTO'})`
-                })
-                .eq('id', existingRec.id);
-
-              if (!updErr) {
-                processedCount++;
-                console.log(`[ZKteco ADMS] Student Attendance Updated to Present: ${student.full_name || student.name || student.id} on ${date}`);
-              } else {
-                console.error('[ZKteco ADMS] Student attendance update error:', updErr);
-              }
+              console.error('[ZKteco ADMS] Student attendance insert error:', insErr);
             }
           } else {
+            const existingRec = existingList[0];
+            const { error: updErr } = await supabase
+              .from('attendance')
+              .update({
+                status: 'present',
+                arrival_time: time || '08:30',
+                session: existingRec.session || activeSessionId,
+                academic_year_id: academicYearId
+              })
+              .eq('id', existingRec.id);
+
+            if (!updErr) {
+              processedCount++;
+              console.log(`[ZKteco ADMS] Student Attendance Updated to Present: ${student.student_name || student.id} on ${date}`);
+            } else {
+              console.error('[ZKteco ADMS] Student attendance update error:', updErr);
+            }
+          }
+        } else {
             // 2. Look up teacher if not found in students
             const teacher = (teachersList || []).find((t: any) => {
               const perms = t.permissions || {};
@@ -389,8 +392,7 @@ export default async function handler(req: any, res: any) {
                   teacher_id: teacher.id,
                   date: date,
                   status: 'present',
-                  arrival_time: time || '08:30',
-                  notes: `ZKteco Biometric Punch at ${time || checkTime} (SN: ${SN || 'AUTO'})`
+                  arrival_time: time || '08:30'
                 });
 
                 if (!insTErr) {
@@ -405,8 +407,7 @@ export default async function handler(req: any, res: any) {
                   .from('teacher_attendance')
                   .update({
                     status: 'present',
-                    arrival_time: time || '08:30',
-                    notes: `ZKteco Biometric Punch at ${time || checkTime} (SN: ${SN || 'AUTO'})`
+                    arrival_time: time || '08:30'
                   })
                   .eq('id', existingT.id);
 
@@ -422,8 +423,17 @@ export default async function handler(req: any, res: any) {
         }
 
         console.log(`[ZKteco ADMS/SDK] Finished processing payload. Logged ${processedCount} present records.`);
-        if (req.headers['content-type']?.includes('application/json')) {
-          return res.status(200).json({ success: true, processed: processedCount });
+        if (req.headers['content-type']?.includes('application/json') || req.headers?.['accept']?.includes('json')) {
+          const firstUserId = lines[0] ? (lines[0].split(/[\t,\s]+/)[0] || '').trim() : '';
+          return res.status(200).json({ 
+            success: true, 
+            processed: processedCount,
+            matched_institution: matchedInstitution?.name,
+            device_sn: SN,
+            message: processedCount > 0
+              ? `সফলভাবে ${processedCount}টি হাজিরার রেকর্ড ডাটাবেজে উপস্থিত (Present) হিসেবে যুক্ত হয়েছে!`
+              : `পাঞ্চ রিকোয়েস্ট সার্ভারে পৌঁছেছে, কিন্তু ইউজার আইডি "${firstUserId}" এর সাথে কোনো শিক্ষার্থী বা শিক্ষকের 'বায়োমেট্রিক আইডি' বা 'রোল' মেলেনি। অনুগ্রহ করে শিক্ষার্থী তালিকায় ছাত্রের প্রোফাইলে এই আইডিটি বসিয়ে নিন।`
+          });
         }
     } catch (err: any) {
       console.error('[ZKteco ADMS/SDK] Exception in POST handler:', err);
@@ -448,7 +458,7 @@ export default async function handler(req: any, res: any) {
 async function sendAttendanceSmsNotification(supabaseClient: any, institutionId: string, student: any, date: string, time: string) {
   try {
     if (!supabaseClient) return;
-    const studentName = student.full_name || student.name || 'শিক্ষার্থী';
+    const studentName = student.student_name || 'শিক্ষার্থী';
     const guardianPhone = student.guardian_phone;
     if (!guardianPhone) return;
 
