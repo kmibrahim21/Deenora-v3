@@ -11,6 +11,7 @@ import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { extractStudentExtraFields, packStudentNotesWithExtra } from 'utils/studentExtraFields';
 import { DobPicker } from '../components/common/DobPicker';
+import { checkStudentLimit } from '../utils/studentLimitChecker';
 
 interface StudentFormProps {
   student?: Student | null;
@@ -113,26 +114,21 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
     setLoading(true);
     try {
-      let currentLimit = madrasah.config_json?.student_limit || 0;
-      if (!isEditing && navigator.onLine) {
-        // Fetch current limit fresh from DB to avoid staleness
-        const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
-        let freshConfig: any = instData?.config_json;
-        if (typeof freshConfig === 'string') {
-          try { freshConfig = JSON.parse(freshConfig); } catch (e) { freshConfig = {}; }
-        }
-        
-        if (freshConfig?.student_limit !== undefined) {
-          currentLimit = Number(freshConfig.student_limit);
-        }
-        
-        if (currentLimit > 0) {
-          const { count, error } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
-          if (!error && count !== null && count >= currentLimit) {
-            setErrorModal({ show: true, message: lang === 'bn' ? `দুঃখিত, আপনার প্রতিষ্ঠানে সর্বোচ্চ ${currentLimit} জন শিক্ষার্থী অ্যাড করার লিমিট রয়েছে। লিমিট বাড়াতে কর্তৃপক্ষের সাথে যোগাযোগ করুন।` : `Limit reached! You can only add up to ${currentLimit} students.` });
-            setLoading(false);
-            return;
-          }
+      if (!isEditing && navigator.onLine && madrasah?.id) {
+        const limitCheck = await checkStudentLimit(madrasah.id, madrasah.config_json);
+        if (limitCheck.isLimitReached) {
+          setErrorModal({
+            show: true,
+            message: lang === 'bn'
+              ? (limitCheck.isSharedBranchLimit
+                  ? `দুঃখিত, মূল ও শাখা ক্যাম্পাস মিলিয়ে নির্ধারিত সর্বোচ্চ ${limitCheck.limit} জন শিক্ষার্থীর কোটা পূর্ণ হয়ে গেছে (বর্তমান মোট: ${limitCheck.currentCount} জন)। নতুন শিক্ষার্থী যোগ করতে লিমিট বৃদ্ধি করতে হবে।`
+                  : `দুঃখিত, আপনার প্রতিষ্ঠানে সর্বোচ্চ ${limitCheck.limit} জন শিক্ষার্থী অ্যাড করার লিমিট রয়েছে। লিমিট বাড়াতে কর্তৃপক্ষের সাথে যোগাযোগ করুন।`)
+              : (limitCheck.isSharedBranchLimit
+                  ? `Total student capacity reached across all campuses! Limit is ${limitCheck.limit} (current: ${limitCheck.currentCount}).`
+                  : `Limit reached! You can only add up to ${limitCheck.limit} students.`)
+          });
+          setLoading(false);
+          return;
         }
       }
 

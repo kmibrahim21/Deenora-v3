@@ -113,6 +113,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
 
       const branchLimit = Number((rootInst.config_json as any)?.branch_limit ?? 0);
+      const rootStudentLimit = Number((rootInst.config_json as any)?.student_limit ?? 0);
+      const sharedBranchStudentLimit = (rootInst.config_json as any)?.shared_branch_student_limit !== false;
+      const remainingStudentQuota = rootStudentLimit > 0 ? Math.max(0, rootStudentLimit - totalStudentsAllBranches) : null;
 
       return res.status(200).json({
         success: true,
@@ -122,6 +125,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalStudentsAllBranches,
         totalTeachersAllBranches,
         branchLimit,
+        rootStudentLimit,
+        sharedBranchStudentLimit,
+        remainingStudentQuota,
         branches: formattedBranches
       });
     }

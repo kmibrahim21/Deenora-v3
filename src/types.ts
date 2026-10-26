@@ -67,6 +67,8 @@ export interface Institution {
     fee_engine?: 'school' | 'qawmi' | 'kindergarten' | 'simple';
     accounting_mode?: 'qawmi_flexible' | 'school_system';
     student_limit?: number;
+    branch_limit?: number;
+    shared_branch_student_limit?: boolean;
     user_pin?: string;
     academic_year_start?: string;
     active_academic_year_id?: string;

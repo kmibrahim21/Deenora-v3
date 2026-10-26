@@ -54,6 +54,9 @@ export const BranchManagementModal: React.FC<BranchManagementModalProps> = ({
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [branchLimit, setBranchLimit] = useState<number>(0);
+  const [rootStudentLimit, setRootStudentLimit] = useState<number>(0);
+  const [totalStudentsAllBranches, setTotalStudentsAllBranches] = useState<number>(0);
+  const [sharedBranchStudentLimit, setSharedBranchStudentLimit] = useState<boolean>(true);
 
   // Shared Pool & Allocation State
   const [parentSmsBalance, setParentSmsBalance] = useState<number>(0);
@@ -87,6 +90,9 @@ export const BranchManagementModal: React.FC<BranchManagementModalProps> = ({
       if (data.branchLimit !== undefined) {
         setBranchLimit(Number(data.branchLimit));
       }
+      if (data.rootStudentLimit !== undefined) setRootStudentLimit(Number(data.rootStudentLimit));
+      if (data.totalStudentsAllBranches !== undefined) setTotalStudentsAllBranches(Number(data.totalStudentsAllBranches));
+      if (data.sharedBranchStudentLimit !== undefined) setSharedBranchStudentLimit(Boolean(data.sharedBranchStudentLimit));
       if (data.sharedSmsBalance !== undefined) setParentSmsBalance(Number(data.sharedSmsBalance));
       if (data.sharedVoiceBalance !== undefined) setParentVoiceBalance(Number(data.sharedVoiceBalance));
     } catch (err: any) {
@@ -311,7 +317,7 @@ export const BranchManagementModal: React.FC<BranchManagementModalProps> = ({
           <div className={`rounded-[2rem] border overflow-hidden ${
             isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/50 border-slate-100 shadow-sm shadow-slate-100/50'
           }`}>
-            <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                   <Sparkles size={18} />
@@ -319,8 +325,8 @@ export const BranchManagementModal: React.FC<BranchManagementModalProps> = ({
                 </div>
                 <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold leading-relaxed font-noto">
                   {lang === 'bn'
-                    ? 'সকল শাখার জন্য একটিই কেন্দ্রীয় এসএমএস ও ভয়েস ব্যালেন্স কার্যকর থাকবে। আলাদা রিচার্জ করার ঝামেলা নেই।'
-                    : 'Unified SMS & Voice balance across all branches. No separate recharge needed.'}
+                    ? 'সকল শাখার জন্য একটিই কেন্দ্রীয় এসএমএস ও ভয়েস ব্যালেন্স কার্যকর থাকবে এবং মূল ও শাখা মিলিয়ে একটি সমন্বিত শিক্ষার্থী লিমিট প্রযোজ্য।'
+                    : 'Unified SMS, Voice balance, and shared student limit across all branches.'}
                 </p>
               </div>
 
@@ -345,6 +351,39 @@ export const BranchManagementModal: React.FC<BranchManagementModalProps> = ({
                       ></div>
                    </div>
                 </div>
+              </div>
+
+              {/* Shared Student Limit Card */}
+              <div className={`p-4 rounded-2xl flex flex-col justify-center gap-2 ${isDark ? 'bg-slate-900/50' : 'bg-white border border-slate-100'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'সমন্বিত শিক্ষার্থী কোটা' : 'Shared Student Quota'}</span>
+                  <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                    rootStudentLimit > 0 && totalStudentsAllBranches >= rootStudentLimit 
+                      ? 'bg-rose-500 text-white' 
+                      : 'bg-emerald-600 text-white'
+                  }`}>
+                    {rootStudentLimit <= 0 ? (lang === 'bn' ? 'সীমাহীন' : 'Unlimited') : (totalStudentsAllBranches >= rootStudentLimit ? (lang === 'bn' ? 'পূর্ণ' : 'Full') : (lang === 'bn' ? 'উপলব্ধ' : 'Available'))}
+                  </div>
+                </div>
+                <div className="flex items-end justify-between gap-2">
+                   <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black tabular-nums">{totalStudentsAllBranches}</span>
+                      <span className="text-slate-400 text-xs font-bold">/ {rootStudentLimit > 0 ? rootStudentLimit : '∞'}</span>
+                   </div>
+                   {rootStudentLimit > 0 && (
+                     <span className={`text-[11px] font-bold ${totalStudentsAllBranches >= rootStudentLimit ? 'text-rose-500' : 'text-emerald-600'}`}>
+                       {lang === 'bn' ? `বাকি: ${Math.max(0, rootStudentLimit - totalStudentsAllBranches)} জন` : `Left: ${Math.max(0, rootStudentLimit - totalStudentsAllBranches)}`}
+                     </span>
+                   )}
+                </div>
+                {rootStudentLimit > 0 && (
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1">
+                     <div 
+                       className={`h-full rounded-full transition-all duration-1000 ${totalStudentsAllBranches >= rootStudentLimit ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                       style={{ width: `${Math.min(100, (totalStudentsAllBranches / rootStudentLimit) * 100)}%` }}
+                     ></div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

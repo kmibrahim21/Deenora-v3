@@ -33,7 +33,8 @@ import {
   Info,
   Plus,
   Square,
-  Edit2
+  Edit2,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
@@ -2563,16 +2564,27 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <a 
+                  href="https://deevox.deenora.app/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-purple-500/20 cursor-pointer font-noto shrink-0"
+                  title="Deevox এআই ভয়েস জেনারেটরে যান"
+                >
+                  <Sparkles size={15} className="text-amber-300 animate-pulse shrink-0" />
+                  <span>{lang === 'bn' ? 'ভয়েস তৈরি করুন (Deevox)' : 'Generate Voice (Deevox)'}</span>
+                  <ExternalLink size={13} className="opacity-80 shrink-0" />
+                </a>
                 <button 
                   onClick={() => setShowUploadModal(true)} 
-                  className="bg-[#2563EB] hover:bg-blue-700 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200 cursor-pointer font-noto"
+                  className="bg-[#2563EB] hover:bg-blue-700 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all shadow-md shadow-blue-200 cursor-pointer font-noto shrink-0"
                 >
                   <Plus size={16} /> <span>{canApproveVoice ? (lang === 'bn' ? 'নতুন ভয়েস আপলোড / রেকর্ড' : 'Upload / Record Voice') : (lang === 'bn' ? 'নতুন ভয়েস আপলোড' : 'Upload Voice')}</span>
                 </button>
                 <button 
                   onClick={() => fetchVoices(true)} 
                   disabled={loading} 
-                  className="bg-blue-50 text-[#2563EB] px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 hover:bg-blue-100 cursor-pointer font-noto"
+                  className="bg-blue-50 text-[#2563EB] px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 hover:bg-blue-100 cursor-pointer font-noto shrink-0"
                 >
                   {loading ? <Loader2 className="animate-spin" size={14} /> : <History size={14} />} {t('sync_voices', lang)}
                 </button>
@@ -3713,6 +3725,21 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                         </label>
                       )}
                     </>
+                  )}
+
+                  {!uploadFile && (
+                    <div className="pt-1">
+                      <a
+                        href="https://deevox.deenora.app/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 p-3 rounded-2xl bg-purple-50/80 hover:bg-purple-100 text-purple-700 font-bold text-xs transition-all w-full border border-purple-100 group font-noto"
+                      >
+                        <Sparkles size={15} className="text-purple-600 animate-pulse group-hover:scale-110 transition-transform shrink-0" />
+                        <span>{lang === 'bn' ? 'টেক্সট থেকে এআই ভয়েস তৈরি করতে চান? Deevox-এ যান' : 'Want to generate AI voice from text? Open Deevox'}</span>
+                        <ExternalLink size={13} className="text-purple-400 group-hover:text-purple-600 shrink-0" />
+                      </a>
+                    </div>
                   )}
 
                   {/* Recorded / Selected Audio Live Preview Player */}

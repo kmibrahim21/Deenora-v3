@@ -418,6 +418,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editDueAmount, setEditDueAmount] = useState<number>(0);
   const [editStudentLimit, setEditStudentLimit] = useState<number>(0);
   const [editBranchLimit, setEditBranchLimit] = useState<number>(0);
+  const [editSharedBranchStudentLimit, setEditSharedBranchStudentLimit] = useState<boolean>(true);
 
   const formatMonthsRange = (months: string[]) => {
     if (!months || months.length === 0) return '';
@@ -2050,6 +2051,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
     setEditStudentLimit(userConfig?.student_limit !== undefined ? Number(userConfig.student_limit) : 200);
     setEditBranchLimit(userConfig?.branch_limit !== undefined ? Number(userConfig.branch_limit) : 0);
+    setEditSharedBranchStudentLimit(userConfig?.shared_branch_student_limit !== false);
     setEditPassword(userConfig?.user_pin || '');
 
     const userModules = { ...(userConfig?.modules || {}) };
@@ -2264,6 +2266,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             due_amount: editDueAmount,
             student_limit: editStudentLimit,
             branch_limit: editBranchLimit,
+            shared_branch_student_limit: editSharedBranchStudentLimit,
             institute_code: editInstituteCode.trim(),
             user_pin: editPassword.trim()
           }
@@ -4115,13 +4118,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                            {selectedUserChildBranches.length > 0 ? 'Total Students (সকল শাখা সহ)' : 'Students'}
                          </p>
-                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} flex items-baseline gap-1.5`}>
                            {selectedUserChildBranches.length > 0 ? ((selectedUser.student_count ?? userStats.students) || 0) : userStats.students}
+                           {selectedUserChildBranches.length > 0 && Number((selectedUser.config_json as any)?.student_limit || 0) > 0 && (
+                             <span className="text-sm font-bold text-slate-400">
+                               / {(selectedUser.config_json as any).student_limit}
+                             </span>
+                           )}
                          </h5>
                          {selectedUserChildBranches.length > 0 && (
-                           <p className="text-[9px] font-bold text-slate-400 mt-1">
-                             মেইন ক্যাম্পাস: {selectedUser.direct_student_count ?? userStats.students} জন | শাখাগুলো: {Math.max(0, ((selectedUser.student_count ?? userStats.students) - (selectedUser.direct_student_count ?? userStats.students)))} জন
-                           </p>
+                           <div className="space-y-0.5 mt-1">
+                             <p className="text-[9px] font-bold text-slate-400">
+                               মেইন ক্যাম্পাস: {selectedUser.direct_student_count ?? userStats.students} জন | শাখাগুলো: {Math.max(0, ((selectedUser.student_count ?? userStats.students) - (selectedUser.direct_student_count ?? userStats.students)))} জন
+                             </p>
+                             {Number((selectedUser.config_json as any)?.student_limit || 0) > 0 && (
+                               <p className={`text-[9px] font-black ${((selectedUser.student_count ?? userStats.students) || 0) >= Number((selectedUser.config_json as any).student_limit) ? 'text-rose-500' : 'text-emerald-600'}`}>
+                                 {((selectedUser.student_count ?? userStats.students) || 0) >= Number((selectedUser.config_json as any).student_limit)
+                                   ? '⚠️ সমন্বিত কোটা পূর্ণ'
+                                   : `কোটা বাকি: ${Math.max(0, Number((selectedUser.config_json as any).student_limit) - ((selectedUser.student_count ?? userStats.students) || 0))} জন`}
+                               </p>
+                             )}
+                           </div>
                          )}
                       </div>
                       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/30 transition-all`}>
@@ -4428,6 +4445,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                        onChange={(e) => setEditBranchLimit(Math.max(0, Number(e.target.value)))}
                                        placeholder="0 = কোনো শাখা খুলতে পারবে না"
                                      />
+                                  </div>
+                                  <div className="col-span-full space-y-2 pt-1">
+                                     <div className={`p-4 rounded-2xl border transition-all ${editSharedBranchStudentLimit ? (madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50/70 border-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200')}`}>
+                                        <label className="flex items-start gap-3 cursor-pointer select-none">
+                                           <input 
+                                             type="checkbox"
+                                             disabled={!canWrite('institution_info')}
+                                             checked={editSharedBranchStudentLimit}
+                                             onChange={(e) => setEditSharedBranchStudentLimit(e.target.checked)}
+                                             className="mt-1 w-5 h-5 rounded text-[#2563EB] focus:ring-blue-500 accent-[#2563EB] cursor-pointer shrink-0"
+                                           />
+                                           <div className="space-y-0.5">
+                                              <span className="text-xs font-black text-[#1E3A8A] dark:text-blue-300 font-noto flex items-center gap-2">
+                                                 <span>শাখা সমন্বিত শিক্ষার্থী লিমিট (Shared Branch Student Limit)</span>
+                                                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${editSharedBranchStudentLimit ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                                                    {editSharedBranchStudentLimit ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Off)'}
+                                                 </span>
+                                              </span>
+                                              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 font-noto leading-relaxed">
+                                                 সক্রিয় থাকলে মূল শাখার শিক্ষার্থী লিমিটটি (যেমন: {editStudentLimit || 0} জন) মূল অ্যাকাউন্ট এবং এর সকল শাখা অ্যাকাউন্ট মিলিয়ে সমন্বিত সর্বোচ্চ কোটা হিসেবে কাজ করবে।
+                                              </p>
+                                           </div>
+                                        </label>
+                                     </div>
                                   </div>
                               </div>
                            </div>
