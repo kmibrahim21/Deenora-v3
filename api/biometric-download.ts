@@ -23,9 +23,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const autoApiUrl = `${protocol}://${hostHeader}/api/iclock`;
     const deenoraApi = (query.api_url || query.apiUrl || autoApiUrl).toString().trim();
 
+    // Generate standalone Python Worker script
+    const pyContent = `from zk import ZK
+import requests
+import time
+import sys
+from datetime import datetime
+
+MACHINE_IP = '${ip}'
+MACHINE_PORT = ${port}
+DEVICE_SN = '${sn}'
+DEENORA_API = '${deenoraApi}'
+
+print("=" * 64)
+print("DEENORA ZKTECO K40 AUTO-SYNC AGENT")
+print(f"Device SN  : {DEVICE_SN}")
+print(f"Machine IP : {MACHINE_IP}:{MACHINE_PORT}")
+print(f"Deenora API: {DEENORA_API}")
+print("=" * 64)
+
+def connect_zk():
+    try:
+        zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=8, password=0, force_udp=False)
+        return zk.connect()
+    except Exception:
+        zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=8, password=0, force_udp=True)
+        return zk.connect()
+
+synced_records = set()
+
+while True:
+    try:
+        print(f"[+] Connecting to ZK K40 Machine at {MACHINE_IP}:{MACHINE_PORT}...")
+        conn = connect_zk()
+        print("[✓] SUCCESSFULLY CONNECTED TO ZK K40 MACHINE!")
+        print("[+] Waiting for live punches... (Keep this running in background)")
+        
+        while True:
+            try:
+                today_str = datetime.now().strftime('%Y-%m-%d')
+                attendances = conn.get_attendance()
+                if attendances:
+                    today_logs = []
+                    for att in attendances:
+                        key = f"{att.user_id}_{att.timestamp}"
+                        att_time_str = str(att.timestamp)
+                        if att_time_str.startswith(today_str) or today_str in att_time_str:
+                            if key not in synced_records:
+                                today_logs.append({'userId': str(att.user_id), 'checkTime': att_time_str})
+                        synced_records.add(key)
+                    
+                    if today_logs:
+                        print(f"\\n[⚡ NEW PUNCH] Found {len(today_logs)} attendance logs. Syncing to Deenora...")
+                        res = requests.post(DEENORA_API, json={"sn": DEVICE_SN, "logs": today_logs}, timeout=10)
+                        if res.status_code == 200:
+                            for log in today_logs:
+                                print(f"  ✓ ID: {log['userId']} | Time: {log['checkTime']} -> Synced successfully!")
+                        else:
+                            print(f"  [!] Server responded with status {res.status_code}")
+                time.sleep(1.5)
+            except Exception as poll_err:
+                print(f"[!] Read Notice: {poll_err}. Reconnecting...")
+                break
+    except Exception as e:
+        print(f"[!] Connection Notice: {e}. Retrying in 5 seconds...")
+        time.sleep(5)
+`;
+
+    if (format === 'py') {
+      res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="deenora_sync_${ip.replace(/\./g, '_')}.py"`);
+      return res.status(200).send(pyContent);
+    }
+
+    // Base64 encode the Python script to embed safely in the Windows Batch launcher without any character escaping issues
+    const base64Py = Buffer.from(pyContent, 'utf-8').toString('base64');
+
     // 1. Windows 1-Click Executable Batch Launcher (.bat)
-    if (format === 'bat' || format === 'cmd' || format === 'exe') {
-      const batContent = `@echo off
+    const batContent = `@echo off
 title Deenora ZKTeco K40 Auto-Sync Agent (%DEVICE_SN%)
 color 0B
 chcp 65001 >nul 2>&1
@@ -103,90 +178,8 @@ if %errorlevel% neq 0 (
     echo [✓] K40 মেশিনের নেটওয়ার্ক পিং সফল!
 )
 
-rem Create clean standalone python worker script via PowerShell (avoids batch escaping bugs)
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-"$ip = '%MACHINE_IP%'; $port = '%MACHINE_PORT%'; $sn = '%DEVICE_SN%'; $api = '%DEENORA_API%';" ^
-"$py = @\"`
-import time, requests, sys
-from datetime import datetime
-try:
-    from zk import ZK
-except ImportError:
-    import os
-    os.system('pip install zk requests')
-    from zk import ZK
-
-MACHINE_IP = '$ip'
-MACHINE_PORT = int('$port')
-DEVICE_SN = '$sn'
-DEENORA_API = '$api'
-
-print('=' * 64)
-print(f'⚡ Deenora K40 লাইভ সিঙ্ক শুরু হচ্ছে... [IP: {MACHINE_IP}:{MACHINE_PORT}]')
-print(f'Deenora ক্লাউড সার্ভার: {DEENORA_API}')
-print('=' * 64)
-
-def connect_zk():
-    try:
-        zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=8, password=0, force_udp=False)
-        return zk.connect()
-    except Exception:
-        zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=8, password=0, force_udp=True)
-        return zk.connect()
-
-def run_sync():
-    synced_records = set()
-    while True:
-        try:
-            print(f'[+] ZKTeco K40 মেশিনের সাথে কানেক্ট করার চেষ্টা করা হচ্ছে...')
-            conn = connect_zk()
-            print('[✓] সফলভাবে ZKTeco K40 মেশিনের সাথে সংযুক্ত হয়েছে!')
-            print('[+] কার্ড পাঞ্চ বা আঙুলের ছাপের জন্য অপেক্ষা করা হচ্ছে... (Live Punch Active)')
-            print('[!] এই উইন্ডোটি চালু রাখুন। পাঞ্চ করলে এখানে সাথে সাথে দেখতে পাবেন।')
-            print('-' * 64)
-
-            while True:
-                try:
-                    today_str = datetime.now().strftime('%Y-%m-%d')
-                    attendances = conn.get_attendance()
-                    if attendances:
-                        today_logs = []
-                        for att in attendances:
-                            record_key = f'{att.user_id}_{att.timestamp}'
-                            att_str = str(att.timestamp)
-                            if att_str.startswith(today_str) or today_str in att_str:
-                                if record_key not in synced_records:
-                                    today_logs.append({'userId': str(att.user_id), 'checkTime': att_str})
-                            synced_records.add(record_key)
-
-                        if today_logs:
-                            print(f'\\n[⚡ নতুন পাঞ্চ!] {len(today_logs)}টি নতুন হাজিরা পাঞ্চ পাওয়া গেছে! Deenora ক্লাউডে পাঠানো হচ্ছে...')
-                            try:
-                                res = requests.post(DEENORA_API, json={'sn': DEVICE_SN, 'logs': today_logs}, timeout=10)
-                                print(f'  ✓ Deenora সার্ভার রেসপন্স: HTTP {res.status_code}')
-                                for log in today_logs:
-                                    print(f'    - ইউজার ID: {log[\"userId\"]} | সময়: {log[\"checkTime\"]} -> উপস্থিতি নিশ্চিত!')
-                            except Exception as req_err:
-                                print(f'  [!] সার্ভারে পাঠানোর ত্রুটি: {req_err}')
-                except Exception as poll_err:
-                    print(f'[!] রিডিং নোটিশ: {poll_err}. পুনরায় কানেক্ট করা হচ্ছে...')
-                    break
-                time.sleep(1.5)
-        except Exception as conn_err:
-            print(f'\\n[!] মেশিন কানেকশন ত্রুটি: {conn_err}')
-            print('[!] অনুগ্রহ করে চেক করুন:')
-            print('    ১. K40 মেশিনের Comm. -> PC Connection এ Comm Key = 0 আছে কিনা।')
-            print('    ২. পিসি এবং K40 মেশিন একই রাউটারে যুক্ত কিনা।')
-            print('    ৩. K40 মেশিনের আইপি ঠিক আছে কিনা।')
-            print('[+] ৫ সেকেন্ড পর পুনরায় চেষ্টা করা হচ্ছে...\\n')
-            time.sleep(5)
-
-if __name__ == '__main__':
-    try:
-        run_sync()
-    except KeyboardInterrupt:
-        print('\\n[!] প্রসেস সমাপ্ত করা হয়েছে।')
-\"@; [System.IO.File]::WriteAllText('deenora_sync_worker.py', $py, [System.Text.Encoding]::UTF8)"
+rem Extract standalone python script safely from Base64
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllBytes('deenora_sync_worker.py', [System.Convert]::FromBase64String('${base64Py}'))"
 
 python deenora_sync_worker.py
 
@@ -197,81 +190,9 @@ echo ===================================================================
 pause
 `;
 
-      res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="Deenora-K40-Sync-${ip.replace(/\./g, '_')}.bat"`);
-      return res.status(200).send(batContent);
-    }
-
-    // 2. Standalone Python Script (.py)
-    const pyContent = `from zk import ZK
-import requests
-import time
-import sys
-from datetime import datetime
-
-MACHINE_IP = '${ip}'
-MACHINE_PORT = ${port}
-DEVICE_SN = '${sn}'
-DEENORA_API = '${deenoraApi}'
-
-print("=" * 64)
-print(f"DEENORA ZKTECO K40 AUTO-SYNC AGENT")
-print(f"Device SN  : {DEVICE_SN}")
-print(f"Machine IP : {MACHINE_IP}:{MACHINE_PORT}")
-print(f"Deenora API: {DEENORA_API}")
-print("=" * 64)
-
-def connect_zk():
-    try:
-        zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=8, password=0, force_udp=False)
-        return zk.connect()
-    except Exception:
-        zk = ZK(MACHINE_IP, port=MACHINE_PORT, timeout=8, password=0, force_udp=True)
-        return zk.connect()
-
-synced_records = set()
-
-while True:
-    try:
-        print(f"[+] Connecting to ZK K40 Machine at {MACHINE_IP}:{MACHINE_PORT}...")
-        conn = connect_zk()
-        print("✓ SUCCESSFULLY CONNECTED TO ZK K40 MACHINE!")
-        print("[+] Waiting for live punches... (Keep this running in background)")
-        
-        while True:
-            try:
-                today_str = datetime.now().strftime('%Y-%m-%d')
-                attendances = conn.get_attendance()
-                if attendances:
-                    today_logs = []
-                    for att in attendances:
-                        key = f"{att.user_id}_{att.timestamp}"
-                        att_time_str = str(att.timestamp)
-                        if att_time_str.startswith(today_str) or today_str in att_time_str:
-                            if key not in synced_records:
-                                today_logs.append({'userId': str(att.user_id), 'checkTime': att_time_str})
-                        synced_records.add(key)
-                    
-                    if today_logs:
-                        print(f"\\n[⚡ NEW PUNCH] Found {len(today_logs)} attendance logs. Syncing to Deenora...")
-                        res = requests.post(DEENORA_API, json={"sn": DEVICE_SN, "logs": today_logs}, timeout=10)
-                        if res.status_code == 200:
-                            for log in today_logs:
-                                print(f"  ✓ ID: {log['userId']} | Time: {log['checkTime']} -> Synced successfully!")
-                        else:
-                            print(f"  [!] Server responded with status {res.status_code}")
-                time.sleep(1.5)
-            except Exception as poll_err:
-                print(f"[!] Read Notice: {poll_err}. Reconnecting...")
-                break
-    except Exception as e:
-        print(f"[!] Connection Notice: {e}. Retrying in 5 seconds...")
-        time.sleep(5)
-`;
-
-    res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="deenora_sync_${ip.replace(/\./g, '_')}.py"`);
-    return res.status(200).send(pyContent);
+    res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Deenora-K40-Sync-${ip.replace(/\./g, '_')}.bat"`);
+    return res.status(200).send(batContent);
 
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
