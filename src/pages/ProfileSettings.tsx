@@ -86,7 +86,12 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       const name = madrasah?.name || 'Deenora';
       const ip = biometricIp.trim() || '172.31.6.208';
       const port = biometricPort.trim() || '4370';
-      const targetApiUrl = `${window.location.origin}/api/iclock`;
+      const isPreviewHost = typeof window !== 'undefined' && (
+        window.location.hostname.includes('run.app') || 
+        window.location.hostname.includes('localhost') || 
+        window.location.hostname.includes('aistudio')
+      );
+      const targetApiUrl = isPreviewHost ? 'https://deenora.app/api/iclock' : `${window.location.origin}/api/iclock`;
       const url = `/api/biometric-download?sn=${encodeURIComponent(sn)}&ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&name=${encodeURIComponent(name)}&api_url=${encodeURIComponent(targetApiUrl)}&format=${format}`;
       
       const res = await fetch(url);
