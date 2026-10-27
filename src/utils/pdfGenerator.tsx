@@ -36,6 +36,9 @@ export const solaimanLipiFontEmbedCSS = `
   .font-solaiman, .font-solaiman * {
     font-family: 'SolaimanLipi', 'Noto Sans Bengali', sans-serif !important;
   }
+  .font-inter, .font-inter * {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  }
 `;
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
