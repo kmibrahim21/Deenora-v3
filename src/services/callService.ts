@@ -294,14 +294,13 @@ export class VoiceCallService {
       this.remoteAudioElement.autoplay = true;
       (this.remoteAudioElement as any).playsInline = true;
 
-      // Auto-hangup when tab is closed or user navigates away
+      // Auto-hangup ONLY when tab/window is explicitly closed (never on mobile pagehide/dialog focus)
       this.handleUnload = () => {
         if (this.activeCallData) {
           this.endCall();
         }
       };
       window.addEventListener('beforeunload', this.handleUnload);
-      window.addEventListener('pagehide', this.handleUnload);
 
       // Listen for cross-tab hangup / reject events
       if ('BroadcastChannel' in window) {
@@ -513,8 +512,9 @@ export class VoiceCallService {
       } catch {}
     };
     dc.onclose = () => {
-      console.log('[VoiceCall] RTCDataChannel closed by peer');
-      if (this.activeCallData && this.peerConnection) {
+      console.log('[VoiceCall] RTCDataChannel closed');
+      // Only end call if the call was already answered and active
+      if (this.activeCallData && this.peerConnection && this.isCallAnswered) {
         this.handleCallEndedRemotely();
       }
     };
@@ -976,22 +976,23 @@ export class VoiceCallService {
         throw new Error('মাইক্রোফোন ব্রাউজারে সাপোর্টেড নয় বা সিকিউর কনটেক্সট (HTTPS) প্রয়োজন।');
       }
       console.log('[VoiceCall] Requesting getUserMedia audio permission...');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-          sampleRate: 48000,
-          latency: 0.01,
-          googEchoCancellation: true,
-          googAutoGainControl: true,
-          googNoiseSuppression: true,
-          googHighpassFilter: true,
-          googTypingNoiseDetection: true,
-        } as any,
-        video: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+      } catch (advancedErr) {
+        console.warn('[VoiceCall] Advanced audio constraints failed, trying basic audio:true:', advancedErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+      }
       const audioTracks = stream.getAudioTracks();
       console.log('[VoiceCall] getUserMedia SUCCESS! Audio tracks count:', audioTracks.length);
       if (audioTracks.length > 0) {
@@ -1325,7 +1326,11 @@ export class VoiceCallService {
           }, 15000);
         }
       } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        this.handleCallEndedRemotely();
+        if (this.isCallAnswered) {
+          this.handleCallEndedRemotely();
+        } else {
+          console.warn('[VoiceCall] Connection state failed before answer, awaiting candidate recovery or timeout');
+        }
       }
     };
 
@@ -1613,77 +1618,53 @@ export class VoiceCallService {
     const callId = payload.callId;
 
     const hasNativeBridge = typeof window !== 'undefined' && Boolean(window.AndroidInterface?.onIncomingCall);
-    let handledByNativeBridge = false;
 
-    // Trigger Android native incoming call UI via JavaScript bridge if available
+    // Trigger Android native incoming call UI & hardware ringtone via JavaScript bridge if available
     if (hasNativeBridge) {
       try {
         window.AndroidInterface?.onIncomingCall?.(callerName, callId);
-        handledByNativeBridge = true;
+        window.AndroidInterface?.startRinging?.();
         this.isNativeBridgeActive = true;
-        console.log('[VoiceCall] Native Android incoming call UI triggered via bridge for call:', callId);
+        console.log('[VoiceCall] Native Android incoming call UI and ringing triggered via bridge for call:', callId);
       } catch (bridgeErr) {
-        console.warn('[VoiceCall] AndroidInterface.onIncomingCall bridge error, falling back to web UI & ringtone:', bridgeErr);
-        handledByNativeBridge = false;
-        this.isNativeBridgeActive = false;
+        console.warn('[VoiceCall] AndroidInterface.onIncomingCall bridge notice:', bridgeErr);
       }
     }
 
     // Persist payload for cold start or native retrieval
     try {
       localStorage.setItem('deenora_active_call_payload', JSON.stringify(payload));
-      // Only broadcast across tabs if web UI is active (never wake web modal when native bridge handles it)
-      if (!handledByNativeBridge && typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('deenora_call_events');
         bc.postMessage({ type: 'INCOMING_CALL', payload });
         setTimeout(() => bc.close(), 1000);
       }
     } catch {}
 
-    // If native bridge is not present (desktop/iOS) or bridge invocation failed, use web ringtone & modal
-    if (!handledByNativeBridge) {
-      this.isNativeBridgeActive = false;
-      // Start incoming ringtone
-      callSoundService.startIncomingRingtone();
-      this.onStatusChange?.('incoming', payload);
-      this.onIncomingCall?.(payload);
+    // ALWAYS activate incoming ringtone and update web UI to 'incoming' so normal/open app screen always displays and rings!
+    callSoundService.startIncomingRingtone();
+    this.onStatusChange?.('incoming', payload);
+    this.onIncomingCall?.(payload);
 
-      // Show WhatsApp-style persistent lock-screen / mobile screen notification
-      showIncomingCallNotification({
-        callId: payload.callId,
-        callerName: cleanCallerName,
-        studentName: payload.student.name,
-        photoUrl: payload.student.photo_url,
-      });
+    // Show WhatsApp-style persistent lock-screen / mobile screen notification
+    showIncomingCallNotification({
+      callId: payload.callId,
+      callerName: cleanCallerName,
+      studentName: payload.student.name,
+      photoUrl: payload.student.photo_url,
+    });
 
-      // Auto-timeout incoming call after 50 seconds on web ONLY if native bridge is not handling it
-      if (this.incomingRingTimeout) {
-        clearTimeout(this.incomingRingTimeout);
-        this.incomingRingTimeout = null;
-      }
-      this.incomingRingTimeout = setTimeout(() => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
-          console.log('[VoiceCall] Callee incoming call unanswered timeout (50s), cleaning up');
-          this.rejectCall('কলের কোনো উত্তর দেওয়া হয়নি (টাইমআউট)।', payload.callId, true);
-        }
-      }, 50000);
-    } else {
-      // In native bridge mode, web stays passive:
-      // Offer state is preserved in this.activeCallData and localStorage.
-      // Do NOT start incomingRingTimeout or send reject!
-      // Native Android UI manages ringtone, UI dismiss, and user actions.
-      // Long-term fail-safe timer (90s): only cleans up local state silently if native never responds
-      if (this.incomingRingTimeout) {
-        clearTimeout(this.incomingRingTimeout);
-        this.incomingRingTimeout = null;
-      }
-      this.incomingRingTimeout = setTimeout(() => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
-          console.log('[VoiceCall] Passive native bridge safety timeout (90s) expired. Silently clearing local state without sending reject.');
-          this.cleanup();
-        }
-      }, 90000);
+    // Auto-timeout incoming call after 50 seconds if unanswered
+    if (this.incomingRingTimeout) {
+      clearTimeout(this.incomingRingTimeout);
+      this.incomingRingTimeout = null;
     }
+    this.incomingRingTimeout = setTimeout(() => {
+      if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
+        console.log('[VoiceCall] Callee incoming call unanswered timeout (50s), cleaning up');
+        this.rejectCall('কলের কোনো উত্তর দেওয়া হয়নি (টাইমআউট)।', payload.callId, true);
+      }
+    }, 50000);
 
     // Notify caller that phone is ringing
     this.broadcastSignaling('call:ringing', {

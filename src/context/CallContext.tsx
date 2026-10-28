@@ -89,10 +89,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     voiceCallService.onIncomingCall = (call) => {
       setActiveCall(call);
       setIsCaller(false);
-      const hasBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
-      if (!hasBridge) {
-        setCallStatus('incoming');
-      }
+      setCallStatus('incoming');
     };
 
     voiceCallService.onError = (msg) => {
@@ -106,10 +103,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Listen for Service Worker incoming call actions & cross-tab events
   useEffect(() => {
-    const hasBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
     // Check if there is an active incoming call already in memory or localStorage
     const existingCall = voiceCallService.getActiveCall();
-    if (existingCall && callStatus === 'idle' && !hasBridge) {
+    if (existingCall && callStatus === 'idle') {
       setActiveCall(existingCall);
       setCallStatus('incoming');
     }
@@ -120,9 +116,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (event.data?.type === 'INCOMING_CALL' && event.data.payload) {
           setActiveCall(event.data.payload);
           setIsCaller(false);
-          if (!hasBridge) {
-            setCallStatus('incoming');
-          }
+          setCallStatus('incoming');
         }
       };
       return () => {
@@ -267,10 +261,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setCallStatus('connected');
           voiceCallService.acceptCall();
         } else {
-          const hasBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
-          if (!hasBridge) {
-            setCallStatus('incoming');
-          }
+          setCallStatus('incoming');
         }
 
         // Clean query parameter from URL without reload
