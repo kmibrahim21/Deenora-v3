@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, MessageSquareText, Library, LayoutDashboard, FileText, Radio, Heart } from 'lucide-react';
+import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, MessageSquareText, Library, LayoutDashboard, FileText, Radio, Heart, FileQuestion } from 'lucide-react';
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
@@ -172,6 +172,7 @@ const Layout: React.FC<LayoutProps> = ({
     if (tab === 'messages' && currentView === 'messages') return true;
     if (tab === 'data-management' && currentView === 'data-management') return true;
     if (tab === 'academic-year' && currentView === 'academic-year') return true;
+    if (tab === 'question-builder' && currentView === 'question-builder') return true;
     return false;
   };
 
@@ -322,6 +323,12 @@ const Layout: React.FC<LayoutProps> = ({
                 <button onClick={() => setView('exams')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('exams') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <GraduationCap size={22} strokeWidth={isTabActive('exams') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">{t('menu_exams', lang, madrasah?.institution_type)}</span>
+                </button>
+              )}
+              {(isSuperAdmin || role === 'madrasah_admin' || role === 'teacher' || hasPermission('can_manage_exams')) && (
+                <button onClick={() => setView('question-builder')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('question-builder') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <FileQuestion size={22} strokeWidth={isTabActive('question-builder') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'প্রশ্নপত্র মেকার' : 'Question Maker'}</span>
                 </button>
               )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && hasAdmissionFormAccess(madrasah, isSuperAdmin) && (

@@ -1,12 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=EB+Garamond:wght@400;600;700&family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lateef:wght@400;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Bengali:wght@400;500;600;700;900&family=Noto+Serif+Bengali:wght@400;600;700;800;900&family=Scheherazade+New:wght@400;700&family=Tiro+Bangla:ital@0;1&display=swap');
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;900&family=Tiro+Bangla:ital@0;1&family=Noto+Serif+Bengali:wght@400;500;600;700;800;900&display=swap');
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @font-face {
   font-family: 'SolaimanLipi';
-  src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+  src: url('https://cdn.jsdelivr.net/gh/atik-ulla/bangla-web-fonts@main/fonts/SolaimanLipi.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/gh/atik-ulla/bangla-web-fonts@main/fonts/SolaimanLipi.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kalpurush';
+  src: url('https://cdn.jsdelivr.net/gh/atik-ulla/bangla-web-fonts@main/fonts/Kalpurush.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/gh/atik-ulla/bangla-web-fonts@main/fonts/Kalpurush.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/kalpurush/kalpurush-2.0.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

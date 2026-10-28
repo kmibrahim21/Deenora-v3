@@ -17,7 +17,9 @@ interface AdmitCardProps {
 
 const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, templateId = 'modern', lang }) => {
   const isBangla = lang === 'bn';
-  const fontFamily = (templateId === 'modern' || templateId === 'admission' || isBangla) ? "'SolaimanLipi', sans-serif" : "'Times New Roman', serif";
+  const fontFamily = (templateId === 'modern' || templateId === 'admission' || isBangla) 
+    ? "'SolaimanLipi', 'Noto Serif Bengali', 'Hind Siliguri', 'Kalpurush', sans-serif" 
+    : "'Times New Roman', serif";
 
   // Parse config_json if it's a string
   let config = madrasah?.config_json;
@@ -37,55 +39,50 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
   };
 
   const getNameStyles = (name: string) => {
-    const len = name ? name.length : 0;
-    // Force single line, scale text down as length increases to prevent overflow without using ellipsis (....)
-    if (len > 60) {
+    const len = name ? name.trim().length : 0;
+    // Allow clean multi-line wrapping (break-words) with bold, prominent font sizing so the madrasah/school name looks grand and authoritative without overflowing.
+    if (len > 48) {
       return {
-        h1Class: 'text-[16px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[10px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[9px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[18px] font-black text-[#0c4a7e] tracking-tight leading-[1.18] mb-0.5 break-words max-w-full mx-auto px-1',
+        addrClass: 'text-[10px] font-bold text-[#0c4a7e]/85 max-w-full mx-auto mb-[1px] leading-tight line-clamp-1 break-words',
+        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 text-[9px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
-    if (len > 50) {
+    if (len > 34) {
       return {
-        h1Class: 'text-[19px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[22px] font-black text-[#0c4a7e] tracking-tight leading-[1.15] mb-0.5 break-words max-w-full mx-auto px-1',
+        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-full mx-auto mb-[1px] leading-tight line-clamp-1 break-words',
+        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 text-[9.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
-    if (len > 40) {
+    if (len > 20) {
       return {
-        h1Class: 'text-[24px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
-      };
-    }
-    if (len > 30) {
-      return {
-        h1Class: 'text-[28px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[12px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
-      };
-    }
-    if (len > 22) { 
-      return {
-        h1Class: 'text-[32px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[14px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[13px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
-      };
-    }
-    if (len > 15) {
-      return {
-        h1Class: 'text-[38px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[16px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-1 leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[14px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[26px] font-black text-[#0c4a7e] tracking-tight leading-[1.15] mb-0.5 break-words max-w-full mx-auto px-1',
+        addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-full mx-auto mb-0.5 leading-tight line-clamp-1 break-words',
+        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     return {
-      h1Class: 'text-[44px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-      addrClass: 'text-[18px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-1.5 leading-tight truncate',
-      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[15px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+      h1Class: 'text-[30px] font-black text-[#0c4a7e] tracking-tight leading-[1.15] mb-0.5 break-words max-w-full mx-auto px-1',
+      addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-full mx-auto mb-1 leading-tight line-clamp-1 break-words',
+      infoClass: 'flex items-center justify-center flex-wrap gap-x-2 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
     };
+  };
+
+  const getClassicNameSize = (name: string) => {
+    const len = name ? name.trim().length : 0;
+    if (len > 48) return 'text-[26px]';
+    if (len > 34) return 'text-[32px]';
+    if (len > 20) return 'text-[38px]';
+    return 'text-[44px]';
+  };
+
+  const getModernNameSize = (name: string) => {
+    const len = name ? name.trim().length : 0;
+    if (len > 48) return 'text-[26px]';
+    if (len > 34) return 'text-[32px]';
+    if (len > 20) return 'text-[38px]';
+    return 'text-[44px]';
   };
   
   if (templateId === 'admission') {
@@ -110,7 +107,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
     return (
       <div className="w-[190mm] h-[135mm] bg-white border-[3.5px] border-[#0c4a7e] rounded-[16px] overflow-hidden relative shadow-md flex flex-col justify-between p-[3.5mm] pb-[8mm]" style={{ fontFamily }}>
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Hind+Siliguri:wght@400;600;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
           @font-face {
             font-family: 'SolaimanLipi';
             src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
@@ -360,11 +357,11 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
               {madrasah.logo_url && (
                 <img src={madrasah.logo_url} className="w-[70px] h-[70px] object-contain mb-2" crossOrigin="anonymous" />
               )}
-              <h1 className="text-[40px] leading-[1.1] font-black text-black tracking-wide break-words w-full">
+              <h1 className={`${getClassicNameSize(madrasah.name)} leading-tight font-black text-black tracking-wide break-words w-full max-w-[760px] mx-auto`}>
                 {madrasah.name}
               </h1>
               {madrasah.address && (
-                <p className="text-[17px] text-black mt-1 font-medium break-words w-full leading-tight">
+                <p className="text-[15px] text-black mt-1 font-medium break-words w-full max-w-[760px] mx-auto leading-tight">
                   {madrasah.address}
                 </p>
               )}
@@ -474,8 +471,8 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
               <img src={madrasah.logo_url} alt="Logo" className="w-[84px] h-[84px] object-contain rounded-full" crossOrigin="anonymous" />
             </div>
           )}
-          <div className="text-left flex flex-col justify-center">
-            <h1 className="text-[52px] font-black drop-shadow-md tracking-wide leading-none text-center" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+          <div className="flex flex-col justify-center items-center max-w-[620px]">
+            <h1 className={`${getModernNameSize(madrasah.name)} font-black drop-shadow-md tracking-wide leading-tight text-center break-words max-w-full`} style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
               {madrasah.name}
             </h1>
             <div className="flex flex-col items-center justify-center mt-3 gap-1.5 text-blue-50 drop-shadow font-medium">
@@ -634,7 +631,7 @@ export const generateAdmitCardPDF = async (
       <base href="\${window.location.origin}/">
       <script src="https://cdn.tailwindcss.com"></script>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Hind+Siliguri:wght@400;600;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
         @font-face {
           font-family: 'SolaimanLipi';
           src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');

@@ -553,6 +553,7 @@ export type View =
   | 'academic-documents'
   | 'profile-settings'
   | 'donations'
+  | 'question-builder'
   | 'chat';
 
 export type ConversationType = 'direct' | 'class_group' | 'announcement' | 'teacher_staff' | 'custom_group';

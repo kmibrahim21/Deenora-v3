@@ -1,0 +1,60 @@
+{
+  "book": {
+    "id": "sample_ctg_01",
+    "board": "নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ (চট্টগ্রাম)",
+    "class_name": "তৃতীয় শ্রেণি",
+    "title": "কুরআন মাজীদ ও তাজবীদ",
+    "subject_code": "১০১",
+    "source_type": "easyqbd",
+    "cover_url": "https://deenora.app/covers/sample.webp",
+    "total_chapters": 2,
+    "total_questions": 4
+  },
+  "chapters": [
+    {
+      "id": "ch_sample_1",
+      "chapter_no": 1,
+      "title": "১ম অধ্যায়: মাখরাজ ও হরকত"
+    },
+    {
+      "id": "ch_sample_2",
+      "chapter_no": 2,
+      "title": "২য় অধ্যায়: গুন্নাহ ও ক্বলক্বলাহ"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_sample_001",
+      "chapter_id": "ch_sample_1",
+      "category_type": "সঠিক উত্তরটি বেছে নাও (MCQ)",
+      "question_text": "আরবি হরফ মোট কতটি?",
+      "options": ["২৭টি", "২৮টি", "২৯টি", "৩০টি"],
+      "answer_text": "২৯টি",
+      "default_marks": 1
+    },
+    {
+      "id": "q_sample_002",
+      "chapter_id": "ch_sample_1",
+      "category_type": "শূন্যস্থান পূরণ করো",
+      "question_text": "এক যবর, এক যের, এক পেশকে ________ বলে।",
+      "answer_text": "হরকত",
+      "default_marks": 1
+    },
+    {
+      "id": "q_sample_003",
+      "chapter_id": "ch_sample_2",
+      "category_type": "সংক্ষিপ্ত প্রশ্ন",
+      "question_text": "ক্বলক্বলার হরফ কয়টি ও কী কী?",
+      "answer_text": "ক্বলক্বলার হরফ ৫টি: ক্বফ (ق), ত্বা (ط), বা (ب), জীম (ج), দাল (د)।",
+      "default_marks": 2
+    },
+    {
+      "id": "q_sample_004",
+      "chapter_id": "ch_sample_2",
+      "category_type": "রচনামূলক প্রশ্ন",
+      "question_text": "তাজবীদের সংজ্ঞা দাও এবং তাজবীদসহ কুরআন তিলাওয়াতের গুরুত্ব আলোচনা করো।",
+      "answer_text": "তাজবীদ অর্থ সুন্দর করা...",
+      "default_marks": 5
+    }
+  ]
+}

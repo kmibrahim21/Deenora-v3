@@ -75,6 +75,9 @@ const TutorialsManager = React.lazy(() =>
 const AdmissionFormPage = React.lazy(() => import("components/admission_form/AdmissionFormPage"));
 const ParentPortal = React.lazy(() => import("pages/ParentPortal"));
 const AdminAiAgentFloatingButton = React.lazy(() => import("components/agent/AdminAiAgentFloatingButton"));
+const QuestionBuilderStudio = React.lazy(() =>
+  import("pages/QuestionBuilderStudio").then((m) => ({ default: m.QuestionBuilderStudio }))
+);
 
 const App: React.FC = () => {
   useSyncEngine();
@@ -870,6 +873,19 @@ const App: React.FC = () => {
             profile={profile}
             onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             onNavigate={(newView) => setView(newView)}
+            onUpgradeClick={() => {
+              setView(role === 'teacher' ? 'teacheraccount' : 'account');
+            }}
+          />
+        );
+      case "question-builder":
+        return (
+          <QuestionBuilderStudio
+            lang={lang}
+            madrasah={madrasah}
+            role={role}
+            profile={profile}
+            onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             onUpgradeClick={() => {
               setView(role === 'teacher' ? 'teacheraccount' : 'account');
             }}
