@@ -1103,9 +1103,67 @@ export class VoiceCallService {
   }
 
   /**
+   * Fetches fresh time-limited TURN credentials from /api/turn-credentials.
+   * If successful, appends TURN server to RTCConfiguration iceServers.
+   * If it fails or is unavailable, falls back gracefully to RTC_CONFIG without interrupting the call.
+   */
+  private async getRtcConfiguration(): Promise<RTCConfiguration> {
+    const config: RTCConfiguration = {
+      ...RTC_CONFIG,
+      iceServers: [...(RTC_CONFIG.iceServers || [])],
+    };
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) {
+        console.warn('[VoiceCall] TURN unavailable, STUN-only');
+        return config;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const res = await fetch('/api/turn-credentials', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        console.warn('[VoiceCall] TURN unavailable, STUN-only');
+        return config;
+      }
+
+      const turnData = await res.json();
+      if (turnData?.urls && turnData?.username && turnData?.credential) {
+        config.iceServers = [
+          ...(config.iceServers || []),
+          {
+            urls: turnData.urls,
+            username: turnData.username,
+            credential: turnData.credential,
+          },
+        ];
+        console.log('[VoiceCall] TURN configured');
+      } else {
+        console.warn('[VoiceCall] TURN unavailable, STUN-only');
+      }
+    } catch {
+      console.warn('[VoiceCall] TURN unavailable, STUN-only');
+    }
+
+    return config;
+  }
+
+  /**
    * Initialize RTCPeerConnection
    */
-  private createPeerConnection(callId: string): RTCPeerConnection {
+  private async createPeerConnection(callId: string): Promise<RTCPeerConnection> {
     if (this.peerConnection) {
       try {
         this.peerConnection.close();
@@ -1113,7 +1171,8 @@ export class VoiceCallService {
       this.peerConnection = null;
     }
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const rtcConfig = await this.getRtcConfiguration();
+    const pc = new RTCPeerConnection(rtcConfig);
     this.peerConnection = pc;
 
     // Zero-latency hangup & control DataChannel
@@ -1320,7 +1379,7 @@ export class VoiceCallService {
       }
 
       const stream = await this.acquireLocalStream();
-      const pc = this.createPeerConnection(callId);
+      const pc = await this.createPeerConnection(callId);
 
       if (stream) {
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -1659,7 +1718,7 @@ export class VoiceCallService {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
       const callId = this.activeCallData.callId;
-      const pc = this.createPeerConnection(callId);
+      const pc = await this.createPeerConnection(callId);
 
       const stream = await this.acquireLocalStream();
       if (stream) {

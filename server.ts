@@ -184,6 +184,11 @@ async function startServer() {
     await runHandler(path.join(__dirname, 'api', 'system.ts'), req, res);
   });
 
+  // TURN Credentials Route
+  app.all('/api/turn-credentials', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'turn-credentials.ts'), req, res);
+  });
+
   // Voice Refund Route (Mapping from vercel.json)
   app.all('/api/voice-refund', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
