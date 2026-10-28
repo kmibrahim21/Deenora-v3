@@ -86,6 +86,7 @@ const Layout: React.FC<LayoutProps> = ({
         exam_routine: configObj.modules?.exam_routine ?? true,
         donations: configObj.modules?.donations === true,
         live_chat: configObj.modules?.live_chat === true || isSuperAdmin,
+        question_bank: configObj.modules?.question_bank === true || isSuperAdmin,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',
@@ -325,7 +326,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <span className="text-sm font-bold font-noto">{t('menu_exams', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
-              {(isSuperAdmin || role === 'madrasah_admin' || role === 'teacher' || hasPermission('can_manage_exams')) && (
+              {(isSuperAdmin || (modules.modules.question_bank && (role === 'madrasah_admin' || role === 'teacher' || hasPermission('can_manage_exams')))) && (
                 <button onClick={() => setView('question-builder')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('question-builder') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <FileQuestion size={22} strokeWidth={isTabActive('question-builder') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'প্রশ্নপত্র মেকার' : 'Question Maker'}</span>

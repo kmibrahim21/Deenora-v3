@@ -42,6 +42,7 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
   const hasCertificates = modulesConfig.certificates ?? true;
   const hasClassRoutine = modulesConfig.class_routine ?? false;
   const hasIdCards = modulesConfig.id_cards ?? false;
+  const hasQuestionBank = (modulesConfig.question_bank === true) || isSuperAdmin;
 
   const allModules = [
     {
@@ -53,9 +54,9 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
       colorClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400',
       borderHover: 'hover:border-indigo-300 dark:hover:border-indigo-500/50',
       iconBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-      restricted: false,
-      badge: lang === 'bn' ? '✨ নতুন' : '✨ New',
-      show: true,
+      restricted: !hasQuestionBank,
+      badge: !hasQuestionBank ? (lang === 'bn' ? 'লকড' : 'Locked') : (lang === 'bn' ? '✨ নতুন' : '✨ New'),
+      show: hasQuestionBank,
       onClick: () => onNavigate('question-builder'),
     },
     {

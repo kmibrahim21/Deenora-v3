@@ -402,7 +402,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     donations: false,
     backup_restore: false,
     biometric_device_sync: false,
-    live_chat: false
+    live_chat: false,
+    question_bank: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -518,6 +519,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       backup_restore: false,
       biometric_device_sync: false,
       live_chat: false,
+      question_bank: false,
     };
 
     // 10. Ultimate package: Attendance, exam, Accounting, sms, voice, certificate, students photo, ID card, class routine, parent portal, messages
@@ -2101,6 +2103,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         backup_restore: userModules.backup_restore ?? false,
         biometric_device_sync: userModules.biometric_device_sync ?? false,
         live_chat: userModules.live_chat ?? false,
+        question_bank: userModules.question_bank ?? false,
         ...userModules
       });
     } else {
@@ -2122,6 +2125,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         backup_restore: false,
         biometric_device_sync: false,
         live_chat: false,
+        question_bank: false,
       });
     }
 
@@ -4602,6 +4606,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       donations: 'Donations',
                                       backup_restore: 'Backup & Restore',
                                       biometric_device_sync: 'Biometric Device',
+                                      question_bank: 'Question Bank',
                                     };
 
                                     return (

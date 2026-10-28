@@ -878,7 +878,36 @@ const App: React.FC = () => {
             }}
           />
         );
-      case "question-builder":
+      case "question-builder": {
+        const isSuperAdminOrManager = role === 'super_admin' || role === 'manager';
+        let configObj: any = madrasah?.config_json;
+        if (typeof configObj === 'string') {
+          try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
+        }
+        const hasQuestionBankAccess = isSuperAdminOrManager || configObj?.modules?.question_bank === true;
+        if (!hasQuestionBankAccess) {
+          return (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[420px]">
+              <div className="w-16 h-16 bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center mb-4">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">
+                {lang === 'bn' ? 'প্রশ্ন ব্যাংক পারমিশন প্রয়োজন' : 'Question Bank Access Required'}
+              </h2>
+              <p className="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
+                {lang === 'bn' 
+                  ? 'আপনার প্রতিষ্ঠানে প্রশ্ন ব্যাংক ও প্রশ্নপত্র মেকার মডিউলটি এখনো সক্রিয় করা হয়নি। এটি সক্রিয় করতে সুপার অ্যাডমিনের সাথে যোগাযোগ করুন।' 
+                  : 'Question Bank & Paper Studio is not enabled for your institution. Please contact the super admin.'}
+              </p>
+              <button 
+                onClick={() => setView('home')}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-all"
+              >
+                {lang === 'bn' ? 'ড্যাশবোর্ডে ফিরে যান' : 'Go to Dashboard'}
+              </button>
+            </div>
+          );
+        }
         return (
           <QuestionBuilderStudio
             lang={lang}
@@ -891,6 +920,7 @@ const App: React.FC = () => {
             }}
           />
         );
+      }
       case "data-management":
         return (
           <DataManagement

@@ -54,6 +54,11 @@ export interface Institution {
       exam_routine?: boolean;
       parent_portal?: boolean;
       donations?: boolean;
+      class_routine?: boolean;
+      live_chat?: boolean;
+      backup_restore?: boolean;
+      biometric_device_sync?: boolean;
+      question_bank?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     class_result_engines?: Record<string, 'gpa' | 'befaq' | 'high_school' | 'school'>;

@@ -1656,7 +1656,8 @@ async function setupInstitution(supabase, userId, body, res) {
         certificates: true,
         class_routine: true,
         parent_portal: false,
-        backup_restore: false
+        backup_restore: false,
+        question_bank: false
       },
       result_engine: 'school',
       result_system: 'grading',
