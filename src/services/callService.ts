@@ -698,8 +698,32 @@ export class VoiceCallService {
     // Auto-register Device FCM Token for Android background call wake-up
     try {
       const storedToken = typeof window !== 'undefined' ? localStorage.getItem('deenora_fcm_token') : null;
-      const bridgeToken = typeof window !== 'undefined' ? (window as any).AndroidInterface?.getFcmToken?.() : null;
+      const bridge = typeof window !== 'undefined' ? (window as any).AndroidInterface : null;
+      const bridgeToken = bridge?.getFcmToken?.() || null;
       const effectiveToken = storedToken || bridgeToken;
+
+      let deviceId = '';
+      try {
+        if (bridge && typeof bridge.getDeviceId === 'function') {
+          deviceId = bridge.getDeviceId() || '';
+        }
+      } catch {}
+      if (!deviceId && typeof window !== 'undefined') {
+        try {
+          deviceId = localStorage.getItem('deenora_device_id') || '';
+          if (!deviceId) {
+            deviceId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            localStorage.setItem('deenora_device_id', deviceId);
+          }
+        } catch {}
+      }
+
+      if (bridge && typeof bridge.savePushIdentity === 'function') {
+        try {
+          bridge.savePushIdentity(cleanPhone || null, cleanUserId || null, cleanInstId || null);
+        } catch {}
+      }
+
       if (effectiveToken && (cleanPhone || cleanUserId)) {
         fetch('/api/call', {
           method: 'POST',
@@ -707,6 +731,7 @@ export class VoiceCallService {
           body: JSON.stringify({
             action: 'register_token',
             token: effectiveToken,
+            device_id: deviceId || undefined,
             phone: cleanPhone || undefined,
             student_id: cleanUserId || undefined,
             institution_id: cleanInstId || undefined,

@@ -259,6 +259,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
           const { device_id, device_name } = req.body || {};
+
+          // Best-effort dedupe: if device_id is present, delete old rows for the same device with a different token
+          if (device_id) {
+            try {
+              await fetch(
+                `${SUPABASE_URL}/rest/v1/device_tokens?device_id=eq.${encodeURIComponent(device_id)}&fcm_token=neq.${encodeURIComponent(token)}`,
+                {
+                  method: 'DELETE',
+                  headers: {
+                    apikey: SUPABASE_KEY,
+                    Authorization: `Bearer ${SUPABASE_KEY}`,
+                  },
+                }
+              );
+            } catch (dedupeErr) {
+              console.warn('[Call API] Deduping device_tokens notice:', dedupeErr);
+            }
+          }
+
           const upsertBody: any = {
             fcm_token: token,
             updated_at: new Date().toISOString(),
@@ -401,6 +420,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         })
       );
+
+      // Prune dead/unregistered tokens (best-effort, never fail the push)
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        try {
+          const deadTokens: string[] = [];
+          sendResults.forEach((resItem, idx) => {
+            const rawTok = targetTokens[idx];
+            if (!rawTok) return;
+            const resText = JSON.stringify(resItem?.result || resItem?.error || '');
+            if (
+              resText.includes('UNREGISTERED') ||
+              resText.includes('registration-token-not-registered') ||
+              resText.includes('NOT_FOUND')
+            ) {
+              deadTokens.push(rawTok);
+            }
+          });
+
+          if (deadTokens.length > 0) {
+            Promise.all(
+              deadTokens.map((deadTok) =>
+                fetch(`${SUPABASE_URL}/rest/v1/device_tokens?fcm_token=eq.${encodeURIComponent(deadTok)}`, {
+                  method: 'DELETE',
+                  headers: {
+                    apikey: SUPABASE_KEY,
+                    Authorization: `Bearer ${SUPABASE_KEY}`,
+                  },
+                }).catch(() => {})
+              )
+            ).catch(() => {});
+          }
+        } catch (pruneErr) {
+          console.warn('[Call API] Dead token prune notice:', pruneErr);
+        }
+      }
 
       return res.status(200).json({
         success: true,

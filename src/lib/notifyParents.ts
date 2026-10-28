@@ -64,6 +64,31 @@ export function registerNativePushToken(
     const w = window as any;
     const bridge = w.AndroidInterface;
     if (!bridge || typeof bridge.getFcmToken !== 'function') return; // not in Android app
+
+    // 1. Resolve device_id: native bridge first, then localStorage (generate crypto.randomUUID if missing)
+    let device_id = '';
+    try {
+      if (typeof bridge.getDeviceId === 'function') {
+        device_id = bridge.getDeviceId() || '';
+      }
+    } catch {}
+    if (!device_id) {
+      try {
+        device_id = localStorage.getItem('deenora_device_id') || '';
+        if (!device_id) {
+          device_id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+          localStorage.setItem('deenora_device_id', device_id);
+        }
+      } catch {}
+    }
+
+    // 2. Save identity to native preferences if available
+    try {
+      if (typeof bridge.savePushIdentity === 'function') {
+        bridge.savePushIdentity(guardian_phone || null, student_id || null, institution_id || null);
+      }
+    } catch {}
+
     let attempts = 0;
     const tryRegister = () => {
       attempts++;
@@ -71,7 +96,7 @@ export function registerNativePushToken(
       try {
         token = bridge.getFcmToken() || '';
       } catch {}
-      const key = `${token}|${guardian_phone || ''}|${student_id || ''}|${user_id || ''}`;
+      const key = `${token}|${guardian_phone || ''}|${student_id || ''}|${user_id || ''}|${device_id || ''}`;
       if (token && key !== lastRegisterKey) {
         lastRegisterKey = key;
         fetch('/api/call?action=register_token', {
@@ -80,6 +105,7 @@ export function registerNativePushToken(
           body: JSON.stringify({
             action: 'register_token',
             token,
+            device_id: device_id || undefined,
             student_id: student_id || undefined,
             user_id: user_id || undefined,
             phone: guardian_phone || undefined,
