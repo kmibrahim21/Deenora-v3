@@ -260,7 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           const { device_id, device_name } = req.body || {};
 
-          // Best-effort dedupe: if device_id is present, delete old rows for the same device with a different token
+          // Best-effort dedupe: same device er purono token row muche felo, upsert er age
           if (device_id) {
             try {
               await fetch(
@@ -421,11 +421,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
       );
 
-      // Prune dead/unregistered tokens (best-effort, never fail the push)
+      // Prune dead/unregistered tokens (best-effort, push ke fail korbe na)
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
           const deadTokens: string[] = [];
-          sendResults.forEach((resItem, idx) => {
+          sendResults.forEach((resItem: any, idx: number) => {
             const rawTok = targetTokens[idx];
             if (!rawTok) return;
             const resText = JSON.stringify(resItem?.result || resItem?.error || '');
@@ -437,10 +437,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               deadTokens.push(rawTok);
             }
           });
-
           if (deadTokens.length > 0) {
             Promise.all(
-              deadTokens.map((deadTok) =>
+              deadTokens.map((deadTok: string) =>
                 fetch(`${SUPABASE_URL}/rest/v1/device_tokens?fcm_token=eq.${encodeURIComponent(deadTok)}`, {
                   method: 'DELETE',
                   headers: {
@@ -465,6 +464,115 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fcmResults: sendResults,
         payload: fcmDataPayload,
       });
+
+  // 2b. ESCALATION PUSH — system-rendered notification for swipe-killed phones.
+  // Data-only FCM cannot wake the app on Tecno/HiOS after a recents-swipe, but a
+  // notification payload is rendered by the system itself (verified 2026-10-05:
+  // hybrid notification arrived while the app was closed). The admin client
+  // fires this once if the call is not answered within ~20s. Tapping the
+  // notification opens MainActivity with the data extras → fcm_tap URL →
+  // requestOffer → the caller re-sends the offer → the parent answers.
+  if (req.method === 'POST' && action === 'escalate_call_push') {
+    try {
+      const payload = req.body?.payload || req.body || {};
+      const {
+        call_id,
+        caller_name,
+        student_name,
+        student_id,
+        institution_id,
+        callee_phone,
+      } = payload;
+
+      const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
+      console.log('[Call API] escalate_call_push attempt:', JSON.stringify({
+        devicesNotified: targetTokens.length,
+        call_id: String(payload.call_id || ''),
+      }));
+
+      const effectiveServiceAccount = await resolveServiceAccount(institution_id);
+      if (!effectiveServiceAccount) {
+        return res.status(200).json({
+          success: false,
+          fcmSent: false,
+          devicesNotified: 0,
+          message: 'Firebase Service Account not configured',
+        });
+      }
+      if (!targetTokens.length) {
+        return res.status(200).json({
+          success: true,
+          fcmSent: false,
+          targetTokenFound: false,
+          devicesNotified: 0,
+          message: 'No device token registered for this phone yet.',
+        });
+      }
+
+      const v1AccessToken = await getFirebaseV1AccessToken(effectiveServiceAccount);
+      if (!v1AccessToken) {
+        return res.status(500).json({
+          success: false,
+          message: 'Could not generate OAuth access token for Firebase HTTP v1.',
+        });
+      }
+
+      const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
+      const fcmDataPayload: Record<string, string> = {
+        type: 'incoming_call',
+        call_id: String(call_id || ''),
+        caller_name: callerLabel,
+        student_name: String(student_name || ''),
+        student_id: String(student_id || ''),
+        institution_id: String(institution_id || ''),
+        callee_phone: String(callee_phone || ''),
+        CALLER_NAME: callerLabel,
+        CALL_ID: String(call_id || ''),
+      };
+
+      const sendResults = await Promise.all(
+        targetTokens.map(async (tok) => {
+          try {
+            const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${v1AccessToken}`,
+              },
+              body: JSON.stringify({
+                message: {
+                  token: tok,
+                  android: { priority: 'HIGH', ttl: '120s' },
+                  notification: {
+                    title: callerLabel,
+                    body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                  },
+                  data: fcmDataPayload,
+                },
+              }),
+            });
+            const v1Result = await v1Response.json().catch(() => ({}));
+            return { token: tok.slice(0, 10), status: v1Response.status, result: v1Result };
+          } catch (e: any) {
+            return { token: tok.slice(0, 10), error: e.message };
+          }
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        fcmSent: true,
+        apiType: 'v1-escalation',
+        devicesNotified: sendResults.length,
+        targetTokenFound: true,
+        fcmResults: sendResults,
+        payload: fcmDataPayload,
+      });
+    } catch (err: any) {
+      console.error('[Call API] escalate_call_push error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
     } catch (err: any) {
       console.error('[Call API] FCM send error:', err);
       return res.status(500).json({ success: false, message: err.message });
