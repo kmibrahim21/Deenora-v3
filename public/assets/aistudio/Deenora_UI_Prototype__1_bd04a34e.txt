@@ -1,0 +1,354 @@
+import React, { useState } from 'react';
+import { 
+  Phone, 
+  PhoneOff, 
+  Mic, 
+  MicOff, 
+  Volume2, 
+  Grid, 
+  GraduationCap, 
+  User, 
+  CheckCircle2
+} from 'lucide-react';
+
+// --- STYLES ---
+const customStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  
+  :root {
+    --primary: #2563EB;
+    --navy: #071B36;
+    --secondary: #60A5FA;
+    --light-bg: #F4F8FF;
+    --success: #16A34A;
+    --danger: #EF4444;
+    --text-primary: #10233F;
+    --text-secondary: #64748B;
+    --surface: #FFFFFF;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #e2e8f0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Glassmorphism utilities */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  /* Subtle pulsing animation for calling state */
+  @keyframes ripple {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+  .animate-ripple {
+    animation: ripple 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Wallpaper gradient for floating notification screen */
+  .bg-wallpaper {
+    background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+    background-image: radial-gradient(at 40% 20%, #a78bfa 0px, transparent 50%),
+                      radial-gradient(at 80% 0%, #60A5FA 0px, transparent 50%),
+                      radial-gradient(at 0% 50%, #34d399 0px, transparent 50%);
+  }
+`;
+
+// --- COMPONENTS ---
+
+const Avatar = ({ initial, color, size = 'md' }) => {
+  const sizes = {
+    sm: 'w-10 h-10 text-sm',
+    md: 'w-14 h-14 text-xl',
+    lg: 'w-24 h-24 text-3xl',
+    xl: 'w-32 h-32 text-4xl'
+  };
+  return (
+    <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white font-semibold shadow-lg shrink-0`}>
+      {initial}
+    </div>
+  );
+};
+
+// 1. Admin Outgoing Call
+const ScreenAdminOutgoing = () => (
+  <div className="w-full h-full bg-gradient-to-b from-[#071B36] to-[#2563EB] flex flex-col items-center justify-between py-12 px-6 animate-in fade-in duration-300">
+    <div className="flex flex-col items-center mt-10">
+      <p className="text-[#60A5FA] text-sm font-medium tracking-wide uppercase mb-8">Calling guardian...</p>
+      
+      <div className="relative mb-6">
+        <div className="absolute inset-0 rounded-full bg-[#60A5FA] animate-ripple"></div>
+        <div className="absolute inset-0 rounded-full bg-[#60A5FA] animate-ripple" style={{ animationDelay: '1s' }}></div>
+        <Avatar initial="TH" color="from-blue-400 to-blue-600" size="xl" />
+      </div>
+      
+      <h2 className="text-white text-3xl font-bold mb-2 text-center">Tahmid Hasan</h2>
+      <p className="text-white/70 text-base mb-8">Class 10 • Roll 15</p>
+
+      <div className="glass-panel w-full rounded-2xl p-4 flex flex-col items-center gap-1 shadow-xl">
+        <User className="text-[#60A5FA] w-6 h-6 mb-1" />
+        <p className="text-white/90 font-medium">Abdul Karim (Father)</p>
+        <p className="text-white/60 text-sm tracking-widest mt-1">01711-223344</p>
+      </div>
+    </div>
+
+    <div className="mb-8">
+      <button className="w-16 h-16 bg-[#EF4444] rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors">
+        <PhoneOff className="text-white w-8 h-8" />
+      </button>
+    </div>
+  </div>
+);
+
+// 2. Parent Incoming Call
+const ScreenParentIncoming = () => (
+  <div className="w-full h-full bg-gradient-to-b from-[#071B36] via-[#0a2347] to-[#071B36] flex flex-col items-center justify-between py-16 px-6 animate-in fade-in duration-300">
+    <div className="flex flex-col items-center mt-12 w-full">
+      <p className="text-white/60 text-sm uppercase tracking-widest mb-10">Incoming Call</p>
+      
+      <div className="w-28 h-28 bg-white/5 rounded-3xl flex items-center justify-center mb-8 border border-white/10 shadow-2xl relative">
+        <div className="absolute inset-0 rounded-3xl bg-white/10 animate-pulse"></div>
+        <GraduationCap className="text-[#60A5FA] w-14 h-14" />
+      </div>
+      
+      <h2 className="text-white text-3xl font-bold mb-3 text-center px-4 leading-tight">Dhaka Ideal Madrasa</h2>
+      <p className="text-[#60A5FA] text-lg tracking-wider">09638-123456</p>
+    </div>
+
+    <div className="flex w-full justify-between px-8 mb-12">
+      <div className="flex flex-col items-center gap-3">
+        <button className="w-[72px] h-[72px] bg-[#EF4444] rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
+          <PhoneOff className="text-white w-8 h-8" />
+        </button>
+        <span className="text-white/70 text-sm font-medium">Decline</span>
+      </div>
+      
+      <div className="flex flex-col items-center gap-3">
+        <button className="w-[72px] h-[72px] bg-[#16A34A] rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 animate-bounce">
+          <Phone className="text-white w-8 h-8 fill-current" />
+        </button>
+        <span className="text-white/70 text-sm font-medium">Accept</span>
+      </div>
+    </div>
+  </div>
+);
+
+// 3. Connected Call (Admin)
+const ScreenConnected = () => {
+  const [timer, setTimer] = useState("02:45");
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(false);
+
+  return (
+    <div className="w-full h-full bg-gradient-to-b from-[#071B36] to-[#1a4185] flex flex-col items-center justify-between py-12 px-6 animate-in fade-in duration-300">
+      <div className="flex flex-col items-center mt-10">
+        <Avatar initial="TH" color="from-blue-400 to-blue-600" size="lg" />
+        <h2 className="text-white text-2xl font-semibold mt-4 mb-1">Tahmid Hasan</h2>
+        <p className="text-white/60 text-sm mb-4">Class 10 • Roll 15</p>
+        <div className="bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-sm border border-white/10">
+          <p className="text-white font-mono text-lg tracking-wider">{timer}</p>
+        </div>
+      </div>
+
+      <div className="w-full max-w-[280px] grid grid-cols-3 gap-y-8 gap-x-4 mb-8">
+        <div className="flex flex-col items-center gap-2">
+          <button 
+            onClick={() => setIsMuted(!isMuted)}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isMuted ? 'bg-white text-[#10233F]' : 'bg-white/20 text-white backdrop-blur'}`}>
+            {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+          </button>
+          <span className="text-white/70 text-xs">Mute</span>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <button className="w-14 h-14 rounded-full bg-white/20 text-white backdrop-blur flex items-center justify-center">
+            <Grid className="w-6 h-6" />
+          </button>
+          <span className="text-white/70 text-xs">Keypad</span>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <button 
+            onClick={() => setIsSpeaker(!isSpeaker)}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isSpeaker ? 'bg-white text-[#10233F]' : 'bg-white/20 text-white backdrop-blur'}`}>
+            <Volume2 className="w-6 h-6" />
+          </button>
+          <span className="text-white/70 text-xs">Speaker</span>
+        </div>
+      </div>
+
+      <div className="mb-8 w-full flex justify-center">
+        <button className="w-20 h-20 bg-[#EF4444] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:bg-red-600 transition-colors">
+          <PhoneOff className="text-white w-10 h-10" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// 4. Floating Notification
+const ScreenFloating = () => (
+  <div className="w-full h-full bg-wallpaper relative animate-in fade-in duration-300">
+    {/* Fake Phone UI Elements */}
+    <div className="absolute bottom-4 left-0 right-0 flex justify-around px-8">
+      <div className="w-14 h-14 bg-white/60 backdrop-blur-md rounded-2xl"></div>
+      <div className="w-14 h-14 bg-white/60 backdrop-blur-md rounded-2xl"></div>
+      <div className="w-14 h-14 bg-white/60 backdrop-blur-md rounded-2xl"></div>
+      <div className="w-14 h-14 bg-white/60 backdrop-blur-md rounded-2xl"></div>
+    </div>
+
+    {/* Floating Notification */}
+    <div className="absolute top-12 left-4 right-4 bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl p-4 border border-black/5 flex flex-col gap-3 animate-in slide-in-from-top-10 duration-500">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#071B36] rounded-xl flex items-center justify-center">
+            <GraduationCap className="text-[#60A5FA] w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-[#10233F] font-semibold text-sm">Dhaka Ideal Madrasa</h4>
+            <p className="text-[#64748B] text-xs">Incoming Voice Call...</p>
+          </div>
+        </div>
+        <div className="w-2 h-2 bg-[#2563EB] rounded-full animate-ping"></div>
+      </div>
+      
+      <div className="flex gap-2 mt-1">
+        <button className="flex-1 bg-gray-100 hover:bg-gray-200 text-[#10233F] font-medium py-2 rounded-xl text-sm transition-colors">
+          Decline
+        </button>
+        <button className="flex-1 bg-[#16A34A] hover:bg-green-700 text-white font-medium py-2 rounded-xl text-sm transition-colors shadow-lg shadow-green-600/20">
+          Accept
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// --- MAIN LAYOUT ---
+
+export default function DeenoraApp() {
+  const [activeScreen, setActiveScreen] = useState('outgoing');
+
+  const screens = {
+    outgoing: <ScreenAdminOutgoing />,
+    incoming: <ScreenParentIncoming />,
+    connected: <ScreenConnected />,
+    floating: <ScreenFloating />,
+  };
+
+  const navItems = [
+    { id: 'outgoing', label: 'Admin Outgoing', icon: Phone },
+    { id: 'incoming', label: 'Parent Incoming', icon: PhoneOff },
+    { id: 'connected', label: 'Connected Call', icon: Mic },
+    { id: 'floating', label: 'Floating Notif.', icon: CheckCircle2 },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#e2e8f0] flex items-center justify-center p-4 lg:p-8 font-inter">
+      <style dangerouslySetInnerHTML={{ __html: customStyles }} />
+      
+      <div className="max-w-5xl w-full flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-10">
+        
+        {/* EXTERNAL CONTROLS (Left side) */}
+        <div className="w-full lg:w-80 bg-white rounded-3xl p-6 shadow-xl border border-gray-200 flex flex-col">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-[#2563EB] rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <GraduationCap className="text-white w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-[#10233F] tracking-tight">Deenora</h1>
+              <p className="text-xs text-[#64748B] font-medium uppercase tracking-wider">Calling UI Prototype</p>
+            </div>
+          </div>
+
+          <h3 className="text-sm font-semibold text-[#64748B] mb-4 uppercase tracking-wider">Select View</h3>
+          
+          <div className="flex flex-col gap-2 flex-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeScreen === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveScreen(item.id)}
+                  className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 text-left font-medium ${
+                    isActive 
+                      ? 'bg-[#2563EB] text-white shadow-md shadow-blue-500/20 translate-x-1' 
+                      : 'bg-[#F4F8FF] text-[#10233F] hover:bg-blue-50 hover:text-[#2563EB]'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-[#64748B]'}`} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
+            <p className="text-xs text-[#64748B] leading-relaxed">
+              <strong>Core States:</strong> This prototype is focused exclusively on the active calling states for the Deenora platform, omitting histories or directories.
+            </p>
+          </div>
+        </div>
+
+        {/* SMARTPHONE DEVICE FRAME (Right side) */}
+        <div className="flex flex-col justify-center items-center py-4">
+          {/* Device Outer Bezel */}
+          <div className="relative w-[360px] h-[780px] bg-black rounded-[3.5rem] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] border-4 border-gray-800 shrink-0">
+            
+            {/* Dynamic Island / Notch Area */}
+            <div className="absolute top-0 inset-x-0 h-8 flex justify-center z-50 pointer-events-none">
+              <div className="w-32 h-7 bg-black rounded-b-3xl flex items-center justify-center gap-3 px-3 shadow-sm">
+                 <div className="w-2 h-2 rounded-full bg-gray-800/80"></div>
+                 <div className="w-2 h-2 rounded-full bg-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+              </div>
+            </div>
+            
+            {/* Screen Inner Container */}
+            <div className="w-full h-full bg-white rounded-[3rem] overflow-hidden relative isolate ring-1 ring-white/10">
+              
+              {/* Status Bar (Fake) */}
+              <div className="absolute top-0 inset-x-0 h-12 flex items-center justify-between px-6 z-40 text-xs font-semibold pointer-events-none mix-blend-difference text-white">
+                <span>12:45</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex gap-0.5">
+                    <div className="w-1 h-1 bg-current rounded-full"></div>
+                    <div className="w-1 h-1.5 bg-current rounded-sm mt-auto"></div>
+                    <div className="w-1 h-2 bg-current rounded-sm mt-auto"></div>
+                    <div className="w-1 h-2.5 bg-current rounded-sm mt-auto"></div>
+                  </div>
+                  <div className="w-4 h-2.5 border border-current rounded-sm relative ml-1">
+                    <div className="absolute right-[-3px] top-0.5 bottom-0.5 w-[2px] bg-current rounded-r-sm"></div>
+                    <div className="absolute inset-[1px] bg-current rounded-sm w-[80%]"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ACTIVE SCREEN CONTENT */}
+              {screens[activeScreen]}
+
+              {/* Home Indicator (Fake) */}
+              <div className="absolute bottom-2 inset-x-0 h-1 flex justify-center z-40 pointer-events-none">
+                <div className={`w-32 h-1 rounded-full ${['outgoing', 'incoming', 'connected'].includes(activeScreen) ? 'bg-white/50' : 'bg-black/30'}`}></div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

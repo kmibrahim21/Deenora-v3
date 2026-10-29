@@ -122,6 +122,7 @@ export class VoiceCallService {
   private lastPingReceived: number = Date.now();
   private statsInterval: NodeJS.Timeout | null = null;
   private isSpeakerOn: boolean = true;
+  private isMuted: boolean = false;
 
   // Realtime connection health & auto-reconnect state
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -213,15 +214,21 @@ export class VoiceCallService {
       }
       callSoundService.stopAll();
       this.setPendingAutoAnswer(null);
-      await this.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।', callId);
+      this.isNativeBridgeActive = false;
+      await this.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।', callId, true);
       return true;
     } else if (act === 'end_call' || act === 'hangup' || act === 'end') {
       if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
       this.setPendingAutoAnswer(null);
+      this.isNativeBridgeActive = false;
       await this.endCall();
       return true;
+    } else if (act === 'mute_toggle' || act === 'togglemute' || act === 'toggle_mute') {
+      const nextMuted = this.toggleMute();
+      console.log('[VoiceCall] Native mute_toggle action executed. isMuted:', nextMuted);
+      return nextMuted;
     }
 
     return false;
@@ -450,6 +457,12 @@ export class VoiceCallService {
           this.handleCallRejected(payload.reason);
         }
       })
+      .on('broadcast', { event: 'call:rejected' }, ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
+          console.log('[VoiceCall] Received call:rejected from peer:', payload);
+          this.handleCallRejected(payload.reason);
+        }
+      })
       .on('broadcast', { event: 'call:candidate' }, async ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && this.activeCallData.callId === payload.callId) {
           await this.handleRemoteCandidate(payload);
@@ -458,6 +471,12 @@ export class VoiceCallService {
       .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
           console.log('[VoiceCall] Received call:end from peer:', payload);
+          this.handleCallEndedRemotely();
+        }
+      })
+      .on('broadcast', { event: 'call:ended' }, ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
+          console.log('[VoiceCall] Received call:ended from peer:', payload);
           this.handleCallEndedRemotely();
         }
       })
@@ -1507,7 +1526,7 @@ export class VoiceCallService {
       this.escalationTimer = setTimeout(() => {
         this.escalationTimer = null;
         if (this.activeCallData && this.activeCallData.callId === callId && this.isCaller && !this.callAnswered) {
-          console.log('[VoiceCall] No answer in 20s, sending escalation push:', callId);
+          console.log('[VoiceCall] No answer in 10s, sending escalation push:', callId);
           fetch('/api/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1525,7 +1544,7 @@ export class VoiceCallService {
             }),
           }).catch(() => {});
         }
-      }, 20000);
+      }, 10000);
 
       // Send a second pulse after 450ms to ensure delivery even during initial network handshake
       setTimeout(() => {
@@ -1908,6 +1927,19 @@ export class VoiceCallService {
         timestamp: Date.now(),
       };
 
+      // Trigger push cancellation so notification dismisses everywhere immediately
+      fetch('/api/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel_call_push',
+          call_id: effectiveCallId,
+          callee_phone: payload.calleePhone,
+          student_id: payload.student?.id,
+          institution_id: payload.institutionId,
+        }),
+      }).catch(() => {});
+
       // Direct WebRTC DataChannel (instant 0ms)
       if (this.dataChannel && this.dataChannel.readyState === 'open') {
         try {
@@ -1916,14 +1948,19 @@ export class VoiceCallService {
       }
 
       // Broadcast immediately across all room & direct channels
-      await this.broadcastSignaling('call:reject', payload);
+      await Promise.all([
+        this.broadcastSignaling('call:reject', payload),
+        this.broadcastSignaling('call:rejected', payload),
+      ]);
 
       // Repeat burst pulse after 60ms and 150ms to guarantee delivery across sockets
       setTimeout(() => {
         this.broadcastSignaling('call:reject', payload).catch(() => {});
+        this.broadcastSignaling('call:rejected', payload).catch(() => {});
       }, 60);
       setTimeout(() => {
         this.broadcastSignaling('call:reject', payload).catch(() => {});
+        this.broadcastSignaling('call:rejected', payload).catch(() => {});
       }, 150);
 
       // Cross-tab broadcast
@@ -1964,9 +2001,9 @@ export class VoiceCallService {
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
 
-    // TASK 4b: If caller cancels/ends call before callee answered, send cancel_call_push
-    if (this.isCaller && !this.isCallAnswered && this.activeCallData) {
-      const callData = this.activeCallData;
+    // TASK 4: If call is ended/cancelled, always dispatch cancel_call_push to clear notifications
+    const callData = this.activeCallData || this.getActiveCall();
+    if (callData) {
       fetch('/api/call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1983,7 +2020,6 @@ export class VoiceCallService {
     // 1. Immediately reflect UI state on the user's screen
     this.onStatusChange?.('ended', this.activeCallData || undefined);
 
-    const callData = this.activeCallData;
     if (callData) {
       const payload = {
         callId: callData.callId,
@@ -2003,11 +2039,15 @@ export class VoiceCallService {
       }
 
       // Broadcast immediately across room & direct channels
-      await this.broadcastSignaling('call:end', payload);
+      await Promise.all([
+        this.broadcastSignaling('call:end', payload),
+        this.broadcastSignaling('call:ended', payload),
+      ]);
 
       // Repeat burst pulse after 60ms
       setTimeout(() => {
         this.broadcastSignaling('call:end', payload).catch(() => {});
+        this.broadcastSignaling('call:ended', payload).catch(() => {});
       }, 60);
 
       // Cross-tab broadcast
@@ -2041,6 +2081,7 @@ export class VoiceCallService {
    * Toggle mute on local microphone
    */
   public setMuted(muted: boolean): boolean {
+    this.isMuted = muted;
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach((track) => {
         track.enabled = !muted;
@@ -2048,6 +2089,14 @@ export class VoiceCallService {
       return muted;
     }
     return false;
+  }
+
+  public toggleMute(): boolean {
+    return this.setMuted(!this.isMuted);
+  }
+
+  public getIsMuted(): boolean {
+    return this.isMuted;
   }
 
   /**
@@ -2140,6 +2189,7 @@ export class VoiceCallService {
     this.pendingCandidates = [];
     this.pendingAutoAnswerCallId = null;
     this.isNativeBridgeActive = false;
+    this.isMuted = false;
     this.currentRingingCallId = null;
     if (this.autoAnswerTimer) {
       clearTimeout(this.autoAnswerTimer);
@@ -2210,6 +2260,15 @@ if (typeof window !== 'undefined') {
     return voiceCallService.handleNativeAction(action, callId);
   };
   (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
+  (window as any).rejectCall = (reason?: string, callId?: string) => {
+    return voiceCallService.rejectCall(reason, callId, true);
+  };
+  (window as any).endCall = () => {
+    return voiceCallService.endCall();
+  };
+  (window as any).acceptCall = () => {
+    return voiceCallService.acceptCall();
+  };
 
   // Auto-detect ?answer=1&call_id=xxx on page load (fresh start case)
   try {
