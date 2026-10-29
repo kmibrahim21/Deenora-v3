@@ -464,6 +464,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fcmResults: sendResults,
         payload: fcmDataPayload,
       });
+    } catch (err: any) {
+      console.error('[Call API] FCM send error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 
   // 2b. ESCALATION PUSH — system-rendered notification for swipe-killed phones.
   // Data-only FCM cannot wake the app on Tecno/HiOS after a recents-swipe, but a
@@ -570,11 +575,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } catch (err: any) {
       console.error('[Call API] escalate_call_push error:', err);
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  }
-    } catch (err: any) {
-      console.error('[Call API] FCM send error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
