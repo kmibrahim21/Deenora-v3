@@ -113,6 +113,8 @@ export class VoiceCallService {
   private subscribePromise: Promise<boolean> | null = null;
   private subscribeResolver: ((val: boolean) => void) | null = null;
   private disconnectTimer: NodeJS.Timeout | null = null;
+  private escalationTimer: NodeJS.Timeout | null = null;
+  private callAnswered = false;
   private outgoingRingTimeout: NodeJS.Timeout | null = null;
   private incomingRingTimeout: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
@@ -1493,6 +1495,38 @@ export class VoiceCallService {
         console.warn('[VoiceCall] FCM call push trigger notice:', fcmErr);
       });
 
+      // Escalation: 20s-e answer na ele system notification fallback pathao.
+      // Data-only FCM Tecno/HiOS-e swipe-killed app jagate pare na, kintu
+      // notification payload system nijei dekhay (2026-10-05 verified).
+      // Parent tap korle fcm_tap → requestOffer → caller offer abar pathabe.
+      if (this.escalationTimer) {
+        clearTimeout(this.escalationTimer);
+        this.escalationTimer = null;
+      }
+      this.callAnswered = false;
+      this.escalationTimer = setTimeout(() => {
+        this.escalationTimer = null;
+        if (this.activeCallData && this.activeCallData.callId === callId && this.isCaller && !this.callAnswered) {
+          console.log('[VoiceCall] No answer in 20s, sending escalation push:', callId);
+          fetch('/api/call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'escalate_call_push',
+              payload: {
+                type: 'incoming_call',
+                call_id: callId,
+                caller_name: payload.institutionName || payload.caller.institutionName || payload.caller.name || 'মাদরাসা এডমিন',
+                student_name: student.name,
+                student_id: student.id,
+                institution_id: institutionId,
+                callee_phone: student.guardian_phone || '',
+              },
+            }),
+          }).catch(() => {});
+        }
+      }, 20000);
+
       // Send a second pulse after 450ms to ensure delivery even during initial network handshake
       setTimeout(() => {
         if (this.activeCallData && this.activeCallData.callId === callId && this.isCaller) {
@@ -1809,6 +1843,7 @@ export class VoiceCallService {
       }
 
       callSoundService.playConnectChime();
+      this.callAnswered = true;
       this.onStatusChange?.('connected', this.activeCallData || undefined);
       this.startHeartbeatAndWatchdog();
       if (this.peerConnection) {
@@ -2043,6 +2078,10 @@ export class VoiceCallService {
     if (this.disconnectTimer) {
       clearTimeout(this.disconnectTimer);
       this.disconnectTimer = null;
+    }
+    if (this.escalationTimer) {
+      clearTimeout(this.escalationTimer);
+      this.escalationTimer = null;
     }
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
