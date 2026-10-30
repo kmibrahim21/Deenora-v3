@@ -366,10 +366,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // High-Priority Data Payload expected by FcmService.kt (all values must be strings)
+      const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
       const fcmDataPayload: Record<string, string> = {
         type: 'incoming_call',
         call_id: String(call_id || ''),
-        caller_name: String(caller_name || 'মাদরাসা এডমিন'),
+        caller_name: callerLabel,
         student_name: String(student_name || ''),
         student_id: String(student_id || ''),
         institution_id: String(institution_id || ''),
@@ -409,6 +410,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 message: {
                   token: tok,
                   android: { priority: 'HIGH', ttl: '120s' },
+                  notification: {
+                    title: callerLabel,
+                    body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                  },
                   data: fcmDataPayload,
                 },
               }),

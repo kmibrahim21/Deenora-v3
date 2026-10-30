@@ -16,6 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ip = (query.ip || query.machine_ip || '172.31.6.208').toString().trim();
     const port = (query.port || '4370').toString().trim();
     const name = (query.name || query.institution || 'Deenora Madrasah').toString().trim();
+    const institutionId = (query.institution_id || query.institutionId || '').toString().trim();
 
     // Dynamically detect server API host (supports dev, preview, or production domain)
     const hostHeader = (req.headers['x-forwarded-host'] || req.headers['host'] || 'deenora.app').toString().split(',')[0].trim();
@@ -33,9 +34,12 @@ MACHINE_IP = sys.argv[1].strip() if len(sys.argv) > 1 and sys.argv[1].strip() el
 MACHINE_PORT = int(sys.argv[2].strip()) if len(sys.argv) > 2 and sys.argv[2].strip() else ${port}
 DEVICE_SN = sys.argv[3].strip() if len(sys.argv) > 3 and sys.argv[3].strip() else '${sn}'
 DEENORA_API = sys.argv[4].strip() if len(sys.argv) > 4 and sys.argv[4].strip() else '${deenoraApi}'
+INSTITUTION_ID = sys.argv[5].strip() if len(sys.argv) > 5 and sys.argv[5].strip() else '${institutionId}'
+INSTITUTION_NAME = sys.argv[6].strip() if len(sys.argv) > 6 and sys.argv[6].strip() else '${name}'
 
 print("=" * 64)
 print("DEENORA ZKTECO K40 AUTO-SYNC AGENT")
+print(f"Institution: {INSTITUTION_NAME}")
 print(f"Device SN  : {DEVICE_SN}")
 print(f"Machine IP : {MACHINE_IP}:{MACHINE_PORT}")
 print(f"Server API : {DEENORA_API}")
@@ -71,6 +75,16 @@ while True:
     try:
         print(f"[+] Connecting to ZKTeco K40 at {MACHINE_IP}:{MACHINE_PORT}...")
         conn = connect_zk()
+        try:
+            hw_sn = conn.get_serialnumber()
+            if hw_sn and str(hw_sn).strip():
+                real_sn = str(hw_sn).strip()
+                if real_sn != DEVICE_SN:
+                    print(f"[+] Detected Machine Hardware Serial Number: {real_sn}")
+                    DEVICE_SN = real_sn
+        except Exception:
+            pass
+
         print("[OK] SUCCESSFULLY CONNECTED TO ZKTECO K40 MACHINE!")
         print("[+] Live Punch Listening Active. (Keep this window open in background)")
         
@@ -90,10 +104,27 @@ while True:
                     
                     if today_logs:
                         print(f"\\n[NEW PUNCH] Detected {len(today_logs)} attendance logs. Syncing to Deenora...")
-                        res = requests.post(DEENORA_API, json={"sn": DEVICE_SN, "logs": today_logs}, timeout=10)
+                        payload = {
+                            "sn": DEVICE_SN,
+                            "institution_id": INSTITUTION_ID,
+                            "institution_name": INSTITUTION_NAME,
+                            "logs": today_logs
+                        }
+                        res = requests.post(DEENORA_API, json=payload, timeout=10)
                         if res.status_code == 200:
-                            for log in today_logs:
-                                print(f"  [OK] Biometric ID: {log['userId']} | Time: {log['checkTime']} -> Synced!")
+                            data = {}
+                            try:
+                                data = res.json()
+                            except Exception:
+                                pass
+                            if data.get('processed', 0) > 0:
+                                for log in today_logs:
+                                    print(f"  [OK] Biometric ID: {log['userId']} | Time: {log['checkTime']} -> Attendance Marked PRESENT!")
+                            elif 'message' in data:
+                                print(f"  [NOTICE] {data.get('message')}")
+                            else:
+                                for log in today_logs:
+                                    print(f"  [!] Biometric ID: {log['userId']} received, but not matched to any student/teacher profile in Deenora. Set Biometric ID {log['userId']} in student profile.")
                         else:
                             print(f"  [!] Server responded with status {res.status_code}")
                 time.sleep(1.5)
@@ -217,7 +248,7 @@ echo (Keep this window open in background during madrasah/school)
 echo ===================================================================
 echo.
 
-!PY_CMD! deenora_sync_worker.py "!MACHINE_IP!" "!MACHINE_PORT!" "!DEVICE_SN!" "!DEENORA_API!"
+!PY_CMD! deenora_sync_worker.py "!MACHINE_IP!" "!MACHINE_PORT!" "!DEVICE_SN!" "!DEENORA_API!" "${institutionId}" "${name}"
 
 echo.
 echo ===================================================================

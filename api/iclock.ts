@@ -191,6 +191,20 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
+      const lines = rawData.split(/\r?\n/).filter((line: string) => line.trim().length > 0);
+      const firstUserId = lines[0] ? (lines[0].split(/[\t,\s]+/)[0] || '').trim() : '';
+
+      // Direct institution hints from query or payload
+      const reqInstId = (
+        query.institution_id || query.institutionId ||
+        (typeof req.body === 'object' && req.body !== null && (req.body.institution_id || req.body.institutionId))
+      )?.toString().trim();
+
+      const reqInstName = (
+        query.institution_name || query.institutionName || query.institution ||
+        (typeof req.body === 'object' && req.body !== null && (req.body.institution_name || req.body.institutionName))
+      )?.toString().trim();
+
       // Find matching institution by Device Serial Number (SN)
       const { data: institutions } = await supabase
         .from('institutions')
@@ -200,18 +214,63 @@ export default async function handler(req: any, res: any) {
       let matchedInstitution: any = null;
 
       if (institutions && institutions.length > 0) {
-        if (SN) {
-          for (const inst of institutions) {
+        if (reqInstId) {
+          matchedInstitution = institutions.find((i: any) => i.id === reqInstId);
+        } else if (reqInstName) {
+          matchedInstitution = institutions.find((i: any) => i.name?.toLowerCase().trim() === reqInstName.toLowerCase().trim()) ||
+                               institutions.find((i: any) => i.name?.toLowerCase().includes(reqInstName.toLowerCase()));
+        }
+
+        if (!matchedInstitution && SN) {
+          const candidateInstitutions = institutions.filter((inst: any) => {
             const devices = (inst.config_json as any)?.biometric_devices || [];
             const devicesList = Array.isArray(devices) ? devices : [devices];
-            const match = devicesList.some((d: any) => {
+            return devicesList.some((d: any) => {
               const snVal = typeof d === 'string' ? d : (d.sn || d.id || d.device_sn || '');
               return String(snVal).trim().toUpperCase() === SN;
             }) || JSON.stringify(inst.config_json || {}).toUpperCase().includes(SN);
+          });
 
-            if (match) {
-              matchedInstitution = inst;
-              break;
+          if (candidateInstitutions.length === 1) {
+            matchedInstitution = candidateInstitutions[0];
+          } else if (candidateInstitutions.length > 1) {
+            // Disambiguate when multiple institutions share the same SN (e.g. default placeholder PAS4254900230)
+            // Find which candidate institution actually has a student with this userId
+            if (firstUserId) {
+              const candidateIds = candidateInstitutions.map((c: any) => c.id);
+              const numUserId = Number(firstUserId);
+              const { data: matchedStudents } = await supabase
+                .from('students')
+                .select('institution_id')
+                .in('institution_id', candidateIds)
+                .or(`biometric_id.eq.${firstUserId},roll.eq.${firstUserId},registration_number.eq.${firstUserId}`);
+
+              if (matchedStudents && matchedStudents.length > 0) {
+                const foundInstId = matchedStudents[0].institution_id;
+                matchedInstitution = candidateInstitutions.find((c: any) => c.id === foundInstId);
+              }
+
+              // Also check teachers if student was not found
+              if (!matchedInstitution) {
+                const { data: allTeachers } = await supabase
+                  .from('teachers')
+                  .select('institution_id, permissions, mobile')
+                  .in('institution_id', candidateIds);
+
+                if (allTeachers && allTeachers.length > 0) {
+                  for (const t of allTeachers) {
+                    const bioId = (t.permissions?.biometric_id || t.permissions?.teacher_id_number || t.mobile || '').toString().trim();
+                    if (bioId === firstUserId || (!isNaN(numUserId) && Number(bioId) === numUserId)) {
+                      matchedInstitution = candidateInstitutions.find((c: any) => c.id === t.institution_id);
+                      if (matchedInstitution) break;
+                    }
+                  }
+                }
+              }
+            }
+
+            if (!matchedInstitution) {
+              matchedInstitution = candidateInstitutions[0];
             }
           }
         }
@@ -236,8 +295,6 @@ export default async function handler(req: any, res: any) {
       const instConfig = (matchedInstitution.config_json as any) || {};
 
       console.log(`[ZKteco ADMS] Processing attendance payload for Institution "${matchedInstitution.name}" (${matchedInstitutionId})`);
-
-      const lines = rawData.split(/\r?\n/).filter(line => line.trim().length > 0);
 
       // Pre-fetch students and teachers for fast matching
       const [{ data: studentsList }, { data: teachersList }] = await Promise.all([

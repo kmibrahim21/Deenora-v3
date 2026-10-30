@@ -92,7 +92,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         window.location.hostname.includes('aistudio')
       );
       const targetApiUrl = isPreviewHost ? 'https://deenora.app/api/iclock' : `${window.location.origin}/api/iclock`;
-      const url = `/api/biometric-download?sn=${encodeURIComponent(sn)}&ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&name=${encodeURIComponent(name)}&api_url=${encodeURIComponent(targetApiUrl)}&format=${format}`;
+      const instId = madrasah?.id || '';
+      const url = `/api/biometric-download?sn=${encodeURIComponent(sn)}&ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&name=${encodeURIComponent(name)}&institution_id=${encodeURIComponent(instId)}&api_url=${encodeURIComponent(targetApiUrl)}&format=${format}`;
       
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to generate agent file');
