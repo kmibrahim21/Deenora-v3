@@ -222,19 +222,20 @@ export default async function handler(req: any, res: any) {
         }
 
         if (!matchedInstitution && SN) {
+          const cleanSn = SN.trim().toUpperCase();
           const candidateInstitutions = institutions.filter((inst: any) => {
             const devices = (inst.config_json as any)?.biometric_devices || [];
             const devicesList = Array.isArray(devices) ? devices : [devices];
             return devicesList.some((d: any) => {
               const snVal = typeof d === 'string' ? d : (d.sn || d.id || d.device_sn || '');
-              return String(snVal).trim().toUpperCase() === SN;
-            }) || JSON.stringify(inst.config_json || {}).toUpperCase().includes(SN);
+              return String(snVal).trim().toUpperCase() === cleanSn;
+            });
           });
 
           if (candidateInstitutions.length === 1) {
             matchedInstitution = candidateInstitutions[0];
           } else if (candidateInstitutions.length > 1) {
-            // Disambiguate when multiple institutions share the same SN (e.g. default placeholder PAS4254900230)
+            // Disambiguate when multiple institutions share the same SN
             // Find which candidate institution actually has a student with this userId
             if (firstUserId) {
               const candidateIds = candidateInstitutions.map((c: any) => c.id);
@@ -274,20 +275,20 @@ export default async function handler(req: any, res: any) {
             }
           }
         }
-
-        // Fallback 1: Match institution with biometric_device_sync module enabled
-        if (!matchedInstitution) {
-          matchedInstitution = institutions.find(inst => (inst.config_json as any)?.modules?.biometric_device_sync === true);
-        }
-
-        // Fallback 2: If only 1 institution exists in database, use it
-        if (!matchedInstitution && institutions.length === 1) {
-          matchedInstitution = institutions[0];
-        }
       }
 
+      // STRICT MULTI-TENANT ISOLATION:
+      // If the device SN or institution_id does not belong to any active institution,
+      // REJECT logging. Never guess or assign attendance to a random institution.
       if (!matchedInstitution) {
-        console.warn(`[ZKteco ADMS] No matching institution found for SN: "${SN}"`);
+        console.warn(`[ZKteco ADMS Security] Unauthorized or unregistered device SN: "${SN}" | Institution Hint: "${reqInstId || reqInstName || 'none'}"`);
+        if (req.headers['content-type']?.includes('application/json') || req.headers?.['accept']?.includes('json')) {
+          return res.status(200).json({
+            success: false,
+            processed: 0,
+            message: `মেশিনের সিরিয়াল নম্বর "${SN}" কোনো প্রতিষ্ঠানের সাথে রেজিস্টার করা নেই। অনুগ্রহ করে প্রোফাইল সেটিংস থেকে সিরিয়াল নম্বরটি সেভ করুন।`
+          });
+        }
         return res.status(200).send('OK');
       }
 

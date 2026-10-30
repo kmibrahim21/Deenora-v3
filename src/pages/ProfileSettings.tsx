@@ -15,6 +15,7 @@ import {
   Zap, 
   Settings2,
   Check,
+  CheckCircle,
   Smartphone,
   Trash2,
   Shield,
@@ -52,9 +53,20 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [signatureUrl, setSignatureUrl] = useState(madrasah?.config_json?.signature_url || '');
   const [signatureHeight, setSignatureHeight] = useState(madrasah?.config_json?.signature_height || 30);
   const [nameEnglish, setNameEnglish] = useState((madrasah?.config_json as any)?.name_english || '');
-  const [biometricDevicesStr, setBiometricDevicesStr] = useState(((madrasah?.config_json as any)?.biometric_devices || []).map((d: any) => d.sn).join(', ') || 'PAS4254900230');
-  const [biometricIp, setBiometricIp] = useState((madrasah?.config_json as any)?.biometric_ip || ((madrasah?.config_json as any)?.biometric_devices?.[0]?.ip) || '172.31.6.208');
-  const [biometricPort, setBiometricPort] = useState((madrasah?.config_json as any)?.biometric_port || ((madrasah?.config_json as any)?.biometric_devices?.[0]?.port) || '4370');
+  const [biometricDevicesStr, setBiometricDevicesStr] = useState(
+    ((madrasah?.config_json as any)?.biometric_devices || [])
+      .map((d: any) => d.sn)
+      .filter((s: string) => s && s !== 'PAS4254900230')
+      .join(', ') || ''
+  );
+  const [biometricIp, setBiometricIp] = useState(
+    (madrasah?.config_json as any)?.biometric_ip ||
+    ((madrasah?.config_json as any)?.biometric_devices?.[0]?.ip) || ''
+  );
+  const [biometricPort, setBiometricPort] = useState(
+    (madrasah?.config_json as any)?.biometric_port ||
+    ((madrasah?.config_json as any)?.biometric_devices?.[0]?.port) || '4370'
+  );
 
   const [featureStudentAttSms, setFeatureStudentAttSms] = useState((madrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
@@ -82,9 +94,16 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const handleDownloadSyncAgent = async (format: 'bat' | 'ps1' | 'py') => {
     setIsDownloadingAgent(format);
     try {
-      const sn = biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230';
+      const sn = biometricDevicesStr.split(',')[0]?.trim();
+      if (!sn) {
+        alert(lang === 'bn' 
+          ? 'অনুগ্রহ করে প্রথমে আপনার মেশিনের আসল সিরিয়াল নম্বর (SN) বক্সে লিখে নিচে "সংরক্ষণ করুন" চাপুন।' 
+          : 'Please enter your machine Serial Number (SN) and save first.');
+        setIsDownloadingAgent(null);
+        return;
+      }
       const name = madrasah?.name || 'Deenora';
-      const ip = biometricIp.trim() || '172.31.6.208';
+      const ip = biometricIp.trim() || '192.168.0.201';
       const port = biometricPort.trim() || '4370';
       const isPreviewHost = typeof window !== 'undefined' && (
         window.location.hostname.includes('run.app') || 
@@ -134,7 +153,16 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     setIsTestingPunch(true);
     setTestPunchResult(null);
     try {
-      const sn = biometricDevicesStr.split(',')[0]?.trim() || 'PAS4254900230';
+      const sn = biometricDevicesStr.split(',')[0]?.trim();
+      if (!sn) {
+        setTestPunchResult({
+          status: 'warning',
+          message: lang === 'bn' 
+            ? 'অনুগ্রহ করে প্রথমে আপনার মেশিনের আসল সিরিয়াল নম্বর (SN) লিখে নিচে সংরক্ষণ করুন।' 
+            : 'Please enter your machine Serial Number (SN) and save first.'
+        });
+        return;
+      }
       const now = new Date();
       const checkTime = now.toISOString().replace('T', ' ').substring(0, 19);
       const res = await fetch('/api/iclock', {
@@ -145,6 +173,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         },
         body: JSON.stringify({
           sn: sn,
+          institution_id: madrasah?.id || '',
+          institution_name: madrasah?.name || '',
           logs: [
             {
               userId: testBioId.trim(),
@@ -279,10 +309,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       setArabicCalligraphyWidth(config.arabic_calligraphy_width || 100);
       setNewPin(config.user_pin || '');
       setSignatureUrl(config.signature_url || '');
-      setSignatureHeight(config.signature_height || 30);
-      const snStr = (config.biometric_devices || []).map((d: any) => d.sn).join(', ');
-      setBiometricDevicesStr(snStr || 'PAS4254900230');
-      setBiometricIp(config.biometric_ip || config.biometric_devices?.[0]?.ip || '172.31.6.208');
+      const snStr = ((config.biometric_devices || []).map((d: any) => d.sn).filter((s: string) => s && s !== 'PAS4254900230').join(', ')) || '';
+      setBiometricDevicesStr(snStr);
+      setBiometricIp(config.biometric_ip || config.biometric_devices?.[0]?.ip || '');
       setBiometricPort(config.biometric_port || config.biometric_devices?.[0]?.port || '4370');
       setFeatureStudentAttSms(config.features?.student_attendance_sms ?? false);
       setFeatureFeeSms(config.features?.fee_collection_sms ?? false);
@@ -653,8 +682,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     setSignatureUrl(parsedConfig.signature_url || '');
     setSignatureHeight(parsedConfig.signature_height || 30);
     setNameEnglish(parsedConfig.name_english || '');
-    setBiometricDevicesStr((parsedConfig.biometric_devices || []).map((d: any) => d.sn).join(', ') || 'PAS4254900230');
-    setBiometricIp(parsedConfig.biometric_ip || parsedConfig.biometric_devices?.[0]?.ip || '172.31.6.208');
+    const snList = ((parsedConfig.biometric_devices || []).map((d: any) => d.sn).filter((s: string) => s && s !== 'PAS4254900230').join(', ')) || '';
+    setBiometricDevicesStr(snList);
+    setBiometricIp(parsedConfig.biometric_ip || parsedConfig.biometric_devices?.[0]?.ip || '');
     setBiometricPort(parsedConfig.biometric_port || parsedConfig.biometric_devices?.[0]?.port || '4370');
 
     const feats = parsedConfig.features || {};
@@ -685,13 +715,13 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         arabic_calligraphy_url: arabicCalligraphyUrl,
         arabic_calligraphy_width: arabicCalligraphyWidth,
         name_english: nameEnglish.trim(),
-        biometric_ip: biometricIp.trim() || '172.31.6.208',
+        biometric_ip: biometricIp.trim() || '192.168.0.201',
         biometric_port: biometricPort.trim() || '4370',
         ...(isBiometricEnabled
           ? { 
-              biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ 
+              biometric_devices: biometricDevicesStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sn => ({ 
                 sn, 
-                ip: biometricIp.trim() || '172.31.6.208',
+                ip: biometricIp.trim() || '192.168.0.201',
                 port: biometricPort.trim() || '4370',
                 name: "Device " + sn 
               })) 
@@ -1130,17 +1160,31 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       </span>
                     </div>
 
+                    {/* Dedicated Multi-Tenant Machine Mapping Banner */}
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 to-blue-50/80 dark:from-emerald-950/30 dark:to-blue-950/30 border border-emerald-200/90 dark:border-emerald-800/60 text-xs space-y-1.5 shadow-sm">
+                      <div className="flex items-center gap-2 font-black text-emerald-800 dark:text-emerald-300">
+                        <CheckCircle size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        <span>১০০% ডেডিকেটেড ও সুরক্ষিত প্রতিষ্ঠান ম্যাপিং</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                        {lang === 'bn' 
+                          ? 'যে ক্লায়েন্ট যে মেশিনের সিরিয়াল নম্বর (SN) এখানে যুক্ত করবেন, শুধুমাত্র সেই প্রতিষ্ঠানেই হাজিরা রেকর্ড হবে। একজনের ডেটা কখনোই অন্য কোনো প্রতিষ্ঠানে যাবে না।' 
+                          : 'Attendance will strictly be recorded only in your institution based on your registered machine Serial Number. Complete tenant isolation guaranteed.'}
+                      </p>
+                    </div>
+
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1">
-                        {lang === 'bn' ? 'মেশিনের সিরিয়াল নাম্বার (Serial Number / SN):' : 'Machine Serial Number (SN):'}
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1 flex items-center justify-between">
+                        <span>{lang === 'bn' ? 'মেশিনের সিরিয়াল নাম্বার (Serial Number / SN):' : 'Machine Serial Number (SN):'}</span>
+                        <span className="text-[9px] text-blue-600 dark:text-blue-400 font-semibold font-noto">মেশিনের পেছনের S/N স্টিকার দেখুন</span>
                       </label>
                       <div className="relative group">
                         <input 
                           type="text" 
                           className={`w-full h-11 border-2 rounded-xl px-4 font-black font-mono text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-200 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
                           value={biometricDevicesStr} 
-                          onChange={(e) => setBiometricDevicesStr(e.target.value)} 
-                          placeholder="যেমন: PAS4254900230"
+                          onChange={(e) => setBiometricDevicesStr(e.target.value.toUpperCase())} 
+                          placeholder="যেমন: B8G92100142 বা আপনার মেশিনের S/N"
                         />
                       </div>
                     </div>
@@ -1156,7 +1200,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                           className={`w-full h-11 border-2 rounded-xl px-4 font-mono font-bold text-xs outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'}`}
                           value={biometricIp} 
                           onChange={(e) => setBiometricIp(e.target.value)} 
-                          placeholder="যেমন: 172.31.6.208"
+                          placeholder="যেমন: 192.168.0.201"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1174,10 +1218,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       </div>
                     </div>
 
-                    <p className={`text-[10px] ml-1 leading-snug p-2 rounded-xl border ${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200/80 text-slate-500'}`}>
+                    <p className={`text-[10px] ml-1 leading-snug p-2.5 rounded-xl border ${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200/80 text-slate-500'}`}>
                       {lang === 'bn' 
-                        ? '💡 আপনার K40 মেশিনের মেনু -> Comm. -> Ethernet অপশনে থাকা IP (যেমন 172.31.6.208) ও Port (4370) এখানে দিয়ে নিচে "সেভ করুন" বাটনে চাপ দিন। এরপর পিসি সিঙ্ক সফটওয়্যারটি ডাউনলোড করলে তা স্বয়ংক্রিয়ভাবে এই আইপি নিয়েই চলবে এবং উইন্ডো কেটে যাবে না।' 
-                        : 'Enter K40 Ethernet IP and Port, then save. Downloaded agent will use this IP automatically.'}
+                        ? '💡 আপনার K40 মেশিনের পেছনের স্টিকার থেকে সিরিয়াল নম্বর (S/N) এবং মেনু -> Comm. -> Ethernet অপশনের IP ও Port দিয়ে নিচে "সংরক্ষণ করুন" চাপুন। এরপর পিসি সিঙ্ক অ্যাপটি চালালে তা সরাসরি আপনার প্রতিষ্ঠানে হাজিরা পাঠাবে।' 
+                        : 'Enter K40 Serial Number, Ethernet IP and Port, then save. Live sync will strictly record attendance for your institution.'}
                     </p>
 
                     <div className="pt-2 flex flex-col gap-3">
