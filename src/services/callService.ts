@@ -1643,8 +1643,86 @@ export class VoiceCallService {
         });
         return;
       } else {
-        console.log('[VoiceCall] Previous call state was not an active connected call. Cleaning up stale state for new incoming call:', payload.callId);
-        this.cleanup();
+        console.log('[VoiceCall] Previous call state was not an active connected call. Clearing stale WebRTC state silently for new incoming call:', payload.callId);
+        // Silent cleanup: clear WebRTC, timers, and channels WITHOUT notifying Android native bridge (no callEnded/stopRinging)
+        if (this.outgoingRingTimeout) {
+          clearTimeout(this.outgoingRingTimeout);
+          this.outgoingRingTimeout = null;
+        }
+        if (this.incomingRingTimeout) {
+          clearTimeout(this.incomingRingTimeout);
+          this.incomingRingTimeout = null;
+        }
+        if (this.disconnectTimer) {
+          clearTimeout(this.disconnectTimer);
+          this.disconnectTimer = null;
+        }
+        if (this.escalationTimer) {
+          clearTimeout(this.escalationTimer);
+          this.escalationTimer = null;
+        }
+        if (this.pingInterval) {
+          clearInterval(this.pingInterval);
+          this.pingInterval = null;
+        }
+        if (this.watchdogInterval) {
+          clearInterval(this.watchdogInterval);
+          this.watchdogInterval = null;
+        }
+        this.stopDiagnosticLogging();
+        try {
+          localStorage.removeItem('deenora_active_call_payload');
+        } catch {}
+
+        if (this.dataChannel) {
+          try { this.dataChannel.close(); } catch {}
+          this.dataChannel = null;
+        }
+
+        if (this.peerConnection) {
+          try {
+            this.peerConnection.close();
+          } catch {}
+          this.peerConnection = null;
+        }
+
+        if (this.localStream) {
+          try {
+            this.localStream.getTracks().forEach((track) => track.stop());
+          } catch {}
+          this.localStream = null;
+        }
+
+        if (this.remoteAudioElement) {
+          try {
+            this.remoteAudioElement.srcObject = null;
+          } catch {}
+        }
+
+        if (this.callRoomChannel) {
+          try { supabase.removeChannel(this.callRoomChannel); } catch {}
+          this.callRoomChannel = null;
+        }
+
+        if (this.callerExtraChannels && this.callerExtraChannels.length > 0) {
+          this.callerExtraChannels.forEach((ch) => {
+            try { supabase.removeChannel(ch); } catch {}
+          });
+          this.callerExtraChannels = [];
+        }
+
+        this.activeCallData = null;
+        this.isCaller = false;
+        this.isCallAnswered = false;
+        this.pendingCandidates = [];
+        this.pendingAutoAnswerCallId = null;
+        this.isNativeBridgeActive = false;
+        this.isMuted = false;
+        this.currentRingingCallId = null;
+        if (this.autoAnswerTimer) {
+          clearTimeout(this.autoAnswerTimer);
+          this.autoAnswerTimer = null;
+        }
       }
     }
 
