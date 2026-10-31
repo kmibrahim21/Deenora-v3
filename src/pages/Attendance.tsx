@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy, Copy, Laptop, Cpu } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate, getTodayDateString, getTodayMonthString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -218,6 +218,29 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
   const [settingsClassId, setSettingsClassId] = useState<string>('global');
+  const [copiedId, setCopiedId] = useState(false);
+  
+  // Biometric Machine Modal States
+  const [showBiometricModal, setShowBiometricModal] = useState(false);
+  const [biometricTab, setBiometricTab] = useState<'adms' | 'non_adms'>('adms');
+  const [testSn, setTestSn] = useState('');
+  const [testingConn, setTestingConn] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
+
+  const testBiometricConnection = async () => {
+    if (!testSn.trim()) return;
+    setTestingConn(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/iclock?sn=${encodeURIComponent(testSn.trim().toUpperCase())}`);
+      const data = await res.json();
+      setTestResult(data);
+    } catch (err: any) {
+      setTestResult({ success: false, error: err.message || 'কানেকশন টেস্ট ব্যর্থ হয়েছে' });
+    } finally {
+      setTestingConn(false);
+    }
+  };
   const [settingsSessions, setSettingsSessions] = useState<{ id: string; name: string }[]>([]);
   const [newSessionName, setNewSessionName] = useState('');
   const [startTime, setStartTime] = useState(madrasah?.config_json?.attendance_settings?.start_time || '08:00');
@@ -1637,10 +1660,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           <h1 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>{t('attendance_daily', lang)}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowSettingsModal(true)} className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all ${isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-400'}`}><Settings size={18} /></button>
+          <button 
+            onClick={() => setShowBiometricModal(true)} 
+            title={lang === 'bn' ? 'বায়োমেট্রিক মেশিন সেটিং' : 'Biometric Machine Setup'}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all relative ${
+              isDark ? 'bg-slate-800 text-blue-400 border border-slate-700' : 'bg-blue-50 text-[#2563EB] border border-blue-100'
+            }`}
+          >
+            <Cpu size={18} />
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 animate-pulse"></span>
+          </button>
+          <button onClick={() => setShowSettingsModal(true)} title={lang === 'bn' ? 'সেশন সেটিংস' : 'Session Settings'} className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all ${isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-400'}`}><Settings size={18} /></button>
           <button onClick={() => selectedClass && (activeTab === 'daily' ? fetchStudents(selectedClass.id) : fetchReport(selectedClass.id))} className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all ${isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-400'}`}><RefreshCw size={18} /></button>
         </div>
       </div>
+
 
       <div className={`flex p-1 rounded-[1.5rem] border shadow-sm transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
         {(['daily', 'report'] as const).map(tab => (
@@ -2633,31 +2667,32 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       
 
 
+      {/* Attendance Settings Modal (Pure Session Settings) */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-start sm:items-center justify-center p-4 sm:p-6 pt-10 sm:pt-6 animate-in fade-in duration-300">
-          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md max-h-[75vh] sm:max-h-[85vh] flex flex-col overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
-            <div className={`p-6 sm:p-8 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
+            <div className={`p-5 sm:p-6 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <div className="absolute top-0 left-0 w-1 h-full bg-[#2563EB]"></div>
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-slate-900 text-blue-400' : 'bg-white text-blue-600'}`}>
-                  <Settings size={24} strokeWidth={2.5} />
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-slate-900 text-blue-400' : 'bg-white text-blue-600'}`}>
+                  <Clock size={22} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <h2 className={`text-xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {lang === 'bn' ? 'হাজিরা সেটিংস' : 'Attendance Settings'}
+                  <h2 className={`text-lg font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {lang === 'bn' ? 'সেশন সেটিংস' : 'Session Settings'}
                   </h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Configure your sessions</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Configure class times & sessions</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowSettingsModal(false)} 
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${isDark ? 'bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-900/20' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100'}`}
+                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${isDark ? 'bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-900/20' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100'}`}
               >
-                <XCircle size={22} />
+                <XCircle size={20} />
               </button>
             </div>
 
-            <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto flex-1 no-scrollbar">
+            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 no-scrollbar">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Class for Sessions</label>
@@ -2665,7 +2700,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     <select
                       value={settingsClassId}
                       onChange={(e) => setSettingsClassId(e.target.value)}
-                      className={`flex-1 h-14 px-6 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                      className={`flex-1 h-12 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
                     >
                       <option value="global">Global (All Classes)</option>
                       {classes.map(c => (
@@ -2683,36 +2718,36 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           setFullDayTime(settings.full_day_time || '14:00');
                         }}
                         title="Copy Global Settings"
-                        className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-blue-600 border-blue-100'}`}
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-blue-600 border-blue-100'}`}
                       >
-                        <RefreshCw size={20} />
+                        <RefreshCw size={18} />
                       </button>
                     )}
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="space-y-1.5">
                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শুরুর সময়' : 'Start Time'}</label>
                     <input 
                       type="time" 
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className={`w-full h-14 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                      className={`w-full h-12 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'ছুটির সময়' : 'End Time'}</label>
                     <input 
                       type="time" 
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
-                      className={`w-full h-14 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                      className={`w-full h-12 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between px-1 mt-6">
+                <div className="flex items-center justify-between px-1 mt-4">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
                     {settingsClassId === 'global' ? 'Global Sessions' : `${classes.find(c => c.id === settingsClassId)?.class_name} Sessions`}
                   </label>
@@ -2721,7 +2756,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </span>
                 </div>
                 
-                <div className="flex gap-3 group">
+                <div className="flex gap-2 group">
                   <div className="relative flex-1">
                     <input 
                       type="text" 
@@ -2734,63 +2769,305 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           addSession();
                         }
                       }}
-                      className={`w-full h-14 px-6 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50 focus:bg-slate-800' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30 focus:bg-white focus:shadow-lg focus:shadow-blue-500/5'}`}
+                      className={`w-full h-12 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50 focus:bg-slate-800' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30 focus:bg-white'}`}
                     />
                   </div>
                   <button 
                     onClick={addSession}
-                    className="w-14 h-14 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30 active:scale-90 hover:scale-105 transition-all shrink-0"
+                    className="w-12 h-12 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all shrink-0"
                   >
-                    <Plus size={28} strokeWidth={3} />
+                    <Plus size={24} strokeWidth={3} />
                   </button>
                 </div>
 
-                <div className={`space-y-3 rounded-3xl p-2 -mx-2 ${isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'}`}>
+                <div className={`space-y-2 rounded-2xl p-2 ${isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'}`}>
                   {settingsSessions.length > 0 ? settingsSessions.map((s, idx) => (
                     <div 
                       key={s.id} 
-                      className={`group flex items-center justify-between p-4 rounded-2xl border transition-all animate-in slide-in-from-right-4 duration-300`}
-                      style={{ animationDelay: `${idx * 50}ms` }}
+                      className="flex items-center justify-between p-3 rounded-xl border transition-all"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black ${isDark ? 'bg-slate-900 text-slate-500' : 'bg-white text-slate-400 shadow-sm'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black ${isDark ? 'bg-slate-900 text-slate-500' : 'bg-white text-slate-400 shadow-xs'}`}>
                           {idx + 1}
                         </div>
                         <span className={`font-black text-sm tracking-tight ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{s.name}</span>
                       </div>
                       <button 
                         onClick={() => removeSession(s.id)} 
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isDark ? 'bg-red-500/10 text-red-400 active:bg-red-500/20' : 'bg-red-50 text-red-500 active:bg-red-100'}`}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isDark ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-500'}`}
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   )) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${isDark ? 'bg-slate-800' : 'bg-white shadow-sm'}`}>
-                        <Clock size={24} className="text-slate-300" />
-                      </div>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <Clock size={22} className="text-slate-300 mb-2" />
                       <p className="text-[11px] text-slate-400 font-black uppercase tracking-widest">No sessions added</p>
-                      <p className="text-[10px] text-slate-400/60 font-bold mt-1 italic">Defaulting to "Daily" attendance</p>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className={`p-6 sm:p-8 border-t flex gap-4 shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+            <div className={`p-5 sm:p-6 border-t flex gap-3 shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <button 
                 onClick={() => setShowSettingsModal(false)}
-                className={`flex-1 h-14 font-black rounded-2xl border-2 active:scale-95 transition-all text-xs uppercase tracking-widest ${isDark ? 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                className={`flex-1 h-12 font-black rounded-2xl border-2 active:scale-95 transition-all text-xs uppercase tracking-widest ${isDark ? 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
               >
-                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                {lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
               </button>
               <button 
                 onClick={saveSettings}
                 disabled={savingSettings}
-                className="flex-1 h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-500/30 active:scale-95 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center justify-center gap-3 text-xs uppercase tracking-widest disabled:opacity-50"
+                className="flex-1 h-12 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-500/30 active:scale-95 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-widest disabled:opacity-50"
               >
-                {savingSettings ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} strokeWidth={2.5} /> {lang === 'bn' ? 'সেভ করুন' : 'Save Changes'}</>}
+                {savingSettings ? <Loader2 className="animate-spin" size={18} /> : <><Save size={18} strokeWidth={2.5} /> {lang === 'bn' ? 'সেভ করুন' : 'Save Changes'}</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Dedicated Biometric Machine Sync Center Modal */}
+      {showBiometricModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-6 sm:pt-6 animate-in fade-in duration-300">
+          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/20' : 'bg-white border-white shadow-blue-200/50'}`}>
+            
+            {/* Modal Header */}
+            <div className={`p-5 sm:p-6 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50/90 border-slate-100'}`}>
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+              <div className="flex items-center gap-3.5">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
+                  <Cpu size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h2 className={`text-lg sm:text-xl font-black tracking-tight font-noto ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {lang === 'bn' ? 'বায়োমেট্রিক ডিভাইস ম্যানেজার' : 'Biometric Device Manager'}
+                  </h2>
+                  <p className="text-[11px] font-bold text-slate-400 mt-0.5">
+                    {lang === 'bn' ? 'ADMS ও নন-ADMS ডিভাইসের সম্পূর্ণ সেটআপ নির্দেশিকা' : 'ADMS & Non-ADMS setup instructions & app'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowBiometricModal(false)} 
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${isDark ? 'bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-900/20' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100'}`}
+              >
+                <XCircle size={22} />
+              </button>
+            </div>
+
+            {/* Sub-Tab Switcher: ADMS vs Non-ADMS */}
+            <div className={`p-3 border-b flex gap-2 shrink-0 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+              <button
+                type="button"
+                onClick={() => setBiometricTab('adms')}
+                className={`flex-1 py-3 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                  biometricTab === 'adms'
+                    ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300 dark:ring-blue-500/50'
+                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60')
+                }`}
+              >
+                <Cpu size={16} />
+                <span>ADMS ডিভাইস (ক্লাউড)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBiometricTab('non_adms')}
+                className={`flex-1 py-3 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                  biometricTab === 'non_adms'
+                    ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-300 dark:ring-purple-500/50'
+                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60')
+                }`}
+              >
+                <Laptop size={16} />
+                <span>নন-ADMS (১-ক্লিক পিসি অ্যাপ)</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1 no-scrollbar">
+              {biometricTab === 'adms' ? (
+                /* TAB 1: ADMS SETUP GUIDE & PING TEST */
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-blue-950/20 border-blue-900/40' : 'bg-blue-50/70 border-blue-100'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <h3 className="text-sm font-black text-blue-900 dark:text-blue-300 font-noto">
+                          ADMS ডায়রেক্ট ক্লাউড সিঙ্ক (পিসির প্রয়োজন নেই)
+                        </h3>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        সরাসরি ক্লাউড
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-bold mb-4">
+                      ZKTeco, Realtime বা সমমানের বায়োমেট্রিক মেশিনের কিপ্যাড চেপে মেনু থেকে নিচের এড্রেস সেটিং করুন:
+                    </p>
+
+                    <div className="space-y-2 text-xs font-mono font-bold">
+                      <div className="p-2.5 rounded-xl border flex justify-between items-center bg-white dark:bg-slate-900 border-blue-100 dark:border-slate-800">
+                        <span className="text-slate-400">1. Enable Domain Name:</span>
+                        <span className="text-emerald-600 font-black">ON</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl border flex justify-between items-center bg-white dark:bg-slate-900 border-blue-100 dark:border-slate-800">
+                        <span className="text-slate-400">2. Server Address:</span>
+                        <span className="text-blue-600 font-black select-all">deenora.app</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl border flex justify-between items-center bg-white dark:bg-slate-900 border-blue-100 dark:border-slate-800">
+                        <span className="text-slate-400">3. Server Port:</span>
+                        <span className="text-blue-600 font-black">443 (or 80)</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-blue-100 dark:border-slate-800 flex items-center justify-between">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Institution Unique ID</p>
+                        <p className="text-xs font-mono font-black text-slate-800 dark:text-slate-200 truncate">
+                          {madrasah?.id}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (madrasah?.id) {
+                            navigator.clipboard.writeText(madrasah.id);
+                            setCopiedId(true);
+                            setTimeout(() => setCopiedId(false), 2000);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all shrink-0"
+                      >
+                        <Copy size={13} />
+                        {copiedId ? 'কপি হয়েছে!' : 'কপি করুন'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ADMS Machine Serial Test */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <h4 className="text-xs font-black text-slate-700 dark:text-slate-200 font-noto mb-2 flex items-center gap-2">
+                      <RefreshCw size={15} className="text-blue-500" />
+                      মেশিন কানেকশন টেস্ট করুন (Serial Number Ping)
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-bold mb-3">
+                      মেশিনের পেছনে থাকা সিরিয়াল নম্বর (SN, যেমন: UEED262800196) দিয়ে টেস্ট করে দেখতে পারেন ডিভাইসটি ক্লাউডের সাথে কানেক্টেড কিনা:
+                    </p>
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="মেশিন Serial Number (SN)"
+                        value={testSn}
+                        onChange={(e) => setTestSn(e.target.value)}
+                        className={`flex-1 h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none ${
+                          isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={testBiometricConnection}
+                        disabled={testingConn || !testSn.trim()}
+                        className="px-4 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shrink-0"
+                      >
+                        {testingConn ? <Loader2 size={16} className="animate-spin" /> : 'কানেকশন চেক'}
+                      </button>
+                    </div>
+
+                    {testResult && (
+                      <div className={`mt-3 p-3 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                        testResult.success 
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
+                          : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                      }`}>
+                        {testResult.success ? (
+                          <div className="space-y-1">
+                            <p className="font-black text-emerald-600 dark:text-emerald-400">✓ ডিভাইস সক্রিয় ও কানেক্টেড!</p>
+                            <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {testResult.institution || 'রেজিস্টার্ড'}</p>
+                            <p className="text-[10px] opacity-75">{testResult.recommendation}</p>
+                          </div>
+                        ) : (
+                          <p>✕ {testResult.error || 'ডিভাইসটি এখনও সার্ভারে পাঞ্চ করেনি বা খুজে পাওয়া যায়নি।'}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* TAB 2: NON-ADMS ONE-CLICK WINDOWS PC AGENT APP */
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-purple-950/20 border-purple-900/40' : 'bg-purple-50/70 border-purple-100'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Laptop size={20} className="text-purple-600 dark:text-purple-400" />
+                        <h3 className="text-sm font-black text-purple-950 dark:text-purple-300 font-noto">
+                          ১-ক্লিক উইন্ডোজ পিসি এজেন্ট (নন-ADMS মেশিনের জন্য)
+                        </h3>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                        ১-ক্লিক ইনস্টল
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-4">
+                      যেসব বায়োমেট্রিক মেশিনে সরাসরি ADMS ক্লাউড ফিচার নেই (কেবল লোকাল পিসির সাথে ইউএসবি বা নেটওয়ার্ক ক্যাবলে যুক্ত), সেগুলোর জন্য এই ছোট উইন্ডোজ পিসি অ্যাপটি ডাউনলোড করে রান করুন:
+                    </p>
+
+                    <a
+                      href={`/api/pc-agent?institution_id=${madrasah?.id || ''}`}
+                      download
+                      className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2.5 shadow-lg shadow-purple-500/25 active:scale-95 transition-all uppercase tracking-wider"
+                    >
+                      <Download size={20} />
+                      <span>ডাউনলোড ১-ক্লিক পিসি অ্যাপ (.exe / .bat)</span>
+                    </a>
+                  </div>
+
+                  {/* 3-Step Simple Setup Instructions */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border space-y-3 ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-wider">
+                      পিসি অ্যাপ ব্যবহারের ৩টি সহজ ধাপ:
+                    </h4>
+
+                    <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 font-bold">
+                      <div className="flex items-start gap-3 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                        <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
+                          ১
+                        </span>
+                        <p className="pt-0.5">ডাউনলোডকৃত ফাইলে ডাবল-ক্লিক করে ইনস্টল বা ওপেন করুন (কোনো পাইথন লাগবে না)।</p>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                        <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
+                          ২
+                        </span>
+                        <p className="pt-0.5">এটি অটোমেটিক লোকাল নেটওয়ার্কে বায়োমেট্রিক মেশিন স্ক্যান করবে এবং ব্যাকগ্রাউন্ড সার্ভিস চালু করবে।</p>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                        <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
+                          ৩
+                        </span>
+                        <p className="pt-0.5">কম্পিউটার বন্ধ হয়ে আবার অন হলেও এটি স্টার্টআপ থেকে স্বয়ংক্রিয়ভাবে ব্যাকগ্রাউন্ডে চলতে থাকবে।</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className={`p-4 sm:p-5 border-t flex justify-end shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+              <button 
+                onClick={() => setShowBiometricModal(false)}
+                className={`w-full sm:w-auto px-6 h-11 font-black rounded-2xl border-2 active:scale-95 transition-all text-xs uppercase tracking-widest ${
+                  isDark ? 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
               </button>
             </div>
           </div>
