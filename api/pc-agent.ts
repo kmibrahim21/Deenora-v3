@@ -157,7 +157,7 @@ try {
 title Deenora Biometric Sync Agent (One-Click Windows Service)
 color 0A
 
-:: GUARANTEE WINDOW STAYS OPEN PERMANENTLY (cmd /k re-launch wrapper)
+if "%~1"=="-silent" goto SILENT_SYNC_EXEC
 if "%~1"=="-keepalive" goto STARTED_ALIVE
 cmd /k ""%~f0" -keepalive"
 exit /b
@@ -186,15 +186,18 @@ set TARGET_PY_FILE=%TEMP%\\deenora_zk_sync_%INSTITUTION_ID%.py
 set STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup
 set SCRIPT_PATH=%~f0
 
-if exist "%STARTUP_DIR%\\DeenoraSyncAgent.bat" (
-    echo [OK] Deenora Sync Agent is registered in Windows Startup.
+if exist "%STARTUP_DIR%\\DeenoraSyncSilent.vbs" (
+    echo [OK] Deenora Silent Background Sync Agent is registered in Windows Startup.
 ) else (
-    echo [INFO] Registering Deenora Sync Agent to auto-run on Windows startup...
-    copy "%SCRIPT_PATH%" "%STARTUP_DIR%\\DeenoraSyncAgent.bat" >nul 2>&1
+    echo [INFO] Registering Deenora Silent Background Agent to auto-run on Windows startup...
+    (
+        echo Set WshShell = CreateObject("WScript.Shell"^)
+        echo WshShell.Run """%SCRIPT_PATH%"" -silent", 0, False
+    ) > "%STARTUP_DIR%\\DeenoraSyncSilent.vbs"
     if %ERRORLEVEL% EQU 0 (
-        echo [SUCCESS] Auto-run on Startup registered successfully!
+        echo [SUCCESS] Auto-run Silent Background Service registered in Windows Startup successfully!
     ) else (
-        echo [INFO] Running in session mode.
+        echo [INFO] Running in windowed session mode.
     )
 )
 
@@ -284,6 +287,30 @@ if %ERRORLEVEL% EQU 0 (
 echo [NOTICE] Retrying sync engine in 5 seconds...
 timeout /t 5 /nobreak >nul
 goto START_SYNC
+
+:SILENT_SYNC_EXEC
+cd /d "%~dp0"
+set INSTITUTION_ID=${institutionId}
+set SERVER_URL=${serverUrl}
+set DEVICE_IP=${deviceIp}
+set TARGET_PY_FILE=%TEMP%\\deenora_zk_sync_%INSTITUTION_ID%.py
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8" >nul 2>&1
+
+:SILENT_LOOP
+where python >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    python "%TARGET_PY_FILE%" >nul 2>&1
+    timeout /t 5 /nobreak >nul
+    goto SILENT_LOOP
+)
+where py >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    py "%TARGET_PY_FILE%" >nul 2>&1
+    timeout /t 5 /nobreak >nul
+    goto SILENT_LOOP
+)
+exit /b
 `;
 
   res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
