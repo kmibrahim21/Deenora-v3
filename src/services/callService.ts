@@ -1808,13 +1808,17 @@ export class VoiceCallService {
     this.onStatusChange?.('incoming', payload);
     this.onIncomingCall?.(payload);
 
-    // Show WhatsApp-style persistent lock-screen / mobile screen notification
-    showIncomingCallNotification({
-      callId: payload.callId,
-      callerName: cleanCallerName,
-      studentName: payload.student.name,
-      photoUrl: payload.student.photo_url,
-    });
+    // Show WhatsApp-style persistent lock-screen / mobile screen notification ONLY if native bridge is not handling it
+    if (!hasNativeBridge) {
+      showIncomingCallNotification({
+        callId: payload.callId,
+        callerName: cleanCallerName,
+        studentName: payload.student.name,
+        photoUrl: payload.student.photo_url,
+      });
+    } else {
+      console.log('[VoiceCall] Native bridge active — skipping web notification (native handles it)');
+    }
 
     // Auto-timeout incoming call after 50 seconds if unanswered
     if (this.incomingRingTimeout) {
