@@ -1797,8 +1797,14 @@ export class VoiceCallService {
       }
     } catch {}
 
-    // ALWAYS activate incoming ringtone and update web UI to 'incoming' so normal/open app screen always displays and rings!
-    callSoundService.startIncomingRingtone();
+    // Play web ringtone ONLY if native bridge is not handling it.
+    // When AndroidInterface exists, the native CallService plays the ringtone —
+    // playing both causes double-ring.
+    if (!hasNativeBridge) {
+      callSoundService.startIncomingRingtone();
+    } else {
+      console.log('[VoiceCall] Native bridge active — skipping web ringtone (native handles it)');
+    }
     this.onStatusChange?.('incoming', payload);
     this.onIncomingCall?.(payload);
 
