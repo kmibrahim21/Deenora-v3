@@ -139,6 +139,33 @@ while True:
   // Base64 encode the Python script to write seamlessly to %TEMP% without permission errors
   const encodedPy = Buffer.from(pythonScript, 'utf-8').toString('base64');
 
+  if (format === 'vbs') {
+    const vbsScript = `Set WshShell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+startupFolder = WshShell.SpecialFolders("Startup")
+tempFolder = fso.GetSpecialFolder(2)
+targetPy = tempFolder & "\\deenora_zk_sync_${institutionId || 'GLOBAL'}.py"
+encodedPy = "${encodedPy}"
+
+cmdDecode = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('" & encodedPy & "')) | Out-File -FilePath '" & targetPy & "' -Encoding utf8"""
+WshShell.Run cmdDecode, 0, True
+
+vbsStartup = startupFolder & "\\DeenoraSyncSilent.vbs"
+Set vbsFile = fso.CreateTextFile(vbsStartup, True)
+vbsFile.WriteLine "Set WshShell = CreateObject(""WScript.Shell"")"
+vbsFile.WriteLine "WshShell.Run ""cmd /c python """"" & targetPy & """"" >nul 2>&1"", 0, False"
+vbsFile.Close
+
+WshShell.Run "cmd /c python """ & targetPy & """ >nul 2>&1 || py """ & targetPy & """ >nul 2>&1", 0, False
+
+MsgBox "Deenora Biometric Attendance Agent is now running continuously in the background!" & vbCrLf & vbCrLf & "ডিইনোরা বায়োমেট্রিক হাজিরা এজেন্ট এখন ব্যাকগ্রাউন্ডে সফলভাবে চালু হয়েছে।" & vbCrLf & "পিসি বন্ধ করে চালু করলেও এটি ব্যাকগ্রাউন্ডে অটোমেটিক চলবে।", 64, "Deenora Sync Agent Started"
+`;
+    res.setHeader('Content-Type', 'application/x-vbs; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="DeenoraSyncSilent_${institutionId || 'Setup'}.vbs"`);
+    return res.status(200).send(vbsScript);
+  }
+
   // Raw PowerShell script for checking server readiness
   const psScript = `$instId = '${institutionId}';
 $serverUrl = '${serverUrl}';
@@ -152,20 +179,44 @@ try {
 `;
   const encodedPs = Buffer.from(psScript, 'utf16le').toString('base64');
 
-  // Generate self-contained Windows One-Click Installer (.bat) script with PERMANENT WINDOW KEEP-ALIVE
+  // Generate self-contained Windows One-Click Installer (.bat) script with AUTOMATIC BACKGROUND SILENT LAUNCH
   const batchScript = `@echo off
-title Deenora Biometric Sync Agent (One-Click Windows Service)
-color 0A
+title Deenora Biometric Sync Agent (Background Service)
 
 if "%~1"=="-silent" goto SILENT_SYNC_EXEC
-if "%~1"=="-keepalive" goto STARTED_ALIVE
-cmd /k ""%~f0" -keepalive"
+if "%~1"=="-visible" goto STARTED_ALIVE
+
+:: Default Double Click Behavior: Register Startup, Launch in Background, and Exit CMD immediately
+cd /d "%~dp0"
+set INSTITUTION_ID=${institutionId}
+set SERVER_URL=${serverUrl}
+set DEVICE_IP=${deviceIp}
+set SCRIPT_PATH=%~f0
+set LAUNCH_VBS=%TEMP%\\run_deenora_hidden_%INSTITUTION_ID%.vbs
+
+set STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup
+if not exist "%STARTUP_DIR%" mkdir "%STARTUP_DIR%" >nul 2>&1
+
+:: Register silent launcher in Windows Startup folder for automatic boot sync
+(
+    echo Set WshShell = CreateObject("WScript.Shell"^)
+    echo WshShell.Run """%SCRIPT_PATH%"" -silent", 0, False
+) > "%STARTUP_DIR%\\DeenoraSyncSilent.vbs" 2>nul
+
+:: Launch hidden background process and display confirmation dialog
+(
+    echo Set WshShell = CreateObject("WScript.Shell"^)
+    echo WshShell.Run """%SCRIPT_PATH%"" -silent", 0, False
+    echo MsgBox "Deenora Biometric Attendance Agent is now running continuously in the background!" ^& vbCrLf ^& vbCrLf ^& "ডিইনোরা বায়োমেট্রিক হাজিরা এজেন্ট এখন ব্যাকগ্রাউন্ডে সফলভাবে চালু হয়েছে। পিসি বন্ধ করে অন করলেও এটি ব্যাকগ্রাউন্ডে অটোমেটিক চলবে।", 64, "Deenora Sync Agent Started"
+) > "%LAUNCH_VBS%"
+
+start wscript "%LAUNCH_VBS%"
 exit /b
 
 :STARTED_ALIVE
 cls
 
-:: Ensure current working directory is the script folder (prevents C:\\Windows\\System32 Access Denied errors)
+:: Ensure current working directory is the script folder
 cd /d "%~dp0"
 
 echo ================================================================
@@ -181,25 +232,6 @@ set INSTITUTION_ID=${institutionId}
 set SERVER_URL=${serverUrl}
 set DEVICE_IP=${deviceIp}
 set TARGET_PY_FILE=%TEMP%\\deenora_zk_sync_%INSTITUTION_ID%.py
-
-:: Auto-add to Windows Startup folder for seamless background operation
-set STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup
-set SCRIPT_PATH=%~f0
-
-if exist "%STARTUP_DIR%\\DeenoraSyncSilent.vbs" (
-    echo [OK] Deenora Silent Background Sync Agent is registered in Windows Startup.
-) else (
-    echo [INFO] Registering Deenora Silent Background Agent to auto-run on Windows startup...
-    (
-        echo Set WshShell = CreateObject("WScript.Shell"^)
-        echo WshShell.Run """%SCRIPT_PATH%"" -silent", 0, False
-    ) > "%STARTUP_DIR%\\DeenoraSyncSilent.vbs"
-    if %ERRORLEVEL% EQU 0 (
-        echo [SUCCESS] Auto-run Silent Background Service registered in Windows Startup successfully!
-    ) else (
-        echo [INFO] Running in windowed session mode.
-    )
-)
 
 echo.
 echo [1/3] Checking Deenora Cloud Server Readiness...
@@ -217,11 +249,9 @@ if %ERRORLEVEL% EQU 0 (
 echo.
 echo ================================================================
 echo [3/3] Preparing Local ZKTeco Machine Punch Fetcher Engine...
-echo Please leave this window minimized while the school/madrasah is open.
 echo ================================================================
 echo.
 
-:: Extract Python script safely into %TEMP% directory
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8"
 
 :START_SYNC
@@ -249,8 +279,6 @@ echo.
 echo ================================================================
 echo [AUTO-SETUP] Python Environment Missing. Installing Automatically...
 echo ================================================================
-echo [INFO] Downloading and setting up Python environment in background.
-echo [INFO] Please wait ~15-20 seconds...
 echo.
 
 where winget >nul 2>&1
@@ -267,7 +295,6 @@ echo [AUTO-INSTALL] Downloading Official Python Silent Installer...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait"
 
 :RUN_INSTALL_CHECK
-:: Refresh environment PATH variable dynamically
 set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
 
 where python >nul 2>&1
@@ -310,7 +337,18 @@ if %ERRORLEVEL% EQU 0 (
     timeout /t 5 /nobreak >nul
     goto SILENT_LOOP
 )
-exit /b
+
+:: Auto install python silently in background if missing
+where winget >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    winget install --id Python.Python.3.11 --exact --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+) else (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait" >nul 2>&1
+)
+
+set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
+timeout /t 5 /nobreak >nul
+goto SILENT_LOOP
 `;
 
   res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');

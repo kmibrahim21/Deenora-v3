@@ -3057,14 +3057,26 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </p>
                     </div>
 
-                    <a
-                      href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}`}
-                      download
-                      className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2.5 shadow-lg shadow-purple-500/25 active:scale-95 transition-all uppercase tracking-wider"
-                    >
-                      <Download size={20} />
-                      <span>ডাউনলোড ১-ক্লিক পিসি অ্যাপ (.exe / .bat)</span>
-                    </a>
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <a
+                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=vbs`}
+                        download
+                        className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25 active:scale-95 transition-all uppercase tracking-wider"
+                      >
+                        <Download size={18} />
+                        <span>১-ক্লিক সাইলেন্ট ব্যাকগ্রাউন্ড (.vbs)</span>
+                      </a>
+                      <a
+                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=bat`}
+                        download
+                        className={`flex-1 py-3.5 px-4 rounded-2xl border text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all uppercase tracking-wider ${
+                          isDark ? 'bg-slate-800 border-purple-800 text-purple-300 hover:bg-slate-700' : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-50'
+                        }`}
+                      >
+                        <Download size={18} />
+                        <span>১-ক্লিক পিসি অ্যাপ (.bat)</span>
+                      </a>
+                    </div>
                   </div>
 
                   {/* 3-Step Simple Setup Instructions */}
@@ -3078,7 +3090,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
                           ১
                         </span>
-                        <p className="pt-0.5">ডাউনলোডকৃত ফাইলে ডাবল-ক্লিক করে ইনস্টল বা ওপেন করুন (কোনো পাইথন লাগবে না)।</p>
+                        <p className="pt-0.5">ডাউনলোডকৃত ফাইলে ডাবল-ক্লিক করলেই কমান্ড উইন্ডো নিজে নিজেই বন্ধ হয়ে অ্যাপটি ব্যাকগ্রাউন্ডে চালু হবে (কোনো কালো উইন্ডো ওপেন থাকবে না)।</p>
                       </div>
 
                       <div className="flex items-start gap-3 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
