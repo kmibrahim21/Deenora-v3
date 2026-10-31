@@ -27,12 +27,14 @@ import os
 try:
     import requests
 except ImportError:
+    print("[INFO] Installing requests library...")
     os.system("pip install requests --quiet")
     import requests
 
 try:
     from zk import ZK
 except ImportError:
+    print("[INFO] Installing pyzk library...")
     os.system("pip install pyzk --quiet")
     from zk import ZK
 
@@ -148,7 +150,7 @@ try {
 `;
   const encodedPs = Buffer.from(psScript, 'utf16le').toString('base64');
 
-  // Generate self-contained Windows One-Click Installer (.bat) script
+  // Generate self-contained Windows One-Click Installer (.bat) script with persistent window safety and auto-python setup
   const batchScript = `@echo off
 title Deenora Biometric Sync Agent (One-Click Windows Service)
 color 0A
@@ -210,32 +212,64 @@ echo.
 :: Extract Python script safely into %TEMP% directory
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8" >nul 2>&1
 
+:START_SYNC
 where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Python Engine Detected! Starting ZKTeco Local Machine Sync...
     python "%TARGET_PY_FILE%"
-) else (
-    echo [NOTICE] Python is not installed on this PC.
     echo.
-    echo [INSTRUCTION] To complete setup:
-    echo 1. Download and install Python from https://www.python.org/downloads/
-    echo 2. OR run 'winget install Python.Python.3.11' in PowerShell.
-    echo 3. Re-run this file after installing Python.
-    echo.
-    echo Retrying in 15 seconds...
-    timeout /t 15 /nobreak >nul
-    goto SYNC_LOOP
+    echo [WARNING] Sync process paused or interrupted. Restarting in 5 seconds...
+    timeout /t 5 /nobreak >nul
+    goto START_SYNC
 )
 
-:SYNC_LOOP
+where py >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] Python Launcher (py) Detected! Starting ZKTeco Local Machine Sync...
+    py "%TARGET_PY_FILE%"
+    echo.
+    echo [WARNING] Sync process paused or interrupted. Restarting in 5 seconds...
+    timeout /t 5 /nobreak >nul
+    goto START_SYNC
+)
+
+echo.
+echo ================================================================
+echo [AUTO-SETUP] Python Environment Missing. Installing Automatically...
+echo ================================================================
+echo [INFO] Downloading and setting up Python environment in background.
+echo [INFO] Please wait ~15-20 seconds...
+echo.
+
+where winget >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [AUTO-INSTALL] Installing Python 3.11 via Windows Package Manager...
+    winget install --id Python.Python.3.11 --exact --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+) else (
+    echo [AUTO-INSTALL] Downloading Official Python Silent Installer...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait" >nul 2>&1
+)
+
+:: Refresh environment PATH variable dynamically
+set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
+
 where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
+    echo [SUCCESS] Python Environment Installed Automatically!
     python "%TARGET_PY_FILE%"
-) else (
-    echo [NOTICE] Waiting for Python installation...
+    goto START_SYNC
 )
-timeout /t 10 /nobreak >nul
-goto SYNC_LOOP
+
+where py >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [SUCCESS] Python Environment Installed Automatically!
+    py "%TARGET_PY_FILE%"
+    goto START_SYNC
+)
+
+echo [NOTICE] Retrying sync engine in 5 seconds...
+timeout /t 5 /nobreak >nul
+goto START_SYNC
 `;
 
   res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
