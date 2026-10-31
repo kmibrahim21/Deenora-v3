@@ -671,7 +671,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
 
       if (reportType === 'daily') {
-        // 1. Fetch students for selected class or all classes
+        // 1. Fetch students for selected class or all classes with robust fallback
         let stdQuery = supabase
           .from('students')
           .select('id, student_name, roll, guardian_phone, class_id')
@@ -690,11 +690,29 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           stdQuery = stdQuery.eq('is_active', true);
         }
 
-        const { data: stdData, error: stdError } = await stdQuery.order('roll', { ascending: true });
-        if (stdError) throw stdError;
+        let { data: stdData, error: stdError } = await stdQuery.order('roll', { ascending: true });
+        
+        // Fallback: if no students found with academic_year_id filter, try without it
+        if ((!stdData || stdData.length === 0) && activeYearId) {
+          let fbQuery = supabase
+            .from('students')
+            .select('id, student_name, roll, guardian_phone, class_id')
+            .eq('institution_id', madrasah?.id);
+          if (cid && cid !== 'all') {
+            fbQuery = fbQuery.eq('class_id', cid);
+          }
+          if ((window as any)._hasIsActive !== false) {
+            fbQuery = fbQuery.eq('is_active', true);
+          }
+          const { data: fbData } = await fbQuery.order('roll', { ascending: true });
+          if (fbData && fbData.length > 0) {
+            stdData = fbData;
+          }
+        }
+
+        if (stdError && (!stdData || stdData.length === 0)) throw stdError;
 
         const classStudents = stdData || [];
-        const studentIds = classStudents.map(s => s.id);
 
         if (classStudents.length === 0) {
           setDailyAllStudents([]);
@@ -705,20 +723,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           return;
         }
 
-        // 2. Fetch attendance records for this date
+        // 2. Fetch attendance records for this date (clean institution-wide fetch prevents URL length limits)
         let attQuery = supabase
           .from('attendance')
           .select('student_id, status, arrival_time, class_id, session')
           .eq('institution_id', madrasah?.id)
           .eq('date', reportDate);
-
-        if (cid && cid !== 'all') {
-          if (studentIds.length > 0) {
-            attQuery = attQuery.or(`class_id.eq.${cid},student_id.in.(${studentIds.join(',')})`);
-          } else {
-            attQuery = attQuery.eq('class_id', cid);
-          }
-        }
 
         if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
           const isMorning = selectedSession === 'morning' || (sessions.length > 0 && selectedSession === sessions[0].id);
@@ -737,7 +747,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
         const attendanceRecords = attData || [];
 
-        // If not a single attendance record exists for this date & class
+        // If not a single attendance record exists for this date
         if (attendanceRecords.length === 0) {
           setAttendanceNotTaken(true);
           setDailyAllStudents([]);
@@ -870,7 +880,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             endDate = `${selectedYear}-12-31`;
         }
 
-        // Fetch students to map over
+        // Fetch students with robust fallback for monthly/yearly reports
         let stdQuery = supabase
           .from('students')
           .select('id, student_name, roll, class_id')
@@ -878,8 +888,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         if (cid && cid !== 'all') {
           stdQuery = stdQuery.eq('class_id', cid);
         }
-        const { data: activeStudents, error: stdError } = await stdQuery;
-        if (stdError) throw stdError;
+        let { data: activeStudents, error: stdError } = await stdQuery;
+        
+        if ((!activeStudents || activeStudents.length === 0) && madrasah?.id) {
+          let fbQuery = supabase
+            .from('students')
+            .select('id, student_name, roll, class_id')
+            .eq('institution_id', madrasah.id);
+          if (cid && cid !== 'all') {
+            fbQuery = fbQuery.eq('class_id', cid);
+          }
+          const { data: fbData } = await fbQuery;
+          if (fbData && fbData.length > 0) activeStudents = fbData;
+        }
+
+        if (stdError && (!activeStudents || activeStudents.length === 0)) throw stdError;
 
         const activeStudentIds = activeStudents?.map((s: any) => s.id) || [];
         if (activeStudentIds.length === 0) {
@@ -903,9 +926,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             .lte('date', endDate)
             .range(page * pageSize, (page + 1) * pageSize - 1);
 
-          if (cid && cid !== 'all') {
-            attQuery = attQuery.in('student_id', activeStudentIds);
-          }
           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
             const isMorning = selectedSession === 'morning' || (sessions.length > 0 && selectedSession === sessions[0].id);
             const isAfternoon = selectedSession === 'afternoon' || (sessions.length > 1 && selectedSession === sessions[1].id);
@@ -1036,6 +1056,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             leave_days: counts.leave,
             total_days: counts.total,
             class_id: s.class_id,
+            class_name: cls?.class_name || '',
             class_sort_order: cls?.sort_order ?? 999999
           };
         }) || [];
