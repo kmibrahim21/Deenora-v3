@@ -97,6 +97,9 @@ while True:
     return res.status(200).send(pythonScript);
   }
 
+  // Base64 encode the Python script to write seamlessly to %TEMP% without permission errors or special character issues
+  const encodedPy = Buffer.from(pythonScript, 'utf-8').toString('base64');
+
   // Raw PowerShell script for checking server readiness
   const psScript = `$instId = '${institutionId}';
 $serverUrl = '${serverUrl}';
@@ -116,6 +119,9 @@ title Deenora Biometric Sync Agent (One-Click Windows Service)
 color 0A
 cls
 
+:: Ensure current working directory is the script folder (prevents C:\\Windows\\System32 Access Denied errors)
+cd /d "%~dp0"
+
 echo ================================================================
 echo    Deenora SaaS Biometric Attendance Sync Agent for Windows
 echo ================================================================
@@ -128,6 +134,7 @@ echo.
 set INSTITUTION_ID=${institutionId}
 set SERVER_URL=${serverUrl}
 set DEVICE_IP=${deviceIp}
+set TARGET_PY_FILE=%TEMP%\\deenora_zk_sync_%INSTITUTION_ID%.py
 
 :: Auto-add to Windows Startup folder for seamless background operation
 set STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup
@@ -160,73 +167,37 @@ if %ERRORLEVEL% EQU 0 (
 
 echo.
 echo ================================================================
-echo [3/3] Starting Local ZKTeco Machine Punch Fetcher Engine...
+echo [3/3] Preparing Local ZKTeco Machine Punch Fetcher Engine...
 echo Please leave this window minimized while the school/madrasah is open.
 echo ================================================================
 echo.
 
-:: Auto-create Python script locally
-(
-echo import time, sys, os
-echo try:
-echo     import requests
-echo except ImportError:
-echo     os.system("pip install requests --quiet"^)
-echo     import requests
-echo try:
-echo     from zk import ZK
-echo except ImportError:
-echo     os.system("pip install pyzk --quiet"^)
-echo     from zk import ZK
-echo DEVICE_IP = "%DEVICE_IP%"
-echo DEVICE_PORT = 4370
-echo INSTITUTION_ID = "%INSTITUTION_ID%"
-echo SERVER_URL = "%SERVER_URL%"
-echo print("[1/2] Connecting to local ZKTeco machine at " + DEVICE_IP + "..."^)
-echo while True:
-echo     try:
-echo         zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=5^)
-echo         conn = zk.connect(^)
-echo         print("[SUCCESS] Connected to ZKTeco machine at " + DEVICE_IP + "!"^)
-echo         while True:
-echo             attendances = conn.get_attendance(^)
-echo             if attendances:
-echo                 logs = [{"userId": str(att.user_id^), "checkTime": str(att.timestamp^)} for att in attendances]
-echo                 payload = {"institution_id": INSTITUTION_ID, "sn": "PC_AGENT_" + INSTITUTION_ID, "logs": logs}
-echo                 try:
-echo                     res = requests.post(SERVER_URL + "/api/iclock", json=payload, timeout=10^)
-echo                     if res.status_code == 200:
-echo                         data = res.json(^)
-echo                         msg = data.get('message', 'Punches synced'^) if isinstance(data, dict^) else 'OK'
-echo                         print("[DEENORA SYNC OK] Uploaded " + str(len(logs^)^) + " punch records -> " + str(msg^)^)
-echo                     else:
-echo                         print("[SERVER WARN] Status Code " + str(res.status_code^)^)
-echo                 except Exception as http_err:
-echo                     print("[SERVER ERROR] " + str(http_err^)^)
-echo             else:
-echo                 print("[POLL] Checked " + DEVICE_IP + " -> No new un-synced punches."^)
-echo             time.sleep(5^)
-echo     except Exception as err:
-echo         print("[NOTICE] Retrying machine connection at " + DEVICE_IP + " (" + str(err^) + ")..."^)
-echo         time.sleep(5^)
-) > deenora_zk_sync.py
+:: Extract Python script safely into %TEMP% directory (Guaranteed writable)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8" >nul 2>&1
 
 where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Python Engine Detected! Starting ZKTeco Local Machine Sync...
-    python deenora_zk_sync.py
+    python "%TARGET_PY_FILE%"
 ) else (
     echo [NOTICE] Python is not installed on this PC.
-    echo [INSTRUCTION] Please install Python from https://www.python.org or run 'winget install Python.Python.3.11'
-    echo Retrying in 10 seconds...
-    timeout /t 10 /nobreak >nul
+    echo.
+    echo [INSTRUCTION] To complete setup:
+    echo 1. Download and install Python from https://www.python.org/downloads/
+    echo 2. OR run 'winget install Python.Python.3.11' in PowerShell.
+    echo 3. Re-run this file after installing Python.
+    echo.
+    echo Retrying in 15 seconds...
+    timeout /t 15 /nobreak >nul
     goto SYNC_LOOP
 )
 
 :SYNC_LOOP
 where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    python deenora_zk_sync.py
+    python "%TARGET_PY_FILE%"
+) else (
+    echo [NOTICE] Waiting for Python installation...
 )
 timeout /t 10 /nobreak >nul
 goto SYNC_LOOP
