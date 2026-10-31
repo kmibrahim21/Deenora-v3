@@ -1,13 +1,18 @@
-
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { CallProvider } from './context/CallContext';
 import { checkOAuthRedirectToken } from './services/googleDriveBackup';
 
-// Instantly capture Google OAuth redirect token from hash if returning from redirect
+// Instantly capture Google OAuth redirect token from hash if returning from redirect safely
 if (typeof window !== 'undefined') {
-  checkOAuthRedirectToken();
+  try {
+    checkOAuthRedirectToken();
+  } catch (err) {
+    console.warn('[Init] checkOAuthRedirectToken notice:', err);
+  }
 }
 
 const rootElement = document.getElementById('root');
@@ -21,13 +26,12 @@ if (typeof window !== 'undefined') {
   const originalWarn = console.warn;
   
   const isBenignError = (message: any) => {
-    const msg = String(message);
+    const msg = String(message || '');
     return (
       msg.includes('[vite]') ||
       msg.includes('WebSocket') ||
       msg.includes('HMR') ||
-      msg.includes('connection refused') ||
-      msg.includes('The operation is insecure')
+      msg.includes('connection refused')
     );
   };
 
@@ -41,7 +45,7 @@ if (typeof window !== 'undefined') {
     originalWarn.apply(console, args);
   };
 
-  // Prevent "Unhandled Rejection" overlays for these specific errors
+  // Prevent "Unhandled Rejection" overlays for these specific benign background network events
   window.addEventListener('unhandledrejection', (event) => {
     if (isBenignError(event.reason)) {
       event.preventDefault();
@@ -49,9 +53,6 @@ if (typeof window !== 'undefined') {
     }
   });
 }
-
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { CallProvider } from './context/CallContext';
 
 const root = createRoot(rootElement);
 root.render(

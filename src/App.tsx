@@ -349,7 +349,14 @@ const App: React.FC = () => {
     );
 
   if (!session && !madrasah) return (
-    <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A]" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 text-center">
+          <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4" />
+          <h3 className="text-white font-black tracking-widest text-xs uppercase opacity-80">DEENORA</h3>
+        </div>
+      }
+    >
       <Auth lang={lang} />
     </Suspense>
   );

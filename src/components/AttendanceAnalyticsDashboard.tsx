@@ -152,7 +152,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
             {madrasah?.config_json?.attendance_settings?.sessions?.map(s => (
               <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[50px] h-full rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${selectedSession === s.id ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{s.name}</button>
             ))}
-            {(!madrasah?.config_json?.attendance_settings?.sessions || madrasah.config_json.attendance_settings.sessions.length === 0) && (
+            {(!madrasah?.config_json?.attendance_settings?.sessions || madrasah?.config_json?.attendance_settings?.sessions?.length === 0) && (
               <button onClick={() => setSelectedSession('daily')} className={`flex-1 min-w-[50px] h-full rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center ${selectedSession === 'daily' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
             )}
         </div>

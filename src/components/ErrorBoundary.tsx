@@ -21,18 +21,6 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    const msg = error.message || String(error);
-    const isBenign = (
-      msg.includes('[vite]') ||
-      msg.includes('WebSocket') ||
-      msg.includes('HMR') ||
-      msg.includes('connection refused') ||
-      msg.includes('The operation is insecure')
-    );
-
-    if (isBenign) {
-      return { hasError: false, error: null, errorInfo: null };
-    }
     return { hasError: true, error, errorInfo: null };
   }
 
@@ -41,14 +29,12 @@ export class ErrorBoundary extends Component<Props, State> {
     const isBenign = (
       msg.includes('[vite]') ||
       msg.includes('WebSocket') ||
-      msg.includes('HMR') ||
-      msg.includes('connection refused') ||
-      msg.includes('The operation is insecure')
+      msg.includes('HMR')
     );
 
     if (isBenign) return;
 
-    console.error("Uncaught error:", error, errorInfo);
+    console.error("ErrorBoundary caught an uncaught render error:", error, errorInfo);
     this.setState({
       error,
       errorInfo

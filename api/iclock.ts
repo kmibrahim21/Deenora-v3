@@ -367,9 +367,31 @@ export default async function handler(req: any, res: any) {
           const activeSessionId = sessionsList.length > 0 ? sessionsList[0].id : 'morning';
           const academicYearId = (student as any).academic_year_id || instConfig.active_academic_year_id || null;
 
+          // Determine class start time and late grace minutes
+          const classTimes = student.class_id ? settings.class_times?.[student.class_id] : null;
+          const classStartTimeStr = classTimes?.start_time || settings.start_time || '08:00';
+          const graceMinutes = Number(settings.late_grace_minutes ?? 10); // default 10 minutes grace
+
+          let punchStatus: 'present' | 'late' = 'present';
+          let lateMinutes: number | null = null;
+
+          if (time && classStartTimeStr) {
+            const timeParts = time.split(':');
+            const startParts = classStartTimeStr.split(':');
+            if (timeParts.length >= 2 && startParts.length >= 2) {
+              const punchTotal = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1], 10);
+              const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10);
+              const diff = punchTotal - startTotal;
+              if (diff > graceMinutes) {
+                punchStatus = 'late';
+                lateMinutes = diff;
+              }
+            }
+          }
+
           const { data: existingList } = await supabase
             .from('attendance')
-            .select('id, status, session')
+            .select('id, status, session, late_minutes, arrival_time')
             .eq('institution_id', matchedInstitutionId)
             .eq('student_id', student.id)
             .eq('date', date);
@@ -380,7 +402,8 @@ export default async function handler(req: any, res: any) {
               student_id: student.id,
               class_id: student.class_id,
               date: date,
-              status: 'present',
+              status: punchStatus,
+              late_minutes: lateMinutes,
               session: activeSessionId,
               arrival_time: time || '08:30',
               academic_year_id: academicYearId
@@ -388,7 +411,7 @@ export default async function handler(req: any, res: any) {
 
             if (!insErr) {
               processedCount++;
-              console.log(`[ZKteco ADMS] Student Attendance Logged: ${student.student_name || student.id} -> Present on ${date}`);
+              console.log(`[ZKteco ADMS] Student Attendance Logged: ${student.student_name || student.id} -> ${punchStatus} on ${date} (Time: ${time})`);
 
               const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
               if (shouldSendSms && student.guardian_phone) {
@@ -403,11 +426,14 @@ export default async function handler(req: any, res: any) {
             }
           } else {
             const existingRec = existingList[0];
+            // If already marked as leave by administration in the app, preserve leave status
+            const targetStatus = existingRec.status === 'leave' ? 'leave' : punchStatus;
             const { error: updErr } = await supabase
               .from('attendance')
               .update({
-                status: 'present',
-                arrival_time: time || '08:30',
+                status: targetStatus,
+                late_minutes: targetStatus === 'late' ? lateMinutes : existingRec.late_minutes,
+                arrival_time: time || existingRec.arrival_time || '08:30',
                 session: existingRec.session || activeSessionId,
                 academic_year_id: academicYearId
               })
@@ -415,7 +441,7 @@ export default async function handler(req: any, res: any) {
 
             if (!updErr) {
               processedCount++;
-              console.log(`[ZKteco ADMS] Student Attendance Updated to Present: ${student.student_name || student.id} on ${date}`);
+              console.log(`[ZKteco ADMS] Student Attendance Updated: ${student.student_name || student.id} -> ${targetStatus} on ${date}`);
             } else {
               console.error('[ZKteco ADMS] Student attendance update error:', updErr);
             }

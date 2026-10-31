@@ -178,12 +178,30 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
   const [reportDate, setReportDate] = useState(getTodayDateString());
   const [dailyAbsentees, setDailyAbsentees] = useState<any[]>([]);
+  const [dailyAllStudents, setDailyAllStudents] = useState<any[]>([]);
+  const [dailyFilter, setDailyFilter] = useState<'all' | 'present' | 'absent' | 'late' | 'leave' | 'half_day'>('absent');
   const [attendanceNotTaken, setAttendanceNotTaken] = useState(false);
 
   const onlyAbsents = dailyAbsentees.filter(a => a.final_status === 'absent' || a.final_status === 'half_day');
   const lateCount = dailyAbsentees.filter(a => a.final_status === 'late').length;
   const leaveCount = dailyAbsentees.filter(a => a.final_status === 'leave').length;
   const halfDayCount = dailyAbsentees.filter(a => a.final_status === 'half_day').length;
+
+  const totalDailyStudents = dailyAllStudents.length;
+  const dailyPresentCount = dailyAllStudents.filter(s => s.final_status === 'present').length;
+  const dailyAbsentOnlyCount = dailyAllStudents.filter(s => s.final_status === 'absent').length;
+  const dailyAttended = dailyPresentCount + lateCount + (halfDayCount * 0.5);
+  const dailyPct = totalDailyStudents > 0 ? Math.round((dailyAttended / totalDailyStudents) * 100) : 0;
+
+  const filteredDailyStudents = useMemo(() => {
+    if (dailyFilter === 'all') return dailyAllStudents;
+    if (dailyFilter === 'present') return dailyAllStudents.filter(s => s.final_status === 'present');
+    if (dailyFilter === 'absent') return dailyAllStudents.filter(s => s.final_status === 'absent');
+    if (dailyFilter === 'late') return dailyAllStudents.filter(s => s.final_status === 'late');
+    if (dailyFilter === 'leave') return dailyAllStudents.filter(s => s.final_status === 'leave');
+    if (dailyFilter === 'half_day') return dailyAllStudents.filter(s => s.final_status === 'half_day');
+    return dailyAllStudents;
+  }, [dailyAllStudents, dailyFilter]);
   
   const [loading, setLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -581,8 +599,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         
         finalStdData.forEach(s => {
           const existing = findMatchingAttendance(recordsToUse, s.id, selectedSession, sessions);
-          initial[s.id] = existing ? (existing.status as any) : 'present';
-          if (existing?.arrival_time) initialArrival[s.id] = existing.arrival_time;
+          if (existing) {
+            initial[s.id] = existing.status as any;
+            if (existing?.arrival_time) initialArrival[s.id] = existing.arrival_time;
+          } else {
+            // When attendance/biometric records exist for this session, non-punched students are 'absent'.
+            // If no attendance exists yet at all for this session, default to 'present' for easy manual marking.
+            initial[s.id] = (recordsToUse && recordsToUse.length > 0) ? 'absent' : 'present';
+          }
         });
         setAttendance(initial);
         setArrivalTime(initialArrival);
@@ -591,6 +615,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       console.error('Attendance fetch error:', e);
       setFetchError(e.message);
     } finally { setLoading(false); }
+  };
+
+  const markAllStudentsPresent = () => {
+    const updated: Record<string, 'present' | 'absent' | 'late' | 'half_day' | 'leave'> = {};
+    students.forEach(s => { updated[s.id] = 'present'; });
+    setAttendance(prev => ({ ...prev, ...updated }));
+  };
+
+  const markAllStudentsAbsent = () => {
+    const updated: Record<string, 'present' | 'absent' | 'late' | 'half_day' | 'leave'> = {};
+    students.forEach(s => { updated[s.id] = 'absent'; });
+    setAttendance(prev => ({ ...prev, ...updated }));
   };
 
   const fetchReport = async (cid: string) => {
@@ -611,181 +647,190 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
 
       if (reportType === 'daily') {
-        const { data: checkData, error: checkError } = await requestManager.cachedFetch(
-          'attendance',
-          (q: any) => {
-            let query = q.select('id')
-               .eq('institution_id', madrasah?.id)
-               .eq('date', reportDate);
-
-            // Conditional class_id filter
-            if (cid && cid !== 'all') {
-               query = query.eq('class_id', cid);
-            }
-            
-            if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
-               const isMorning = selectedSession === 'morning' || (sessions.length > 0 && selectedSession === sessions[0].id);
-               const isAfternoon = selectedSession === 'afternoon' || (sessions.length > 1 && selectedSession === sessions[1].id);
-               if (isMorning) {
-                 query = query.or(`session.eq.${selectedSession},session.eq.morning,session.is.null`);
-               } else if (isAfternoon) {
-                 query = query.or(`session.eq.${selectedSession},session.eq.afternoon`);
-               } else {
-                 query = query.eq('session', selectedSession);
-               }
-            }
-            return query.limit(1);
-          },
-          `attendance_check:${madrasah?.id}:${reportDate}:${cid || 'all'}:${selectedSession || 'daily'}`,
-          CACHE_TTLS.SHORT
-        );
+        // 1. Fetch students for selected class or all classes
+        let stdQuery = supabase
+          .from('students')
+          .select('id, student_name, roll, guardian_phone, class_id')
+          .eq('institution_id', madrasah?.id);
         
-        if (checkError) {
-          // If class_id fails, retry without it as a fallback
-          if (checkError.code === 'PGRST204' || checkError.message?.includes('class_id')) {
-             const { data: fallbackCheck } = await requestManager.cachedFetch(
-                'attendance',
-                (q: any) => q.select('id').eq('institution_id', madrasah?.id).eq('date', reportDate).limit(1),
-                `attendance_check_fallback:${madrasah?.id}:${reportDate}`,
-                CACHE_TTLS.SHORT
-             );
-             if (!fallbackCheck || fallbackCheck.length === 0) {
-                setDailyAbsentees([]);
-                setAttendanceNotTaken(true);
-                setLoading(false);
-                return;
-             }
+        if (cid && cid !== 'all') {
+          stdQuery = stdQuery.eq('class_id', cid);
+        }
+        
+        const activeYearId = madrasah?.config_json?.active_academic_year_id;
+        const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+        if (activeYearId && isUuid(activeYearId)) {
+          stdQuery = stdQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        }
+        if ((window as any)._hasIsActive !== false) {
+          stdQuery = stdQuery.eq('is_active', true);
+        }
+
+        const { data: stdData, error: stdError } = await stdQuery.order('roll', { ascending: true });
+        if (stdError) throw stdError;
+
+        const classStudents = stdData || [];
+        const studentIds = classStudents.map(s => s.id);
+
+        if (classStudents.length === 0) {
+          setDailyAllStudents([]);
+          setDailyAbsentees([]);
+          setReportData([]);
+          setAttendanceNotTaken(true);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Fetch attendance records for this date
+        let attQuery = supabase
+          .from('attendance')
+          .select('student_id, status, arrival_time, class_id, session')
+          .eq('institution_id', madrasah?.id)
+          .eq('date', reportDate);
+
+        if (cid && cid !== 'all') {
+          if (studentIds.length > 0) {
+            attQuery = attQuery.or(`class_id.eq.${cid},student_id.in.(${studentIds.join(',')})`);
           } else {
-            throw checkError;
+            attQuery = attQuery.eq('class_id', cid);
           }
         }
 
-        if (!checkData || checkData.length === 0) {
-           setDailyAbsentees([]);
-           setAttendanceNotTaken(true);
-        } else {
-           setAttendanceNotTaken(false);
-           
-           // Client-side mapping of daily attendance to ensure support for 'leave' and 'late' statuses
-           let stdQuery = supabase
-             .from('students')
-             .select('id, student_name, roll, guardian_phone, class_id')
-             .eq('institution_id', madrasah?.id);
-           if (cid && cid !== 'all') {
-             stdQuery = stdQuery.eq('class_id', cid);
-           }
-           const { data: stdData, error: stdError } = await stdQuery;
-           if (stdError) throw stdError;
-
-           let attQuery = supabase
-             .from('attendance')
-             .select('student_id, status, arrival_time, class_id, session')
-             .eq('institution_id', madrasah?.id)
-             .eq('date', reportDate);
-           if (cid && cid !== 'all') {
-             attQuery = attQuery.eq('class_id', cid);
-           }
-           
-           const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
-             const isMorning = selectedSession === 'morning' || (sessions.length > 0 && selectedSession === sessions[0].id);
-             const isAfternoon = selectedSession === 'afternoon' || (sessions.length > 1 && selectedSession === sessions[1].id);
-             if (isMorning) {
-               attQuery = attQuery.or(`session.eq.${selectedSession},session.eq.morning,session.is.null`);
-             } else if (isAfternoon) {
-               attQuery = attQuery.or(`session.eq.${selectedSession},session.eq.afternoon`);
-             } else {
-               attQuery = attQuery.eq('session', selectedSession);
-             }
-           }
-           const { data: attData, error: attError } = await attQuery;
-           if (attError) throw attError;
-
-           const studentDailyAtt: Record<string, { statuses: string[]; max_arrival: string | null }> = {};
-           attData?.forEach((r: any) => {
-             if (!studentDailyAtt[r.student_id]) {
-               studentDailyAtt[r.student_id] = { statuses: [], max_arrival: null };
-             }
-             studentDailyAtt[r.student_id].statuses.push(r.status);
-             if (r.arrival_time && (!studentDailyAtt[r.student_id].max_arrival || r.arrival_time > studentDailyAtt[r.student_id].max_arrival)) {
-               studentDailyAtt[r.student_id].max_arrival = r.arrival_time;
-             }
-           });
-
-           const mappedDailyDetails = stdData?.map((s: any) => {
-             const att = studentDailyAtt[s.id];
-             const statuses = att?.statuses || [];
-             
-             let finalStatus = 'absent';
-             if (statuses.length === 0) {
-               return null;
-             }
-             
-             if (statuses.every(st => st === 'present')) {
-               finalStatus = 'present';
-             } else if (statuses.every(st => st === 'absent')) {
-               finalStatus = 'absent';
-             } else if (statuses.includes('absent') && (statuses.includes('present') || statuses.includes('late'))) {
-               finalStatus = 'half_day';
-             } else if (statuses.includes('half_day')) {
-               finalStatus = 'half_day';
-             } else if (statuses.includes('leave')) {
-               finalStatus = 'leave';
-             } else if (statuses.includes('late')) {
-               finalStatus = 'late';
-             } else if (statuses.includes('present')) {
-               finalStatus = 'present';
-             } else {
-               finalStatus = 'absent';
-             }
-
-             const cls = classes.find(c => c.id === s.class_id);
-
-             return {
-               id: s.id,
-               student_id: s.id,
-               student_name: s.student_name,
-               roll: s.roll,
-               class_name: cls?.class_name || '',
-               class_id: s.class_id,
-               guardian_phone: s.guardian_phone,
-               final_status: finalStatus,
-               arrival_time: att?.max_arrival || null,
-               session: selectedSession === 'all' || selectedSession === 'daily' ? 'daily' : selectedSession
-             };
-           }).filter(Boolean) || [];
-
-           // Filter for absents, lates, leaves, and half_days for the list
-           const absents = (mappedDailyDetails as any[]).filter((r: any) => r.final_status === 'absent' || r.final_status === 'late' || r.final_status === 'leave' || r.final_status === 'half_day').map((r: any) => ({
-             ...r,
-             students: { student_name: r.student_name, roll: r.roll, guardian_phone: r.guardian_phone },
-             classes: { class_name: r.class_name }
-           }));
-           
-           // Sort absents by class sort_order
-           const sortedAbsents = [...absents].sort((a, b) => {
-             const clsA = classes.find(c => c.id === a.class_id || c.class_name === a.class_name);
-             const clsB = classes.find(c => c.id === b.class_id || c.class_name === b.class_name);
-             
-             const orderA = clsA?.sort_order ?? 999999;
-             const orderB = clsB?.sort_order ?? 999999;
-             
-             if (orderA !== orderB) return orderA - orderB;
-             
-             // Secondary sort by roll
-             const parseRoll = (r: any) => {
-               if (typeof r === 'string') return parseInt(r) || parseInt(r.replace(/\D/g, '')) || 999999;
-               return Number(r) || 999999;
-             };
-             
-             const rollA = parseRoll(a.roll);
-             const rollB = parseRoll(b.roll);
-             return rollA - rollB;
-           });
-           
-           setDailyAbsentees(sortedAbsents);
-           await CacheService.cacheData('attendance_daily', madrasah?.id || '', sortedAbsents);
+        if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+          const isMorning = selectedSession === 'morning' || (sessions.length > 0 && selectedSession === sessions[0].id);
+          const isAfternoon = selectedSession === 'afternoon' || (sessions.length > 1 && selectedSession === sessions[1].id);
+          if (isMorning) {
+            attQuery = attQuery.or(`session.eq.${selectedSession},session.eq.morning,session.is.null`);
+          } else if (isAfternoon) {
+            attQuery = attQuery.or(`session.eq.${selectedSession},session.eq.afternoon`);
+          } else {
+            attQuery = attQuery.eq('session', selectedSession);
+          }
         }
+
+        const { data: attData, error: attError } = await attQuery;
+        if (attError) throw attError;
+
+        const attendanceRecords = attData || [];
+
+        // If not a single attendance record exists for this date & class
+        if (attendanceRecords.length === 0) {
+          setAttendanceNotTaken(true);
+          setDailyAllStudents([]);
+          setDailyAbsentees([]);
+          setReportData([]);
+          setLoading(false);
+          return;
+        }
+
+        setAttendanceNotTaken(false);
+
+        // Identify which classes have actually recorded attendance / punches today
+        const classesWithAttendance = new Set<string>();
+        const studentDailyAtt: Record<string, { statuses: string[]; max_arrival: string | null }> = {};
+        
+        attendanceRecords.forEach((r: any) => {
+          if (r.class_id) {
+            classesWithAttendance.add(r.class_id);
+          }
+          const std = classStudents.find((s: any) => s.id === r.student_id);
+          if (std?.class_id) {
+            classesWithAttendance.add(std.class_id);
+          }
+
+          if (!studentDailyAtt[r.student_id]) {
+            studentDailyAtt[r.student_id] = { statuses: [], max_arrival: null };
+          }
+          studentDailyAtt[r.student_id].statuses.push(r.status);
+          if (r.arrival_time && (!studentDailyAtt[r.student_id].max_arrival || r.arrival_time > studentDailyAtt[r.student_id].max_arrival)) {
+            studentDailyAtt[r.student_id].max_arrival = r.arrival_time;
+          }
+        });
+
+        const mappedDailyDetails = classStudents.map((s: any) => {
+          const att = studentDailyAtt[s.id];
+          const statuses = att?.statuses || [];
+          const classHasTakenAttendance = classesWithAttendance.has(s.class_id);
+
+          let finalStatus = 'not_started';
+          if (!classHasTakenAttendance) {
+            // Attendance has NOT taken place for this student's class today -> Do NOT mark as absent
+            finalStatus = 'not_started';
+          } else if (statuses.length === 0) {
+            // Student's class took attendance today, but this student did not punch -> Absent
+            finalStatus = 'absent';
+          } else if (statuses.includes('leave')) {
+            finalStatus = 'leave';
+          } else if (statuses.includes('late')) {
+            finalStatus = 'late';
+          } else if (statuses.includes('half_day')) {
+            finalStatus = 'half_day';
+          } else if (statuses.includes('present')) {
+            finalStatus = 'present';
+          } else {
+            finalStatus = 'absent';
+          }
+
+          const cls = classes.find(c => c.id === s.class_id);
+
+          return {
+            id: s.id,
+            student_id: s.id,
+            student_name: s.student_name,
+            roll: s.roll,
+            class_name: cls?.class_name || '',
+            class_id: s.class_id,
+            guardian_phone: s.guardian_phone,
+            final_status: finalStatus,
+            arrival_time: att?.max_arrival || null,
+            session: selectedSession === 'all' || selectedSession === 'daily' ? 'daily' : selectedSession,
+            students: { student_name: s.student_name, roll: s.roll, guardian_phone: s.guardian_phone },
+            classes: { class_name: cls?.class_name || '' }
+          };
+        });
+
+        // Sort by class sort_order, then by numeric roll
+        const sortedStudents = [...mappedDailyDetails].sort((a, b) => {
+          const clsA = classes.find(c => c.id === a.class_id || c.class_name === a.class_name);
+          const clsB = classes.find(c => c.id === b.class_id || c.class_name === b.class_name);
+          const orderA = clsA?.sort_order ?? 999999;
+          const orderB = clsB?.sort_order ?? 999999;
+          if (orderA !== orderB) return orderA - orderB;
+
+          const parseRoll = (r: any) => {
+            if (typeof r === 'string') return parseInt(r) || parseInt(r.replace(/\D/g, '')) || 999999;
+            return Number(r) || 999999;
+          };
+          return parseRoll(a.roll) - parseRoll(b.roll);
+        });
+
+        setDailyAllStudents(sortedStudents);
+
+        const absents = sortedStudents.filter(r => 
+          r.final_status === 'absent' || 
+          r.final_status === 'late' || 
+          r.final_status === 'leave' || 
+          r.final_status === 'half_day'
+        );
+        setDailyAbsentees(absents);
+
+        // Populate reportData so PDF download works for daily report as well!
+        const dailyForReport = sortedStudents.map(s => ({
+          student_id: s.id,
+          student_name: s.student_name,
+          roll: s.roll,
+          present_days: s.final_status === 'present' ? 1 : 0,
+          absent_days: s.final_status === 'absent' ? 1 : 0,
+          late_days: s.final_status === 'late' ? 1 : 0,
+          leave_days: s.final_status === 'leave' ? 1 : 0,
+          half_days: s.final_status === 'half_day' ? 1 : 0,
+          total_days: 1,
+          class_id: s.class_id,
+          class_name: s.class_name
+        }));
+        setReportData(dailyForReport);
+
+        await CacheService.cacheData('attendance_daily', madrasah?.id || '', absents);
       } else {
         let startDate, endDate;
 
@@ -1771,9 +1816,16 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 </div>
               ) : students.length > 0 ? (
                 <div className="space-y-3 animate-in slide-in-from-bottom-5">
-                   <div className="flex items-center justify-between px-6">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">শিক্ষার্থী তালিকা</h4>
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">উপস্থিতি</h4>
+                   <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষার্থী তালিকা' : 'Student List'} ({students.length})</h4>
+                        {existingAttRecords.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            {lang === 'bn' ? 'সংরক্ষিত/বায়োমেট্রিক' : 'Recorded'}
+                          </span>
+                        )}
+                      </div>
+                      {/* Removed Mark All buttons per user request */}
                    </div>
                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-3.5">
                    {students.map(s => (
@@ -1968,75 +2020,219 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </div>
             ) : reportType === 'daily' ? (
               <div className="space-y-6 animate-in slide-in-from-bottom-5">
-                  {dailyAbsentees.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 max-w-lg">
-                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50/50 border-red-100 text-red-600'}`}>
-                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</p>
-                          <p className="text-xs sm:text-sm font-black">{dailyAbsentees.filter(a => a.final_status === 'absent').length}</p>
-                       </div>
-                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' : 'bg-purple-50/50 border-purple-100 text-purple-600'}`}>
-                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'আংশিক (হাফ ডে)' : 'Half Day'}</p>
-                          <p className="text-xs sm:text-sm font-black">{halfDayCount}</p>
-                       </div>
-                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50/50 border-amber-100 text-amber-600'}`}>
-                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'বিলম্ব / দেরি' : 'Late'}</p>
-                          <p className="text-xs sm:text-sm font-black">{lateCount}</p>
-                       </div>
-                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50/50 border-indigo-100 text-indigo-600'}`}>
-                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'ছুটি' : 'Leave'}</p>
-                          <p className="text-xs sm:text-sm font-black">{leaveCount}</p>
-                       </div>
+                {attendanceNotTaken ? (
+                  <div className={`p-8 sm:p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50/80 border-slate-200'}`}>
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/50 flex items-center justify-center text-amber-500 mb-4 shadow-2xs">
+                      <Clock size={28} />
                     </div>
-                  )}
-
-                  <div className="flex items-center gap-2 mb-2 mt-2">
-                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                        {lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থী তালিকা' : 'Absent Student List'} ({onlyAbsents.length})
-                     </h4>
+                    <h4 className="text-base font-black text-slate-800 dark:text-slate-100 font-noto mb-1.5">
+                      {lang === 'bn' ? 'আজ এখনও এই ক্লাসের কোনো হাজিরা বা পাঞ্চ নেওয়া হয়নি' : 'No attendance recorded for this class today yet'}
+                    </h4>
+                    <p className="text-xs text-slate-400 dark:text-slate-400 font-bold max-w-md leading-relaxed">
+                      {lang === 'bn' 
+                        ? 'বায়োমেট্রিক মেশিনে পাঞ্চ অথবা অ্যাপসের "দৈনিক হাজিরা" ট্যাবে হাজিরা সেভ করার পর উপস্থিতি ও অনুপস্থিতির রিপোর্ট স্বয়ংক্রিয়ভাবে তৈরি হবে।' 
+                        : 'Attendance & absentee reports will be generated automatically once biometric machine punches or manual attendance is saved.'}
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    {/* Summary 2x2 Stat Cards - Compact Size */}
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setDailyFilter(dailyFilter === 'absent' ? 'all' : 'absent')}
+                        className={`py-2 px-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                          dailyFilter === 'absent'
+                            ? 'bg-rose-100/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 shadow-xs ring-1 ring-rose-400/50 scale-[1.01]'
+                            : (isDark 
+                                ? 'bg-rose-950/20 border-rose-900/40 hover:bg-rose-950/40' 
+                                : 'bg-[#FFF2F2] border-rose-100/80 hover:border-rose-200 shadow-2xs')
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 font-noto leading-tight">
+                          {lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}
+                        </p>
+                        <p className="text-sm sm:text-base font-black text-rose-600 dark:text-rose-400 mt-0.5 leading-none">
+                          {dailyAbsentOnlyCount}
+                        </p>
+                      </button>
 
-                  {onlyAbsents.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-3.5">
-                      {onlyAbsents.map(a => (
-                        <div key={a.student_id} className={`p-3 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                           <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-2">
-                             <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 ${a.final_status === 'half_day' ? (isDark ? 'bg-purple-900/30 text-purple-400 border-purple-700' : 'bg-purple-50 text-purple-600 border-purple-100') : (isDark ? 'bg-slate-900 text-red-400 border-slate-700' : 'bg-red-50 text-red-500 border-red-100')}`}>
-                               <XCircle size={16} className="sm:w-5 sm:h-5" />
-                             </div>
-                             <div className="min-w-0 flex-1">
-                               <h5 className={`font-black font-noto text-xs sm:text-sm md:text-base leading-snug break-words ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`} title={a.students?.student_name}>{a.students?.student_name}</h5>
-                               <div className="mt-1 space-y-0.5">
-                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.classes?.class_name || 'Class'}</p>
-                                   <span className="text-slate-300">•</span>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roll: {a.students?.roll}</p>
-                                   <span className="text-slate-300">•</span>
-                                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${a.final_status === 'half_day' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300' : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}`}>
-                                     {a.final_status === 'half_day' ? (lang === 'bn' ? 'আংশিক (হাফ ডে)' : 'Half Day') : (lang === 'bn' ? 'অনুপস্থিত' : 'Absent')}
-                                   </span>
-                                 </div>
-                               </div>
-                             </div>
-                           </div>
-                           {a.students?.guardian_phone && (
-                             <a href={`tel:${a.students.guardian_phone}`} className={`shrink-0 w-11 h-11 rounded-[1.1rem] flex items-center justify-center border transition-all active:scale-95 ${isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
-                               <Phone size={16} className="sm:w-[18px] sm:h-[18px]" />
-                             </a>
-                           )}
-                        </div>
-                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setDailyFilter(dailyFilter === 'present' ? 'all' : 'present')}
+                        className={`py-2 px-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                          dailyFilter === 'present'
+                            ? 'bg-emerald-100/90 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 shadow-xs ring-1 ring-emerald-400/50 scale-[1.01]'
+                            : (isDark 
+                                ? 'bg-emerald-950/20 border-emerald-900/40 hover:bg-emerald-950/40' 
+                                : 'bg-emerald-50/90 border-emerald-100/80 hover:border-emerald-200 shadow-2xs')
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-noto leading-tight">
+                          {lang === 'bn' ? 'উপস্থিত' : 'Present'}
+                        </p>
+                        <p className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 leading-none">
+                          {dailyPresentCount}
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDailyFilter(dailyFilter === 'late' ? 'all' : 'late')}
+                        className={`py-2 px-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                          dailyFilter === 'late'
+                            ? 'bg-amber-100/90 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 shadow-xs ring-1 ring-amber-400/50 scale-[1.01]'
+                            : (isDark 
+                                ? 'bg-amber-950/20 border-amber-900/40 hover:bg-amber-950/40' 
+                                : 'bg-[#FFFBEB] border-amber-100/80 hover:border-amber-200 shadow-2xs')
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 font-noto leading-tight">
+                          {lang === 'bn' ? 'বিলম্ব / দেরি' : 'Late'}
+                        </p>
+                        <p className="text-sm sm:text-base font-black text-amber-600 dark:text-amber-400 mt-0.5 leading-none">
+                          {lateCount}
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDailyFilter(dailyFilter === 'leave' ? 'all' : 'leave')}
+                        className={`py-2 px-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                          dailyFilter === 'leave'
+                            ? 'bg-blue-100/90 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800 shadow-xs ring-1 ring-blue-400/50 scale-[1.01]'
+                            : (isDark 
+                                ? 'bg-blue-950/20 border-blue-900/40 hover:bg-blue-950/40' 
+                                : 'bg-[#EFF6FF] border-blue-100/80 hover:border-blue-200 shadow-2xs')
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 font-noto leading-tight">
+                          {lang === 'bn' ? 'ছুটি' : 'Leave'}
+                        </p>
+                        <p className="text-sm sm:text-base font-black text-blue-600 dark:text-blue-400 mt-0.5 leading-none">
+                          {leaveCount}
+                        </p>
+                      </button>
                     </div>
-                 ) : attendanceNotTaken ? (
-                    <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                       <AlertTriangle size={40} className="text-yellow-500 mb-3" />
-                       <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'হাজিরা নেওয়া হয়নি' : 'Attendance Not Taken'}</p>
+
+                    {/* Section Header Title without extra filter buttons */}
+                    <div className="pt-1 pb-2">
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-400 dark:text-slate-400 font-noto">
+                        {dailyFilter === 'absent' ? (lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থী তালিকা' : 'Absent Student List')
+                          : dailyFilter === 'present' ? (lang === 'bn' ? 'উপস্থিত শিক্ষার্থী তালিকা' : 'Present Student List')
+                          : dailyFilter === 'late' ? (lang === 'bn' ? 'বিলম্বিত শিক্ষার্থী তালিকা' : 'Late Student List')
+                          : dailyFilter === 'leave' ? (lang === 'bn' ? 'ছুটিপ্রাপ্ত শিক্ষার্থী তালিকা' : 'On-Leave Student List')
+                          : dailyFilter === 'half_day' ? (lang === 'bn' ? 'আংশিক শিক্ষার্থী তালিকা' : 'Half-Day Student List')
+                          : (lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থী তালিকা' : 'Absent Student List')} ({filteredDailyStudents.length})
+                      </h4>
                     </div>
-                 ) : (
-                    <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                       <CheckCircle2 size={40} className="text-emerald-500 mb-3" />
-                       <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'সবাই উপস্থিত' : 'Everyone Present'}</p>
-                    </div>
-                 )}
+
+                    {/* Student Cards for Daily Report */}
+                    {filteredDailyStudents.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {filteredDailyStudents.map(student => {
+                          const isPresent = student.final_status === 'present';
+                          const isLate = student.final_status === 'late';
+                          const isLeave = student.final_status === 'leave';
+                          const isHalfDay = student.final_status === 'half_day';
+                          const isNotPunched = student.final_status === 'not_punched';
+                          const isAbsent = student.final_status === 'absent';
+
+                          return (
+                            <div 
+                              key={student.student_id || student.id} 
+                              className={`p-3.5 sm:p-4 rounded-[1.8rem] border flex items-center justify-between gap-3 transition-all ${
+                                isDark ? 'bg-slate-800/80 border-slate-700/80' : 'bg-white border-slate-100 shadow-xs'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                {/* Circular Avatar Icon */}
+                                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 border ${
+                                  isPresent 
+                                    ? (isDark ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-emerald-50 text-emerald-600 border-emerald-100')
+                                    : isLate
+                                    ? (isDark ? 'bg-amber-950/60 text-amber-400 border-amber-800/60' : 'bg-amber-50 text-amber-600 border-amber-100')
+                                    : isLeave
+                                    ? (isDark ? 'bg-blue-950/60 text-blue-400 border-blue-800/60' : 'bg-blue-50 text-blue-600 border-blue-100')
+                                    : isHalfDay
+                                    ? (isDark ? 'bg-purple-950/60 text-purple-400 border-purple-800/60' : 'bg-purple-50 text-purple-600 border-purple-100')
+                                    : (isDark ? 'bg-rose-950/60 text-rose-400 border-rose-800/60' : 'bg-rose-50 text-rose-500 border-rose-100')
+                                }`}>
+                                  {isPresent ? <CheckCircle size={22} className="text-emerald-500" />
+                                   : isLate ? <Clock size={22} className="text-amber-500" />
+                                   : isLeave ? <CalendarOff size={22} className="text-blue-500" />
+                                   : isHalfDay ? <Clock size={22} className="text-purple-500" />
+                                   : <XCircle size={22} className="text-rose-500" />}
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-black font-noto text-sm leading-snug truncate ${isDark ? 'text-slate-100' : 'text-slate-800'}`} title={student.student_name}>
+                                    {student.student_name}
+                                  </h5>
+                                  <div className="mt-1 flex items-center gap-1.5 flex-wrap text-xs text-slate-400 font-bold">
+                                    <span>{student.class_name || selectedClass?.class_name}</span>
+                                    <span>•</span>
+                                    <span>ROLL: {student.roll || '-'}</span>
+                                    <span>•</span>
+                                    {isPresent && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                        {lang === 'bn' ? 'উপস্থিত' : 'Present'}
+                                      </span>
+                                    )}
+                                    {(isNotPunched || isAbsent) && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                                        {lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}
+                                      </span>
+                                    )}
+                                    {isLate && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                        {lang === 'bn' ? 'বিলম্ব' : 'Late'}
+                                      </span>
+                                    )}
+                                    {isLeave && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                                        {lang === 'bn' ? 'ছুটি' : 'Leave'}
+                                      </span>
+                                    )}
+                                    {isHalfDay && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                                        {lang === 'bn' ? 'হাফ ডে' : 'Half Day'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {student.guardian_phone && (
+                                <a 
+                                  href={`tel:${student.guardian_phone}`} 
+                                  title={lang === 'bn' ? `কল করুন: ${student.guardian_phone}` : `Call: ${student.guardian_phone}`}
+                                  className={`shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center border transition-all active:scale-95 ${
+                                    isDark 
+                                      ? 'bg-blue-950/40 text-blue-400 border-blue-900/50 hover:bg-blue-900/50' 
+                                      : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+                                  }`}
+                                >
+                                  <Phone size={18} />
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className={`p-8 rounded-2xl border text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                          {dailyFilter === 'present' 
+                            ? (lang === 'bn' ? 'কোনো শিক্ষার্থী এখনও উপস্থিত হয়নি' : 'No students present yet')
+                            : dailyFilter === 'absent'
+                            ? (lang === 'bn' ? 'সবাই উপস্থিত! কোনো অনুপস্থিত শিক্ষার্থী নেই' : 'Everyone is present! No absentees')
+                            : (lang === 'bn' ? 'কোনো তথ্য পাওয়া যায়নি' : 'No records found')}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
                  
                  {dailyAbsentees.length > 0 && (
                    <div className="flex flex-col gap-4 mt-8 border-t pt-8 border-slate-100 dark:border-slate-800">

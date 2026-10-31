@@ -409,12 +409,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               body: JSON.stringify({
                 message: {
                   token: tok,
-                  android: { priority: 'HIGH', ttl: '120s' },
+                  android: {
+                    priority: 'HIGH',
+                    ttl: '120s',
+                    notification: {
+                      title: callerLabel,
+                      body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                      sound: 'default',
+                      default_sound: true,
+                      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                      tag: 'incoming-voice-call',
+                      notification_priority: 'PRIORITY_MAX',
+                      visibility: 'PUBLIC',
+                    },
+                  },
                   notification: {
                     title: callerLabel,
                     body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
                   },
                   data: fcmDataPayload,
+                  apns: {
+                    payload: {
+                      aps: {
+                        sound: 'default',
+                      },
+                    },
+                  },
+                  webpush: {
+                    headers: { Urgency: 'high' },
+                    notification: {
+                      title: callerLabel,
+                      body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                      sound: 'default',
+                      tag: 'incoming-voice-call',
+                    },
+                    fcm_options: {
+                      link: `/?fcm_tap=1&action=incoming_call&call_id=${encodeURIComponent(String(call_id || ''))}&caller_name=${encodeURIComponent(callerLabel)}`,
+                    },
+                  },
                 },
               }),
             });
@@ -552,12 +584,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               body: JSON.stringify({
                 message: {
                   token: tok,
-                  android: { priority: 'HIGH', ttl: '120s' },
+                  android: {
+                    priority: 'HIGH',
+                    ttl: '120s',
+                    notification: {
+                      title: callerLabel,
+                      body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                      sound: 'default',
+                      default_sound: true,
+                      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                      tag: 'incoming-voice-call',
+                      notification_priority: 'PRIORITY_MAX',
+                      visibility: 'PUBLIC',
+                    },
+                  },
                   notification: {
                     title: callerLabel,
                     body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
                   },
                   data: fcmDataPayload,
+                  apns: {
+                    payload: {
+                      aps: {
+                        sound: 'default',
+                      },
+                    },
+                  },
+                  webpush: {
+                    headers: { Urgency: 'high' },
+                    notification: {
+                      title: callerLabel,
+                      body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                      sound: 'default',
+                      tag: 'incoming-voice-call',
+                    },
+                    fcm_options: {
+                      link: `/?fcm_tap=1&action=incoming_call&call_id=${encodeURIComponent(String(call_id || ''))}&caller_name=${encodeURIComponent(callerLabel)}`,
+                    },
+                  },
                 },
               }),
             });

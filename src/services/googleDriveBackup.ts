@@ -18,8 +18,15 @@ export interface GoogleDriveUser {
 }
 
 // Reuse existing app or initialize if not present
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+let app: any = null;
+let authInstance: any = null;
+try {
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  authInstance = getAuth(app);
+} catch (e) {
+  console.warn('[GoogleDriveBackup] Firebase initialization notice:', e);
+}
+export const auth = authInstance;
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.file');
