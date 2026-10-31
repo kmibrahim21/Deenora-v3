@@ -297,8 +297,23 @@ export default async function handler(req: any, res: any) {
 
       console.log(`[ZKteco ADMS] Processing attendance payload for Institution "${matchedInstitution.name}" (${matchedInstitutionId})`);
 
-      // Pre-fetch students and teachers for fast matching
-      const [{ data: studentsList }, { data: teachersList }] = await Promise.all([
+      // Extract target dates from payload for batch pre-fetching
+      const targetDates = Array.from(new Set(
+        lines.map((l: string) => {
+          let checkTime = '';
+          if (l.includes('\t')) checkTime = (l.split('\t')[1] || '').trim();
+          else if (l.includes(',')) checkTime = (l.split(',')[1] || '').trim();
+          else {
+            const parts = l.split(/\s+/);
+            if (parts.length >= 3 && parts[1]?.length === 10 && parts[2]?.includes(':')) checkTime = `${parts[1]} ${parts[2]}`;
+            else checkTime = (parts[1] || '').trim();
+          }
+          return checkTime ? checkTime.substring(0, 10) : '';
+        }).filter((d: string) => d && d.length === 10)
+      ));
+
+      // Pre-fetch students, teachers, and existing attendance records in a single parallel query
+      const [{ data: studentsList }, { data: teachersList }, { data: existingAttendanceList }, { data: existingTeacherAttendanceList }] = await Promise.all([
         supabase
           .from('students')
           .select('id, class_id, notes, registration_number, roll, biometric_id, guardian_phone, student_name')
@@ -306,7 +321,21 @@ export default async function handler(req: any, res: any) {
         supabase
           .from('teachers')
           .select('id, permissions, teacher_name, mobile')
-          .eq('institution_id', matchedInstitutionId)
+          .eq('institution_id', matchedInstitutionId),
+        targetDates.length > 0
+          ? supabase
+              .from('attendance')
+              .select('id, student_id, status, session, late_minutes, arrival_time, date')
+              .eq('institution_id', matchedInstitutionId)
+              .in('date', targetDates)
+          : Promise.resolve({ data: [] }),
+        targetDates.length > 0
+          ? supabase
+              .from('teacher_attendance')
+              .select('id, teacher_id, status, date')
+              .eq('institution_id', matchedInstitutionId)
+              .in('date', targetDates)
+          : Promise.resolve({ data: [] })
       ]);
 
       let processedCount = 0;
@@ -389,14 +418,9 @@ export default async function handler(req: any, res: any) {
             }
           }
 
-          const { data: existingList } = await supabase
-            .from('attendance')
-            .select('id, status, session, late_minutes, arrival_time')
-            .eq('institution_id', matchedInstitutionId)
-            .eq('student_id', student.id)
-            .eq('date', date);
+          const existingRec = (existingAttendanceList || []).find((att: any) => att.student_id === student.id && att.date === date);
 
-          if (!existingList || existingList.length === 0) {
+          if (!existingRec) {
             const { error: insErr } = await supabase.from('attendance').insert({
               institution_id: matchedInstitutionId,
               student_id: student.id,
@@ -425,7 +449,6 @@ export default async function handler(req: any, res: any) {
               console.error('[ZKteco ADMS] Student attendance insert error:', insErr);
             }
           } else {
-            const existingRec = existingList[0];
             // If already marked as leave by administration in the app, preserve leave status
             const targetStatus = existingRec.status === 'leave' ? 'leave' : punchStatus;
             const { error: updErr } = await supabase
@@ -463,14 +486,9 @@ export default async function handler(req: any, res: any) {
             });
 
             if (teacher) {
-              const { data: existingTList } = await supabase
-                .from('teacher_attendance')
-                .select('id, status')
-                .eq('institution_id', matchedInstitutionId)
-                .eq('teacher_id', teacher.id)
-                .eq('date', date);
+              const existingT = (existingTeacherAttendanceList || []).find((tAtt: any) => tAtt.teacher_id === teacher.id && tAtt.date === date);
 
-              if (!existingTList || existingTList.length === 0) {
+              if (!existingT) {
                 const { error: insTErr } = await supabase.from('teacher_attendance').insert({
                   institution_id: matchedInstitutionId,
                   teacher_id: teacher.id,
@@ -486,7 +504,6 @@ export default async function handler(req: any, res: any) {
                   console.error('[ZKteco ADMS] Teacher attendance insert error:', insTErr);
                 }
               } else {
-                const existingT = existingTList[0];
                 const { error: updTErr } = await supabase
                   .from('teacher_attendance')
                   .update({

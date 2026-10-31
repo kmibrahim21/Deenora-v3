@@ -105,13 +105,15 @@ while True:
                 }
                 
                 try:
-                    res = requests.post(f"{SERVER_URL}/api/iclock", json=payload, timeout=10)
+                    res = requests.post(f"{SERVER_URL}/api/iclock", json=payload, timeout=(10, 30))
                     if res.status_code == 200:
                         data = res.json()
                         msg = data.get('message', 'Punches synced') if isinstance(data, dict) else 'OK'
                         print(f"[DEENORA SYNC OK] Uploaded {len(logs)} punch records to server -> {msg}")
                     else:
                         print(f"[SERVER WARN] Status Code {res.status_code}")
+                except requests.exceptions.Timeout:
+                    print(f"[SERVER TIMEOUT] Server response timed out (>30s). Will retry on next cycle...")
                 except Exception as http_err:
                     print(f"[SERVER SYNC ERROR] Failed to send to Deenora: {http_err}")
             else:
