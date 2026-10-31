@@ -11,7 +11,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const query = req.query || {};
   const institutionId = (query.institution_id || query.institutionId || query.inst || '').toString().trim();
-  const deviceIp = (query.device_ip || query.deviceIp || '192.168.1.201').toString().trim();
+  const deviceIp = (query.device_ip || query.deviceIp || '192.168.0.201').toString().trim();
   const format = (query.format || 'bat').toString().trim().toLowerCase();
   
   const serverHost = req.headers.host || 'deenora.app';
@@ -19,6 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const serverUrl = `${protocol}://${serverHost}`;
 
   // Dedicated Python Sync Script for ZKTeco K40/K14 (Non-ADMS local network devices)
+  // Supports dual-subnet auto-detection (both 192.168.0.x and 192.168.1.x)
   const pythonScript = `import time
 import sys
 import os
@@ -35,26 +36,56 @@ except ImportError:
     os.system("pip install pyzk --quiet")
     from zk import ZK
 
-DEVICE_IP = "${deviceIp}"
+PRIMARY_IP = "${deviceIp}"
 DEVICE_PORT = 4370
 INSTITUTION_ID = "${institutionId}"
 SERVER_URL = "${serverUrl}"
+
+# Construct smart fallback candidate list for both 192.168.0.x and 192.168.1.x subnets
+CANDIDATE_IPS = [PRIMARY_IP]
+if PRIMARY_IP.startswith("192.168.0."):
+    alt = PRIMARY_IP.replace("192.168.0.", "192.168.1.")
+    if alt not in CANDIDATE_IPS: CANDIDATE_IPS.append(alt)
+elif PRIMARY_IP.startswith("192.168.1."):
+    alt = PRIMARY_IP.replace("192.168.1.", "192.168.0.")
+    if alt not in CANDIDATE_IPS: CANDIDATE_IPS.append(alt)
+
+for default_ip in ["192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202", "192.168.0.100", "192.168.1.100"]:
+    if default_ip not in CANDIDATE_IPS:
+        CANDIDATE_IPS.append(default_ip)
 
 print("================================================================")
 print("   Deenora SaaS ZKTeco Biometric Machine Local Sync Engine")
 print("================================================================")
 print(f" Institution ID : {INSTITUTION_ID if INSTITUTION_ID else 'GLOBAL'}")
-print(f" Target Device  : {DEVICE_IP}:{DEVICE_PORT}")
+print(f" Target IP      : {PRIMARY_IP}:{DEVICE_PORT}")
+print(f" Auto-Scan IPs  : {', '.join(CANDIDATE_IPS)}")
 print(f" Server URL     : {SERVER_URL}")
 print("================================================================")
-print("\\n[1/2] Connecting to local ZKTeco machine at " + DEVICE_IP + "...")
 
 while True:
+    connected_ip = None
+    conn = None
+
+    for target_ip in CANDIDATE_IPS:
+        try:
+            print(f"[SCAN] Checking ZKTeco device at {target_ip}:{DEVICE_PORT}...")
+            zk = ZK(target_ip, port=DEVICE_PORT, timeout=3)
+            conn = zk.connect()
+            connected_ip = target_ip
+            print(f"\\n[SUCCESS] Connected to ZKTeco machine on local network at {target_ip}:{DEVICE_PORT}!")
+            break
+        except Exception as e:
+            continue
+
+    if not connected_ip or not conn:
+        print(f"[NOTICE] Could not connect to ZKTeco device on candidate IPs: {CANDIDATE_IPS}.")
+        print("         Please check Wi-Fi/Ethernet cable or machine power. Retrying in 5s...")
+        time.sleep(5)
+        continue
+
+    # Active sync loop once connected
     try:
-        zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=5)
-        conn = zk.connect()
-        print(f"\\n[SUCCESS] Connected to ZKTeco machine at {DEVICE_IP}:{DEVICE_PORT}!")
-        
         while True:
             attendances = conn.get_attendance()
             if attendances:
@@ -82,12 +113,16 @@ while True:
                 except Exception as http_err:
                     print(f"[SERVER SYNC ERROR] Failed to send to Deenora: {http_err}")
             else:
-                print(f"[POLL] Checked {DEVICE_IP} -> No new un-synced punches yet.")
+                print(f"[POLL] Checked {connected_ip} -> No new un-synced punches yet.")
             
             time.sleep(5)
 
-    except Exception as err:
-        print(f"[NOTICE] Waiting for machine at {DEVICE_IP}:{DEVICE_PORT} ({err}). Retrying in 5s...")
+    except Exception as run_err:
+        print(f"[NOTICE] Device connection interrupted at {connected_ip} ({run_err}). Auto-reconnecting in 5s...")
+        try:
+            conn.disconnect()
+        except:
+            pass
         time.sleep(5)
 `;
 
@@ -97,7 +132,7 @@ while True:
     return res.status(200).send(pythonScript);
   }
 
-  // Base64 encode the Python script to write seamlessly to %TEMP% without permission errors or special character issues
+  // Base64 encode the Python script to write seamlessly to %TEMP% without permission errors
   const encodedPy = Buffer.from(pythonScript, 'utf-8').toString('base64');
 
   // Raw PowerShell script for checking server readiness
@@ -157,12 +192,12 @@ echo [1/3] Checking Deenora Cloud Server Readiness...
 powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedPs}
 
 echo.
-echo [2/3] Checking Network Connection to Biometric Device at %DEVICE_IP%...
+echo [2/3] Checking Network Connection to Biometric Device...
 ping -n 2 %DEVICE_IP% >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [SUCCESS] Connected to Biometric Device on Local Network at %DEVICE_IP%!
 ) else (
-    echo [NOTICE] Device at %DEVICE_IP% not responding to ping. Auto-retrying connection...
+    echo [NOTICE] Primary IP %DEVICE_IP% not responding directly. Auto-scanning candidate IPs (192.168.0.x / 192.168.1.x)...
 )
 
 echo.
@@ -172,7 +207,7 @@ echo Please leave this window minimized while the school/madrasah is open.
 echo ================================================================
 echo.
 
-:: Extract Python script safely into %TEMP% directory (Guaranteed writable)
+:: Extract Python script safely into %TEMP% directory
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8" >nul 2>&1
 
 where python >nul 2>&1

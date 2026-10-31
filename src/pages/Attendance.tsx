@@ -223,6 +223,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   // Biometric Machine Modal States
   const [showBiometricModal, setShowBiometricModal] = useState(false);
   const [biometricTab, setBiometricTab] = useState<'adms' | 'non_adms'>('adms');
+  const [agentDeviceIp, setAgentDeviceIp] = useState('192.168.0.201');
   const [testSn, setTestSn] = useState('');
   const [testingConn, setTestingConn] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -3012,12 +3013,31 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-4">
-                      যেসব বায়োমেট্রিক মেশিনে সরাসরি ADMS ক্লাউড ফিচার নেই (কেবল লোকাল পিসির সাথে ইউএসবি বা নেটওয়ার্ক ক্যাবলে যুক্ত), সেগুলোর জন্য এই ছোট উইন্ডোজ পিসি অ্যাপটি ডাউনলোড করে রান করুন:
+                    <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-3">
+                      যেসব বায়োমেট্রিক মেশিনে সরাসরি ADMS ক্লাউড ফিচার নেই (কেবল লোকাল পিসির সাথে ইউএসবি বা নেটওয়ার্ক ক্যাবলে যুক্ত), সেগুলোর জন্য আপনার মেশিনের লোকাল আইপি অ্যাড্রেস নিচে বসিয়ে ডাউনলোড করুন:
                     </p>
 
+                    <div className="space-y-1.5 mb-4">
+                      <label className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                        <span>মেশিনের লোকাল আইপি অ্যাড্রেস (Machine Local IP):</span>
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold font-noto">রাউটার Subnet (0 বা 1)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={agentDeviceIp}
+                        onChange={(e) => setAgentDeviceIp(e.target.value)}
+                        placeholder="যেমন: 192.168.0.201 বা 192.168.1.201"
+                        className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none ${
+                          isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-purple-200 text-slate-900'
+                        }`}
+                      />
+                      <p className="text-[10px] text-slate-400 font-bold">
+                        💡 আপনার রাউটার অনুযায়ী আইপি <code className="text-purple-600 dark:text-purple-300 font-mono">192.168.0.201</code> অথবা <code className="text-purple-600 dark:text-purple-300 font-mono">192.168.1.201</code> হতে পারে। যেকোনো একটি বেছে নিন, সিস্টেম উভয়েই অটো-স্ক্যান করবে।
+                      </p>
+                    </div>
+
                     <a
-                      href={`/api/pc-agent?institution_id=${madrasah?.id || ''}`}
+                      href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}`}
                       download
                       className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2.5 shadow-lg shadow-purple-500/25 active:scale-95 transition-all uppercase tracking-wider"
                     >
