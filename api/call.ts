@@ -416,11 +416,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                       title: callerLabel,
                       body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
                       sound: 'default',
-                      default_sound: true,
-                      click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                      tag: 'incoming-voice-call',
-                      notification_priority: 'PRIORITY_MAX',
-                      visibility: 'PUBLIC',
                     },
                   },
                   notification: {
