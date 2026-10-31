@@ -150,10 +150,17 @@ try {
 `;
   const encodedPs = Buffer.from(psScript, 'utf16le').toString('base64');
 
-  // Generate self-contained Windows One-Click Installer (.bat) script with persistent window safety and auto-python setup
+  // Generate self-contained Windows One-Click Installer (.bat) script with PERMANENT WINDOW KEEP-ALIVE
   const batchScript = `@echo off
 title Deenora Biometric Sync Agent (One-Click Windows Service)
 color 0A
+
+:: GUARANTEE WINDOW STAYS OPEN PERMANENTLY (cmd /k re-launch wrapper)
+if "%~1"=="-keepalive" goto STARTED_ALIVE
+cmd /k ""%~f0" -keepalive"
+exit /b
+
+:STARTED_ALIVE
 cls
 
 :: Ensure current working directory is the script folder (prevents C:\\Windows\\System32 Access Denied errors)
@@ -210,7 +217,7 @@ echo ================================================================
 echo.
 
 :: Extract Python script safely into %TEMP% directory
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedPy}')) | Out-File -FilePath '%TARGET_PY_FILE%' -Encoding utf8"
 
 :START_SYNC
 where python >nul 2>&1
@@ -218,7 +225,7 @@ if %ERRORLEVEL% EQU 0 (
     echo [OK] Python Engine Detected! Starting ZKTeco Local Machine Sync...
     python "%TARGET_PY_FILE%"
     echo.
-    echo [WARNING] Sync process paused or interrupted. Restarting in 5 seconds...
+    echo [WARNING] Sync process paused. Restarting in 5 seconds...
     timeout /t 5 /nobreak >nul
     goto START_SYNC
 )
@@ -228,7 +235,7 @@ if %ERRORLEVEL% EQU 0 (
     echo [OK] Python Launcher (py) Detected! Starting ZKTeco Local Machine Sync...
     py "%TARGET_PY_FILE%"
     echo.
-    echo [WARNING] Sync process paused or interrupted. Restarting in 5 seconds...
+    echo [WARNING] Sync process paused. Restarting in 5 seconds...
     timeout /t 5 /nobreak >nul
     goto START_SYNC
 )
@@ -244,10 +251,10 @@ echo.
 where winget >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [AUTO-INSTALL] Installing Python 3.11 via Windows Package Manager...
-    winget install --id Python.Python.3.11 --exact --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+    winget install --id Python.Python.3.11 --exact --silent --accept-package-agreements --accept-source-agreements
 ) else (
     echo [AUTO-INSTALL] Downloading Official Python Silent Installer...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait" >nul 2>&1
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait"
 )
 
 :: Refresh environment PATH variable dynamically
