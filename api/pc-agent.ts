@@ -206,7 +206,7 @@ ping -n 2 %DEVICE_IP% >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [SUCCESS] Connected to Biometric Device on Local Network at %DEVICE_IP%!
 ) else (
-    echo [NOTICE] Primary IP %DEVICE_IP% not responding directly. Auto-scanning candidate IPs (192.168.0.x / 192.168.1.x)...
+    echo [NOTICE] Primary IP %DEVICE_IP% not responding directly. Auto-scanning candidate IPs on local subnets...
 )
 
 echo.
@@ -232,7 +232,7 @@ if %ERRORLEVEL% EQU 0 (
 
 where py >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [OK] Python Launcher (py) Detected! Starting ZKTeco Local Machine Sync...
+    echo [OK] Python Launcher py Detected! Starting ZKTeco Local Machine Sync...
     py "%TARGET_PY_FILE%"
     echo.
     echo [WARNING] Sync process paused. Restarting in 5 seconds...
@@ -249,14 +249,19 @@ echo [INFO] Please wait ~15-20 seconds...
 echo.
 
 where winget >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    echo [AUTO-INSTALL] Installing Python 3.11 via Windows Package Manager...
-    winget install --id Python.Python.3.11 --exact --silent --accept-package-agreements --accept-source-agreements
-) else (
-    echo [AUTO-INSTALL] Downloading Official Python Silent Installer...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait"
-)
+if %ERRORLEVEL% EQU 0 goto INSTALL_WINGET
+goto INSTALL_POWERSHELL
 
+:INSTALL_WINGET
+echo [AUTO-INSTALL] Installing Python 3.11 via Windows Package Manager...
+winget install --id Python.Python.3.11 --exact --silent --accept-package-agreements --accept-source-agreements
+goto RUN_INSTALL_CHECK
+
+:INSTALL_POWERSHELL
+echo [AUTO-INSTALL] Downloading Official Python Silent Installer...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait"
+
+:RUN_INSTALL_CHECK
 :: Refresh environment PATH variable dynamically
 set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
 
