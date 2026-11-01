@@ -855,6 +855,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
             if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
             initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
         });
+
+        // Load manual attendance
+        const manualAttendanceMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examId] || {};
+        Object.entries(manualAttendanceMap).forEach(([studentId, val]: [string, any]) => {
+            if (!initialMarks[studentId]) initialMarks[studentId] = {};
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+                initialMarks[studentId]['attendance'] = String(val).trim();
+            }
+        });
+
         setMarksData(initialMarks);
     }
     setLoading(false);
@@ -886,6 +896,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
           if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
           initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
         });
+
+        const manualAttendanceMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examId] || {};
+        Object.entries(manualAttendanceMap).forEach(([studentId, val]: [string, any]) => {
+          if (!initialMarks[studentId]) initialMarks[studentId] = {};
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            initialMarks[studentId]['attendance'] = String(val).trim();
+          }
+        });
+
         setMarksData(initialMarks);
       }
     } catch (err) {
@@ -1334,6 +1353,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
     Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
         Object.entries(subMarks).forEach(([subjectId, marks]) => {
+            if (subjectId === 'attendance') return;
             if (marks !== undefined && marks !== null && marks !== '') {
                 payload.push({
                     exam_id: selectedExam.id,
@@ -1352,6 +1372,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
     // Validate that no marks exceed the subject's total_marks
     for (const item of payload) {
+        if (item.subject_id === 'attendance') continue;
         const sub = subjects.find(s => s.id === item.subject_id);
         if (sub && item.marks_obtained > sub.total_marks) {
             alert(lang === 'bn' ? `${sub.subject_name} বিষয়ের প্রাপ্ত নম্বর পূর্ণ নম্বর (${sub.total_marks}) এর বেশি হতে পারে না!` : `Obtained marks for ${sub.subject_name} cannot exceed full marks (${sub.total_marks})!`);
@@ -1406,6 +1427,41 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
         setIsSaving(false);
         return;
     }
+
+    // Save manual attendance to madrasah config
+    try {
+        const examId = selectedExam.id;
+        const currentManualAttendance = (madrasah?.config_json as any)?.exam_manual_attendance || {};
+        const examAttendance: any = { ...(currentManualAttendance[examId] || {}) };
+
+        Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
+            if (subMarks && subMarks.attendance !== undefined) {
+                const val = String(subMarks.attendance).trim();
+                if (val !== '') {
+                    examAttendance[studentId] = val;
+                } else {
+                    delete examAttendance[studentId];
+                }
+            }
+        });
+
+        const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah?.id).single();
+        const updatedConfig = {
+            ...(instData?.config_json || madrasah?.config_json || {}),
+            exam_manual_attendance: {
+                ...((instData?.config_json || madrasah?.config_json)?.exam_manual_attendance || {}),
+                [examId]: examAttendance
+            }
+        };
+
+        const { error: configError } = await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah?.id);
+        if (!configError && madrasah) {
+            madrasah.config_json = updatedConfig;
+        }
+    } catch (err) {
+        console.error("Error saving manual attendance in Befaq:", err);
+    }
+
     setShowSuccessModal(true);
     setIsSaving(false);
   };
@@ -1465,6 +1521,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
             if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
             initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
           });
+
+          // Fill manual attendance
+          const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examToUse.id] || {};
+          Object.entries(manualAttMap).forEach(([studentId, val]: [string, any]) => {
+            if (!initialMarks[studentId]) initialMarks[studentId] = {};
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+              initialMarks[studentId]['attendance'] = String(val).trim();
+            }
+          });
+
           activeMarksData = initialMarks;
           setMarksData(initialMarks);
         }
@@ -1472,9 +1538,21 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
       setDownloadProgress(25);
 
+      const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examToUse.id] || {};
+      const enrichedMarksData = { ...activeMarksData };
+      activeStudents.forEach(st => {
+        const curr = { ...(enrichedMarksData[st.id] || {}) };
+        if (curr['attendance'] === undefined || String(curr['attendance']).trim() === '') {
+          if (manualAttMap[st.id] !== undefined && String(manualAttMap[st.id]).trim() !== '') {
+            curr['attendance'] = String(manualAttMap[st.id]).trim();
+          }
+        }
+        enrichedMarksData[st.id] = curr;
+      });
+
       const totalPossible = activeSubjects.reduce((sum, s) => sum + (s.total_marks || 100), 0);
       const sortedStds = activeStudents.map(std => {
-        const stdMarks = activeMarksData[std.id] || {};
+        const stdMarks = enrichedMarksData[std.id] || {};
         const totalObtained = activeSubjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
         const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
         const division = getDivision(totalObtained, totalPossible);
@@ -1508,11 +1586,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
       });
 
       const pdfStudents = rankedStds.map(std => {
-        const stdMarks = activeMarksData[std.id] || {};
+        const stdMarks = enrichedMarksData[std.id] || {};
         const subjectMarksMap: { [key: string]: any } = {};
         activeSubjects.forEach(s => {
           subjectMarksMap[s.subject_name] = stdMarks[s.id] !== undefined ? stdMarks[s.id] : '-';
         });
+
+        const stdAtt = (enrichedMarksData[std.id]?.['attendance'] !== undefined && String(enrichedMarksData[std.id]?.['attendance']).trim() !== '')
+          ? String(enrichedMarksData[std.id]?.['attendance']).trim()
+          : ((std as any).attendance || '-');
 
         return {
           id: std.id,
@@ -1524,7 +1606,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
           grade: std.division,
           percentage: ((Math.round(std.percentage * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage)) : (Math.round(std.percentage * 10) / 10).toFixed(1),
           gpa: `${((Math.round(std.percentage * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage)) : (Math.round(std.percentage * 10) / 10).toFixed(1)}%`,
-          rank: std.rank
+          rank: std.rank,
+          attendance: stdAtt
         };
       });
 
@@ -1536,7 +1619,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
           { ...examToUse, classes: { class_name: className }, is_befaq: true, result_engine: 'befaq' },
           activeSubjects,
           rankedStds,
-          activeMarksData,
+          enrichedMarksData,
           madrasah,
           downloadLang,
           (p) => setDownloadProgress(p),
@@ -1606,6 +1689,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
             if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
             initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
           });
+
+          // Fill manual attendance
+          const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examToUse.id] || {};
+          Object.entries(manualAttMap).forEach(([studentId, val]: [string, any]) => {
+            if (!initialMarks[studentId]) initialMarks[studentId] = {};
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+              initialMarks[studentId]['attendance'] = String(val).trim();
+            }
+          });
+
           activeMarksData = initialMarks;
           setMarksData(initialMarks);
         }
@@ -1613,6 +1706,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
       setDownloadProgress(20);
 
+      const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examToUse.id] || {};
       const totalPossible = activeSubjects.reduce((sum, s) => sum + (s.total_marks || 100), 0);
       
       const highestMarksMap: { [subId: string]: number } = {};
@@ -1686,6 +1780,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
           };
         });
 
+        const stdAtt = (stdMarks['attendance'] !== undefined && String(stdMarks['attendance']).trim() !== '')
+          ? String(stdMarks['attendance']).trim()
+          : (manualAttMap[std.id] !== undefined && String(manualAttMap[std.id]).trim() !== '')
+            ? String(manualAttMap[std.id]).trim()
+            : ((std as any).attendance || '-');
+
         return {
           info: {
             ...std,
@@ -1696,7 +1796,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
             gpa: `${((Math.round(std.percentage * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage)) : (Math.round(std.percentage * 10) / 10).toFixed(1)}%`,
             grade: std.division,
             photo_url: std.photo_url,
-            attendance: (std as any).attendance || '-'
+            attendance: stdAtt
           },
           marks: preparedMarks
         };
@@ -1769,6 +1869,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
         };
       });
 
+      const manualAtt = stdMarks['attendance'] || (madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id]?.[std.id];
+      const stdAtt = manualAtt !== undefined && manualAtt !== null && String(manualAtt).trim() !== ''
+        ? String(manualAtt).trim()
+        : (std.attendance || '-');
+
       const studentInfo = {
         ...std,
         student_name: std.student_name,
@@ -1778,7 +1883,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
         gpa: `${((Math.round((std.percentage || 0) * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage || 0)) : (Math.round((std.percentage || 0) * 10) / 10).toFixed(1)}%`,
         grade: std.division,
         photo_url: std.photo_url,
-        attendance: std.attendance || '-'
+        attendance: stdAtt
       };
 
       const examPayload = {
@@ -3452,6 +3557,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                             {subjects.map(s => (
                                 <th key={s.id} className={`py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4 sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{s.subject_name}</th>
                             ))}
+                            <th className={`py-4 text-[10px] font-black text-amber-500 uppercase text-center min-w-[80px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'উপস্থিতি (ঐচ্ছিক)' : 'Attendance (Opt)'}</th>
                             <th className={`py-4 text-[10px] font-black text-emerald-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>মোট</th>
                             <th className={`py-4 text-[10px] font-black text-blue-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'গড়' : 'Average'}</th>
                             <th className={`py-4 text-[10px] font-black text-purple-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>বিভাগ</th>
@@ -3535,6 +3641,32 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                         />
                                     </td>
                                 ))}
+                                <td className="py-4 px-2">
+                                    <input 
+                                        id={`befaq-mark-attendance-${sIndex}`}
+                                        type="text" 
+                                        inputMode="decimal"
+                                        enterKeyHint="next"
+                                        autoComplete="off"
+                                        tabIndex={subjects.length * students.length + sIndex + 1}
+                                        placeholder="%"
+                                        title={lang === 'bn' ? 'উপস্থিতির সংখ্যা বা শতকরা লিখুন (ঐচ্ছিক)' : 'Enter attendance (Optional)'}
+                                        className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500' : 'bg-amber-50/80 border-amber-100 text-slate-900 focus:border-amber-500'} rounded-lg text-center font-black text-xs outline-none transition-all placeholder:text-slate-400 placeholder:font-normal`}
+                                        value={marksData[std.id]?.['attendance'] ?? ''}
+                                        onFocus={(e) => e.target.select()}
+                                        onKeyDown={(e) => handleKeyDown(e, 'attendance')}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setMarksData(prev => ({
+                                                ...prev,
+                                                [std.id]: {
+                                                    ...prev[std.id],
+                                                    attendance: val
+                                                }
+                                            }));
+                                        }}
+                                    />
+                                </td>
                                 <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
                                     {subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0)}
                                 </td>
