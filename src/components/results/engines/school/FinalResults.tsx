@@ -657,7 +657,8 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           madrasah,
           downloadLang,
           (p) => setDownloadProgress(p),
-          withBreakdown
+          withBreakdown,
+          viewResult.class_id
       );
     } catch (error) {
       console.error('Download error:', error);

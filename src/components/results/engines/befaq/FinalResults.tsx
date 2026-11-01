@@ -191,10 +191,10 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
   };
 
   const getDivision = (percentage: number) => {
-    if (percentage >= 80) return 'মুমতাজ';
-    if (percentage >= 65) return 'জায়্যিদ জিদ্দান';
+    if (percentage >= 80) return 'মুমতায';
+    if (percentage >= 65) return 'জা. জিদ্দান';
     if (percentage >= 50) return 'জায়্যিদ';
-    if (percentage >= 40) return 'মকবুল';
+    if (percentage >= 35) return 'মাকবুল';
     return 'রাসিব';
   };
 
@@ -376,7 +376,9 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
           pdfData,
           madrasah,
           downloadLang,
-          (p) => setDownloadProgress(p)
+          (p) => setDownloadProgress(p),
+          false,
+          viewResult.class_id
       );
     } catch (error) {
       console.error('Download error:', error);

@@ -509,6 +509,7 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
 
                 if (count > 0) {
                     const avg = totalPct / count;
+                    const finalHasFailed = isBefaq ? (avg < 35) : hasFailed;
                     studentAverages.push({
                         id: std.id,
                         name: std.student_name,
@@ -516,10 +517,10 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
                         className: classes.find(c => c.id === std.class_id)?.class_name || '',
                         average: avg,
                         totalMarks: totalPct,
-                        hasFailed
+                        hasFailed: finalHasFailed
                     });
 
-                    if (hasFailed) failedCount++;
+                    if (finalHasFailed) failedCount++;
                     else passedCount++;
                 }
             }

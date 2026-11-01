@@ -36,13 +36,66 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
     return cfg;
   }, [madrasah?.config_json]);
 
+  const { isBefaq, isHighSchool } = React.useMemo(() => {
+    const classId = exam?.class_id || exam?.marhala_id;
+    const classEngine = classId ? config?.class_result_engines?.[classId] : undefined;
+
+    let befaq = false;
+    let highSchool = false;
+
+    if (exam?.result_engine) {
+      befaq = exam.result_engine === 'befaq';
+      highSchool = exam.result_engine === 'high_school';
+    } else if (exam?.is_befaq === true) {
+      befaq = true;
+      highSchool = false;
+    } else if (exam?.is_befaq === false) {
+      befaq = false;
+      highSchool = classEngine === 'high_school';
+    } else if (classEngine) {
+      befaq = classEngine === 'befaq';
+      highSchool = classEngine === 'high_school';
+    } else if (exam?.marhala_id !== undefined && !exam?.class_id) {
+      befaq = true;
+      highSchool = false;
+    } else if (madrasah?.institution_type === 'school') {
+      befaq = false;
+      highSchool = config?.result_system === 'high_school' || config?.result_engine === 'high_school';
+    } else {
+      const instCfg = config?.result_engine || config?.result_system;
+      befaq = instCfg === 'befaq';
+      highSchool = instCfg === 'high_school';
+      if (!instCfg && madrasah?.institution_type !== 'school') {
+        befaq = true;
+      }
+    }
+    return { isBefaq: befaq, isHighSchool: highSchool };
+  }, [config, exam, madrasah?.institution_type]);
+
+  const getBefaqDivision = React.useCallback((percentage: number): string => {
+    if (percentage >= 80) return 'মুমতায';
+    if (percentage >= 65) return 'জা. জিদ্দান';
+    if (percentage >= 50) return 'জায়্যিদ';
+    if (percentage >= 35) return 'মাকবুল';
+    return 'রাসিব';
+  }, []);
+
+  const formatCleanNumber = (val: number | string | undefined | null): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const str = String(val).trim();
+    const num = typeof val === 'number' ? val : parseFloat(str.replace(/[^0-9.-]/g, ''));
+    if (isNaN(num)) return str;
+    const rounded = Math.round(num * 10) / 10;
+    return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
+  };
+
   // Language translations
   const t = {
     resultSheet: isBangla ? 'ফলাফল পত্র' : 'RESULT SHEET',
     academicYear: isBangla ? 'শিক্ষাবর্ষ' : 'Academic Year',
     annualExam: isBangla ? 'বার্ষিক পরীক্ষা' : 'Annual Examination',
     class: isBangla ? 'শ্রেণি' : 'Class',
-    section: isBangla ? 'শাখা' : 'Section',
+    section: isBangla ? ' শাখা' : 'Section',
     group: isBangla ? 'বিভাগ' : 'Group',
     exam: isBangla ? 'পরীক্ষা' : 'Exam',
     subjects: isBangla ? 'বিষয়সমূহ' : 'Subjects',
@@ -55,9 +108,9 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
     subjectMarks: isBangla ? 'বিষয়ভিত্তিক নম্বর (পূর্ণমান: ১০০)' : 'SUBJECT MARKS (FULL MARK: 100)',
     total: isBangla ? 'মোট' : 'Total',
     average: isBangla ? 'গড়' : 'Average',
-    gpa: 'GPA',
+    gpa: isBangla ? 'জিপিএ' : 'GPA',
     percentage: isBangla ? 'শতকরা (%)' : 'Percentage (%)',
-    grade: isBangla ? 'গ্রেড' : 'Grade',
+    grade: isBefaq ? (isBangla ? 'বিভাগ' : 'Division') : (isBangla ? 'গ্রেড' : 'Grade'),
     rank: 'Merit Position',
     result: isBangla ? 'ফলাফল' : 'Result',
     pass: isBangla ? 'পাস' : 'Pass',
@@ -67,7 +120,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
     passed: isBangla ? 'উত্তীর্ণ' : 'Passed',
     failed: isBangla ? 'অনুত্তীর্ণ' : 'Failed',
     passPercentage: isBangla ? 'পাসের হার' : 'Pass Percentage',
-    gradeScale: isBangla ? 'গ্রেড স্কেল' : 'GRADE SCALE',
+    gradeScale: isBefaq ? (isBangla ? 'বেফাক গ্রেড স্কেল' : 'BEFAQ GRADE SCALE') : (isBangla ? 'গ্রেড স্কেল' : 'GRADE SCALE'),
     gradeDistribution: isBangla ? 'গ্রেড বন্টন' : 'GRADE DISTRIBUTION',
     remarks: isBangla ? 'মন্তব্য' : 'REMARKS',
     marksRange: isBangla ? 'নম্বর নম্বর সীমা' : 'Marks Range (Total)',
@@ -100,12 +153,22 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
         if (hasMark) markMap[m.subject_id || m.id] = val;
         totalObtained += val;
         totalPossible += Number(m.full_marks || 100);
-        if (hasMark && (m.grade === 'F' || val < (m.pass_marks || 33))) failed = true;
+        if (!isBefaq && hasMark && (m.grade === 'F' || val < (m.pass_marks || 33))) failed = true;
       });
 
       const pct = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
-      const grade = singleStudent.grade || (pct >= 80 ? 'A+' : pct >= 70 ? 'A' : pct >= 60 ? 'B+' : pct >= 50 ? 'B' : pct >= 40 ? 'C' : 'F');
-      const isPassed = hasAnyMark && !failed && grade !== 'F';
+      let grade = singleStudent.grade || singleStudent.division;
+      if (isBefaq) {
+        const befaqDiv = getBefaqDivision(pct);
+        if (!grade || ['A+', 'A', 'A-', 'B+', 'B', 'C', 'D', 'F'].includes(grade)) {
+          grade = befaqDiv;
+        }
+        failed = grade === 'রাসিব' || pct < 35;
+      } else if (!grade) {
+        grade = (pct >= 80 ? 'A+' : pct >= 70 ? 'A' : pct >= 60 ? 'B+' : pct >= 50 ? 'B' : pct >= 40 ? 'C' : 'F');
+      }
+
+      const isPassed = hasAnyMark && (isBefaq ? grade !== 'রাসিব' && !failed : !failed && grade !== 'F');
 
       rawList = [{
         id: singleStudent.id || '1',
@@ -114,7 +177,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
         marks: markMap,
         total: hasAnyMark ? totalObtained : '',
         fullTotal: totalPossible,
-        percentage: hasAnyMark ? pct.toFixed(1) : '',
+        percentage: hasAnyMark ? formatCleanNumber(pct) : '',
         grade: hasAnyMark ? grade : '',
         isPassed,
         hasAnyMark,
@@ -144,14 +207,20 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
           const fMarks = Number(sub.full_marks || 100);
           fullTotal += fMarks;
           const pMarks = Number(sub.pass_marks || Math.ceil(fMarks * 0.33));
-          if (hasMark && numVal < pMarks && !sub.is_optional) {
+          if (!isBefaq && hasMark && numVal < pMarks && !sub.is_optional) {
             failed = true;
           }
         });
 
         const pct = fullTotal > 0 ? (total / fullTotal) * 100 : 0;
-        let grade = std._grade || std.grade;
-        if (!grade) {
+        let grade = std._grade || std.grade || std.division;
+        if (isBefaq) {
+          const befaqDiv = getBefaqDivision(pct);
+          if (!grade || ['A+', 'A', 'A-', 'B+', 'B', 'C', 'D', 'F'].includes(grade)) {
+            grade = befaqDiv;
+          }
+          failed = grade === 'রাসিব' || pct < 35;
+        } else if (!grade) {
           if (failed) grade = 'F';
           else if (pct >= 80) grade = 'A+';
           else if (pct >= 70) grade = 'A';
@@ -161,7 +230,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
           else grade = 'F';
         }
 
-        const isPassed = hasAnyMark && grade !== 'F' && !failed;
+        const isPassed = hasAnyMark && (isBefaq ? grade !== 'রাসিব' && !failed : grade !== 'F' && !failed);
 
         return {
           id: std.id || std.student_id || String(idx + 1),
@@ -170,7 +239,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
           marks: markMap,
           total: hasAnyMark ? (std._total !== undefined && std._total !== '' ? std._total : total) : '',
           fullTotal,
-          percentage: hasAnyMark ? ((std._avg || pct).toFixed ? (std._avg || pct).toFixed(1) : String(std._avg || pct)) : '',
+          percentage: hasAnyMark ? formatCleanNumber(std._avg !== undefined && std._avg !== '' ? std._avg : pct) : '',
           grade: hasAnyMark ? grade : '',
           isPassed,
           hasAnyMark,
@@ -205,7 +274,9 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
       // Calculate GPA
       let calculatedGpa = '0.0';
       if (std.rawGpa !== undefined && std.rawGpa !== null && std.rawGpa !== '') {
-        calculatedGpa = Number(std.rawGpa).toFixed(1);
+        calculatedGpa = String(std.rawGpa);
+      } else if (isBefaq) {
+        calculatedGpa = std.percentage !== '' && std.percentage !== undefined ? `${toBnNum(std.percentage)}%` : '-';
       } else if (!std.isPassed || std.grade === 'F') {
         calculatedGpa = '0.0';
       } else {
@@ -223,11 +294,11 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
       return {
         ...std,
-        gpa: toBnNum(calculatedGpa),
+        gpa: isBefaq ? calculatedGpa : toBnNum(calculatedGpa),
         rank: displayRank
       };
     });
-  }, [students, subjects, marksData, singleStudent, singleStudentMarks, isBangla]);
+  }, [students, subjects, marksData, singleStudent, singleStudentMarks, isBangla, isBefaq, getBefaqDivision]);
 
   // Overall Statistics
   const totalStudents = studentList.length;
@@ -253,6 +324,15 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
   // Grade Distribution
   const gradeCounts = React.useMemo(() => {
+    if (isBefaq) {
+      const counts: Record<string, number> = { 'মুমতায': 0, 'জা. জিদ্দান': 0, 'জায়্যিদ': 0, 'মাকবুল': 0, 'রাসিব': 0 };
+      studentList.forEach(s => {
+        const g = s.grade || 'রাসিব';
+        if (counts[g] !== undefined) counts[g]++;
+        else counts['রাসিব']++;
+      });
+      return counts;
+    }
     const counts: Record<string, number> = { 'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'F': 0 };
     studentList.forEach(s => {
       const g = s.grade || 'F';
@@ -260,7 +340,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
       else counts['F']++;
     });
     return counts;
-  }, [studentList]);
+  }, [studentList, isBefaq]);
 
   // Total possible marks across all subjects
   const totalSubjectFullMarks = subjects.reduce((sum, s) => sum + Number(s.full_marks || 100), 0);
@@ -270,14 +350,26 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
   const totalPages = Math.ceil(studentList.length / STUDENTS_PER_PAGE) || 1;
 
   // Grade scale reference table
-  const gradeScaleData = [
-    { grade: 'A+', range: '80% and above', remarks: isBangla ? 'চমৎকার' : 'Excellent' },
-    { grade: 'A', range: '70% – 79%', remarks: isBangla ? 'উত্তম' : 'Very Good' },
-    { grade: 'B+', range: '60% – 69%', remarks: isBangla ? 'ভালো' : 'Good' },
-    { grade: 'B', range: '50% – 59%', remarks: isBangla ? 'গড়' : 'Average' },
-    { grade: 'C', range: '40% – 49%', remarks: isBangla ? 'চলনসই' : 'Below Average' },
-    { grade: 'F', range: 'Below 40%', remarks: isBangla ? 'অনুত্তীর্ণ' : 'Fail' },
-  ];
+  const gradeScaleData = React.useMemo(() => {
+    if (isBefaq) {
+      return [
+        { grade: 'মুমতায', range: '৮০% – ১০০%', remarks: isBangla ? '১ম বিভাগ (চমৎকার)' : '1st Div (Distinction)' },
+        { grade: 'জা. জিদ্দান', range: '৬৫% – ৭৯%', remarks: isBangla ? '১ম বিভাগ' : '1st Division' },
+        { grade: 'জায়্যিদ', range: '৫০% – ৬৪%', remarks: isBangla ? '২য় বিভাগ' : '2nd Division' },
+        { grade: 'মাকবুল', range: '৩৫% – ৪৯%', remarks: isBangla ? '৩য় বিভাগ (উত্তীর্ণ)' : '3rd Division (Pass)' },
+        { grade: 'রাসিব', range: '১% – ৩৪%', remarks: isBangla ? 'ফেল (অনুত্তীর্ণ)' : 'Fail' },
+      ];
+    }
+    return [
+      { grade: 'A+', range: isBangla ? '৮০% – ১০০% (৫.০)' : '80% – 100% (5.0)', remarks: isBangla ? 'চমৎকার' : 'Outstanding' },
+      { grade: 'A', range: isBangla ? '৭০% – ৭৯% (৪.০)' : '70% – 79% (4.0)', remarks: isBangla ? 'উত্তম' : 'Very Good' },
+      { grade: 'A-', range: isBangla ? '৬০% – ৬৯% (৩.৫)' : '60% – 69% (3.5)', remarks: isBangla ? 'ভালো' : 'Good' },
+      { grade: 'B', range: isBangla ? '৫০% – ৫৯% (৩.০)' : '50% – 59% (3.0)', remarks: isBangla ? 'সন্তোষজনক' : 'Satisfactory' },
+      { grade: 'C', range: isBangla ? '৪০% – ৪৯% (২.০)' : '40% – 49% (2.0)', remarks: isBangla ? 'চলনসই' : 'Acceptable' },
+      { grade: 'D', range: isBangla ? '৩৩% – ৩৯% (১.০)' : '33% – 39% (1.0)', remarks: isBangla ? 'পাস' : 'Pass' },
+      { grade: 'F', range: isBangla ? '০% – ৩২% (০.০)' : '0% – 32% (0.0)', remarks: isBangla ? 'অনুত্তীর্ণ' : 'Fail' },
+    ];
+  }, [isBefaq, isBangla]);
 
   // Dynamic layout styling based on student count
   const isCompact = totalStudents > 20;
@@ -452,16 +544,18 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                         <th className="py-1 px-0.5 border-r border-white/20 text-center align-middle" colSpan={subjects.length}>
                           {t.subjectMarks}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[40px] border-r border-white/20 align-middle`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} ${isBefaq ? 'w-[44px]' : 'w-[40px]'} border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.total}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[40px] border-r border-white/20 align-middle`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} ${isBefaq ? 'w-[52px]' : 'w-[40px]'} border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.average}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[38px] border-r border-white/20 align-middle`} rowSpan={2}>
-                          {t.gpa}
-                        </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[36px] border-r border-white/20 align-middle`} rowSpan={2}>
+                        {!isBefaq && (
+                          <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[44px] min-w-[42px] border-r border-white/20 align-middle`} rowSpan={2}>
+                            {t.gpa}
+                          </th>
+                        )}
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} ${isBefaq ? 'w-[64px]' : 'w-[36px]'} border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.grade}
                         </th>
                         <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[40px] align-middle`} rowSpan={2}>
@@ -520,22 +614,27 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               );
                             })}
 
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center whitespace-nowrap`}>
                               {toBnNum(std.total)}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-bold text-slate-900 border-r border-slate-200 text-center whitespace-nowrap`}>
                               {std.percentage !== '' && std.percentage !== undefined ? `${toBnNum(std.percentage)}%` : ''}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
-                              {std.gpa}
-                            </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-black border-r border-slate-200 text-center truncate ${
-                              std.grade === 'A+' ? 'text-blue-700' :
-                              std.grade === 'F' ? 'text-red-600' : 'text-slate-800'
+                            {!isBefaq && (
+                              <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-extrabold text-slate-900 border-r border-slate-200 text-center whitespace-nowrap`}>
+                                {std.gpa}
+                              </td>
+                            )}
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-black border-r border-slate-200 text-center whitespace-nowrap ${
+                              std.grade === 'মুমতায' || std.grade === 'A+' ? 'text-blue-700' :
+                              std.grade === 'জা. জিদ্দান' ? 'text-emerald-700' :
+                              std.grade === 'জায়্যিদ' ? 'text-indigo-700' :
+                              std.grade === 'মাকবুল' ? 'text-amber-700' :
+                              std.grade === 'রাসিব' || std.grade === 'F' ? 'text-red-600' : 'text-slate-800'
                             }`}>
                               {std.grade}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-mono font-black text-blue-900 bg-blue-50/20 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[12px]' : 'py-1.5 px-0.5 text-[14px]'} font-mono font-black text-blue-900 bg-blue-50/20 text-center whitespace-nowrap`}>
                               {std.rank}
                             </td>
                           </tr>
@@ -606,9 +705,9 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                     } font-medium text-left border-collapse`}>
                       <thead>
                         <tr className="border-b border-slate-300 font-bold text-slate-700">
-                          <th className="py-0.5">Grade</th>
-                          <th className="py-0.5">Range</th>
-                          <th className="py-0.5">Remarks</th>
+                          <th className="py-0.5">{isBefaq ? (isBangla ? 'বিভাগ' : 'Division') : 'Grade'}</th>
+                          <th className="py-0.5">{isBefaq ? (isBangla ? 'নম্বর ব্যাপ্তি' : 'Range') : 'Range'}</th>
+                          <th className="py-0.5">{isBefaq ? (isBangla ? 'মান / মূল্যায়ন' : 'Remarks') : 'Remarks'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">

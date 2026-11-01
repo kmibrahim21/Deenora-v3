@@ -8,20 +8,50 @@ interface FinalResultProps {
   madrasah: any;
   lang: 'en' | 'bn';
   includeBreakdown?: boolean;
+  classId?: string;
 }
 
-export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, className, subjects, students, madrasah, lang, includeBreakdown = false }) => {
+export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, className, subjects, students, madrasah, lang, includeBreakdown = false, classId }) => {
   const isBangla = lang === 'bn';
   const toBnNum = (n: number | string) => isBangla ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : String(n);
-  const config = madrasah?.config_json || {};
+  const config = React.useMemo(() => {
+    let cfg = madrasah?.config_json || {};
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; }
+    }
+    return cfg;
+  }, [madrasah?.config_json]);
+
+  const targetClassId = classId || students?.[0]?.class_id;
+  const classEngine = targetClassId ? config?.class_result_engines?.[targetClassId] : undefined;
+
+  let isBefaq = false;
+  if (classEngine) {
+    isBefaq = classEngine === 'befaq';
+  } else if (madrasah?.institution_type === 'school') {
+    isBefaq = false;
+  } else {
+    const instCfg = config?.result_engine || config?.result_system;
+    isBefaq = instCfg === 'befaq' || (!instCfg && madrasah?.institution_type !== 'school');
+  }
+
+  const formatCleanNumber = (val: number | string | undefined | null): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const str = String(val).trim();
+    const num = typeof val === 'number' ? val : parseFloat(str.replace(/[^0-9.-]/g, ''));
+    if (isNaN(num)) return str;
+    const rounded = Math.round(num * 10) / 10;
+    return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
+  };
+
   const t = {
     class: isBangla ? 'শ্রেণি' : 'Class',
     rank: isBangla ? 'মেধা' : 'Merit',
     roll: isBangla ? 'রোল' : 'Roll',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
-    grade: isBangla ? 'বিভাগ / গ্রেড' : 'Grade / Division',
-    gpa: isBangla ? 'শতাংশ / GPA' : 'GPA / %',
+    grade: isBefaq ? (isBangla ? 'বিভাগ' : 'Division') : (isBangla ? 'গ্রেড' : 'Grade'),
+    gpa: isBefaq ? (isBangla ? 'গড়' : 'Avg') : (isBangla ? 'জিপিএ' : 'GPA'),
     date: isBangla ? 'তারিখ' : 'Date',
     examController: isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Exam Controller',
     principal: isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Principal',
@@ -81,11 +111,11 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                         </div>
                       </th>
                     ))}
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.total}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.grade}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.gpa}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-amber-900 w-10">{isBangla ? 'উপস্থিতি' : 'Att.'}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest bg-slate-800 w-10">{t.rank}</th>
+                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-12">{t.total}</th>
+                    <th className={`px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 ${isBefaq ? 'w-16' : 'w-12'}`}>{t.grade}</th>
+                    <th className={`px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 ${isBefaq ? 'w-14' : 'w-12'} min-w-[44px]`}>{t.gpa}</th>
+                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-amber-900 w-12">{isBangla ? 'উপস্থিতি' : 'Att.'}</th>
+                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest bg-slate-800 w-12">{t.rank}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -113,13 +143,21 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                           )}
                         </td>
                       ))}
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-blue-900 border-r border-slate-200 bg-blue-50/30 text-[13px]">{std.total}</td>
-                      <td className={`px-2 py-1.5 text-center font-black border-r border-slate-200 bg-slate-50/30 text-[13px] ${std.grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-blue-900 border-r border-slate-200 bg-blue-50/30 text-[13px] whitespace-nowrap">{toBnNum(std.total)}</td>
+                      <td className={`px-2 py-1.5 text-center font-black border-r border-slate-200 bg-slate-50/30 text-[13px] whitespace-nowrap ${std.grade === 'F' || std.grade === 'রাসিব' ? 'text-red-800' : 'text-emerald-800'}`}>
                         {std.grade}
                       </td>
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-200 bg-slate-50/30 text-[13px]">{std.gpa}</td>
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-amber-900 border-r border-slate-200 bg-amber-50/30 text-[12px]">{std.attendance ? (isBangla ? toBnNum(std.attendance) : std.attendance) : '-'}</td>
-                      <td className="px-2 py-1.5 text-center font-black text-[#2563EB] bg-blue-50/20 text-[13px]">#{std.rank}</td>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-200 bg-slate-50/30 text-[13px] whitespace-nowrap">
+                        {(() => {
+                          const cleanVal = formatCleanNumber(std.gpa);
+                          if (isBefaq) {
+                            return cleanVal !== '' ? `${toBnNum(cleanVal)}%` : '';
+                          }
+                          return cleanVal !== '' ? toBnNum(cleanVal) : (std.gpa ? toBnNum(std.gpa) : '-');
+                        })()}
+                      </td>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-amber-900 border-r border-slate-200 bg-amber-50/30 text-[12px] whitespace-nowrap">{std.attendance ? (isBangla ? toBnNum(std.attendance) : std.attendance) : '-'}</td>
+                      <td className="px-2 py-1.5 text-center font-black text-[#2563EB] bg-blue-50/20 text-[13px] whitespace-nowrap">#{toBnNum(std.rank)}</td>
                     </tr>
                   ))}
                 </tbody>

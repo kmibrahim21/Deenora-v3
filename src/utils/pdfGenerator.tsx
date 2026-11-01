@@ -580,13 +580,69 @@ export const generateMassMarksheetPDF = async (
     onProgress?.(100);
 };
 
+export const resolveResultEngine = (
+    exam: any,
+    madrasah: any,
+    explicitClassId?: string
+): { isBefaq: boolean; isHighSchool: boolean; isGpa: boolean; effectiveEngine: 'befaq' | 'high_school' | 'gpa' } => {
+    let configObj = madrasah?.config_json as any;
+    if (typeof configObj === 'string') {
+        try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
+    }
+    const config = (typeof configObj === 'object' && configObj !== null) ? configObj : {};
+    const classId = explicitClassId || exam?.class_id || exam?.marhala_id;
+    const classEngine = classId ? config?.class_result_engines?.[classId] : undefined;
+
+    // 1. Explicit exam-level result_engine override
+    if (exam?.result_engine) {
+        if (exam.result_engine === 'befaq') return { isBefaq: true, isHighSchool: false, isGpa: false, effectiveEngine: 'befaq' };
+        if (exam.result_engine === 'high_school') return { isBefaq: false, isHighSchool: true, isGpa: false, effectiveEngine: 'high_school' };
+        if (exam.result_engine === 'gpa' || exam.result_engine === 'school') return { isBefaq: false, isHighSchool: false, isGpa: true, effectiveEngine: 'gpa' };
+    }
+
+    // 2. Explicit exam is_befaq boolean flag
+    if (exam?.is_befaq === true) return { isBefaq: true, isHighSchool: false, isGpa: false, effectiveEngine: 'befaq' };
+    if (exam?.is_befaq === false) {
+        if (classEngine === 'high_school') return { isBefaq: false, isHighSchool: true, isGpa: false, effectiveEngine: 'high_school' };
+        return { isBefaq: false, isHighSchool: false, isGpa: true, effectiveEngine: 'gpa' };
+    }
+
+    // 3. Class-level engine configuration (e.g. from Exam Settings)
+    if (classEngine) {
+        if (classEngine === 'befaq') return { isBefaq: true, isHighSchool: false, isGpa: false, effectiveEngine: 'befaq' };
+        if (classEngine === 'high_school') return { isBefaq: false, isHighSchool: true, isGpa: false, effectiveEngine: 'high_school' };
+        if (classEngine === 'gpa' || classEngine === 'school') return { isBefaq: false, isHighSchool: false, isGpa: true, effectiveEngine: 'gpa' };
+    }
+
+    // 4. Marhala presence without class_id indicates Befaq
+    if (exam?.marhala_id !== undefined && !exam?.class_id) {
+        return { isBefaq: true, isHighSchool: false, isGpa: false, effectiveEngine: 'befaq' };
+    }
+
+    // 5. Institution-level defaults
+    if (madrasah?.institution_type === 'school') {
+        if (config?.result_system === 'high_school' || config?.result_engine === 'high_school') {
+            return { isBefaq: false, isHighSchool: true, isGpa: false, effectiveEngine: 'high_school' };
+        }
+        return { isBefaq: false, isHighSchool: false, isGpa: true, effectiveEngine: 'gpa' };
+    }
+
+    const instEngine = config?.result_engine || config?.result_system;
+    if (instEngine === 'high_school') return { isBefaq: false, isHighSchool: true, isGpa: false, effectiveEngine: 'high_school' };
+    if (instEngine === 'school' || instEngine === 'gpa' || instEngine === 'grading') return { isBefaq: false, isHighSchool: false, isGpa: true, effectiveEngine: 'gpa' };
+    if (instEngine === 'befaq') return { isBefaq: true, isHighSchool: false, isGpa: false, effectiveEngine: 'befaq' };
+
+    // Default fallback for madrasah
+    return { isBefaq: true, isHighSchool: false, isGpa: false, effectiveEngine: 'befaq' };
+};
+
 // --- CLASS RESULT GENERATOR ---
 export const generateClassResultPDF = async (
     exam: any,
     subjects: any[],
     students: any[],
     marksData: any,
-    madrasah: { name: string, config_json?: any },
+    madrasah: { name: string, config_json?: any, institution_type?: string, [key: string]: any },
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
     templateId: 'classic' | 'premium' = 'classic'
@@ -598,7 +654,9 @@ export const generateClassResultPDF = async (
         try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
     }
     const config = (typeof configObj === 'object' && configObj !== null) ? configObj : {};
-    const resultSystem = config.result_system || 'grading';
+    const { isBefaq, isHighSchool, effectiveEngine } = resolveResultEngine(exam, madrasah);
+    const resultSystem = isHighSchool ? 'high_school' : (isBefaq ? 'befaq' : (config.result_system || 'grading'));
+    const examToUse = { ...exam, is_befaq: isBefaq, result_engine: effectiveEngine };
 
     // Pre-calculate totals, GPA, rank
     const calculatedStudents = students.map((student, sIdx) => {
@@ -687,7 +745,7 @@ export const generateClassResultPDF = async (
                     else gp = 1.00;
                 }
 
-                if (combinedFailed && !isSubOptional) hasFailed = true;
+                if (!isBefaq && combinedFailed && !isSubOptional) hasFailed = true;
 
                 total += combinedObtained;
                 totalPossible += combinedFull;
@@ -721,7 +779,7 @@ export const generateClassResultPDF = async (
                     }
 
                     const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
-                    if (!isOptionalEffectively && failed) hasFailed = true;
+                    if (!isBefaq && !isOptionalEffectively && failed) hasFailed = true;
 
                     const pct = (markVal / fullMarkValue) * 100;
                     let gp = 0.00;
@@ -751,7 +809,7 @@ export const generateClassResultPDF = async (
                 } else {
                     const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
                     if (!isOptionalEffectively) {
-                        hasFailed = true;
+                        if (!isBefaq) hasFailed = true;
                         totalPossible += fullMarkValue;
                         numMainSubjects++;
                     }
@@ -761,12 +819,27 @@ export const generateClassResultPDF = async (
         });
         
         const hasAnyMark = subjects.some(s => studentMarks[s.id] !== undefined && studentMarks[s.id] !== '' && studentMarks[s.id] !== null);
-        const avgPercentage = subjects.length > 0 ? (total / subjects.length) : 0;
+        const avgPercentage = totalPossible > 0 ? (total / totalPossible) * 100 : (subjects.length > 0 ? (total / subjects.length) : 0);
         
         let gpa = '0.00';
         let grade = 'F';
 
-        if (numMainSubjects > 0) {
+        if (isBefaq) {
+            // Befaq Grading Policy:
+            // ৮০ - ১০০ : মুমতায
+            // ৬৫ - ৭৯ : জা. জিদ্দান
+            // ৫০ - ৬৪ : জায়্যিদ
+            // ৩৫ - ৪৯ : মাকবুল
+            // ১ - ৩৪ : রাসিব (ফেল)
+            // এক বিষয়ে ফেল করলেও সামগ্রিক রেজাল্ট ফেল হবে না, গড়ের উপর রেজাল্ট ও গ্রেডিং হবে
+            if (avgPercentage >= 80) { grade = 'মুমতায'; gpa = '5.0'; }
+            else if (avgPercentage >= 65) { grade = 'জা. জিদ্দান'; gpa = '4.0'; }
+            else if (avgPercentage >= 50) { grade = 'জায়্যিদ'; gpa = '3.0'; }
+            else if (avgPercentage >= 35) { grade = 'মাকবুল'; gpa = '2.0'; }
+            else { grade = 'রাসিব'; gpa = '0.0'; }
+
+            hasFailed = grade === 'রাসিব' || avgPercentage < 35;
+        } else if (numMainSubjects > 0) {
             if (!hasFailed) {
                 if (resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') {
                     let avgGp = pointsSum / numMainSubjects;
@@ -796,12 +869,17 @@ export const generateClassResultPDF = async (
         const rawAtt = studentMarks['attendance'] || config.exam_manual_attendance?.[exam?.id]?.[student.id] || student.attendance || '0';
         const stdAtt = parseFloat(String(rawAtt).replace(/[^0-9.]/g, '')) || 0;
 
+        const cleanAvg = ((Math.round(avgPercentage * 10) / 10) % 1 === 0)
+            ? String(Math.round(avgPercentage))
+            : (Math.round(avgPercentage * 10) / 10).toFixed(1);
+
         return {
             ...student,
             _total: hasAnyMark ? total : '',
-            _avg: hasAnyMark ? avgPercentage.toFixed(1) : '',
-            _gpa: hasAnyMark ? gpa : '',
+            _avg: hasAnyMark ? cleanAvg : '',
+            _gpa: hasAnyMark ? (isBefaq ? `${cleanAvg}%` : gpa) : '',
             _grade: hasAnyMark ? grade : '',
+            _division: hasAnyMark ? grade : '',
             _hasFailed: hasAnyMark ? hasFailed : true,
             _hasAnyMark: hasAnyMark,
             _att: stdAtt
@@ -912,7 +990,7 @@ export const generateClassResultPDF = async (
             root.render(
                 <div id="pdf-wrapper">
                     <PremiumResultSheetTemplate 
-                        exam={exam} 
+                        exam={examToUse} 
                         subjects={subjects} 
                         students={calculatedStudents} 
                         marksData={marksData} 
@@ -988,7 +1066,7 @@ export const generateClassResultPDF = async (
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
-                <ClassResultTemplate exam={exam} subjects={subjects} students={calculatedStudents} marksData={marksData} madrasah={madrasah} lang={lang} />
+                <ClassResultTemplate exam={examToUse} subjects={subjects} students={calculatedStudents} marksData={marksData} madrasah={madrasah} lang={lang} />
             </div>
         );
         setTimeout(resolve, 800);
@@ -1333,7 +1411,8 @@ export const generateFinalResultPDF = async (
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
-    includeBreakdown: boolean = false
+    includeBreakdown: boolean = false,
+    classId?: string
 ) => {
     onProgress?.(5);
     const container = document.createElement('div');
@@ -1347,7 +1426,7 @@ export const generateFinalResultPDF = async (
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
-                <FinalResultTemplate title={title} className={className} subjects={subjects} students={students} madrasah={madrasah} lang={lang} includeBreakdown={includeBreakdown} />
+                <FinalResultTemplate title={title} className={className} subjects={subjects} students={students} madrasah={madrasah} lang={lang} includeBreakdown={includeBreakdown} classId={classId} />
             </div>
         );
         setTimeout(resolve, 800);

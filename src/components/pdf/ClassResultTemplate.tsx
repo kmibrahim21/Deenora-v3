@@ -23,7 +23,50 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
     return cfg;
   }, [madrasah?.config_json]);
 
-  const isHighSchool = config?.result_system === 'high_school';
+  const { isBefaq, isHighSchool } = React.useMemo(() => {
+    const classId = exam?.class_id || exam?.marhala_id;
+    const classEngine = classId ? config?.class_result_engines?.[classId] : undefined;
+
+    let befaq = false;
+    let highSchool = false;
+
+    if (exam?.result_engine) {
+      befaq = exam.result_engine === 'befaq';
+      highSchool = exam.result_engine === 'high_school';
+    } else if (exam?.is_befaq === true) {
+      befaq = true;
+      highSchool = false;
+    } else if (exam?.is_befaq === false) {
+      befaq = false;
+      highSchool = classEngine === 'high_school';
+    } else if (classEngine) {
+      befaq = classEngine === 'befaq';
+      highSchool = classEngine === 'high_school';
+    } else if (exam?.marhala_id !== undefined && !exam?.class_id) {
+      befaq = true;
+      highSchool = false;
+    } else if (madrasah?.institution_type === 'school') {
+      befaq = false;
+      highSchool = config?.result_system === 'high_school' || config?.result_engine === 'high_school';
+    } else {
+      const instCfg = config?.result_engine || config?.result_system;
+      befaq = instCfg === 'befaq';
+      highSchool = instCfg === 'high_school';
+      if (!instCfg && madrasah?.institution_type !== 'school') {
+        befaq = true;
+      }
+    }
+    return { isBefaq: befaq, isHighSchool: highSchool };
+  }, [config, exam, madrasah?.institution_type]);
+
+  const formatCleanNumber = (val: number | string | undefined | null): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const str = String(val).trim();
+    const num = typeof val === 'number' ? val : parseFloat(str.replace(/[^0-9.-]/g, ''));
+    if (isNaN(num)) return str;
+    const rounded = Math.round(num * 10) / 10;
+    return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
+  };
 
   const t = {
     title: isBangla ? 'শ্রেণি ভিত্তিক ফলাফল বিবরণী' : 'Class Result Summary',
@@ -32,8 +75,8 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
     avg: isBangla ? 'গড়' : 'Avg',
-    gpa: 'GPA',
-    grade: isBangla ? 'গ্রেড' : 'Grade',
+    gpa: isBangla ? 'জিপিএ' : 'GPA',
+    grade: isBefaq ? (isBangla ? 'বিভাগ' : 'Division') : (isBangla ? 'গ্রেড' : 'Grade'),
     exam: isBangla ? 'পরীক্ষা' : 'Exam',
     date: isBangla ? 'তারিখ' : 'Date',
     examController: isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Exam Controller',
@@ -129,9 +172,11 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                           );
                         })}
                         <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-12">{t.total}</th>
-                        <th className="px-0.5 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-13">{t.avg}</th>
-                        <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-11">{t.grade}</th>
-                        <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
+                        <th className={`px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 ${isBefaq ? 'w-16' : 'w-13'}`}>{t.avg}</th>
+                        <th className={`px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 ${isBefaq ? 'w-20' : 'w-11'}`}>{t.grade}</th>
+                        {!isBefaq && (
+                          <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-12 min-w-[44px]">{t.gpa}</th>
+                        )}
                         <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-amber-900 w-12">{isBangla ? 'উপস্থিতি' : 'Att.'}</th>
                         <th className="px-1 py-1 text-center font-black uppercase bg-blue-900 w-12">{t.rank}</th>
                       </tr>
@@ -145,9 +190,10 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         }) || (student._total !== undefined && student._total !== null && student._total !== '' && Number(student._total) > 0) || student._hasAnyMark === true;
 
                         const total = hasAnyMark ? (student._total !== undefined && student._total !== '' ? student._total : 0) : '';
-                        const avg = hasAnyMark ? `${student._avg || '0.0'}%` : '';
+                        const cleanAvg = formatCleanNumber(student._avg);
+                        const avgDisplay = hasAnyMark && cleanAvg !== '' ? `${toBnNum(cleanAvg)}%` : '';
                         const gpa = hasAnyMark ? (student._gpa || '0.0') : '';
-                        const grade = hasAnyMark ? (student._grade || 'F') : '';
+                        const grade = hasAnyMark ? (student._grade || student._division || 'F') : '';
                         const rank = hasAnyMark ? (student._rank && student._rank !== '-' ? student._rank : '') : '';
                         const attendance = studentMarks['attendance'] !== undefined && String(studentMarks['attendance']).trim() !== ''
                           ? String(studentMarks['attendance']).trim()
@@ -194,18 +240,20 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                                 </td>
                               );
                             })}
-                            <td className="px-1 py-[3px] text-center font-black text-blue-900 border-r border-slate-200 bg-blue-50/40 text-[14px]">{toBnNum(total)}</td>
-                            <td className="px-0.5 py-[3px] text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[12px]">{toBnNum(avg)}</td>
-                            <td className={`px-1 py-[3px] text-center font-black border-r border-slate-200 bg-slate-50/40 text-[12px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
+                            <td className="px-1 py-[3px] text-center font-black text-blue-900 border-r border-slate-200 bg-blue-50/40 text-[14px] whitespace-nowrap">{toBnNum(total)}</td>
+                            <td className="px-1 py-[3px] text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[12.5px] whitespace-nowrap">{avgDisplay}</td>
+                            <td className={`px-1 py-[3px] text-center font-black border-r border-slate-200 bg-slate-50/40 text-[12px] whitespace-nowrap ${grade === 'F' || grade === 'রাসিব' ? 'text-red-800' : 'text-emerald-800'}`}>
                               {grade ? (
-                                <span className="inline-flex items-center justify-center w-5.5 h-3.5 rounded bg-white border border-slate-200 shadow-xs text-[11px]">
+                                <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white border border-slate-200 shadow-xs text-[10px] font-black ${grade === 'রাসিব' || grade === 'F' ? 'text-red-700' : 'text-emerald-700'}`}>
                                   {grade}
                                 </span>
                               ) : ''}
                             </td>
-                            <td className="px-1 py-[3px] text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[13.5px]">{toBnNum(gpa)}</td>
-                            <td className="px-1 py-[3px] text-center font-black text-amber-900 border-r border-slate-200 bg-amber-50/40 text-[12px]">{toBnNum(attendance)}</td>
-                            <td className="px-1 py-[3px] text-center font-black text-[#2563EB] bg-blue-50/30 text-[13.5px]">{toBnNum(rank)}</td>
+                            {!isBefaq && (
+                              <td className="px-1 py-[3px] text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[13px] whitespace-nowrap">{toBnNum(gpa)}</td>
+                            )}
+                            <td className="px-1 py-[3px] text-center font-black text-amber-900 border-r border-slate-200 bg-amber-50/40 text-[12px] whitespace-nowrap">{toBnNum(attendance)}</td>
+                            <td className="px-1 py-[3px] text-center font-black text-[#2563EB] bg-blue-50/30 text-[13.5px] whitespace-nowrap">{toBnNum(rank)}</td>
                           </tr>
                         );
                       })}

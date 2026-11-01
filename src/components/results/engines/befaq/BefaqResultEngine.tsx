@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, BefaqExam, BefaqSubject, Language, UserRole, Profile } from 'types';
-import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Layout, Download, CreditCard, Trash2, RefreshCw, Edit2, Edit3, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload, Globe, Eye, EyeOff, Type, Printer, Settings } from 'lucide-react';
+import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Layout, Download, CreditCard, Trash2, RefreshCw, Edit2, Edit3, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload, Globe, Eye, EyeOff, Type, Printer, Settings, Info } from 'lucide-react';
 import { t } from 'translations';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
@@ -1414,10 +1414,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
     if (totalPossible === 0) return 'N/A';
     const percentage = (totalMarks / totalPossible) * 100;
     
-    if (percentage >= 80) return 'মুমতাজ';
-    if (percentage >= 65) return 'জায়্যিদ জিদ্দান';
+    if (percentage >= 80) return 'মুমতায';
+    if (percentage >= 65) return 'জা. জিদ্দান';
     if (percentage >= 50) return 'জায়্যিদ';
-    if (percentage >= 40) return 'মকবুল';
+    if (percentage >= 35) return 'মাকবুল';
     return 'রাসিব';
   };
 
@@ -1476,12 +1476,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
       const sortedStds = activeStudents.map(std => {
         const stdMarks = activeMarksData[std.id] || {};
         const totalObtained = activeSubjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
-        const failed = activeSubjects.some(sub => {
-          const marks = parseFloat(stdMarks[sub.id] || '0');
-          return marks < (sub.passing_marks || 33);
-        });
         const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
-        const division = failed ? 'রাসিব' : getDivision(totalObtained, totalPossible);
+        const division = getDivision(totalObtained, totalPossible);
+        const failed = division === 'রাসিব';
         return {
           ...std,
           totalObtained,
@@ -1525,8 +1522,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
           total: std.totalObtained,
           division: std.division,
           grade: std.division,
-          percentage: std.percentage.toFixed(1),
-          gpa: `${std.percentage.toFixed(1)}%`,
+          percentage: ((Math.round(std.percentage * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage)) : (Math.round(std.percentage * 10) / 10).toFixed(1),
+          gpa: `${((Math.round(std.percentage * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage)) : (Math.round(std.percentage * 10) / 10).toFixed(1)}%`,
           rank: std.rank
         };
       });
@@ -1536,9 +1533,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
       if (templateId === 'premium') {
         await generateClassResultPDF(
-          { ...examToUse, classes: { class_name: className } },
+          { ...examToUse, classes: { class_name: className }, is_befaq: true, result_engine: 'befaq' },
           activeSubjects,
-          activeStudents,
+          rankedStds,
           activeMarksData,
           madrasah,
           downloadLang,
@@ -1631,12 +1628,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
       const sortedStds = activeStudents.map(std => {
         const stdMarks = activeMarksData[std.id] || {};
         const totalObtained = activeSubjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
-        const failed = activeSubjects.some(sub => {
-          const marks = parseFloat(stdMarks[sub.id] || '0');
-          return marks < (sub.passing_marks || 33);
-        });
         const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
-        const division = failed ? 'রাসিব' : getDivision(totalObtained, totalPossible);
+        const division = getDivision(totalObtained, totalPossible);
+        const failed = division === 'রাসিব';
         return {
           ...std,
           totalObtained,
@@ -1674,14 +1668,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
           const fullMarks = s.total_marks || 100;
           const passMarks = s.passing_marks || 33;
           const subPct = fullMarks > 0 ? (obtained / fullMarks) * 100 : 0;
-          const isSubFail = obtained < passMarks;
           let subGrade = 'রাসিব';
-          if (!isSubFail) {
-            if (subPct >= 80) subGrade = 'মুমতাজ';
-            else if (subPct >= 65) subGrade = 'জায়্যিদ জিদ্দান';
-            else if (subPct >= 50) subGrade = 'জায়্যিদ';
-            else if (subPct >= 40) subGrade = 'মকবুল';
-          }
+          if (subPct >= 80) subGrade = 'মুমতায';
+          else if (subPct >= 65) subGrade = 'জা. জিদ্দান';
+          else if (subPct >= 50) subGrade = 'জায়্যিদ';
+          else if (subPct >= 35) subGrade = 'মাকবুল';
+          else subGrade = 'রাসিব';
           return {
             id: s.id,
             subject_name: s.subject_name,
@@ -1701,7 +1693,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
             roll: std.roll,
             classes: { class_name: className },
             merit_position: std.rank,
-            gpa: `${std.percentage.toFixed(1)}%`,
+            gpa: `${((Math.round(std.percentage * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage)) : (Math.round(std.percentage * 10) / 10).toFixed(1)}%`,
             grade: std.division,
             photo_url: std.photo_url,
             attendance: (std as any).attendance || '-'
@@ -1759,14 +1751,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
         const fullMarks = s.total_marks || 100;
         const passMarks = s.passing_marks || 33;
         const subPct = fullMarks > 0 ? (obtained / fullMarks) * 100 : 0;
-        const isSubFail = obtained < passMarks;
         let subGrade = 'রাসিব';
-        if (!isSubFail) {
-          if (subPct >= 80) subGrade = 'মুমতাজ';
-          else if (subPct >= 65) subGrade = 'জায়্যিদ জিদ্দান';
-          else if (subPct >= 50) subGrade = 'জায়্যিদ';
-          else if (subPct >= 40) subGrade = 'মকবুল';
-        }
+        if (subPct >= 80) subGrade = 'মুমতায';
+        else if (subPct >= 65) subGrade = 'জা. জিদ্দান';
+        else if (subPct >= 50) subGrade = 'জায়্যিদ';
+        else if (subPct >= 35) subGrade = 'মাকবুল';
+        else subGrade = 'রাসিব';
         return {
           id: s.id,
           subject_name: s.subject_name,
@@ -1785,7 +1775,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
         roll: std.roll,
         classes: { class_name: className },
         merit_position: rank,
-        gpa: `${(std.percentage || 0).toFixed(1)}%`,
+        gpa: `${((Math.round((std.percentage || 0) * 10) / 10) % 1 === 0) ? String(Math.round(std.percentage || 0)) : (Math.round((std.percentage || 0) * 10) / 10).toFixed(1)}%`,
         grade: std.division,
         photo_url: std.photo_url,
         attendance: std.attendance || '-'
@@ -3439,6 +3429,20 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
       {activeTab === 'exams' && view === 'marks' && (
         <div className="space-y-4">
+            {/* Befaq Grading Scale Notice */}
+            <div className={`p-3.5 sm:p-4 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs font-bold border ${madrasah?.theme === 'dark' ? 'bg-slate-800/60 border-slate-700 text-slate-300' : 'bg-purple-50/70 border-purple-200/60 text-purple-950'}`}>
+                <span className="font-black flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
+                    <Info size={16} /> {lang === 'bn' ? 'বেফাক গ্রেডিং নীতিমালা:' : 'Befaq Grading Rules:'}
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px]">
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-black">৮০-১০০% মুমতায</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 font-black">৬৫-৭৯% জা. জিদ্দান</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-black">৫০-৬৪% জায়্যিদ</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 font-black">৩৫-৪৯% মাকবুল</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 font-black">১-৩৪% রাসিব</span>
+                </div>
+            </div>
+
             <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border`}>
                 <div className="overflow-auto max-h-[60vh] md:max-h-[70vh] no-scrollbar">
                 <table className="w-full text-left">
@@ -3538,7 +3542,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                     {(() => {
                                         const total = subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0);
                                         const avg = subjects.length > 0 ? (total / subjects.length) : 0;
-                                        return avg.toFixed(2);
+                                        const rounded = Math.round(avg * 10) / 10;
+                                        return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
                                     })()}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
@@ -3573,19 +3578,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                 const stdMarks = marksData[std.id] || {};
                 const totalObtained = subjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
                 
-                // Check if failed in any subject
-                const failed = subjects.some(sub => {
-                    const marks = parseFloat(stdMarks[sub.id] || '0');
-                    return marks < (sub.passing_marks || 33);
-                });
-
                 const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
+                const division = getDivision(totalObtained, totalPossible);
+                const failed = division === 'রাসিব';
 
                 return {
                     ...std,
                     totalObtained,
                     percentage,
-                    division: failed ? 'রাসিব' : getDivision(totalObtained, totalPossible),
+                    division,
                     failed
                 };
             }).sort((a, b) => {
@@ -3650,7 +3651,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                     <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter truncate opacity-80">
                                         ROLL: {item.roll} | {item.totalObtained} | {(() => {
                                             const avgValue = subjects.length > 0 ? (item.totalObtained / subjects.length) : 0;
-                                            return avgValue.toFixed(2);
+                                            const rounded = Math.round(avgValue * 10) / 10;
+                                            return rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1);
                                         })()}{(item as any).attendance ? ` | ATT: ${(item as any).attendance}` : ''}
                                     </p>
                                 </div>

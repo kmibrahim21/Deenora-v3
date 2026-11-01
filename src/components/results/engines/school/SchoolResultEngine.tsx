@@ -2351,8 +2351,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
     });
 
     try {
+      const classEngine = (madrasah?.config_json as any)?.class_result_engines?.[selectedClassId || selectedExam.class_id] || (madrasah?.config_json as any)?.result_engine || 'school';
+      const examForPdf = {
+        ...selectedExam,
+        class_id: selectedClassId || selectedExam.class_id,
+        result_engine: classEngine,
+        is_befaq: classEngine === 'befaq'
+      };
+
       await generateClassResultPDF(
-          selectedExam,
+          examForPdf,
           subjects,
           students,
           enrichedMarksData,
@@ -2456,9 +2464,17 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
     });
 
     try {
+      const classEngine = (madrasah?.config_json as any)?.class_result_engines?.[selectedClassId || selectedExam.class_id] || (madrasah?.config_json as any)?.result_engine || 'school';
+      const examForPdf = {
+        ...selectedExam,
+        class_id: selectedClassId || selectedExam.class_id,
+        result_engine: classEngine,
+        is_befaq: classEngine === 'befaq'
+      };
+
       await generateMassMarksheetPDF(
           preppedStudents,
-          selectedExam,
+          examForPdf,
           madrasah,
           downloadLang,
           (p) => setDownloadProgress(p),
@@ -4532,7 +4548,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                                                           gpa: resultInfo.gpa,
                                                           grade: resultInfo.grade
                                                         },
-                                                        selectedExam,
+                                                        {
+                                                          ...selectedExam,
+                                                          class_id: selectedClassId || selectedExam.class_id,
+                                                          result_engine: (madrasah?.config_json as any)?.class_result_engines?.[selectedClassId || selectedExam.class_id] || (madrasah?.config_json as any)?.result_engine || 'school',
+                                                          is_befaq: ((madrasah?.config_json as any)?.class_result_engines?.[selectedClassId || selectedExam.class_id] || (madrasah?.config_json as any)?.result_engine) === 'befaq'
+                                                        },
                                                         preparedMarks,
                                                         madrasah,
                                                         lang,

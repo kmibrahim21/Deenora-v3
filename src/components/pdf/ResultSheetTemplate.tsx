@@ -117,17 +117,17 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   const assessmentText = React.useMemo(() => {
     if (!hasAnyMark) return '-';
     if (isBangla) {
-      if (finalGrade === 'A+' || finalGrade === 'মুমতাজ') return 'চমৎকার';
-      if (finalGrade === 'A' || finalGrade === 'জায়্যিদ জিদ্দান') return 'উত্তম';
+      if (finalGrade === 'A+' || finalGrade === 'মুমতাজ' || finalGrade === 'মুমতায') return 'চমৎকার';
+      if (finalGrade === 'A' || finalGrade === 'জায়্যিদ জিদ্দান' || finalGrade === 'জা. জিদ্দান') return 'উত্তম';
       if (finalGrade === 'জায়্যিদ') return 'সন্তোষজনক';
-      if (finalGrade === 'মকবুল') return 'সাধারণ';
+      if (finalGrade === 'মকবুল' || finalGrade === 'মাকবুল') return 'সাধারণ';
       if (isPassed) return 'সন্তোষজনক';
       return 'প্রচেষ্টা প্রয়োজন';
     }
-    if (finalGrade === 'A+' || finalGrade === 'মুমতাজ') return 'Outstanding';
-    if (finalGrade === 'A' || finalGrade === 'জায়্যিদ জিদ্দান') return 'Very Good';
+    if (finalGrade === 'A+' || finalGrade === 'মুমতাজ' || finalGrade === 'মুমতায') return 'Outstanding';
+    if (finalGrade === 'A' || finalGrade === 'জায়্যিদ জিদ্দান' || finalGrade === 'জা. জিদ্দান') return 'Very Good';
     if (finalGrade === 'জায়্যিদ') return 'Good';
-    if (finalGrade === 'মকবুল') return 'Satisfactory';
+    if (finalGrade === 'মকবুল' || finalGrade === 'মাকবুল') return 'Satisfactory';
     if (isPassed) return 'Satisfactory';
     return 'Needs Improvement';
   }, [isBangla, finalGrade, isPassed, hasAnyMark]);

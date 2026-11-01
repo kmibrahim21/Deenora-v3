@@ -433,10 +433,10 @@ export const ShortcodeService = {
 
       if (totalFull > 0) {
         if (resultEngine === 'befaq' || resultEngine === 'qawmi_custom') {
-          if (percentage >= 80) grade = 'মুমতাজ';
-          else if (percentage >= 65) grade = 'জায়্যিদ জিদ্দান';
+          if (percentage >= 80) grade = 'মুমতায';
+          else if (percentage >= 65) grade = 'জা. জিদ্দান';
           else if (percentage >= 50) grade = 'জায়্যিদ';
-          else if (percentage >= 40) grade = 'মকবুল';
+          else if (percentage >= 35) grade = 'মাকবুল';
           else grade = 'রাসিব';
         } else {
           // School system logic
