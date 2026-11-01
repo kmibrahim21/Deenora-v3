@@ -18,6 +18,7 @@ interface CertificatesProps {
   madrasah: Institution | null;
   onBack: () => void;
   profile: Profile | null;
+  activeYear?: any;
 }
 
 const certificateTypes = [
@@ -30,7 +31,7 @@ const certificateTypes = [
 
 import { sortMadrasahClasses } from 'pages/Classes';
 
-const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, profile }) => {
+const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, profile, activeYear }) => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClassMap, setSelectedClassMap] = useState<Record<string, string>>({});
@@ -205,12 +206,21 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
     if (!madrasah) return;
     setLoadingStudents(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('students')
         .select('*')
         .eq('institution_id', madrasah.id)
-        .eq('class_id', classId)
-        .order('roll', { ascending: true });
+        .eq('class_id', classId);
+
+      const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+      const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+      if (isAdvanceOrHistorical && targetYearId) {
+        query = query.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+      }
+
+      const { data, error } = await query.order('roll', { ascending: true });
 
       if (error) throw error;
       setStudents(data || []);

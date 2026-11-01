@@ -433,15 +433,35 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       }
 
       if (activeTab === 'structures') {
+        const targetYearId = activeYear?.id || activeYearId;
+        const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+
         const { data } = await requestManager.cachedFetch(
           'fee_structures',
           (q) => q.select('*, classes(class_name)').eq('institution_id', madrasah.id),
-          `structures_full:${madrasah.id}`,
+          `structures_full:${madrasah.id}:${targetYearId || 'all'}`,
           CACHE_TTLS.MEDIUM
         );
         if (data) {
-           setStructures(data || []);
-           globalSchoolStructures[madrasah.id] = data || [];
+          let list = data || [];
+          if (isAdvanceOrHistorical && activeYear) {
+            const yStart = activeYear.start_date || '';
+            const yEnd = activeYear.end_date || '';
+            list = list.filter((s: any) => {
+              if (s.academic_year_id) {
+                return s.academic_year_id === targetYearId;
+              }
+              if (s.start_date && yStart && yEnd) {
+                return s.start_date >= yStart && s.start_date <= yEnd;
+              }
+              if (s.due_date && yStart && yEnd) {
+                return s.due_date >= yStart && s.due_date <= yEnd;
+              }
+              return false;
+            });
+          }
+          setStructures(list);
+          globalSchoolStructures[`${madrasah.id}:${targetYearId || 'all'}`] = list;
         }
       }
     } catch (e: any) {
@@ -2160,6 +2180,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                               finalDueDate = null;
                             }
 
+                            const targetYearId = activeYear?.id || activeYearId;
                             const payload: any = {
                                 institution_id: madrasah.id,
                                 class_id: structureSelectedClass || null,
@@ -2168,6 +2189,9 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 due_date: finalDueDate,
                                 start_date: finalStartDate
                             };
+                            if (targetYearId) {
+                                payload.academic_year_id = targetYearId;
+                            }
                             if (structureCategoryId) {
                                 payload.category_id = structureCategoryId;
                             }
@@ -2181,6 +2205,18 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 const { data: insertRes, error: insertError } = await supabase.from('fee_structures').insert(payload).select('id');
                                 error = insertError;
                                 if (insertRes && insertRes.length > 0) savedId = insertRes[0].id;
+                            }
+                            
+                            if (error && (error.message?.includes('academic_year_id') || error.code === '42703')) {
+                                delete payload.academic_year_id;
+                                if (editingStructureId) {
+                                    const { error: retryError } = await supabase.from('fee_structures').update(payload).eq('id', editingStructureId);
+                                    error = retryError;
+                                } else {
+                                    const { data: retryInsertRes, error: retryInsertError } = await supabase.from('fee_structures').insert(payload).select('id');
+                                    error = retryInsertError;
+                                    if (retryInsertRes && retryInsertRes.length > 0) savedId = retryInsertRes[0].id;
+                                }
                             }
                             
                             if (error && (error.message?.includes('category_id') || error.code === '42703')) {

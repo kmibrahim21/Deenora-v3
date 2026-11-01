@@ -36,9 +36,11 @@ interface ClassesProps {
   triggerRefresh: () => void;
   readOnly?: boolean;
   profile?: Profile | null;
+  activeYear?: any;
+  selectedYear?: any;
 }
 
-const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVersion, triggerRefresh, readOnly, profile }) => {
+const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVersion, triggerRefresh, readOnly, profile, activeYear, selectedYear }) => {
   const effectiveInstitutionId = madrasah?.id;
   const [classes, setClasses] = useState<(Class & { student_count?: number })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +49,24 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [newSortOrder, setNewSortOrder] = useState('');
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Class | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<(Class & { student_count?: number }) | null>(null);
   const isDark = madrasah?.theme === 'dark';
-  const canDeleteClass = (madrasah?.config_json as any)?.features?.delete_class === true;
+  const canDeleteClass = profile?.role === 'super_admin' || profile?.role === 'madrasah_admin' || (madrasah?.config_json as any)?.features?.delete_class !== false;
+
+  const targetYear = selectedYear || activeYear;
+  const isAdvanceOrHistorical = Boolean(targetYear && targetYear.status !== 'active');
+
+  const activeYearId = React.useMemo(() => {
+    if (targetYear?.id) return targetYear.id;
+    if (!madrasah?.config_json) return null;
+    let config = madrasah.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const yearId = config?.active_academic_year_id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(yearId) ? yearId : null;
+  }, [madrasah, targetYear]);
 
   useEffect(() => { 
     if (madrasah?.id) {
@@ -57,7 +74,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       requestManager.invalidatePattern(`classes:${effectiveInstitutionId}`);
       fetchClasses(); 
     }
-  }, [dataVersion, madrasah?.id]);
+  }, [dataVersion, madrasah?.id, activeYearId]);
 
   const fetchClasses = async () => {
     if (!madrasah?.id) return;
@@ -83,12 +100,19 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           filteredClasses = classesData.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
         }
 
-        // 2. Fetch Student Class Counts (Only class_id to reduce payload)
-        // Cache this for 1 minute as it's just for display counts
+        // 2. Fetch Student Class Counts filtered strictly by academic year
         const { data: studentData } = await requestManager.cachedFetch(
           'students',
-          (q) => q.select('class_id').eq('institution_id', effectiveInstitutionId),
-          `student_counts:${effectiveInstitutionId}`,
+          (q) => {
+            let query = q.select('class_id, academic_year_id').eq('institution_id', effectiveInstitutionId);
+            if (targetYear?.id) {
+              query = query.eq('academic_year_id', targetYear.id);
+            } else if (activeYearId) {
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            }
+            return query;
+          },
+          `student_counts:${effectiveInstitutionId}:${activeYearId || 'all'}`,
           30 * 60 * 1000 // 30 mins
         );
         
@@ -209,6 +233,14 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
 
   const handleDeleteClass = async () => {
     if (!showDeleteConfirm || !madrasah) return;
+
+    if (showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0) {
+      alert(lang === 'bn' 
+        ? `"${showDeleteConfirm.class_name}" শ্রেণিতে বর্তমানে ${showDeleteConfirm.student_count} জন শিক্ষার্থী রয়েছে। শিক্ষার্থী যুক্ত থাকা অবস্থায় শ্রেণি ডিলিট করা সম্ভব নয়। অনুগ্রহ করে প্রথমে শিক্ষার্থীদের অন্য শ্রেণিতে প্রমোশন/ট্রান্সফার করুন অথবা তাদের রেকর্ড মুছে ফেলুন।`
+        : `There are currently ${showDeleteConfirm.student_count} students in "${showDeleteConfirm.class_name}". Cannot delete a class with active students. Please promote, transfer, or remove the students first.`);
+      return;
+    }
+
     setModalLoading(true);
     
     // Invalidate
@@ -224,8 +256,8 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           // Check for foreign key constraint violation (PostgreSQL error code 23503)
           if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
              throw new Error(lang === 'bn' 
-               ? 'এই ক্লাসটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: শিক্ষার্থী, ফি, পরীক্ষা) সাথে যুক্ত। প্রথমে যুক্ত তথ্যগুলো ডিলিট করুন।' 
-               : 'This class cannot be deleted because it is linked to other records (e.g. students, fees, exams). Please delete the linked records first.');
+               ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ভর্তি, ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত। প্রথমে সেই যুক্ত তথ্যগুলো অপসারণ করুন।' 
+               : 'This class cannot be deleted because it is linked to other records (e.g. fees, exams, routine). Please remove the linked records first.');
           }
           throw error;
         }

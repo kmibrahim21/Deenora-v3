@@ -25,9 +25,10 @@ interface WalletSMSProps {
   onBack: () => void;
   preSelectedInstitutionIds?: string[];
   initialMessage?: string;
+  activeYear?: any;
 }
 
-const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, dataVersion, initialTab, role, profile, onBack, preSelectedInstitutionIds = [], initialMessage = '' }) => {
+const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, dataVersion, initialTab, role, profile, onBack, preSelectedInstitutionIds = [], initialMessage = '', activeYear }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;
@@ -382,6 +383,13 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   const fetchClassStudents = async (cid: string) => {
     let query = supabase.from('students').select('*').eq('class_id', cid);
+    const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+    const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+    if (isAdvanceOrHistorical && targetYearId) {
+      query = query.eq('academic_year_id', targetYearId);
+    } else if (targetYearId) {
+      query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+    }
     if ((window as any)._hasIsActive !== false) {
       query = query.eq('is_active', true);
     }

@@ -1879,17 +1879,7 @@ const Account: React.FC<AccountProps> = ({
               dark={madrasah?.theme === 'dark'}
             />
 
-            {/* Accounting / Fees Card */}
-            {((madrasah?.config_json as any)?.modules?.accounting !== false || isSuperAdmin) && (
-              <ActionCard
-                icon={Banknote}
-                title={lang === 'bn' ? 'ফি ও হিসাব' : 'Fees & Accounts'}
-                subtitle={lang === 'bn' ? 'আয়, ব্যয় ও শিক্ষার্থী ফি' : 'Income, Expense & Fees'}
-                colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                onClick={() => setView('accounting')}
-                dark={madrasah?.theme === 'dark'}
-              />
-            )}
+
 
             {/* Multi-Branch Management Card */}
             <ActionCard

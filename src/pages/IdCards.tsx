@@ -29,6 +29,7 @@ interface IdCardsProps {
   madrasah: Institution | null;
   onBack: () => void;
   profile: Profile | null;
+  activeYear?: any;
 }
 
 const loadSavedDesignSettings = (madrasah: Institution | null, cardType: 'student' | 'teacher'): IdCardDesignSettings => {
@@ -59,7 +60,7 @@ const loadSavedDesignSettings = (madrasah: Institution | null, cardType: 'studen
   return defaults;
 };
 
-const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) => {
+const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile, activeYear }) => {
   const [mainTab, setMainTab] = useState<'download' | 'design'>('download');
   const [roleTab, setRoleTab] = useState<'students' | 'teachers'>('students');
   const [classes, setClasses] = useState<Class[]>([]);
@@ -149,6 +150,14 @@ const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) =>
 
       if (classId !== 'all_classes') {
         query = query.eq('class_id', classId);
+      }
+
+      const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+      const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+      if (isAdvanceOrHistorical && targetYearId) {
+        query = query.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
       }
 
       const { data, error } = await query.order('roll', { ascending: true });

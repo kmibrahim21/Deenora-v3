@@ -29,9 +29,10 @@ interface DataManagementProps {
   madrasah: Institution | null;
   onBack: () => void;
   triggerRefresh: () => void;
+  activeYear?: any;
 }
 
-const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack, triggerRefresh }) => {
+const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack, triggerRefresh, activeYear }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
@@ -806,10 +807,20 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     setStatus({ type: 'idle', message: '' });
     
     try {
-      const { data: students, error: fetchError } = await supabase
+      let query = supabase
         .from('students')
         .select('*, classes(class_name, sort_order)')
         .eq('institution_id', madrasah.id);
+
+      const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+      const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+      if (isAdvanceOrHistorical && targetYearId) {
+        query = query.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+      }
+
+      const { data: students, error: fetchError } = await query;
         
       if (fetchError) throw fetchError;
       if (!students || students.length === 0) {
@@ -873,6 +884,14 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         
       if (selectedClassId !== 'all') {
         query = query.eq('class_id', selectedClassId);
+      }
+
+      const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+      const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+      if (isAdvanceOrHistorical && targetYearId) {
+        query = query.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
       }
 
       const { data: students, error: fetchError } = await query;

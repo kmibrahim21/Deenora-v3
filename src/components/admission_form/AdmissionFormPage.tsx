@@ -33,6 +33,7 @@ interface Props {
   madrasah: Institution | null;
   onBack: () => void;
   lang: 'bn' | 'en';
+  activeYear?: any;
 }
 
 const getDefaultAdmissionConfig = (lang: AdmissionFormLang = 'bn', madrasahName?: string): AdmissionFormConfig => ({
@@ -120,7 +121,7 @@ interface DownloadModalState {
   fileName?: string;
 }
 
-const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang }) => {
+const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, activeYear }) => {
   const [lang, setLang] = useState<AdmissionFormLang>(appLang as AdmissionFormLang || 'bn');
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
@@ -261,11 +262,20 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
     if (!selectedClassId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('students')
         .select('*, classes(class_name)')
-        .eq('class_id', selectedClassId)
-        .order('student_name');
+        .eq('class_id', selectedClassId);
+
+      const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+      const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+      if (isAdvanceOrHistorical && targetYearId) {
+        query = query.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+      }
+
+      const { data, error } = await query.order('student_name');
       if (error) throw error;
       const formatted = (data || []).map(s => {
         const extra = extractStudentExtraFields(s);

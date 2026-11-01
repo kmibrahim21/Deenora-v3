@@ -59,9 +59,10 @@ interface VoiceBroadcastProps {
   onBack: () => void;
   preSelectedStudentIds?: string[];
   preSelectedInstitutionIds?: string[];
+  activeYear?: any;
 }
 
-const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack, preSelectedStudentIds = [], preSelectedInstitutionIds = [] }) => {
+const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack, preSelectedStudentIds = [], preSelectedInstitutionIds = [], activeYear }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canUseVoice = role !== 'teacher' || profile?.permissions?.can_use_voice_call || profile?.permissions?.voice_dashboard;
@@ -277,8 +278,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     if (selectedClassId) fetchClassStudents(selectedClassId); else setClassStudents([]);
   }, [selectedClassId]);
 
+  const targetYearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id;
+  const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active');
+
   const fetchClassStudents = async (cid: string) => {
     let query = supabase.from('students').select('id, guardian_phone, guardian_phone_2').eq('class_id', cid);
+    if (isAdvanceOrHistorical && targetYearId) {
+      query = query.eq('academic_year_id', targetYearId);
+    } else if (targetYearId) {
+      query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+    }
     if ((window as any)._hasIsActive !== false) {
       query = query.eq('is_active', true);
     }
@@ -1555,11 +1564,21 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       count = teachers.length;
     } else if (isTargetingAllStudents) {
       let q = supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
+      if (isAdvanceOrHistorical && targetYearId) {
+        q = q.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        q = q.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+      }
       if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
       const { count: c } = await q;
       count = c || 0;
     } else {
       let q = supabase.from('students').select('*', { count: 'exact', head: true }).eq('class_id', selectedClassId);
+      if (isAdvanceOrHistorical && targetYearId) {
+        q = q.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        q = q.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+      }
       if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
       const { count: c } = await q;
       count = c || 0;
@@ -1638,12 +1657,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           students = data || [];
         } else if (isTargetingAllStudents) {
           let q = supabase.from('students').select('guardian_phone, guardian_phone_2').eq('institution_id', madrasah.id);
+          if (isAdvanceOrHistorical && targetYearId) {
+            q = q.eq('academic_year_id', targetYearId);
+          } else if (targetYearId) {
+            q = q.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+          }
           if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
           const { data, error } = await q;
           if (error) throw error;
           students = data || [];
         } else {
           let q = supabase.from('students').select('guardian_phone, guardian_phone_2').eq('class_id', selectedClassId);
+          if (isAdvanceOrHistorical && targetYearId) {
+            q = q.eq('academic_year_id', targetYearId);
+          } else if (targetYearId) {
+            q = q.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+          }
           if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
           const { data, error } = await q;
           if (error) throw error;

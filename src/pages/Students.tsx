@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic, Hash, Sparkles, Trash2, Eye, RefreshCw, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic, Hash, Sparkles, Trash2, Eye, RefreshCw, Settings2, Users } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
 import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -47,6 +47,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'current' | 'advance'>('all');
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
@@ -55,6 +56,19 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const isSendingRef = useRef(false);
   const [statusModal, setStatusModal] = useState<{ show: boolean; type: 'success' | 'error' | 'balance'; title: string; message: string }>({ show: false, type: 'success', title: '', message: '' });
   const { startCall } = useVoiceCall();
+  const [academicYears, setAcademicYears] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (effectiveInstitutionId) {
+      supabase.from('academic_years')
+        .select('id, year_name, status')
+        .eq('institution_id', effectiveInstitutionId)
+        .then(({ data }) => {
+          if (data) setAcademicYears(data);
+        });
+    }
+  }, [effectiveInstitutionId]);
+
 
   // Registration Number Generator States
   const [showRegNoModal, setShowRegNoModal] = useState(false);
@@ -407,8 +421,11 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       if ((window as any)._hasIsActive === false) selectFields = selectFields.replace('is_active, ', '');
       if ((window as any)._hasNameEn === false) selectFields = selectFields.replace('name_en, ', '');
 
-      // 2. Fetch via RequestManager (Cache key includes page and class)
-      const cacheKey = `v6_students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}:${showInactive}`;
+      const targetYearId = selectedYear?.id || activeYearId || activeYear?.id;
+      const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active') || Boolean(selectedYear && selectedYear.status !== 'active');
+
+      // 2. Fetch via RequestManager (Cache key includes page, class, search, sessionFilter, and target year)
+      const cacheKey = `v8_students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}:${showInactive}:${sessionFilter}:${targetYearId || 'default'}`;
       
       const { data, error } = await requestManager.cachedFetch(
         'students',
@@ -420,8 +437,25 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             .order('id', { ascending: true })
             .range(from, to);
 
-          if (readOnly && selectedYear?.id && isValidUUID(selectedYear.id)) {
+          const advanceYears = academicYears.filter(y => y.id !== activeYearId && y.status !== 'archived');
+          const advanceIds = advanceYears.map(y => y.id).filter(isValidUUID);
+
+          if (selectedYear?.id && isValidUUID(selectedYear.id) && selectedYear.status !== 'active') {
             query = query.eq('academic_year_id', selectedYear.id);
+          } else if (sessionFilter === 'current' && activeYearId) {
+            query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          } else if (sessionFilter === 'advance') {
+            if (advanceIds.length > 0) {
+              query = query.in('academic_year_id', advanceIds);
+            } else if (activeYearId) {
+              query = query.neq('academic_year_id', activeYearId);
+            }
+          } else if (activeYearId && isValidUUID(activeYearId)) {
+            if (advanceIds.length > 0) {
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null,academic_year_id.in.(${advanceIds.map(id => `"${id}"`).join(',')})`);
+            } else {
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            }
           }
 
           if (!showInactive && (window as any)._hasIsActive !== false) {
@@ -533,7 +567,12 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [effectiveInstitutionId, selectedClass.id, page, searchQuery, activeYearId]);
+  }, [effectiveInstitutionId, selectedClass.id, page, searchQuery, activeYearId, readOnly, selectedYear?.id, sessionFilter, academicYears]);
+
+  useEffect(() => {
+    fetchStudents(true);
+  }, [sessionFilter]);
+
 
   useEffect(() => {
     // Clear any leftover old student cache patterns from previous selective column runs
@@ -688,84 +727,158 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
               <span className="hidden sm:inline">{lang === 'bn' ? 'ইন-অ্যাক্টিভ' : 'Inactive'}</span>
             </button>
           </div>
+
+          {/* Session Filter Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-white/10 backdrop-blur-2xl rounded-2xl border border-white/20 w-full overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setSessionFilter('all')}
+              className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                sessionFilter === 'all'
+                  ? 'bg-white text-[#2563EB] shadow-md'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Users size={13} />
+              <span>{lang === 'bn' ? 'সকল শিক্ষার্থী' : 'All Students'}</span>
+            </button>
+            
+            <button
+              onClick={() => setSessionFilter('current')}
+              className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                sessionFilter === 'current'
+                  ? 'bg-white text-[#2563EB] shadow-md'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <CheckCircle2 size={13} />
+              <span>{lang === 'bn' ? 'বর্তমান সেশন' : 'Current Session'}</span>
+            </button>
+
+            <button
+              onClick={() => setSessionFilter('advance')}
+              className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                sessionFilter === 'advance'
+                  ? 'bg-amber-400 text-slate-900 shadow-md font-black'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Sparkles size={13} />
+              <span>{lang === 'bn' ? 'অগ্রিম সেশন' : 'Advance Session'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Student List Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {students.map(student => (
-          <div 
-            key={student.id} 
-            onClick={() => isSelectionMode ? (setSelectedIds(prev => { const n = new Set(prev); if(n.has(student.id)) n.delete(student.id); else n.add(student.id); return n; })) : onStudentClick(student)}
-            className={`group p-4 rounded-[2rem] border-2 transition-all flex items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer ${isSelectionMode && selectedIds.has(student.id) ? (isDark ? 'bg-blue-600/20 border-[#2563EB] shadow-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB] shadow-[#2563EB]/10') : (isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/40 hover:bg-slate-700/50' : 'bg-white border-slate-100 hover:border-[#2563EB]/20')}`}
-          >
-            <div className={`flex items-center gap-4 flex-1 min-w-0 relative ${student.is_active === false ? 'opacity-70' : ''}`}>
-              <div className="relative shrink-0">
-                <div className={`w-14 h-14 rounded-[1rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${isSelectionMode && selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-[#2563EB]' : (isDark ? 'bg-slate-800 text-blue-400 border-slate-700 group-hover:bg-slate-700 group-hover:border-[#2563EB]/40' : 'bg-slate-50 text-[#2563EB] border-slate-100 group-hover:bg-blue-50 group-hover:border-[#2563EB]/20')}`}>
-                  <span className={`text-[8px] font-black leading-none uppercase tracking-widest ${isSelectionMode && selectedIds.has(student.id) ? 'opacity-70' : 'opacity-40'}`}>{t('roll', lang)}</span>
-                  <span className="text-lg font-black leading-none mt-1">{student.roll || '-'}</span>
+        {students.map(student => {
+          const studentYear = academicYears.find(y => y.id === student.academic_year_id);
+          const isAdvanceSession = Boolean(
+            student.academic_year_id && activeYearId && student.academic_year_id !== activeYearId
+          );
+          const yearName = studentYear?.year_name || '';
+          const badgeText = yearName 
+            ? `${yearName} • ${lang === 'bn' ? 'অগ্রিম সেশন' : 'Advance'}`
+            : (lang === 'bn' ? 'অগ্রিম সেশন' : 'Advance Session');
+
+          return (
+            <div 
+              key={student.id} 
+              onClick={() => isSelectionMode ? (setSelectedIds(prev => { const n = new Set(prev); if(n.has(student.id)) n.delete(student.id); else n.add(student.id); return n; })) : onStudentClick(student)}
+              className={`group p-4 ${isAdvanceSession ? 'pt-7' : ''} rounded-[2rem] border-2 transition-all flex flex-col justify-between shadow-sm hover:shadow-xl active:scale-[0.98] cursor-pointer relative overflow-hidden ${
+                isSelectionMode && selectedIds.has(student.id) 
+                  ? (isDark ? 'bg-blue-600/20 border-[#2563EB] shadow-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB] shadow-[#2563EB]/10') 
+                  : (isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/40 hover:bg-slate-700/50' : 'bg-white border-slate-100 hover:border-[#2563EB]/20')
+              }`}
+            >
+              {isAdvanceSession && (
+                <div className="absolute top-2 right-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[8px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-sm z-10 flex items-center gap-1 animate-pulse">
+                  <Sparkles size={10} />
+                  {badgeText}
                 </div>
-                {isSelectionMode && (
-                  <div className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border-2 transition-all duration-300 ${selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-white scale-110' : (isDark ? 'bg-slate-800 text-slate-600 border-slate-700' : 'bg-white text-slate-200 border-slate-100')}`}>
-                    <Check size={14} strokeWidth={4} />
+              )}
+              <div className="w-full flex items-center justify-between">
+                <div className={`flex items-center gap-4 flex-1 min-w-0 relative ${student.is_active === false ? 'opacity-70' : ''}`}>
+                  <div className="relative shrink-0">
+                    <div className={`w-14 h-14 rounded-[1rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${
+                      isSelectionMode && selectedIds.has(student.id) 
+                        ? 'bg-[#2563EB] text-white border-[#2563EB]' 
+                        : (isDark ? 'bg-slate-800 text-blue-400 border-slate-700 group-hover:bg-slate-700 group-hover:border-[#2563EB]/40' : 'bg-slate-50 text-[#2563EB] border-slate-100 group-hover:bg-blue-50 group-hover:border-[#2563EB]/20')
+                    }`}>
+                      <span className={`text-[8px] font-black leading-none uppercase tracking-widest ${isSelectionMode && selectedIds.has(student.id) ? 'opacity-70' : 'opacity-40'}`}>
+                        {t('roll', lang)}
+                      </span>
+                      <span className="text-lg font-black leading-none mt-1">{student.roll || '-'}</span>
+                    </div>
+                    {isSelectionMode && (
+                      <div className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border-2 transition-all duration-300 ${selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-white scale-110' : (isDark ? 'bg-slate-800 text-slate-600 border-slate-700' : 'bg-white text-slate-200 border-slate-100')}`}>
+                        <Check size={14} strokeWidth={4} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <h3 className={`font-black text-base font-noto line-clamp-2 whitespace-normal leading-tight group-hover:text-[#2563EB] transition-colors ${
+                        isDark ? 'text-slate-100' : 'text-[#1E3A8A]'
+                      }`}>
+                        {student.student_name}
+                      </h3>
+                      {student.is_active === false && (
+                        <UserX size={16} className="text-red-500 shrink-0" strokeWidth={2.5} />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
+                      {student.section && (
+                        <>
+                          <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
+                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{student.section}</p>
+                        </>
+                      )}
+                      {student.registration_number && (
+                        <>
+                          <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
+                          <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-800/30">
+                            {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {student.registration_number}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {!isSelectionMode && (
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2 md:ml-3">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${student.guardian_phone}`; }} 
+                      title="সাধারণ ফোন কল"
+                      className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${
+                        isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'
+                      }`}
+                    >
+                      <Phone size={16} fill="currentColor" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); openWhatsAppChooser(student.guardian_phone); }} 
+                      title="হোয়াটসঅ্যাপ চ্যাট / কল"
+                      className="w-9 h-9 md:w-10 md:h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
+                    >
+                      <PhoneCall size={16} fill="currentColor" />
+                    </button>
+                    {isLiveChatEnabled && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleVoiceCall(student); }} 
+                        title={lang === 'bn' ? 'অ্যাপ ভয়েস কল (গার্ডিয়ান অ্যাপে সরাসরি কথা বলুন)' : 'Direct In-App Voice Call to Guardian'}
+                        className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-200 active:scale-90 transition-all hover:scale-105 hover:shadow-indigo-400 group"
+                      >
+                        <Mic size={16} className="group-hover:scale-110 transition-transform" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <h3 className={`font-black text-base font-noto line-clamp-2 whitespace-normal leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
-                  {student.is_active === false && (
-                    <UserX size={16} className="text-red-500 shrink-0" strokeWidth={2.5} />
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
-                  {student.section && (
-                    <>
-                      <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                      <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{student.section}</p>
-                    </>
-                  )}
-                  {student.registration_number && (
-                    <>
-                      <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                      <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-800/30">
-                        {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {student.registration_number}
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
-            {!isSelectionMode && (
-              <div className="flex items-center gap-1.5 shrink-0 ml-2 md:ml-3">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${student.guardian_phone}`; }} 
-                  title="সাধারণ ফোন কল"
-                  className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'}`}
-                >
-                  <Phone size={16} fill="currentColor" />
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); openWhatsAppChooser(student.guardian_phone); }} 
-                  title="হোয়াটসঅ্যাপ চ্যাট / কল"
-                  className="w-9 h-9 md:w-10 md:h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
-                >
-                  <PhoneCall size={16} fill="currentColor" />
-                </button>
-                {isLiveChatEnabled && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleVoiceCall(student); }} 
-                    title={lang === 'bn' ? 'অ্যাপ ভয়েস কল (গার্ডিয়ান অ্যাপে সরাসরি কথা বলুন)' : 'Direct In-App Voice Call to Guardian'}
-                    className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-200 active:scale-90 transition-all hover:scale-105 hover:shadow-indigo-400 group"
-                  >
-                    <Mic size={16} className="group-hover:scale-110 transition-transform" />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
         
         {loading && (
           <div className="col-span-full flex flex-col items-center justify-center py-16 space-y-3">

@@ -556,6 +556,8 @@ const App: React.FC = () => {
               )
             }
             profile={profile}
+            activeYear={selectedYear || activeYear}
+            selectedYear={selectedYear}
           />
         );
       case "students":
@@ -822,6 +824,7 @@ const App: React.FC = () => {
             }}
             preSelectedInstitutionIds={preSelectedInstitutionIds}
             initialMessage={preSelectedMessage}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "voice-broadcast":
@@ -840,6 +843,7 @@ const App: React.FC = () => {
             }}
             preSelectedStudentIds={preSelectedStudentIds}
             preSelectedInstitutionIds={preSelectedInstitutionIds}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "sms-voice-menu":
@@ -935,6 +939,7 @@ const App: React.FC = () => {
             madrasah={madrasah}
             onBack={() => handleBack("account")}
             triggerRefresh={triggerRefresh}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "accounting":
@@ -1036,6 +1041,7 @@ const App: React.FC = () => {
             madrasah={madrasah}
             onBack={() => handleBack('academic-documents')}
             profile={profile}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "id-cards":
@@ -1045,6 +1051,7 @@ const App: React.FC = () => {
             madrasah={madrasah}
             onBack={() => handleBack('academic-documents')}
             profile={profile}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "admission-form":
@@ -1076,6 +1083,7 @@ const App: React.FC = () => {
             madrasah={madrasah}
             onBack={() => handleBack("academic-documents")}
             lang={lang}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "chat":

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Save, User as UserIcon, Phone, List, Hash, Loader2, ChevronDown, Camera, X, Check, UserCheck, AlertCircle, BookOpen } from 'lucide-react';
+import { ArrowLeft, Save, User as UserIcon, Phone, List, Hash, Loader2, ChevronDown, Camera, X, Check, UserCheck, AlertCircle, BookOpen, Calendar } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
 import { OfflineService } from 'services/OfflineService';
 import { CacheService } from 'services/cacheService';
@@ -43,6 +43,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [address, setAddress] = useState(student?.address || '');
   const [classId, setClassId] = useState(student?.class_id || defaultClassId || '');
   const [classes, setClasses] = useState<Class[]>([]);
+  const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [selectedAcademicYearId, setSelectedAcademicYearId] = useState<string>(student?.academic_year_id || activeYear?.id || '');
   const [loading, setLoading] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
 
@@ -65,7 +67,29 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
   useEffect(() => {
     fetchClasses();
-  }, []);
+    fetchAcademicYears();
+  }, [madrasah?.id]);
+
+  const fetchAcademicYears = async () => {
+    if (!madrasah?.id) return;
+    try {
+      const { data } = await requestManager.cachedFetch(
+        'academic_years',
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('start_date', { ascending: false }),
+        `academic_years:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
+      if (data && data.length > 0) {
+        setAcademicYears(data);
+        if (!selectedAcademicYearId) {
+          const active = data.find((y: any) => y.status === 'active') || data[0];
+          setSelectedAcademicYearId(active.id);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch academic years in StudentForm:', e);
+    }
+  };
 
   const fetchClasses = async () => {
     if (!madrasah?.id) return;
@@ -143,6 +167,9 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
           console.warn('Could not fetch active year in StudentForm:', e);
         }
       }
+
+      // Prefer user selected academic year, fallback to active year
+      const targetAcademicYearId = selectedAcademicYearId || activeYearId;
       
       // Validate UUID format for academic_year_id
       const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -184,7 +211,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         class_id: classId,
         section: section.trim() || null,
         institution_id: madrasah.id,
-        academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null,
+        academic_year_id: (targetAcademicYearId && isValidUUID(targetAcademicYearId)) ? targetAcademicYearId : null,
         notes: packedNotes || null,
         ...extraFields
       };
@@ -460,7 +487,33 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
               <h3 className={`text-[11px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'} uppercase tracking-widest`}>{lang === 'bn' ? 'একাডেমিক ও যোগাযোগ' : 'Academic & Contact'}</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {academicYears.length > 0 && (
+                <div className="space-y-2">
+                  <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                    <Calendar size={11} className="text-[#2563EB]" /> 
+                    {lang === 'bn' ? 'শিক্ষাবর্ষ (সেশন)' : 'Academic Year'}
+                  </label>
+                  <div className="relative">
+                    <select 
+                      className={`w-full h-[54px] px-4 pr-10 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm appearance-none cursor-pointer`}
+                      value={selectedAcademicYearId} 
+                      onChange={(e) => setSelectedAcademicYearId(e.target.value)}
+                    >
+                      {academicYears.map((ay) => {
+                        const isActive = ay.status === 'active';
+                        return (
+                          <option key={ay.id} value={ay.id}>
+                            {ay.year_name} {isActive ? (lang === 'bn' ? '— (বর্তমান সক্রিয়)' : '— (Active)') : (lang === 'bn' ? '— (অগ্রিম ভর্তি)' : '— (Advance Year)')}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown size={16} className="text-[#2563EB] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
                   <Hash size={11} className="text-[#2563EB]" /> 
@@ -534,6 +587,29 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                 />
               </div>
             </div>
+
+            {/* Advance admission notice if non-active year selected */}
+            {(() => {
+              const selectedAy = academicYears.find(y => y.id === selectedAcademicYearId);
+              if (selectedAy && selectedAy.status !== 'active') {
+                return (
+                  <div className={`p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in duration-300 ${isDark ? 'bg-amber-950/40 border-amber-800/60 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                    <span className="text-xl shrink-0">⚡</span>
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-black uppercase tracking-wider">
+                        {lang === 'bn' ? `অগ্রিম ভর্তি: ${selectedAy.year_name} শিক্ষাবর্ষ` : `Advance Admission: ${selectedAy.year_name}`}
+                      </h4>
+                      <p className="text-xs font-semibold leading-relaxed">
+                        {lang === 'bn'
+                          ? `এই শিক্ষার্থী ${selectedAy.year_name} শিক্ষাবর্ষে সংরক্ষিত থাকবে। বর্তমান সক্রিয় শিক্ষাবর্ষের মোট শিক্ষার্থী, হাজিরা বা লেজারে যুক্ত হবে না। শিক্ষাবর্ষ পরিবর্তন করলে যাবতীয় কার্যক্রম চালু হবে।`
+                          : `This student will be saved in ${selectedAy.year_name}. They will not count towards current active year's student count, attendance, or fees until this academic year is activated.`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
 

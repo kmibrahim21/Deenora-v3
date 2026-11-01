@@ -124,9 +124,12 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       if (!navigator.onLine && !isBackground) {
         const cachedStats = await CacheService.getCachedData('stats', institutionId);
         if (cachedStats && cachedStats.length > 0) {
-          setStats(cachedStats[0]);
-          setLoadingStats(false);
-          return;
+          const match = cachedStats.find((s: any) => s.academic_year_id === activeYearId) || (!activeYearId ? cachedStats[0] : null);
+          if (match) {
+            setStats(match);
+            setLoadingStats(false);
+            return;
+          }
         }
       }
 
@@ -137,19 +140,34 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
 
       const targetInstIds = [institutionId];
 
-      // 1. Students Count (Cached)
+      // Auto backfill legacy students with NULL academic_year_id to active year if in active year
+      if (institutionId && activeYear?.id && activeYear?.status === 'active') {
+        supabase
+          .from('students')
+          .update({ academic_year_id: activeYear.id })
+          .eq('institution_id', institutionId)
+          .is('academic_year_id', null)
+          .then(() => {});
+      }
+
+      // 1. Students Count (Strict per-year isolation for advance/historical years like 2027)
+      const isAdvanceOrHistoricalYear = Boolean(activeYear && activeYear.status !== 'active');
       const stdProm = requestManager.cachedFetch(
         'students',
         (q) => {
-          let query = q.select('id', { count: 'exact', head: true }).eq('institution_id', institutionId);
+          let query = q.select('id', { count: 'exact' }).eq('institution_id', institutionId);
           if (activeYearId) {
-            query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            if (isAdvanceOrHistoricalYear) {
+              query = query.eq('academic_year_id', activeYearId);
+            } else {
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            }
           }
           if (isTeacher && allowedClasses?.length) query = query.in('class_id', allowedClasses);
           return query;
         },
-        `dashboard_students:${institutionId}:${activeYearId || 'all'}`,
-        CACHE_TTLS.LONG
+        `dashboard_students:${institutionId}:${activeYearId || 'all'}:${isAdvanceOrHistoricalYear ? 'strict' : 'active'}`,
+        0 // Always fresh count on dashboard
       );
 
       // 2. Classes Count (Cached)
@@ -201,7 +219,11 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           .eq('date', today);
         
         if (activeYearId) {
-          attQuery = attQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          if (isAdvanceOrHistoricalYear) {
+            attQuery = attQuery.eq('academic_year_id', activeYearId);
+          } else {
+            attQuery = attQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          }
         }
         
         if (isTeacher && allowedClasses?.length) {
@@ -214,6 +236,9 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
       ]);
 
+      let totalStudents = stdRes.count || (Array.isArray(stdRes.data) ? stdRes.data.length : 0);
+      const activeStudentIds = new Set(Array.isArray(stdRes.data) ? stdRes.data.map((s: any) => s.id) : []);
+
       let attendanceTodayCount = 0;
       let attendanceTodayLeavesCount = 0;
       let attendanceTodayAbsentCount = 0;
@@ -222,11 +247,13 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const allClasses = Array.isArray(clsRes.data) ? clsRes.data : [];
       const attData = attRes?.data;
 
-      if (attData) {
+      if (totalStudents > 0 && attData && attData.length > 0) {
         const studentAttMap = new Map<string, string[]>();
         const recordedClassIds = new Set<string>();
 
         attData.forEach((a: any) => {
+          if (activeStudentIds.size > 0 && !activeStudentIds.has(a.student_id)) return;
+
           if (a.class_id) recordedClassIds.add(a.class_id);
           if (!studentAttMap.has(a.student_id)) {
             studentAttMap.set(a.student_id, []);
@@ -247,8 +274,13 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         if (allClasses.length > 0) {
           pendingClassesCount = allClasses.filter((c: any) => !recordedClassIds.has(c.id)).length;
         }
-      } else if (allClasses.length > 0) {
+      } else if (totalStudents > 0 && allClasses.length > 0) {
         pendingClassesCount = allClasses.length;
+      } else {
+        attendanceTodayCount = 0;
+        attendanceTodayLeavesCount = 0;
+        attendanceTodayAbsentCount = 0;
+        pendingClassesCount = 0;
       }
 
       const income = Array.isArray(ledgerRes.data) 
@@ -277,8 +309,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         }
       }
 
-      let totalStudents = stdRes.count || 0;
-      if (totalStudents === 0 && typeof (madrasah as any)?.studentCount === 'number' && (madrasah as any).studentCount > 0) {
+      if (totalStudents === 0 && !activeYearId && typeof (madrasah as any)?.studentCount === 'number' && (madrasah as any).studentCount > 0) {
         totalStudents = (madrasah as any).studentCount;
       }
 
@@ -292,6 +323,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         attendanceTodayLeaves: attendanceTodayLeavesCount,
         attendanceTodayAbsents: attendanceTodayAbsentCount,
         pendingAttendanceClasses: pendingClassesCount,
+        academic_year_id: activeYearId,
         totalIncome: income,
         totalExpense: expense
       };
