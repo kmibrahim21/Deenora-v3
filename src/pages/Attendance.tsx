@@ -546,7 +546,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         (q) => {
           let query = q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).order('roll', { ascending: true });
           if (targetYearId && isUuid(targetYearId)) {
-            query = query.eq('academic_year_id', targetYearId);
+            query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
           }
           if ((window as any)._hasIsActive !== false) {
             query = query.eq('is_active', true);
@@ -570,29 +570,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
       
       let finalStdData = stdData || [];
-      
-      // Fallback: ONLY if no students found with targetYearId, try fetching unassigned legacy null students for default active year
-      if (finalStdData.length === 0 && targetYearId) {
-        const { data: fallbackData } = await requestManager.cachedFetch(
-          'students',
-          (q) => {
-            let query = q.select('*')
-              .eq('institution_id', madrasah.id)
-              .eq('class_id', cid)
-              .is('academic_year_id', null)
-              .order('roll', { ascending: true });
-            if ((window as any)._hasIsActive !== false) {
-              query = query.eq('is_active', true);
-            }
-            return query;
-          },
-          `students:${madrasah.id}:${cid}:legacy_null`,
-          CACHE_TTLS.LONG
-        );
-        if (fallbackData && fallbackData.length > 0) {
-          finalStdData = fallbackData;
-        }
-      }
       
       // Ensure robust numeric sorting in case database sorting is lexicographical
       finalStdData = [...finalStdData].sort((a: any, b: any) => {
@@ -707,32 +684,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
         const targetYearId = activeYear?.id || madrasah?.config_json?.active_academic_year_id;
         if (targetYearId && isUuid(targetYearId)) {
-          stdQuery = stdQuery.eq('academic_year_id', targetYearId);
+          stdQuery = stdQuery.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
         }
         if ((window as any)._hasIsActive !== false) {
           stdQuery = stdQuery.eq('is_active', true);
         }
 
         let { data: stdData, error: stdError } = await stdQuery.order('roll', { ascending: true });
-        
-        // Fallback: ONLY if no students found with academic_year_id filter, try fetching legacy null students
-        if ((!stdData || stdData.length === 0) && targetYearId) {
-          let fbQuery = supabase
-            .from('students')
-            .select('id, student_name, roll, guardian_phone, class_id')
-            .eq('institution_id', madrasah?.id)
-            .is('academic_year_id', null);
-          if (cid && cid !== 'all') {
-            fbQuery = fbQuery.eq('class_id', cid);
-          }
-          if ((window as any)._hasIsActive !== false) {
-            fbQuery = fbQuery.eq('is_active', true);
-          }
-          const { data: fbData } = await fbQuery.order('roll', { ascending: true });
-          if (fbData && fbData.length > 0) {
-            stdData = fbData;
-          }
-        }
 
         if (stdError && (!stdData || stdData.length === 0)) throw stdError;
 
@@ -915,28 +873,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
         const targetYearId = activeYear?.id || madrasah?.config_json?.active_academic_year_id;
         if (targetYearId && isUuid(targetYearId)) {
-          stdQuery = stdQuery.eq('academic_year_id', targetYearId);
+          stdQuery = stdQuery.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
         }
         if ((window as any)._hasIsActive !== false) {
           stdQuery = stdQuery.eq('is_active', true);
         }
         let { data: activeStudents, error: stdError } = await stdQuery;
-        
-        if ((!activeStudents || activeStudents.length === 0) && madrasah?.id) {
-          let fbQuery = supabase
-            .from('students')
-            .select('id, student_name, roll, class_id')
-            .eq('institution_id', madrasah.id)
-            .is('academic_year_id', null);
-          if (cid && cid !== 'all') {
-            fbQuery = fbQuery.eq('class_id', cid);
-          }
-          if ((window as any)._hasIsActive !== false) {
-            fbQuery = fbQuery.eq('is_active', true);
-          }
-          const { data: fbData } = await fbQuery;
-          if (fbData && fbData.length > 0) activeStudents = fbData;
-        }
 
         if (stdError && (!activeStudents || activeStudents.length === 0)) throw stdError;
 

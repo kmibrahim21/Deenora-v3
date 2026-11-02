@@ -155,7 +155,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const stdProm = requestManager.cachedFetch(
         'students',
         (q) => {
-          let query = q.select('id', { count: 'exact' }).eq('institution_id', institutionId);
+          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId);
           if (activeYearId) {
             if (isAdvanceOrHistoricalYear) {
               query = query.eq('academic_year_id', activeYearId);
@@ -236,8 +236,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
       ]);
 
-      let totalStudents = stdRes.count || (Array.isArray(stdRes.data) ? stdRes.data.length : 0);
-      const activeStudentIds = new Set(Array.isArray(stdRes.data) ? stdRes.data.map((s: any) => s.id) : []);
+      const allStudents: Array<{ id: string; class_id: string }> = Array.isArray(stdRes.data) ? stdRes.data : [];
+      let totalStudents = stdRes.count || allStudents.length;
 
       let attendanceTodayCount = 0;
       let attendanceTodayLeavesCount = 0;
@@ -247,26 +247,38 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const allClasses = Array.isArray(clsRes.data) ? clsRes.data : [];
       const attData = attRes?.data;
 
-      if (totalStudents > 0 && attData && attData.length > 0) {
+      if (totalStudents > 0) {
         const studentAttMap = new Map<string, string[]>();
         const recordedClassIds = new Set<string>();
 
-        attData.forEach((a: any) => {
-          if (activeStudentIds.size > 0 && !activeStudentIds.has(a.student_id)) return;
+        if (attData && attData.length > 0) {
+          attData.forEach((a: any) => {
+            if (a.class_id) recordedClassIds.add(a.class_id);
+            if (!studentAttMap.has(a.student_id)) {
+              studentAttMap.set(a.student_id, []);
+            }
+            studentAttMap.get(a.student_id)!.push(a.status);
+          });
+        }
 
-          if (a.class_id) recordedClassIds.add(a.class_id);
-          if (!studentAttMap.has(a.student_id)) {
-            studentAttMap.set(a.student_id, []);
+        // Also add class IDs of students who have attendance entries
+        allStudents.forEach((s) => {
+          if (s.id && studentAttMap.has(s.id) && s.class_id) {
+            recordedClassIds.add(s.class_id);
           }
-          studentAttMap.get(a.student_id)!.push(a.status);
         });
 
-        studentAttMap.forEach((statuses) => {
+        // Calculate attendance for every student in a class where attendance was recorded today
+        allStudents.forEach((s) => {
+          const classHasTakenAttendance = s.class_id ? recordedClassIds.has(s.class_id) : false;
+          if (!classHasTakenAttendance) return;
+
+          const statuses = studentAttMap.get(s.id) || [];
           if (statuses.includes('present') || statuses.includes('late') || statuses.includes('half_day')) {
             attendanceTodayCount++;
           } else if (statuses.includes('leave')) {
             attendanceTodayLeavesCount++;
-          } else if (statuses.includes('absent')) {
+          } else {
             attendanceTodayAbsentCount++;
           }
         });
@@ -274,7 +286,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         if (allClasses.length > 0) {
           pendingClassesCount = allClasses.filter((c: any) => !recordedClassIds.has(c.id)).length;
         }
-      } else if (totalStudents > 0 && allClasses.length > 0) {
+      } else if (allClasses.length > 0) {
         pendingClassesCount = allClasses.length;
       } else {
         attendanceTodayCount = 0;
