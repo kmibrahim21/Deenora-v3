@@ -413,6 +413,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     priority: 'HIGH',
                     ttl: '120s',
                   },
+                  notification: {
+                    title: callerLabel,
+                    body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                    sound: 'default',
+                  },
                   data: fcmDataPayload,
                   apns: {
                     payload: {
