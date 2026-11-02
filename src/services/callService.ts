@@ -209,13 +209,96 @@ export class VoiceCallService {
       }
       return true;
     } else if (act === 'decline' || act === 'reject' || act === 'reject_call') {
+      // 1. Resolve targetCallId even if call state in memory is unclear
+      let targetCallId = callId ? String(callId).trim() : '';
+      if (!targetCallId && this.activeCallData?.callId) {
+        targetCallId = this.activeCallData.callId;
+      }
+      if (!targetCallId && this.currentRingingCallId) {
+        targetCallId = this.currentRingingCallId;
+      }
+      if (!targetCallId) {
+        const storedCall = this.getActiveCall();
+        if (storedCall?.callId) targetCallId = storedCall.callId;
+      }
+      if (!targetCallId) {
+        try {
+          const raw = localStorage.getItem('deenora_active_call_payload');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.callId) targetCallId = String(parsed.callId);
+          }
+        } catch {}
+      }
+
+      // 2. Guaranteed immediate broadcast of call:reject with retries BEFORE any cleanup
+      if (targetCallId) {
+        const rejectPayload: any = {
+          callId: targetCallId,
+          reason: 'Android Native UI থেকে কল বাতিল করা হয়েছে।',
+          senderId: this.currentUserId || 'guardian-native',
+          timestamp: Date.now(),
+        };
+
+        // Guarantee A: Dedicated call room channel push with subscription wait & immediate retry burst
+        try {
+          const roomChannel = supabase.channel(`call-room-${targetCallId}`, {
+            config: { broadcast: { self: false } },
+          });
+          roomChannel.subscribe(async (status: string) => {
+            if (status === 'SUBSCRIBED') {
+              for (let i = 0; i < 3; i++) {
+                await roomChannel.send({ type: 'broadcast', event: 'call:reject', payload: rejectPayload }).catch(() => {});
+                await roomChannel.send({ type: 'broadcast', event: 'call:rejected', payload: rejectPayload }).catch(() => {});
+                if (i < 2) await new Promise((r) => setTimeout(r, 60));
+              }
+            }
+          });
+        } catch (e) {
+          console.warn('[VoiceCall] Dedicated room channel reject broadcast notice:', e);
+        }
+
+        // Guarantee B: Broadcast across all currently active signaling channels with retries
+        this.broadcastSignaling('call:reject', rejectPayload).catch(() => {});
+        this.broadcastSignaling('call:rejected', rejectPayload).catch(() => {});
+
+        setTimeout(() => {
+          this.broadcastSignaling('call:reject', rejectPayload).catch(() => {});
+          this.broadcastSignaling('call:rejected', rejectPayload).catch(() => {});
+        }, 80);
+
+        setTimeout(() => {
+          this.broadcastSignaling('call:reject', rejectPayload).catch(() => {});
+          this.broadcastSignaling('call:rejected', rejectPayload).catch(() => {});
+        }, 200);
+
+        // Guarantee C: Server push cancellation backup
+        fetch('/api/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'cancel_call_push',
+            call_id: targetCallId,
+          }),
+        }).catch(() => {});
+
+        // Guarantee D: Cross-tab BroadcastChannel
+        try {
+          if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+            const bc = new BroadcastChannel('deenora_call_events');
+            bc.postMessage({ type: 'CALL_REJECTED', payload: rejectPayload });
+            setTimeout(() => bc.close(), 1000);
+          }
+        } catch {}
+      }
+
       if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
       callSoundService.stopAll();
       this.setPendingAutoAnswer(null);
       this.isNativeBridgeActive = false;
-      await this.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।', callId, true);
+      await this.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।', targetCallId || callId, true);
       return true;
     } else if (act === 'end_call' || act === 'hangup' || act === 'end') {
       if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
