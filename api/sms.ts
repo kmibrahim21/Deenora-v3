@@ -516,31 +516,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       };
 
-      // Dispatcher with Auto-Fallback
-      const sendSingleWithFallback = async (item: { phone?: string; recipient?: string; mobile?: string; text: string }): Promise<SmsProviderResult> => {
-        if (primaryProvider === 'automas' && automasApiKey && rawAutomasSenderId) {
+      // Strict Provider Dispatcher without cross-provider fallback
+      const sendSingleDirect = async (item: { phone?: string; recipient?: string; mobile?: string; text: string }): Promise<SmsProviderResult> => {
+        if (finalType === 'non_masking') {
+          // Strictly Automas for non-masking — NEVER fallback to REVE
+          if (!automasApiKey || !rawAutomasSenderId) {
+            return {
+              success: false,
+              provider: 'automas',
+              recipient: item.phone || item.recipient || item.mobile || '',
+              errorMessage: 'Automas API Key বা Sender ID সংযোগ বিচ্ছিন্ন বা কনফিগার করা নেই'
+            };
+          }
           const autoRes = await sendSingleAutomas(item);
-          if (autoRes.success) return autoRes;
-          // Fallback to REVE if Automas failed or timed out
-          const reveRes = await sendSingleReve(item);
-          return reveRes;
+          if (!autoRes.success && !autoRes.errorMessage) {
+            autoRes.errorMessage = 'Automas সংযোগ বিচ্ছিন্ন বা ডেলিভারি ব্যর্থ হয়েছে';
+          }
+          return autoRes;
         } else {
+          // Strictly REVE for masking — NEVER fallback to Automas
+          if (!reveApiKey || !reveSecretKey) {
+            return {
+              success: false,
+              provider: 'reve',
+              recipient: item.phone || item.recipient || item.mobile || '',
+              errorMessage: 'REVE API Key বা Secret Key সংযোগ বিচ্ছিন্ন বা কনফিগার করা নেই'
+            };
+          }
           const reveRes = await sendSingleReve(item);
-          if (reveRes.success) return reveRes;
-          // Fallback to Automas if REVE failed
-          if (automasApiKey && rawAutomasSenderId) {
-            const autoRes = await sendSingleAutomas(item);
-            if (autoRes.success) return autoRes;
+          if (!reveRes.success && !reveRes.errorMessage) {
+            reveRes.errorMessage = 'REVE সংযোগ বিচ্ছিন্ন বা ডেলিভারি ব্যর্থ হয়েছে';
           }
           return reveRes;
         }
       };
 
       const results: SmsProviderResult[] = [];
-      const chunkSize = 25; // Increased chunk size for better parallelism
+      const chunkSize = 25; // Chunk size for parallel dispatch
       for (let i = 0; i < messages.length; i += chunkSize) {
         const chunk = messages.slice(i, i + chunkSize);
-        const chunkResults = await Promise.all(chunk.map(sendSingleWithFallback));
+        const chunkResults = await Promise.all(chunk.map(sendSingleDirect));
         results.push(...chunkResults);
       }
 

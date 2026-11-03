@@ -158,7 +158,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (typeof window === 'undefined') return;
 
     const handleAction = async (action: string, callId?: string) => {
-      console.log('[CallContext] Received handleNativeCallAction from Android Native:', action, callId);
+      console.log(`Deenora: handleNativeCallAction ${action} for ${callId}`);
       const cleanAction = String(action || '').toLowerCase().trim();
 
       if (cleanAction === 'accept_call' || cleanAction === 'answer' || cleanAction === 'accept') {
@@ -170,17 +170,14 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else if (callId) {
           autoAnswerRef.current = callId;
         }
-        await voiceCallService.handleNativeAction('answer', callId);
-      } else if (cleanAction === 'reject_call' || cleanAction === 'decline' || cleanAction === 'reject') {
+        await voiceCallService.answerIncomingCall(callId);
+      } else if (cleanAction === 'incoming' || cleanAction === 'incoming_call' || cleanAction === 'show_incoming' || cleanAction === 'ring') {
+        autoAnswerRef.current = null;
+        await voiceCallService.showIncomingCallUI(callId);
+      } else if (cleanAction === 'reject_call' || cleanAction === 'decline' || cleanAction === 'reject' || cleanAction === 'end' || cleanAction === 'hangup' || cleanAction === 'end_call') {
         native('stopRinging');
         autoAnswerRef.current = null;
-        await voiceCallService.handleNativeAction('decline', callId);
-        setCallStatus('idle');
-        setActiveCall(null);
-      } else if (cleanAction === 'end_call' || cleanAction === 'hangup' || cleanAction === 'end') {
-        native('stopRinging');
-        autoAnswerRef.current = null;
-        await voiceCallService.handleNativeAction('end', callId);
+        await voiceCallService.rejectCall(callId, true);
         setCallStatus('idle');
         setActiveCall(null);
       } else if (cleanAction === 'mute_toggle' || cleanAction === 'togglemute' || cleanAction === 'toggle_mute') {
@@ -214,7 +211,18 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return () => {
       if (typeof window !== 'undefined') {
-        (window as any).handleNativeCallAction = (act: string, cId?: string) => voiceCallService.handleNativeAction(act, cId);
+        (window as any).handleNativeCallAction = (act: string, cId?: string) => {
+          console.log(`Deenora: handleNativeCallAction ${act} for ${cId}`);
+          const a = String(act || '').toLowerCase().trim();
+          if (a === 'answer' || a === 'accept' || a === 'accept_call') {
+            return voiceCallService.answerIncomingCall(cId);
+          } else if (a === 'decline' || a === 'end' || a === 'reject' || a === 'hangup' || a === 'reject_call' || a === 'end_call') {
+            return voiceCallService.rejectCall(cId, true);
+          } else if (a === 'incoming' || a === 'incoming_call' || a === 'show_incoming' || a === 'ring') {
+            return voiceCallService.showIncomingCallUI(cId);
+          }
+          return voiceCallService.handleNativeAction(act, cId);
+        };
         (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
       }
     };
@@ -268,39 +276,39 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
-    if (action === 'accept_call' || action === 'incoming_call' || action === 'answer' || action === 'accept') {
+    if (action === 'accept_call' || action === 'answer' || action === 'accept') {
       const pendingCall = activeCall || voiceCallService.getActiveCall();
       if (pendingCall && (!targetCallId || pendingCall.callId === targetCallId)) {
         setActiveCall(pendingCall);
-        if (action === 'accept_call' || action === 'answer' || action === 'accept') {
-          console.log('[CallContext] Auto-answering call from URL parameter (?answer=1):', pendingCall.callId);
-          native('stopRinging');
-          setCallStatus('connected');
-          voiceCallService.acceptCall();
-        } else {
-          setCallStatus('incoming');
-        }
-
-        // Clean query parameter from URL without reload
-        const url = new URL(window.location.href);
-        ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 'call_action', 'native_ui', 't'].forEach((k) => url.searchParams.delete(k));
-        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+        console.log('[CallContext] Auto-answering call from URL parameter (?answer=1):', pendingCall.callId);
+        native('stopRinging');
+        setCallStatus('connected');
+        voiceCallService.acceptCall();
       } else if (targetCallId) {
-        // App was closed / fresh start case:
-        if (action === 'accept_call' || action === 'answer' || action === 'accept') {
-          console.log('[CallContext] Fresh start with ?answer=1&call_id=' + targetCallId + '. Staging auto-answer...');
-          autoAnswerRef.current = targetCallId;
-          voiceCallService.setPendingAutoAnswer(targetCallId);
-        }
+        console.log('[CallContext] Fresh start with ?answer=1&call_id=' + targetCallId + '. Staging auto-answer...');
+        autoAnswerRef.current = targetCallId;
+        voiceCallService.setPendingAutoAnswer(targetCallId);
         native('stopRinging');
         voiceCallService.subscribeCallRoom(targetCallId);
         voiceCallService.requestOffer(targetCallId);
-
-        // Clean query parameter from URL without reload
-        const url = new URL(window.location.href);
-        ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 'call_action', 'native_ui', 't'].forEach((k) => url.searchParams.delete(k));
-        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
       }
+
+      // Clean query parameter from URL without reload
+      const url = new URL(window.location.href);
+      ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 'call_action', 'native_ui', 't'].forEach((k) => url.searchParams.delete(k));
+      window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      return;
+    }
+
+    if (action === 'incoming_call' || action === 'incoming') {
+      console.log('[CallContext] Opening incoming call screen from URL / notification tap:', targetCallId);
+      voiceCallService.showIncomingCallUI(targetCallId || undefined);
+
+      // Clean query parameter from URL without reload
+      const url = new URL(window.location.href);
+      ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 'call_action', 'native_ui', 't'].forEach((k) => url.searchParams.delete(k));
+      window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      return;
     }
   }, [activeCall, callStatus]);
 
@@ -458,8 +466,8 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return !isCaller;
   };
 
-  // Suppress web call UI when native UI mode is active AND user is parent/guardian (run WebRTC headless; Admin is unaffected)
-  const suppressWebModal = isNativeUiMode() && isParentUser() && !isCaller;
+  // Ensure web call UI is NEVER suppressed on answer so VoiceCallModal is always visible
+  const suppressWebModal = false;
 
   return (
     <CallContext.Provider

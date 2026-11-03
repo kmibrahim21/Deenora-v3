@@ -4,6 +4,9 @@ import crypto from 'crypto';
 // In-memory token cache fallback if table is not yet migrated in Supabase
 const memoryTokens: Record<string, { token: string; updatedAt: number }> = {};
 
+// In-memory active call payload cache for killed-state notification taps
+const activeCallPayloads: Record<string, { payload: any; updatedAt: number }> = {};
+
 // OAuth2 cached token for Firebase V1 HTTP API
 let cachedAccessToken: { token: string; expiresAt: number; projectId: string } | null = null;
 
@@ -378,6 +381,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timestamp: String(Date.now()),
       };
 
+      if (call_id) {
+        activeCallPayloads[String(call_id)] = {
+          payload: fcmDataPayload,
+          updatedAt: Date.now(),
+        };
+      }
+
       if (!targetTokens.length) {
         return res.status(200).json({
           success: true,
@@ -562,6 +572,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         CALLER_NAME: callerLabel,
         CALL_ID: String(call_id || ''),
       };
+
+      if (call_id) {
+        activeCallPayloads[String(call_id)] = {
+          payload: fcmDataPayload,
+          updatedAt: Date.now(),
+        };
+      }
 
       const sendResults = await Promise.all(
         targetTokens.map(async (tok) => {
@@ -865,8 +882,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 5. GET CALL CONFIG & HEALTH
+  // 5. GET CALL PAYLOAD FOR KILLED-STATE NOTIFICATION TAP
+  if (action === 'get_call_payload' || (req.query && req.query.action === 'get_call_payload')) {
+    const targetCallId = String(req.body?.call_id || req.query?.call_id || '').trim();
+    if (targetCallId && activeCallPayloads[targetCallId]) {
+      return res.status(200).json({
+        success: true,
+        payload: activeCallPayloads[targetCallId].payload,
+      });
+    }
+    return res.status(200).json({
+      success: false,
+      message: 'Call payload not found in cache',
+    });
+  }
+
+  // 6. GET CALL CONFIG & HEALTH
   if (req.method === 'GET') {
+    if (req.query && req.query.action === 'get_call_payload') {
+      const targetCallId = String(req.query?.call_id || '').trim();
+      if (targetCallId && activeCallPayloads[targetCallId]) {
+        return res.status(200).json({
+          success: true,
+          payload: activeCallPayloads[targetCallId].payload,
+        });
+      }
+      return res.status(200).json({
+        success: false,
+        message: 'Call payload not found in cache',
+      });
+    }
+
     return res.status(200).json({
       status: 'active',
       hasFirebaseServiceAccount: Boolean(serviceAccount),

@@ -172,42 +172,274 @@ export class VoiceCallService {
   }
 
   /**
+   * Trigger the web's answer flow — show call UI and connect WebRTC
+   */
+  public async answerIncomingCall(callId?: string): Promise<boolean> {
+    console.log(`Deenora: answerIncomingCall for ${callId}`);
+
+    // 1. Tell Android native to stop ringing sound immediately
+    if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+      try { window.AndroidInterface.stopRinging(); } catch {}
+    }
+    callSoundService.stopAll();
+
+    // 2. Check if we already have the activeCallData or stored call matching callId
+    let currentCall = this.activeCallData;
+    if (!currentCall || (callId && currentCall.callId !== callId)) {
+      const stored = this.getActiveCall();
+      if (stored && (!callId || stored.callId === callId)) {
+        currentCall = stored;
+      }
+    }
+    if (!currentCall && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('deenora_active_call_payload');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (!callId || parsed.callId === callId)) {
+            currentCall = parsed;
+          }
+        }
+      } catch {}
+    }
+
+    const targetId = callId ? String(callId).trim() : (currentCall?.callId || '__ANY__');
+
+    if (currentCall && currentCall.offer) {
+      console.log('[VoiceCall] Found active offer matching callId, accepting WebRTC immediately:', currentCall.callId);
+      this.activeCallData = currentCall;
+      this.onIncomingCall?.(currentCall);
+      this.onStatusChange?.('connected', currentCall);
+      const accepted = await this.acceptCall();
+      return accepted;
+    }
+
+    // 3. If offer not yet in memory (or socket delivery in flight):
+    // Stage callId so when handleIncomingOffer fires, it automatically accepts instead of ringing!
+    console.log('[VoiceCall] Staging auto-answer for upcoming offer:', targetId);
+    this.setPendingAutoAnswer(targetId);
+    if (currentCall) {
+      this.activeCallData = currentCall;
+      this.onIncomingCall?.(currentCall);
+      this.onStatusChange?.('connecting', currentCall);
+    }
+
+    if (callId) {
+      this.subscribeCallRoom(callId);
+      this.requestOffer(callId);
+    }
+    return true;
+  }
+
+  /**
+   * Show incoming call UI (VoiceCallModal with Answer/Decline buttons) without auto-answering.
+   * Invoked when Android sends 'incoming' action from a killed-state notification tap.
+   */
+  public async showIncomingCallUI(callId?: string): Promise<boolean> {
+    const targetCallId = String(callId || '').trim();
+    console.log(`Deenora: showIncomingCallUI for ${targetCallId || 'unspecified call'}`);
+
+    // 1. Immediately subscribe to the dedicated call room and request offer re-send from caller
+    if (targetCallId) {
+      this.subscribeCallRoom(targetCallId);
+      this.requestOffer(targetCallId);
+    }
+
+    // 2. Fetch or resolve call payload (caller name, etc.)
+    let payload: CallPayload | null = null;
+
+    // Check memory: activeCallData
+    if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId)) {
+      payload = this.activeCallData;
+    }
+
+    // Check localStorage: getActiveCall()
+    if (!payload) {
+      const stored = this.getActiveCall();
+      if (stored && (!targetCallId || stored.callId === targetCallId)) {
+        payload = stored;
+      }
+    }
+
+    // Check URL parameters if app opened via fcm_tap or intent URL
+    if (!payload && typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const urlCallId = params.get('call_id') || params.get('CALL_ID');
+        const urlCallerName = params.get('caller_name') || params.get('CALLER_NAME');
+        const urlStudentName = params.get('student_name');
+        const urlStudentId = params.get('student_id');
+        const urlInstId = params.get('institution_id');
+        const urlPhone = params.get('callee_phone');
+
+        if (urlCallId && (!targetCallId || urlCallId === targetCallId)) {
+          payload = {
+            callId: urlCallId,
+            institutionId: urlInstId || this.currentInstitutionId || '',
+            institutionName: urlCallerName || this.cachedInstitutionName || 'মাদরাসা এডমিন',
+            caller: {
+              id: 'caller-admin',
+              name: urlCallerName || this.cachedInstitutionName || 'মাদরাসা এডমিন',
+              institutionName: urlCallerName || this.cachedInstitutionName || 'মাদরাসা এডমিন',
+            },
+            student: {
+              id: urlStudentId || '',
+              name: urlStudentName || 'শিক্ষার্থী',
+              guardian_phone: urlPhone || '',
+            },
+            timestamp: Date.now(),
+          };
+        }
+      } catch (e) {
+        console.warn('[VoiceCall] URL params parse error:', e);
+      }
+    }
+
+    // Check backend API /api/call?action=get_call_payload
+    if (!payload && targetCallId) {
+      try {
+        console.log('[VoiceCall] Querying backend API for call payload:', targetCallId);
+        const res = await fetch(`/api/call?action=get_call_payload&call_id=${encodeURIComponent(targetCallId)}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && data?.payload) {
+            const bp = data.payload;
+            payload = {
+              callId: bp.callId || bp.call_id || targetCallId,
+              institutionId: bp.institutionId || bp.institution_id || this.currentInstitutionId || '',
+              institutionName: bp.caller_name || bp.institutionName || this.cachedInstitutionName || 'মাদরাসা এডমিন',
+              caller: {
+                id: bp.caller_id || 'caller-admin',
+                name: bp.caller_name || 'মাদরাসা এডমিন',
+                institutionName: bp.caller_name || this.cachedInstitutionName || 'মাদরাসা এডমিন',
+              },
+              student: {
+                id: bp.student_id || '',
+                name: bp.student_name || 'শিক্ষার্থী',
+                guardian_phone: bp.callee_phone || '',
+              },
+              timestamp: Number(bp.timestamp) || Date.now(),
+            };
+          }
+        }
+      } catch (apiErr) {
+        console.warn('[VoiceCall] Backend call payload fetch notice:', apiErr);
+      }
+    }
+
+    // Check Supabase directly if student phone or parent phone is present
+    if (!payload && targetCallId) {
+      try {
+        const localPhone = typeof window !== 'undefined' ? localStorage.getItem('parent_phone') : null;
+        if (localPhone) {
+          const { data: stdRows } = await supabase
+            .from('students')
+            .select('id, name, guardian_phone, guardian_name, institution_id')
+            .eq('guardian_phone', localPhone)
+            .limit(1);
+          if (stdRows && stdRows.length > 0) {
+            const st = stdRows[0];
+            payload = {
+              callId: targetCallId,
+              institutionId: st.institution_id || this.currentInstitutionId || '',
+              institutionName: this.cachedInstitutionName || 'মাদরাসা এডমিন',
+              caller: {
+                id: 'caller-admin',
+                name: this.cachedInstitutionName || 'মাদরাসা এডমিন',
+                institutionName: this.cachedInstitutionName || 'মাদরাসা এডমিন',
+              },
+              student: {
+                id: st.id,
+                name: st.name,
+                guardian_name: st.guardian_name,
+                guardian_phone: st.guardian_phone,
+              },
+              timestamp: Date.now(),
+            };
+          }
+        }
+      } catch (sbErr) {
+        console.warn('[VoiceCall] Supabase direct lookup notice:', sbErr);
+      }
+    }
+
+    // Construct graceful fallback if payload is still null
+    if (!payload) {
+      payload = {
+        callId: targetCallId || `call_${Date.now()}`,
+        institutionId: this.currentInstitutionId || '',
+        institutionName: this.cachedInstitutionName || 'মাদরাসা এডমিন',
+        caller: {
+          id: 'caller-admin',
+          name: this.cachedInstitutionName || 'মাদরাসা এডমিন',
+          institutionName: this.cachedInstitutionName || 'মাদরাসা এডমিন',
+        },
+        student: {
+          id: '',
+          name: 'শিক্ষার্থী',
+        },
+        timestamp: Date.now(),
+      };
+    }
+
+    // 3. Set the web state to ringing / incoming (NEVER auto-answer!)
+    this.isCaller = false;
+    this.isCallAnswered = false;
+    this.currentRingingCallId = payload.callId;
+    this.setPendingAutoAnswer(null); // Ensure no auto-answer flag is set!
+    this.activeCallData = payload;
+
+    try {
+      localStorage.setItem('deenora_active_call_payload', JSON.stringify(payload));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('deenora_call_events');
+        bc.postMessage({ type: 'INCOMING_CALL', payload });
+        setTimeout(() => bc.close(), 1000);
+      }
+    } catch {}
+
+    // Web ringtone handling
+    const hasNativeBridge = typeof window !== 'undefined' && Boolean(window.AndroidInterface?.onIncomingCall);
+    if (!hasNativeBridge) {
+      callSoundService.startIncomingRingtone();
+    } else {
+      console.log('[VoiceCall] Native bridge active during showIncomingCallUI (native handles ringtone)');
+    }
+
+    // 4. Trigger incoming callbacks to display VoiceCallModal with Answer/Decline buttons
+    this.onIncomingCall?.(payload);
+    this.onStatusChange?.('incoming', payload);
+
+    // 5. Incoming ring timeout (50s)
+    if (this.incomingRingTimeout) {
+      clearTimeout(this.incomingRingTimeout);
+      this.incomingRingTimeout = null;
+    }
+    this.incomingRingTimeout = setTimeout(() => {
+      if (this.activeCallData && this.activeCallData.callId === payload!.callId && !this.isCallAnswered) {
+        console.log('[VoiceCall] Callee incoming call unanswered timeout (50s) in showIncomingCallUI');
+        this.rejectCall('কলের কোনো উত্তর দেওয়া হয়নি (টাইমআউট)।', payload!.callId, true);
+      }
+    }, 50000);
+
+    return true;
+  }
+
+  /**
    * Handle native call action invoked by Android WebView bridge or background notifications:
-   * action: 'answer' | 'decline' | 'end'
+   * action: 'answer' | 'incoming' | 'decline' | 'end'
    */
   public async handleNativeAction(action: string, callId?: string): Promise<boolean> {
     const act = String(action || '').toLowerCase().trim();
     console.log('[VoiceCall] handleNativeAction invoked:', { action: act, callId });
 
     if (act === 'answer' || act === 'accept' || act === 'accept_call') {
-      // 1. Tell Android native to stop ringing sound immediately
-      if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
-        try { window.AndroidInterface.stopRinging(); } catch {}
-      }
-      callSoundService.stopAll();
-
-      // 2. Check if we already have the activeCallData or stored call matching callId
-      const currentCall = this.activeCallData || this.getActiveCall();
-      const isMatchingCall = currentCall && (!callId || currentCall.callId === callId);
-
-      if (isMatchingCall && currentCall?.offer) {
-        console.log('[VoiceCall] Found active offer matching callId, accepting WebRTC immediately:', currentCall.callId);
-        this.activeCallData = currentCall;
-        const accepted = await this.acceptCall();
-        return accepted;
-      }
-
-      // 3. If offer not yet in memory (or socket delivery in flight):
-      // Stage callId so when handleIncomingOffer fires, it automatically accepts instead of ringing!
-      const targetId = callId ? String(callId).trim() : '__ANY__';
-      console.log('[VoiceCall] Staging auto-answer for upcoming offer:', targetId);
-      this.setPendingAutoAnswer(targetId);
-
-      if (callId) {
-        this.subscribeCallRoom(callId);
-        this.requestOffer(callId);
-      }
-      return true;
+      return await this.answerIncomingCall(callId);
+    } else if (act === 'incoming' || act === 'incoming_call' || act === 'show_incoming' || act === 'ring') {
+      return await this.showIncomingCallUI(callId);
     } else if (act === 'decline' || act === 'reject' || act === 'reject_call') {
       // 1. Resolve targetCallId even if call state in memory is unclear
       let targetCallId = callId ? String(callId).trim() : '';
@@ -1844,6 +2076,9 @@ export class VoiceCallService {
       if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
+      this.activeCallData = payload;
+      this.onIncomingCall?.(payload);
+      this.onStatusChange?.('connected', payload);
       await this.acceptCall();
       return;
     }
@@ -1932,7 +2167,9 @@ export class VoiceCallService {
       if (stored && stored.offer) {
         this.activeCallData = stored;
       } else {
-        return false;
+        const targetId = this.activeCallData?.callId || stored?.callId || '__ANY__';
+        console.log('[VoiceCall] acceptCall invoked before offer arrived. Staging auto-answer for:', targetId);
+        return await this.answerIncomingCall(targetId);
       }
     }
 
@@ -2065,13 +2302,28 @@ export class VoiceCallService {
    * Reject incoming call
    */
   public async rejectCall(
-    reason: string = 'কলটি কেটে দেওয়া হয়েছে।',
-    specificCallId?: string,
+    reasonOrCallId: string = 'কলটি কেটে দেওয়া হয়েছে।',
+    specificCallIdOrExplicit?: string | boolean,
     isExplicitUserAction: boolean = false
   ) {
+    let reason = 'কলটি কেটে দেওয়া হয়েছে।';
+    let specificCallId: string | undefined = undefined;
+    let explicit = false;
+
+    if (typeof specificCallIdOrExplicit === 'boolean') {
+      // Called as rejectCall(callId, true)
+      specificCallId = reasonOrCallId;
+      explicit = specificCallIdOrExplicit;
+      reason = 'Android Native UI থেকে কল বাতিল করা হয়েছে।';
+    } else {
+      reason = reasonOrCallId || 'কলটি কেটে দেওয়া হয়েছে।';
+      specificCallId = specificCallIdOrExplicit;
+      explicit = isExplicitUserAction;
+    }
+
     // 5.3 Guard: If native bridge is active, web must NEVER send automatic reject signals to caller.
     // Only send reject if action was explicitly initiated by user/native action.
-    if (this.isNativeBridgeActive && !isExplicitUserAction) {
+    if (this.isNativeBridgeActive && !explicit) {
       console.warn('[VoiceCall] Native bridge is active. Suppressing automatic web reject signal so Admin call is not cut off.');
       this.cleanup();
       return;
@@ -2425,14 +2677,29 @@ export class VoiceCallService {
 
 export const voiceCallService = new VoiceCallService();
 
-// Expose global bridge function window.handleNativeCallAction for Android WebView & Notifications
+// Bridge for Android native Answer/Decline actions
 if (typeof window !== 'undefined') {
-  (window as any).handleNativeCallAction = (action: string, callId?: string) => {
+  (window as any).handleNativeCallAction = (action: string, callId: string) => {
+    console.log(`Deenora: handleNativeCallAction ${action} for ${callId}`);
+    const act = String(action || '').toLowerCase().trim();
+    if (act === 'answer' || act === 'accept' || act === 'accept_call') {
+      // Trigger the web's answer flow — show call UI and connect WebRTC
+      return voiceCallService.answerIncomingCall(callId);
+    } else if (act === 'decline' || act === 'end' || act === 'reject' || act === 'hangup' || act === 'reject_call' || act === 'end_call') {
+      // Trigger decline — broadcast call:reject to admin
+      return voiceCallService.rejectCall(callId, true);
+    } else if (act === 'incoming' || act === 'incoming_call' || act === 'show_incoming' || act === 'ring') {
+      // Trigger incoming call UI with Answer / Decline buttons (no auto-answer)
+      return voiceCallService.showIncomingCallUI(callId);
+    }
     return voiceCallService.handleNativeAction(action, callId);
   };
   (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
-  (window as any).rejectCall = (reason?: string, callId?: string) => {
-    return voiceCallService.rejectCall(reason, callId, true);
+  (window as any).showIncomingCallUI = (callId?: string) => {
+    return voiceCallService.showIncomingCallUI(callId);
+  };
+  (window as any).rejectCall = (reasonOrCallId?: string, specificCallIdOrExplicit?: string | boolean) => {
+    return voiceCallService.rejectCall(reasonOrCallId, specificCallIdOrExplicit, true);
   };
   (window as any).endCall = () => {
     return voiceCallService.endCall();
@@ -2441,7 +2708,7 @@ if (typeof window !== 'undefined') {
     return voiceCallService.acceptCall();
   };
 
-  // Auto-detect ?answer=1&call_id=xxx on page load (fresh start case)
+  // Auto-detect ?answer=1&call_id=xxx or ?action=incoming_call on page load (fresh start case)
   try {
     const params = new URLSearchParams(window.location.search);
     if (params.get('answer') === '1') {
@@ -2452,6 +2719,14 @@ if (typeof window !== 'undefined') {
         voiceCallService.subscribeCallRoom(targetCallId);
         voiceCallService.requestOffer(targetCallId);
       }
+    } else if (
+      params.get('action') === 'incoming_call' ||
+      params.get('action') === 'incoming' ||
+      (params.get('fcm_tap') === '1' && params.get('call_id') && params.get('answer') !== '1')
+    ) {
+      const targetCallId = params.get('call_id') || '';
+      console.log('[VoiceCall] Page load detected incoming call from URL / notification tap:', targetCallId);
+      voiceCallService.showIncomingCallUI(targetCallId);
     }
   } catch {}
 }

@@ -5,6 +5,31 @@ import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CallProvider } from './context/CallContext';
 import { checkOAuthRedirectToken } from './services/googleDriveBackup';
+import { voiceCallService } from './services/callService';
+
+// Bridge for Android native Answer/Decline actions
+if (typeof window !== 'undefined') {
+  (window as any).handleNativeCallAction = (action: string, callId: string) => {
+    console.log(`Deenora: handleNativeCallAction ${action} for ${callId}`);
+    const act = String(action || '').toLowerCase().trim();
+    if (act === 'answer' || act === 'accept' || act === 'accept_call') {
+      // Trigger the web's answer flow — show call UI and connect WebRTC
+      voiceCallService.answerIncomingCall(callId);
+    } else if (act === 'decline' || act === 'end' || act === 'reject' || act === 'hangup' || act === 'reject_call' || act === 'end_call') {
+      // Trigger decline — broadcast call:reject to admin
+      voiceCallService.rejectCall(callId, true);
+    } else if (act === 'incoming' || act === 'incoming_call' || act === 'show_incoming' || act === 'ring') {
+      // Trigger incoming call UI with Answer / Decline buttons (no auto-answer)
+      voiceCallService.showIncomingCallUI(callId);
+    } else {
+      voiceCallService.handleNativeAction(action, callId);
+    }
+  };
+  (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
+  (window as any).showIncomingCallUI = (callId?: string) => {
+    return voiceCallService.showIncomingCallUI(callId);
+  };
+}
 
 // Instantly capture Google OAuth redirect token from hash if returning from redirect safely
 if (typeof window !== 'undefined') {

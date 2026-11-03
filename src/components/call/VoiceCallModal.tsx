@@ -95,7 +95,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
           }
         })()));
 
-  if (status === 'idle' || !callData || (isNativeUi && isParentRole && !isCaller)) return null;
+  if (status === 'idle' || !callData) return null;
 
   const formatDuration = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
