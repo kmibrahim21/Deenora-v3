@@ -32,6 +32,8 @@ export interface CallPayload {
   candidate?: RTCIceCandidateInit;
   reason?: string;
   senderId?: string;
+  role?: 'caller' | 'callee';
+  isCaller?: boolean;
   timestamp: number;
 }
 
@@ -171,11 +173,19 @@ export class VoiceCallService {
     return this.pendingAutoAnswerCallId;
   }
 
+  public getIsCaller(): boolean {
+    return this.isCaller;
+  }
+
   /**
    * Trigger the web's answer flow — show call UI and connect WebRTC
    */
   public async answerIncomingCall(callId?: string): Promise<boolean> {
     console.log(`Deenora: answerIncomingCall for ${callId}`);
+
+    // EXPLICIT: Set role to 'callee' (not caller) for guardian answering
+    this.isCaller = false;
+    console.log('[VoiceCall] [DIAGNOSTIC] answerIncomingCall: role explicitly set to callee (isCaller: false)');
 
     // 1. Tell Android native to stop ringing sound immediately
     if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
@@ -205,10 +215,21 @@ export class VoiceCallService {
 
     const targetId = callId ? String(callId).trim() : (currentCall?.callId || '__ANY__');
 
-    if (currentCall && currentCall.offer) {
-      console.log('[VoiceCall] Found active offer matching callId, accepting WebRTC immediately:', currentCall.callId);
+    // Immediately subscribe to dedicated call room so signaling to admin is direct
+    if (targetId && targetId !== '__ANY__') {
+      this.subscribeCallRoom(targetId);
+    }
+
+    if (currentCall) {
+      currentCall.role = 'callee';
+      currentCall.isCaller = false;
       this.activeCallData = currentCall;
+    }
+
+    if (currentCall && currentCall.offer) {
+      console.log('[VoiceCall] [DIAGNOSTIC] Found active offer matching callId, accepting WebRTC immediately:', currentCall.callId);
       this.onIncomingCall?.(currentCall);
+      // Set callStatus to 'connected' (NEVER 'calling')
       this.onStatusChange?.('connected', currentCall);
       const accepted = await this.acceptCall();
       return accepted;
@@ -216,17 +237,17 @@ export class VoiceCallService {
 
     // 3. If offer not yet in memory (or socket delivery in flight):
     // Stage callId so when handleIncomingOffer fires, it automatically accepts instead of ringing!
-    console.log('[VoiceCall] Staging auto-answer for upcoming offer:', targetId);
+    console.log('[VoiceCall] [DIAGNOSTIC] Staging auto-answer for upcoming offer:', targetId);
     this.setPendingAutoAnswer(targetId);
     if (currentCall) {
-      this.activeCallData = currentCall;
       this.onIncomingCall?.(currentCall);
-      this.onStatusChange?.('connecting', currentCall);
+      // Set callStatus to 'connected' (NEVER 'calling')
+      this.onStatusChange?.('connected', currentCall);
     }
 
-    if (callId) {
-      this.subscribeCallRoom(callId);
-      this.requestOffer(callId);
+    if (targetId && targetId !== '__ANY__') {
+      this.subscribeCallRoom(targetId);
+      this.requestOffer(targetId);
     }
     return true;
   }
@@ -763,18 +784,25 @@ export class VoiceCallService {
       })
       .on('broadcast', { event: 'call:accept' }, async ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+          console.log('[VoiceCall] [DIAGNOSTIC] Caller received call:accept from callee:', payload);
+          await this.handleRemoteAnswer(payload);
+        }
+      })
+      .on('broadcast', { event: 'call:answer' }, async ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+          console.log('[VoiceCall] [DIAGNOSTIC] Caller received call:answer from callee:', payload);
           await this.handleRemoteAnswer(payload);
         }
       })
       .on('broadcast', { event: 'call:reject' }, ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
-          console.log('[VoiceCall] Received call:reject from peer:', payload);
+          console.log('[VoiceCall] [DIAGNOSTIC] Received call:reject from peer:', payload);
           this.handleCallRejected(payload.reason);
         }
       })
       .on('broadcast', { event: 'call:rejected' }, ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
-          console.log('[VoiceCall] Received call:rejected from peer:', payload);
+          console.log('[VoiceCall] [DIAGNOSTIC] Received call:rejected from peer:', payload);
           this.handleCallRejected(payload.reason);
         }
       })
@@ -785,13 +813,13 @@ export class VoiceCallService {
       })
       .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
-          console.log('[VoiceCall] Received call:end from peer:', payload);
+          console.log('[VoiceCall] [DIAGNOSTIC] Received call:end from peer:', payload);
           this.handleCallEndedRemotely();
         }
       })
       .on('broadcast', { event: 'call:ended' }, ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
-          console.log('[VoiceCall] Received call:ended from peer:', payload);
+          console.log('[VoiceCall] [DIAGNOSTIC] Received call:ended from peer:', payload);
           this.handleCallEndedRemotely();
         }
       })
@@ -813,19 +841,22 @@ export class VoiceCallService {
    */
   public subscribeCallRoom(callId: string) {
     if (!callId) return;
+    const roomName = `call-room-${callId}`;
+    if (this.callRoomChannel && (this.callRoomChannel.topic === roomName || this.callRoomChannel.topic === `realtime:${roomName}`)) {
+      return; // Already actively subscribed to this call room channel
+    }
     if (this.callRoomChannel) {
       try { supabase.removeChannel(this.callRoomChannel); } catch {}
       this.callRoomChannel = null;
     }
 
-    const roomName = `call-room-${callId}`;
     this.callRoomChannel = supabase.channel(roomName, {
       config: { broadcast: { self: false } },
     });
     this.attachCallListeners(this.callRoomChannel);
     this.callRoomChannel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[VoiceCall] Call room channel active:', roomName);
+        console.log('[VoiceCall] [DIAGNOSTIC] Call room channel active & subscribed:', roomName);
       }
     });
   }
@@ -1168,11 +1199,13 @@ export class VoiceCallService {
    * Resilient broadcast across all active signaling channels
    */
   private async broadcastSignaling(event: string, payload: any) {
+    console.log(`[VoiceCall] [DIAGNOSTIC] broadcastSignaling event: "${event}" for callId: ${payload?.callId}, senderId: ${payload?.senderId || this.currentUserId}`);
     const promises: Promise<any>[] = [];
 
     // 1. Direct WebRTC DataChannel (0ms latency direct transport)
     if (this.dataChannel && this.dataChannel.readyState === 'open') {
       try {
+        console.log(`[VoiceCall] [DIAGNOSTIC] DataChannel sending "${event}"`);
         this.dataChannel.send(JSON.stringify({ type: event, ...payload }));
       } catch (dcErr) {
         console.warn('[VoiceCall] DataChannel send warning:', dcErr);
@@ -1185,23 +1218,30 @@ export class VoiceCallService {
       promises.push(
         this.callRoomChannel
           .send({ type: 'broadcast', event, payload })
+          .then(() => console.log(`[VoiceCall] [DIAGNOSTIC] "${event}" delivered on active call room channel`))
           .catch((e: any) => console.warn('[VoiceCall] broadcast on call room channel failed:', e))
       );
-    }
-    if (targetRoomCallId) {
+    } else if (targetRoomCallId) {
       const roomChanName = `call-room-${targetRoomCallId}`;
-      if (!this.callRoomChannel || this.callRoomChannel.topic !== roomChanName) {
-        try {
-          const rChan = supabase.channel(roomChanName, {
-            config: { broadcast: { self: false } },
-          });
-          rChan.subscribe(async (st: string) => {
-            if (st === 'SUBSCRIBED') {
-              await rChan.send({ type: 'broadcast', event, payload }).catch(() => {});
-            }
-          });
-        } catch {}
-      }
+      promises.push(
+        new Promise<void>((resolve) => {
+          try {
+            const rChan = supabase.channel(roomChanName, {
+              config: { broadcast: { self: false } },
+            });
+            rChan.subscribe(async (st: string) => {
+              if (st === 'SUBSCRIBED') {
+                await rChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+                console.log(`[VoiceCall] [DIAGNOSTIC] "${event}" delivered on newly subscribed call room: ${roomChanName}`);
+                resolve();
+              }
+            });
+            setTimeout(resolve, 500);
+          } catch {
+            resolve();
+          }
+        })
+      );
     }
 
     // 3. Main Institution Channel
@@ -1240,21 +1280,30 @@ export class VoiceCallService {
       );
     }
 
-    // 7. Direct Caller's dedicated channel (Guarantees Admin panel receives reject/end instantly!)
+    // 7. Direct Caller's dedicated channel (Guarantees Admin panel receives reject/end/accept instantly!)
     const callerId = payload?.caller?.id || this.activeCallData?.caller?.id;
     if (callerId) {
       const callerChanName = `user-call-${String(callerId).trim().toLowerCase()}`;
       if (!this.userChannel || this.userChannel.topic !== callerChanName) {
-        try {
-          const cChan = supabase.channel(callerChanName, {
-            config: { broadcast: { self: false } },
-          });
-          cChan.subscribe(async (st: string) => {
-            if (st === 'SUBSCRIBED') {
-              await cChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+        promises.push(
+          new Promise<void>((resolve) => {
+            try {
+              const cChan = supabase.channel(callerChanName, {
+                config: { broadcast: { self: false } },
+              });
+              cChan.subscribe(async (st: string) => {
+                if (st === 'SUBSCRIBED') {
+                  await cChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+                  console.log(`[VoiceCall] [DIAGNOSTIC] "${event}" delivered on caller user channel: ${callerChanName}`);
+                  resolve();
+                }
+              });
+              setTimeout(resolve, 500);
+            } catch {
+              resolve();
             }
-          });
-        } catch {}
+          })
+        );
       }
     }
 
@@ -1276,7 +1325,7 @@ export class VoiceCallService {
       }
     }
 
-    // 7. Target guardian phone's dedicated channel
+    // 9. Target guardian phone's dedicated channel
     const guardianPhone = this.normPhone(
       payload?.calleePhone ||
       payload?.student?.guardian_phone ||
@@ -1299,7 +1348,7 @@ export class VoiceCallService {
       }
     }
 
-    // 8. Target institution channel if known
+    // 10. Target institution channel if known
     const targetInstId = String(payload?.institutionId || this.activeCallData?.institutionId || '').trim();
     if (targetInstId && (!this.channel || this.channel.topic !== `institution-calls-${targetInstId}`)) {
       try {
@@ -2162,18 +2211,29 @@ export class VoiceCallService {
    * Accept incoming call
    */
   public async acceptCall(): Promise<boolean> {
+    // EXPLICIT: role is callee (guardian answering)
+    this.isCaller = false;
+
     if (!this.activeCallData || !this.activeCallData.offer) {
       const stored = this.getActiveCall();
       if (stored && stored.offer) {
         this.activeCallData = stored;
+        this.activeCallData.role = 'callee';
+        this.activeCallData.isCaller = false;
       } else {
         const targetId = this.activeCallData?.callId || stored?.callId || '__ANY__';
-        console.log('[VoiceCall] acceptCall invoked before offer arrived. Staging auto-answer for:', targetId);
+        console.log('[VoiceCall] [DIAGNOSTIC] acceptCall invoked before offer arrived. Staging auto-answer for:', targetId);
         return await this.answerIncomingCall(targetId);
       }
     }
 
     try {
+      this.isCaller = false;
+      if (this.activeCallData) {
+        this.activeCallData.role = 'callee';
+        this.activeCallData.isCaller = false;
+      }
+
       if (this.incomingRingTimeout) {
         clearTimeout(this.incomingRingTimeout);
         this.incomingRingTimeout = null;
@@ -2185,6 +2245,10 @@ export class VoiceCallService {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
       const callId = this.activeCallData.callId;
+
+      // Ensure dedicated call room channel is actively subscribed
+      this.subscribeCallRoom(callId);
+
       const pc = await this.createPeerConnection(callId);
 
       const stream = await this.acquireLocalStream();
@@ -2202,31 +2266,53 @@ export class VoiceCallService {
         }
       }
 
-      this.onStatusChange?.('connecting', this.activeCallData);
       const answer = await pc.createAnswer();
       if (answer.sdp) {
         answer.sdp = optimizeOpusSdp(answer.sdp);
       }
       await pc.setLocalDescription(answer);
 
-      // Broadcast accept across channels
-      await this.broadcastSignaling('call:accept', {
-        callId,
+      console.log('[VoiceCall] [DIAGNOSTIC] WebRTC answer created. Broadcasting call:accept to caller for callId:', callId);
+
+      // BROADCAST call:accept via Supabase (ensuring senderId and full context are sent)
+      const acceptPayload = {
+        callId: callId,
+        answer: { type: answer.type, sdp: answer.sdp },
+        senderId: this.currentUserId,
         institutionId: this.activeCallData.institutionId,
         student: this.activeCallData.student,
-        answer: {
-          type: answer.type,
-          sdp: answer.sdp,
-        },
-        calleeName: this.activeCallData.student.guardian_name || 'অভিভাবক',
+        caller: this.activeCallData.caller,
+        calleeName: this.activeCallData.student?.guardian_name || 'অভিভাবক',
+        calleePhone: this.activeCallData.calleePhone || this.activeCallData.student?.guardian_phone || this.currentPhone,
         timestamp: Date.now(),
+      };
+
+      console.log('[VoiceCall] [DIAGNOSTIC] Broadcasting call:accept & call:answer payload:', {
+        callId,
+        senderId: this.currentUserId,
+        hasAnswer: !!answer.sdp,
       });
+
+      await Promise.all([
+        this.broadcastSignaling('call:accept', acceptPayload),
+        this.broadcastSignaling('call:answer', acceptPayload),
+      ]);
+
+      // Burst pulse after 80ms to guarantee delivery across network handovers
+      setTimeout(() => {
+        this.broadcastSignaling('call:accept', acceptPayload).catch(() => {});
+        this.broadcastSignaling('call:answer', acceptPayload).catch(() => {});
+      }, 80);
 
       this.isCallAnswered = true;
       this.isNativeBridgeActive = false;
       this.currentRingingCallId = null;
+
+      // Set callStatus to 'connected' (NEVER 'calling' or 'connecting')
+      console.log('[VoiceCall] [DIAGNOSTIC] Callee call state now connected. Emitting onStatusChange("connected")');
       this.onStatusChange?.('connected', this.activeCallData);
       callSoundService.playConnectChime();
+
       if (typeof window !== 'undefined' && window.AndroidInterface?.callStarted) {
         try { window.AndroidInterface.callStarted(); } catch {}
       }
@@ -2337,7 +2423,7 @@ export class VoiceCallService {
     this.onStatusChange?.('rejected', this.activeCallData || undefined);
 
     const callData = this.activeCallData || this.getActiveCall();
-    const effectiveCallId = specificCallId || callData?.callId;
+    const effectiveCallId = specificCallId || callData?.callId || this.currentRingingCallId;
 
     if (effectiveCallId) {
       const payload: any = {
@@ -2346,9 +2432,12 @@ export class VoiceCallService {
         student: callData?.student,
         calleePhone: callData?.calleePhone || callData?.student?.guardian_phone || this.currentPhone,
         caller: callData?.caller,
+        senderId: this.currentUserId,
         reason,
         timestamp: Date.now(),
       };
+
+      console.log('[VoiceCall] [DIAGNOSTIC] rejectCall: Broadcasting call:reject & call:rejected BEFORE local cleanup:', payload);
 
       // Trigger push cancellation so notification dismisses everywhere immediately
       fetch('/api/call', {
@@ -2366,6 +2455,7 @@ export class VoiceCallService {
       // Direct WebRTC DataChannel (instant 0ms)
       if (this.dataChannel && this.dataChannel.readyState === 'open') {
         try {
+          console.log('[VoiceCall] [DIAGNOSTIC] Sending call:reject via DataChannel');
           this.dataChannel.send(JSON.stringify({ type: 'call:reject', ...payload }));
         } catch {}
       }
@@ -2375,6 +2465,7 @@ export class VoiceCallService {
         this.broadcastSignaling('call:reject', payload),
         this.broadcastSignaling('call:rejected', payload),
       ]);
+      console.log('[VoiceCall] [DIAGNOSTIC] rejectCall initial broadcast promises resolved');
 
       // Repeat burst pulse after 60ms and 150ms to guarantee delivery across sockets
       setTimeout(() => {
@@ -2399,6 +2490,7 @@ export class VoiceCallService {
       await new Promise((r) => setTimeout(r, 650));
     }
 
+    console.log('[VoiceCall] [DIAGNOSTIC] rejectCall: Finished broadcast signaling, executing local cleanup.');
     this.cleanup();
   }
 
@@ -2406,6 +2498,7 @@ export class VoiceCallService {
    * Call was rejected by other party
    */
   private handleCallRejected(reason?: string) {
+    console.log('[VoiceCall] [DIAGNOSTIC] handleCallRejected received:', reason);
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
@@ -2420,6 +2513,7 @@ export class VoiceCallService {
    * Hang up / End active call
    */
   public async endCall() {
+    console.log('[VoiceCall] [DIAGNOSTIC] endCall invoked. Current activeCall:', this.activeCallData?.callId);
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
@@ -2450,13 +2544,17 @@ export class VoiceCallService {
         student: callData.student,
         calleePhone: callData.calleePhone || callData.student?.guardian_phone,
         caller: callData.caller,
+        senderId: this.currentUserId,
         reason: 'কল সমাপ্ত হয়েছে।',
         timestamp: Date.now(),
       };
 
+      console.log('[VoiceCall] [DIAGNOSTIC] endCall: Broadcasting call:end / call:ended BEFORE local cleanup:', payload);
+
       // Direct WebRTC DataChannel (instant 0ms)
       if (this.dataChannel && this.dataChannel.readyState === 'open') {
         try {
+          console.log('[VoiceCall] [DIAGNOSTIC] Sending call:end via DataChannel');
           this.dataChannel.send(JSON.stringify({ type: 'call:end', ...payload }));
         } catch {}
       }
@@ -2465,12 +2563,16 @@ export class VoiceCallService {
       await Promise.all([
         this.broadcastSignaling('call:end', payload),
         this.broadcastSignaling('call:ended', payload),
+        // If caller was still ringing, also signal call:reject to stop admin ringing instantly
+        this.broadcastSignaling('call:reject', payload),
       ]);
+      console.log('[VoiceCall] [DIAGNOSTIC] endCall initial broadcast promises resolved');
 
       // Repeat burst pulse after 60ms
       setTimeout(() => {
         this.broadcastSignaling('call:end', payload).catch(() => {});
         this.broadcastSignaling('call:ended', payload).catch(() => {});
+        this.broadcastSignaling('call:reject', payload).catch(() => {});
       }, 60);
 
       // Cross-tab broadcast
@@ -2483,9 +2585,10 @@ export class VoiceCallService {
       } catch {}
 
       // Safe buffer so socket packets leave the browser before channel teardown
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 450));
     }
 
+    console.log('[VoiceCall] [DIAGNOSTIC] endCall: Finished broadcast signaling, executing local cleanup.');
     this.cleanup();
   }
 

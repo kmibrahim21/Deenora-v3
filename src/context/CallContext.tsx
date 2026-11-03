@@ -62,6 +62,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     voiceCallService.onStatusChange = (status, data) => {
       setCallStatus(status);
+      setIsCaller(voiceCallService.getIsCaller());
       if (data) {
         setActiveCall(data);
       }
@@ -163,8 +164,11 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (cleanAction === 'accept_call' || cleanAction === 'answer' || cleanAction === 'accept') {
         native('stopRinging');
+        setIsCaller(false);
         const currentActive = activeCall || voiceCallService.getActiveCall();
         if (currentActive && (!callId || currentActive.callId === callId)) {
+          currentActive.role = 'callee';
+          currentActive.isCaller = false;
           setActiveCall(currentActive);
           setCallStatus('connected');
         } else if (callId) {
@@ -172,6 +176,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         await voiceCallService.answerIncomingCall(callId);
       } else if (cleanAction === 'incoming' || cleanAction === 'incoming_call' || cleanAction === 'show_incoming' || cleanAction === 'ring') {
+        setIsCaller(false);
         autoAnswerRef.current = null;
         await voiceCallService.showIncomingCallUI(callId);
       } else if (cleanAction === 'reject_call' || cleanAction === 'decline' || cleanAction === 'reject' || cleanAction === 'end' || cleanAction === 'hangup' || cleanAction === 'end_call') {
@@ -215,10 +220,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log(`Deenora: handleNativeCallAction ${act} for ${cId}`);
           const a = String(act || '').toLowerCase().trim();
           if (a === 'answer' || a === 'accept' || a === 'accept_call') {
+            setIsCaller(false);
             return voiceCallService.answerIncomingCall(cId);
           } else if (a === 'decline' || a === 'end' || a === 'reject' || a === 'hangup' || a === 'reject_call' || a === 'end_call') {
             return voiceCallService.rejectCall(cId, true);
           } else if (a === 'incoming' || a === 'incoming_call' || a === 'show_incoming' || a === 'ring') {
+            setIsCaller(false);
             return voiceCallService.showIncomingCallUI(cId);
           }
           return voiceCallService.handleNativeAction(act, cId);
@@ -277,8 +284,11 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (action === 'accept_call' || action === 'answer' || action === 'accept') {
+      setIsCaller(false);
       const pendingCall = activeCall || voiceCallService.getActiveCall();
       if (pendingCall && (!targetCallId || pendingCall.callId === targetCallId)) {
+        pendingCall.role = 'callee';
+        pendingCall.isCaller = false;
         setActiveCall(pendingCall);
         console.log('[CallContext] Auto-answering call from URL parameter (?answer=1):', pendingCall.callId);
         native('stopRinging');

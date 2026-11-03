@@ -105,7 +105,8 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
 
   const student = callData.student || { id: '', name: 'শিক্ষার্থী' };
   const caller = callData.caller || { id: '', name: 'মাদরাসা' };
-  const isIncoming = status === 'incoming' && !isCaller;
+  const effectiveIsCaller = Boolean(isCaller && callData?.role !== 'callee' && callData?.isCaller !== false);
+  const isIncoming = status === 'incoming' && !effectiveIsCaller;
 
   const isGenericOrEmail = (str?: string) => {
     if (!str) return true;
@@ -223,8 +224,8 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
     );
   }
 
-  // 2. ADMIN CONNECTED CALL SCREEN (matches ScreenConnected from prototype)
-  if (status === 'connected') {
+  // 2. CONNECTED / IN-CALL SCREEN (For caller AND callee when connected/connecting)
+  if (status === 'connected' || (!effectiveIsCaller && status === 'connecting')) {
     return (
       <div className="fixed inset-0 z-[99999] w-screen h-screen min-h-screen bg-gradient-to-b from-[#071B36] to-[#1a4185] text-white flex flex-col items-center justify-between py-10 px-6 select-none animate-in fade-in duration-300 overflow-hidden">
         
@@ -258,45 +259,56 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
           <div className="w-full max-w-sm rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-4 shadow-2xl animate-in slide-in-from-top-4 duration-200 text-xs mt-2">
             <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
               <span className="font-bold text-[#60A5FA] flex items-center gap-1.5">
-                <Sparkles size={14} /> শিক্ষার্থী পরিচিতি
+                <Sparkles size={14} /> {effectiveIsCaller ? 'শিক্ষার্থী পরিচিতি' : 'প্রতিষ্ঠানের বিবরণ'}
               </span>
               <button onClick={() => setShowStudentDetails(false)} className="text-white/60 hover:text-white">✕</button>
             </div>
             <div className="space-y-1.5 text-white/90">
-              <p><span className="text-white/60">শ্রেণি:</span> {student.class_name || 'N/A'}</p>
-              <p><span className="text-white/60">রোল:</span> {student.roll || 'N/A'}</p>
-              <p><span className="text-white/60">অভিভাবক:</span> {student.guardian_name || 'N/A'}</p>
-              <p><span className="text-white/60">মোবাইল:</span> <span className="font-mono">{student.guardian_phone || callData.calleePhone || 'N/A'}</span></p>
+              <p><span className="text-white/60">প্রতিষ্ঠান:</span> {displayInstName}</p>
+              {student.name && <p><span className="text-white/60">শিক্ষার্থী:</span> {student.name}</p>}
+              {student.class_name && <p><span className="text-white/60">শ্রেণি:</span> {student.class_name}</p>}
+              {student.roll && <p><span className="text-white/60">রোল:</span> {student.roll}</p>}
+              <p><span className="text-white/60">কলকারী:</span> {callerPersonName || displayInstName}</p>
             </div>
           </div>
         )}
 
-        {/* Center: Avatar, Student Name, Class/Roll, and Digital Timer Pill */}
+        {/* Center: Avatar, Display Name, Subtitle, and Digital Timer Pill */}
         <div className="flex flex-col items-center mt-4 sm:mt-8">
           {/* Avatar (lg: w-24 h-24 text-3xl) */}
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-3xl shadow-xl overflow-hidden border-2 border-white/20 shrink-0">
-            {student.photo_url ? (
-              <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            {effectiveIsCaller ? (
+              student.photo_url ? (
+                <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <span>{getInitials(student.name)}</span>
+              )
             ) : (
-              <span>{getInitials(student.name)}</span>
+              <GraduationCap className="text-white w-12 h-12" />
             )}
           </div>
 
           <h2 className="text-white text-2xl font-semibold mt-4 mb-1 text-center font-noto">
-            {student.name || 'শিক্ষার্থী'}
+            {effectiveIsCaller ? (student.name || 'শিক্ষার্থী') : (displayInstName || 'শিক্ষা প্রতিষ্ঠান')}
           </h2>
 
-          <p className="text-white/60 text-sm mb-4 font-noto">
-            {student.class_name ? `${student.class_name}` : ''}
-            {student.class_name && student.roll ? ' • ' : ''}
-            {student.roll ? `Roll ${student.roll}` : ''}
+          <p className="text-white/60 text-sm mb-4 font-noto text-center">
+            {effectiveIsCaller ? (
+              <>
+                {student.class_name ? `${student.class_name}` : ''}
+                {student.class_name && student.roll ? ' • ' : ''}
+                {student.roll ? `Roll ${student.roll}` : ''}
+              </>
+            ) : (
+              callerPersonName || (student.name ? `শিক্ষার্থী: ${student.name}` : 'মাদরাসা ভয়েস কল')
+            )}
           </p>
 
-          {/* Timer Pill */}
+          {/* Timer / Connection Status Pill */}
           <div className="bg-white/10 px-5 py-1.5 rounded-full backdrop-blur-sm border border-white/10 flex items-center gap-2 shadow-inner">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400 animate-ping'}`} />
             <p className="text-white font-mono text-lg tracking-wider font-bold">
-              {formatDuration(duration)}
+              {status === 'connected' ? formatDuration(duration) : 'সংযোগ হচ্ছে...'}
             </p>
           </div>
         </div>
@@ -392,8 +404,8 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   }
 
   // 3. ADMIN OUTGOING CALL SCREEN (matches ScreenAdminOutgoing from prototype)
-  // Handles: 'calling', 'ringing', 'connecting', 'reconnecting', and terminal states
-  if (isCaller || (!isIncoming && status !== 'incoming')) {
+  // Handles: 'calling', 'ringing', 'connecting', 'reconnecting', and terminal states ONLY for caller
+  if (effectiveIsCaller) {
     const isTerminated = status === 'rejected' || status === 'ended' || status === 'busy' || status === 'failed';
     const statusText =
       status === 'ringing'
@@ -571,30 +583,48 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
         </p>
       </div>
 
-      {/* Decline and Accept Buttons (Matching prototype: Red & Green) */}
-      <div className="flex w-full justify-between max-w-xs px-4 mb-8">
-        <div className="flex flex-col items-center gap-3">
-          <button
-            onClick={onReject}
-            className="w-[72px] h-[72px] bg-[#EF4444] rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 active:scale-95 hover:bg-red-600 transition-all"
-            title="কেটে দিন"
-          >
-            <PhoneOff className="text-white w-8 h-8" />
-          </button>
-          <span className="text-white/70 text-sm font-medium font-noto">Decline</span>
-        </div>
+      {/* Decline and Accept Buttons or Terminal Status Badge */}
+      {status === 'incoming' ? (
+        <div className="flex w-full justify-between max-w-xs px-4 mb-8">
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={onReject}
+              className="w-[72px] h-[72px] bg-[#EF4444] rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 active:scale-95 hover:bg-red-600 transition-all"
+              title="কেটে দিন"
+            >
+              <PhoneOff className="text-white w-8 h-8" />
+            </button>
+            <span className="text-white/70 text-sm font-medium font-noto">Decline</span>
+          </div>
 
-        <div className="flex flex-col items-center gap-3">
-          <button
-            onClick={onAccept}
-            className="w-[72px] h-[72px] bg-[#16A34A] rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 animate-bounce active:scale-95 hover:bg-green-700 transition-all"
-            title="রিসিভ করুন"
-          >
-            <Phone className="text-white w-8 h-8 fill-current" />
-          </button>
-          <span className="text-white/70 text-sm font-medium font-noto">Accept</span>
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={onAccept}
+              className="w-[72px] h-[72px] bg-[#16A34A] rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 animate-bounce active:scale-95 hover:bg-green-700 transition-all"
+              title="রিসিভ করুন"
+            >
+              <Phone className="text-white w-8 h-8 fill-current" />
+            </button>
+            <span className="text-white/70 text-sm font-medium font-noto">Accept</span>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col items-center mb-10 w-full max-w-xs">
+          <div className="px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-center shadow-lg">
+            <p className="text-white/90 text-sm font-noto">
+              {status === 'ended'
+                ? 'কল সমাপ্ত হয়েছে (Call Ended)'
+                : status === 'rejected'
+                ? 'কলটি কেটে দেওয়া হয়েছে (Declined)'
+                : status === 'busy'
+                ? 'ব্যস্ত আছেন (Busy)'
+                : status === 'failed'
+                ? 'সংযোগ স্থাপন ব্যর্থ হয়েছে'
+                : 'সংযোগ বিচ্ছিন্ন হচ্ছে...'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
