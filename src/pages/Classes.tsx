@@ -234,13 +234,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const handleDeleteClass = async () => {
     if (!showDeleteConfirm || !madrasah) return;
 
-    if (showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0) {
-      alert(lang === 'bn' 
-        ? `"${showDeleteConfirm.class_name}" শ্রেণিতে বর্তমানে ${showDeleteConfirm.student_count} জন শিক্ষার্থী রয়েছে। শিক্ষার্থী যুক্ত থাকা অবস্থায় শ্রেণি ডিলিট করা সম্ভব নয়। অনুগ্রহ করে প্রথমে শিক্ষার্থীদের অন্য শ্রেণিতে প্রমোশন/ট্রান্সফার করুন অথবা তাদের রেকর্ড মুছে ফেলুন।`
-        : `There are currently ${showDeleteConfirm.student_count} students in "${showDeleteConfirm.class_name}". Cannot delete a class with active students. Please promote, transfer, or remove the students first.`);
-      return;
-    }
-
     setModalLoading(true);
     
     // Invalidate
@@ -251,15 +244,27 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       setClasses(prev => prev.filter(c => c.id !== showDeleteConfirm.id));
 
       if (navigator.onLine) {
+        // If there are students associated with this class, unlink them first so foreign key constraint does not block
+        if (showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0) {
+          await supabase.from('students').update({ class_id: null }).eq('class_id', showDeleteConfirm.id);
+        }
+
         const { error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
         if (error) {
           // Check for foreign key constraint violation (PostgreSQL error code 23503)
           if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
-             throw new Error(lang === 'bn' 
-               ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ভর্তি, ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত। প্রথমে সেই যুক্ত তথ্যগুলো অপসারণ করুন।' 
-               : 'This class cannot be deleted because it is linked to other records (e.g. fees, exams, routine). Please remove the linked records first.');
+             // Attempt unlinking students and sections if not done already
+             await supabase.from('students').update({ class_id: null }).eq('class_id', showDeleteConfirm.id);
+             await supabase.from('sections').delete().eq('class_id', showDeleteConfirm.id);
+             const { error: retryError } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
+             if (retryError) {
+               throw new Error(lang === 'bn' 
+                 ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত।' 
+                 : 'This class cannot be deleted because it is linked to other records (e.g. fees, exams, routine).');
+             }
+          } else {
+             throw error;
           }
-          throw error;
         }
       } else {
         // Offline check (limited)
@@ -386,19 +391,34 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
 
       {showDeleteConfirm && createPortal(
         <div className="modal-overlay bg-[#080A12]/40 backdrop-blur-2xl animate-in fade-in duration-300">
-          <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-red-50'} w-full max-w-sm rounded-[3.5rem] p-10 shadow-bubble border text-center space-y-6 animate-in zoom-in-95 duration-500`}>
-             <div className={`w-20 h-20 ${isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-500'} rounded-full flex items-center justify-center mx-auto shadow-inner border`}>
+          <div className={`${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} w-full max-w-sm rounded-[3.5rem] p-8 sm:p-10 shadow-bubble border text-center space-y-6 animate-in zoom-in-95 duration-300`}>
+             <div className={`w-20 h-20 ${isDark ? "bg-red-900/30 text-red-400 border-red-900/50" : "bg-red-50 text-red-500"} rounded-full flex items-center justify-center mx-auto shadow-inner border`}>
                 <AlertTriangle size={40} />
              </div>
              <div>
-                <h3 className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-800'} font-noto`}>{t('confirm_delete', lang)}</h3>
-                <p className="text-[11px] font-bold text-slate-400 mt-2 uppercase tracking-wider px-4">"{showDeleteConfirm.class_name}" শ্রেণির সকল শিক্ষার্থীর তথ্য মুছে যাবে।</p>
+                <h3 className={`text-xl font-black ${isDark ? "text-white" : "text-slate-800"} font-noto`}>
+                  {lang === "bn" ? "আপনি কি নিশ্চিতভাবে ডিলিট করতে চান?" : "Are you sure you want to delete?"}
+                </h3>
+                <p className="text-[12px] font-bold text-slate-500 dark:text-slate-400 mt-2 font-noto px-2">
+                  {lang === "bn"
+                    ? `"${showDeleteConfirm.class_name}" শ্রেণিটি স্থায়ীভাবে মুছে ফেলা হবে।`
+                    : `"${showDeleteConfirm.class_name}" class will be permanently deleted.`}
+                </p>
+                {showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0 ? (
+                  <p className="text-[11px] font-bold text-red-500 dark:text-red-400 mt-2 bg-red-50 dark:bg-red-950/40 p-3 rounded-2xl border border-red-100 dark:border-red-900/40 font-noto">
+                    {lang === "bn"
+                      ? `সতর্কতা: এই শ্রেণিতে বর্তমানে ${showDeleteConfirm.student_count} জন শিক্ষার্থী যুক্ত রয়েছে।`
+                      : `Warning: This class currently has ${showDeleteConfirm.student_count} active students.`}
+                  </p>
+                ) : null}
              </div>
              <div className="flex flex-col gap-3 pt-2">
-                <button onClick={handleDeleteClass} disabled={modalLoading} className="w-full py-5 bg-red-500 text-white font-black rounded-full shadow-xl shadow-red-100 active:scale-95 transition-all flex items-center justify-center text-md">
-                  {modalLoading ? <Loader2 className="animate-spin" size={22} /> : 'ডিলিট করুন'}
+                <button onClick={handleDeleteClass} disabled={modalLoading} className="w-full py-5 bg-red-600 hover:bg-red-700 text-white font-black rounded-full shadow-xl shadow-red-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center text-md font-noto">
+                  {modalLoading ? <Loader2 className="animate-spin" size={22} /> : (lang === "bn" ? "ডিলিট করুন" : "Delete Class")}
                 </button>
-                <button onClick={() => setShowDeleteConfirm(null)} className={`w-full py-4 ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-400'} font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest`}>বাতিল</button>
+                <button onClick={() => setShowDeleteConfirm(null)} className={`w-full py-4 ${isDark ? "bg-[#1E293B] text-slate-400" : "bg-slate-50 text-slate-400"} font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest`}>
+                  {lang === "bn" ? "বাতিল" : "Cancel"}
+                </button>
              </div>
           </div>
         </div>,
