@@ -213,6 +213,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return Array.from(foundTokens);
   }
 
+  async function findTargetFcmToken(
+    calleePhone?: string | null | undefined,
+    studentId?: string | null | undefined,
+    userId?: string | null | undefined
+  ): Promise<string | null> {
+    const tokens = await findTargetFcmTokens(calleePhone, studentId, userId);
+    return tokens[0] || null;
+  }
+
   async function resolveServiceAccount(institutionId?: string): Promise<FirebaseServiceAccount | null> {
     if (serviceAccount) return serviceAccount;
     if (institutionId && SUPABASE_URL && SUPABASE_KEY) {
@@ -332,6 +341,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Helper: Check if the callee device has already acknowledged the call (ringing / answered / rejected / ended)
+  async function hasCallBeenAcknowledged(targetCallId?: string | null): Promise<boolean> {
+    const cleanId = String(targetCallId || '').trim();
+    if (!cleanId) return false;
+
+    const ackEvents = new Set([
+      'call:ringing',
+      'call:accept',
+      'call:answer',
+      'call:reject',
+      'call:rejected',
+      'call:end',
+      'call:ended',
+      'call:cancel',
+      'call:busy',
+    ]);
+
+    const memList = activeCallSignals[cleanId] || [];
+    if (memList.some((s) => ackEvents.has(String(s.event || '').trim()))) {
+      return true;
+    }
+
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const checkUrl = `${SUPABASE_URL}/rest/v1/call_signals?select=event&call_id=eq.${encodeURIComponent(cleanId)}&limit=20`;
+        const res = await fetch(checkUrl, {
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+          },
+        });
+        if (res.ok) {
+          const rows = await res.json();
+          if (Array.isArray(rows) && rows.some((r: any) => ackEvents.has(String(r?.event || '').trim()))) {
+            return true;
+          }
+        }
+      } catch {}
+    }
+
+    return false;
+  }
+
   // 2. INITIATE HIGH-PRIORITY CALL PUSH TO WAKE UP ANDROID FULLSCREEN INTENT
   if (req.method === 'POST' && (action === 'initiate_call_push' || req.body?.type === 'incoming_call')) {
     try {
@@ -400,7 +452,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // Send pure DATA-ONLY push to ALL active devices for simultaneous ringing without OS tray block
+      // Wave 1 (0s): Pure Data-Only High-Priority Push to wake FcmService -> CallService
       const sendResults = await Promise.all(
         targetTokens.map(async (tok) => {
           try {
@@ -416,6 +468,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   android: {
                     priority: 'HIGH',
                     ttl: '120s',
+                    direct_boot_ok: true,
                   },
                   data: fcmDataPayload,
                   apns: {
@@ -481,6 +534,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      // Smart Wave 2 Auto-Escalation (3s):
+      // If the app is open, minimized, or wakes up via FcmService, CallService sends 'call:ringing' within ~500ms.
+      // If the user swipe-killed the app on Tecno/HiOS/MIUI (Force-Stopped), Data-Only FCM is blocked by the ROM
+      // and no 'call:ringing' arrives. In that case, automatically send a system-rendered call alert notification
+      // on channel 'deenora_calls_alert_v19' (which plays the phone's ringtone and opens MainActivity on tap).
+      let wave2Results: any = null;
+      let wave2SkippedReason: string | null = null;
+      if (call_id) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const alreadyAcked = await hasCallBeenAcknowledged(String(call_id));
+        if (alreadyAcked) {
+          wave2SkippedReason = 'Device already acknowledged call (ringing/answered/declined)';
+        } else {
+          const callBodyText = student_name
+            ? `ইনকামিং ভয়েস কল (${student_name}) — উত্তর দিতে ট্যাপ করুন`
+            : 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন';
+          const wave2DataPayload: Record<string, string> = {
+            ...fcmDataPayload,
+            CALLER_NAME: callerLabel,
+            CALL_ID: String(call_id || ''),
+          };
+          wave2Results = await Promise.all(
+            targetTokens.map(async (tok) => {
+              try {
+                const v2Res = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${v1AccessToken}`,
+                  },
+                  body: JSON.stringify({
+                    message: {
+                      token: tok,
+                      android: {
+                        priority: 'HIGH',
+                        ttl: '120s',
+                        direct_boot_ok: true,
+                        notification: {
+                          channel_id: 'deenora_calls_alert_v19',
+                          title: callerLabel,
+                          body: callBodyText,
+                          sound: 'default',
+                          default_sound: true,
+                          default_vibrate_timings: true,
+                          click_action: 'OPEN_ACTIVITY_1',
+                          tag: 'incoming-voice-call',
+                          notification_priority: 'PRIORITY_MAX',
+                          visibility: 'PUBLIC',
+                        },
+                      },
+                      notification: {
+                        title: callerLabel,
+                        body: callBodyText,
+                      },
+                      data: wave2DataPayload,
+                    },
+                  }),
+                });
+                const v2Json = await v2Res.json().catch(() => ({}));
+                return { token: tok.slice(0, 10), status: v2Res.status, result: v2Json };
+              } catch (e: any) {
+                return { token: tok.slice(0, 10), error: e.message };
+              }
+            })
+          );
+        }
+      }
+
       return res.status(200).json({
         success: true,
         fcmSent: true,
@@ -488,6 +609,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         devicesNotified: sendResults.length,
         targetTokenFound: true,
         fcmResults: sendResults,
+        wave2Results,
+        wave2SkippedReason,
         payload: fcmDataPayload,
       });
     } catch (err: any) {
@@ -496,7 +619,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 2b. ESCALATION PUSH
+  // 2b. ESCALATION PUSH — system-rendered notification for swipe-killed phones.
   if (req.method === 'POST' && action === 'escalate_call_push') {
     try {
       const payload = req.body?.payload || req.body || {};
@@ -508,6 +631,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         institution_id,
         callee_phone,
       } = payload;
+
+      if (call_id && (await hasCallBeenAcknowledged(String(call_id)))) {
+        return res.status(200).json({
+          success: true,
+          fcmSent: false,
+          skipped: true,
+          message: 'Device already acknowledged call (ringing/answered/declined), skipping escalation push.',
+        });
+      }
 
       const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
       console.log('[Call API] escalate_call_push attempt:', JSON.stringify({
@@ -543,6 +675,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
+      const callBodyText = student_name
+        ? `ইনকামিং ভয়েস কল (${student_name}) — উত্তর দিতে ট্যাপ করুন`
+        : 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন';
       const fcmDataPayload: Record<string, string> = {
         type: 'incoming_call',
         call_id: String(call_id || ''),
@@ -577,6 +712,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   android: {
                     priority: 'HIGH',
                     ttl: '120s',
+                    direct_boot_ok: true,
+                    notification: {
+                      channel_id: 'deenora_calls_alert_v19',
+                      title: callerLabel,
+                      body: callBodyText,
+                      sound: 'default',
+                      default_sound: true,
+                      default_vibrate_timings: true,
+                      click_action: 'OPEN_ACTIVITY_1',
+                      tag: 'incoming-voice-call',
+                      notification_priority: 'PRIORITY_MAX',
+                      visibility: 'PUBLIC',
+                    },
+                  },
+                  notification: {
+                    title: callerLabel,
+                    body: callBodyText,
                   },
                   data: fcmDataPayload,
                   apns: {
@@ -590,7 +742,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     headers: { Urgency: 'high' },
                     notification: {
                       title: callerLabel,
-                      body: 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন',
+                      body: callBodyText,
                       sound: 'default',
                       tag: 'incoming-voice-call',
                     },
@@ -624,7 +776,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3. TASK 4a: CANCEL CALL PUSH TO DISMISS ANDROID INCOMING CALL UI AND STOP RINGING
+  // 3. CANCEL CALL PUSH TO DISMISS ANDROID INCOMING CALL UI AND STOP RINGING
   if (req.method === 'POST' && action === 'cancel_call_push') {
     try {
       const payload = req.body?.payload || req.body || {};
@@ -703,7 +855,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3b. RELAY CALL SIGNAL
+  // 3b. RELAY CALL SIGNAL (PERSISTENT SUPABASE CALL_SIGNALS + HIGH-PRIORITY FCM BACKEND RELAY)
   if (req.method === 'POST' && action === 'relay_call_signal') {
     try {
       const event = String(req.body?.event || req.body?.type || '').trim();
@@ -1113,7 +1265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // 5b. GET RELAYED CALL SIGNALS
+  // 5b. GET RELAYED CALL SIGNALS (SUPABASE CALL_SIGNALS + HTTP POLLING FALLBACK)
   if (action === 'get_call_signals' || (req.query && req.query.action === 'get_call_signals')) {
     const targetCallId = String(req.body?.call_id || req.query?.call_id || '').trim();
     if (!targetCallId) {
