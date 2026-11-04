@@ -144,7 +144,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (event.data.type === 'REJECT_CALL_FROM_NOTIFICATION') {
         console.log('[CallContext] Received REJECT_CALL_FROM_NOTIFICATION from SW');
         native('stopRinging');
-        voiceCallService.rejectCall('মোবাইলের নোটিফিকেশন থেকে কল বাতিল করা হয়েছে।');
+        voiceCallService.rejectCall('মোবাইলের নোটিফিকেশন থেকে কল বাতিল করা হয়েছে।', event.data?.callId || undefined, true);
       }
     };
 
@@ -426,7 +426,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const rejectCall = useCallback(async (reason?: string, specificCallId?: string) => {
     native('stopRinging');
-    await voiceCallService.rejectCall(reason, specificCallId);
+    await voiceCallService.rejectCall(reason, specificCallId, true);
   }, []);
 
   const endCall = useCallback(async () => {
