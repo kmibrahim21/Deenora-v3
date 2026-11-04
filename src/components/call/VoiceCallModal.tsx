@@ -71,30 +71,6 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
     }
   }, [status]);
 
-  // Defense-in-depth: If native call UI mode is active and user role is parent/guardian, do NOT render web modal
-  const isNativeUi =
-    typeof window !== 'undefined' &&
-    (new URLSearchParams(window.location.search).get('native_ui') === '1' ||
-      (window as any).__nativeCallUi === true ||
-      (window as any).__NATIVE_UI_MODE__ === true ||
-      (window as any).AndroidInterface?.isNativeCallUi?.() === true ||
-      (window as any).AndroidInterface?.isNativeUi?.() === true ||
-      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('deenora_native_ui') === '1'));
-
-  const isParentRole =
-    !isCaller ||
-    (typeof window !== 'undefined' &&
-      (Boolean(localStorage.getItem('parent_session')) ||
-        Boolean(localStorage.getItem('parent_phone')) ||
-        (() => {
-          try {
-            const u = localStorage.getItem('user_profile');
-            return u ? JSON.parse(u).role === 'parent' : false;
-          } catch {
-            return false;
-          }
-        })()));
-
   if (status === 'idle' || !callData) return null;
 
   const formatDuration = (totalSeconds: number) => {
@@ -106,7 +82,6 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   const student = callData.student || { id: '', name: 'শিক্ষার্থী' };
   const caller = callData.caller || { id: '', name: 'মাদরাসা' };
   const effectiveIsCaller = Boolean(isCaller && callData?.role !== 'callee' && callData?.isCaller !== false);
-  const isIncoming = status === 'incoming' && !effectiveIsCaller;
 
   const isGenericOrEmail = (str?: string) => {
     if (!str) return true;
@@ -600,29 +575,17 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
           <div className="flex flex-col items-center gap-3">
             <button
               onClick={onAccept}
-              className="w-[72px] h-[72px] bg-[#16A34A] rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 animate-bounce active:scale-95 hover:bg-green-700 transition-all"
+              className="w-[72px] h-[72px] bg-[#10B981] rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 hover:bg-emerald-600 transition-all animate-bounce"
               title="রিসিভ করুন"
             >
-              <Phone className="text-white w-8 h-8 fill-current" />
+              <Phone className="text-white w-8 h-8" />
             </button>
             <span className="text-white/70 text-sm font-medium font-noto">Accept</span>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center mb-10 w-full max-w-xs">
-          <div className="px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-center shadow-lg">
-            <p className="text-white/90 text-sm font-noto">
-              {status === 'ended'
-                ? 'কল সমাপ্ত হয়েছে (Call Ended)'
-                : status === 'rejected'
-                ? 'কলটি কেটে দেওয়া হয়েছে (Declined)'
-                : status === 'busy'
-                ? 'ব্যস্ত আছেন (Busy)'
-                : status === 'failed'
-                ? 'সংযোগ স্থাপন ব্যর্থ হয়েছে'
-                : 'সংযোগ বিচ্ছিন্ন হচ্ছে...'}
-            </p>
-          </div>
+        <div className="mb-10 px-6 py-2.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-sm font-noto text-white/90">
+          {status === 'busy' ? 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন' : 'কল সমাপ্ত হয়েছে'}
         </div>
       )}
     </div>
