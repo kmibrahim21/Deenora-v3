@@ -703,7 +703,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3b. RELAY CALL SIGNAL (PERSISTENT SUPABASE CALL_SIGNALS + HIGH-PRIORITY FCM BACKEND RELAY)
+  // 3b. RELAY CALL SIGNAL
   if (req.method === 'POST' && action === 'relay_call_signal') {
     try {
       const event = String(req.body?.event || req.body?.type || '').trim();
