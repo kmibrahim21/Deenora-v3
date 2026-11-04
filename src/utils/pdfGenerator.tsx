@@ -1280,9 +1280,8 @@ export const generateFeeReceiptPDF_Universal = async (
         const heightPx = receiptEl.offsetHeight;
         const heightMm = heightPx / 3.78;
         
-        imgData = await toJpeg(receiptEl, {
+        imgData = await toPng(receiptEl, {
             pixelRatio: 3,
-            quality: 1.0,
             backgroundColor: '#ffffff',
             width: pixelWidth,
             height: heightPx,
@@ -1294,12 +1293,11 @@ export const generateFeeReceiptPDF_Universal = async (
             format: [widthMm, heightMm],
             putOnlyUsedFonts: true
         });
-        doc.addImage(imgData, 'JPEG', 0, 0, widthMm, heightMm, undefined, 'FAST');
+        doc.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'MEDIUM');
     } else {
-        // Standard A4 PDF Download
-        imgData = await toJpeg(receiptEl, {
-            pixelRatio: 1.5,
-            quality: 0.9,
+        // Standard A4 PDF Download - High contrast lossless PNG rendering
+        imgData = await toPng(receiptEl, {
+            pixelRatio: 2.5,
             backgroundColor: '#ffffff',
             width: 794,
             height: 1123,
@@ -1308,7 +1306,7 @@ export const generateFeeReceiptPDF_Universal = async (
         doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'MEDIUM');
     }
     
     onProgress?.(80);
