@@ -8,10 +8,8 @@ import {
   VolumeX,
   Grid,
   GraduationCap,
-  User,
   Minimize2,
   Maximize2,
-  X,
   Lock,
   Sparkles,
   Info
@@ -100,11 +98,11 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   };
 
   const rawInstName = callData.institutionName || caller?.institutionName || '';
-  const displayInstName = isGenericOrEmail(rawInstName) ? 'শিক্ষা প্রতিষ্ঠান' : rawInstName.trim();
+  const displayInstName = isGenericOrEmail(rawInstName) ? 'Deenora Madrasa' : rawInstName.trim();
   const callerPersonName = !isGenericOrEmail(caller?.name) ? caller?.name?.trim() : '';
 
   const getInitials = (name?: string) => {
-    if (!name) return 'DH';
+    if (!name) return 'DM';
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -133,166 +131,319 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
     } catch {}
   };
 
-  // 1. MINIMIZED FLOATING VIEW (Compact Dock)
+  // Primary & secondary titles matching Design 1
+  const primaryTitle = effectiveIsCaller
+    ? student.name || 'শিক্ষার্থী'
+    : callerPersonName || displayInstName;
+
+  const secondarySubtitle = effectiveIsCaller
+    ? `${student.guardian_name || 'অভিভাবক'}${student.class_name ? ` • ${student.class_name}` : ''}`
+    : callerPersonName
+    ? displayInstName
+    : student.name
+    ? `শিক্ষার্থী: ${student.name}`
+    : 'মাদরাসা ভয়েস কল';
+
+  const statusLineText =
+    status === 'connected'
+      ? `Deenora Voice Call • ${formatDuration(duration)}`
+      : status === 'ringing'
+      ? 'Deenora Voice Call • Ringing...'
+      : status === 'connecting' || status === 'reconnecting'
+      ? 'Deenora Voice Call • Connecting...'
+      : status === 'busy'
+      ? 'Deenora Voice Call • Busy'
+      : status === 'rejected'
+      ? 'Deenora Voice Call • Declined'
+      : status === 'ended'
+      ? 'Deenora Voice Call • Ended'
+      : status === 'failed'
+      ? 'Deenora Voice Call • Failed'
+      : 'Deenora Voice Call • Ringing...';
+
+  // 1. FLOATING NOTIFICATION BANNER (Design 1 Top Card Style when Minimized)
   if (isMinimized) {
     return (
-      <div className="fixed bottom-6 right-6 z-[99999] animate-in slide-in-from-bottom-5 duration-300">
-        <div className="flex items-center gap-3.5 px-4 py-3 rounded-3xl bg-[#071B36]/95 border border-white/10 shadow-2xl backdrop-blur-2xl text-white ring-1 ring-white/10">
-          {/* Mini Avatar */}
-          <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden flex items-center justify-center shrink-0 font-bold text-sm shadow-md">
-            {student.photo_url ? (
-              <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              <span>{getInitials(student.name)}</span>
-            )}
-            <span
-              className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#071B36] ${
-                status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400 animate-ping'
-              }`}
-            />
-          </div>
-
-          {/* Mini Info */}
-          <div className="flex flex-col min-w-[120px]">
-            <span className="text-xs font-bold font-noto truncate max-w-[150px]">{student.name}</span>
-            <span className="text-[11px] font-mono text-emerald-400 font-semibold">
-              {status === 'connected'
-                ? formatDuration(duration)
-                : status === 'ringing'
-                ? 'রিং বাজছে...'
-                : status === 'busy'
-                ? 'ব্যস্ত আছেন'
-                : 'কল হচ্ছে...'}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] w-[94%] max-w-[400px] animate-in slide-in-from-top-5 duration-300">
+        <div className="flex items-center gap-3.5 px-4 py-3.5 rounded-[24px] bg-gradient-to-br from-[#D8E8E3]/95 via-[#C3DCD4]/95 to-[#B2CFC6]/95 border border-white/70 shadow-[0_16px_40px_rgba(0,0,0,0.45)] backdrop-blur-2xl text-[#042F26]">
+          {/* Left Avatar with Green Call Badge */}
+          <div className="relative w-14 h-14 shrink-0">
+            <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#0A3F32] to-[#04241C] border border-[#6EE7B7]/40 overflow-hidden flex items-center justify-center text-[#6EE7B7] font-bold text-base shadow-md">
+              {student.photo_url ? (
+                <img
+                  src={student.photo_url}
+                  alt={primaryTitle}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <GraduationCap className="w-7 h-7 text-[#6EE7B7]" />
+              )}
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#16A34A] border-2 border-[#D8E8E3] flex items-center justify-center shadow">
+              <Phone size={10} className="text-white fill-current" />
             </span>
           </div>
 
-          {/* Controls */}
-          {status === 'connected' && (
-            <button
-              onClick={onToggleMute}
-              className={`p-2.5 rounded-full transition-all border ${
-                isMuted ? 'bg-white text-[#10233F] border-white' : 'bg-white/10 text-white border-white/20'
-              }`}
-              title={isMuted ? 'আনমিউট' : 'মিউট'}
-            >
-              {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
-            </button>
-          )}
+          {/* Right Info + Pill Action Buttons */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1 mb-2">
+              <p className="text-xs sm:text-[13px] font-bold text-[#042F26] truncate font-noto">
+                {displayInstName}{' '}
+                <span className="font-normal text-[#1E4E42]">
+                  • {status === 'connected' ? formatDuration(duration) : 'Incoming Voice Call'}
+                </span>
+              </p>
+              <button
+                onClick={() => setIsMinimized(false)}
+                className="p-1 rounded-full hover:bg-black/10 text-[#042F26]/70 transition-colors shrink-0"
+                title="ফুল স্ক্রিন"
+              >
+                <Maximize2 size={14} />
+              </button>
+            </div>
 
-          <button
-            onClick={status === 'incoming' ? onReject : onEnd}
-            className="p-2.5 rounded-full bg-[#EF4444] text-white hover:bg-red-600 transition-all shadow-md shadow-red-500/30"
-            title="কল শেষ করুন"
-          >
-            <PhoneOff size={16} />
-          </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={status === 'incoming' ? onReject : onEnd}
+                className="flex-1 py-2 rounded-full bg-gradient-to-b from-[#F87171] to-[#EF4444] text-white font-bold text-xs shadow-md shadow-red-500/25 active:scale-95 transition-all"
+              >
+                {status === 'incoming' ? 'Decline' : 'End Call'}
+              </button>
 
-          <button
-            onClick={() => setIsMinimized(false)}
-            className="p-2.5 rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-all ml-1"
-            title="ফুল স্ক্রিন"
-          >
-            <Maximize2 size={16} />
-          </button>
+              {status === 'incoming' ? (
+                <button
+                  onClick={onAccept}
+                  className="flex-1 py-2 rounded-full bg-gradient-to-b from-[#A7F3D0] to-[#6EE7B7] text-[#042F26] font-bold text-xs shadow-md shadow-emerald-500/25 active:scale-95 transition-all"
+                >
+                  Answer
+                </button>
+              ) : (
+                <button
+                  onClick={onToggleMute}
+                  className={`flex-1 py-2 rounded-full font-bold text-xs shadow-md active:scale-95 transition-all ${
+                    isMuted
+                      ? 'bg-[#042F26] text-white'
+                      : 'bg-gradient-to-b from-[#A7F3D0] to-[#6EE7B7] text-[#042F26]'
+                  }`}
+                >
+                  {isMuted ? 'Unmute' : 'Mute'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // 2. CONNECTED / IN-CALL SCREEN (For caller AND callee when connected/connecting)
-  if (status === 'connected' || (!effectiveIsCaller && status === 'connecting')) {
-    return (
-      <div className="fixed inset-0 z-[99999] w-screen h-screen min-h-screen bg-gradient-to-b from-[#071B36] to-[#1a4185] text-white flex flex-col items-center justify-between py-10 px-6 select-none animate-in fade-in duration-300 overflow-hidden">
-        
-        {/* Top Header Controls (Minimize & Encryption Badge) */}
-        <div className="w-full flex items-center justify-between max-w-md pt-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-[11px] text-white/80 font-medium">
-            <Lock size={12} className="text-emerald-400" />
-            <span>HD Voice Encrypted</span>
-          </div>
+  const isTerminated =
+    status === 'rejected' || status === 'ended' || status === 'busy' || status === 'failed';
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowStudentDetails((prev) => !prev)}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 text-white/80 hover:text-white transition-all text-xs flex items-center gap-1"
-              title="শিক্ষার্থীর তথ্য"
-            >
-              <Info size={16} />
-            </button>
-            <button
-              onClick={() => setIsMinimized(true)}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 text-white/80 hover:text-white transition-all"
-              title="মিনিমাইজ"
-            >
-              <Minimize2 size={16} />
-            </button>
-          </div>
+  // 2. FULL-SCREEN CALL UI — Design 1: Emerald Glassmorphism (WhatsApp Inspired Premium)
+  return (
+    <div className="fixed inset-0 z-[99999] w-screen h-screen min-h-screen bg-gradient-to-b from-[#064235] via-[#042F25] to-[#021914] text-white flex flex-col items-center justify-between pt-6 pb-0 px-0 select-none animate-in fade-in duration-300 overflow-hidden">
+      {/* Ambient Radial Emerald Glow */}
+      <div
+        className="pointer-events-none absolute top-[18%] left-1/2 -translate-x-1/2 w-[340px] h-[340px] rounded-full opacity-35 blur-3xl"
+        style={{
+          background: 'radial-gradient(circle, rgba(52,211,153,0.55) 0%, rgba(4,47,38,0) 70%)',
+        }}
+      />
+
+      {/* Subtle Islamic Geometric Arch / Dome Silhouette at Bottom (Design 1 Motif) */}
+      <svg
+        className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] h-[260px] opacity-25"
+        viewBox="0 0 400 240"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M200 18C165 55 110 75 110 140C110 165 65 180 35 215H365C335 180 290 165 290 140C290 75 235 55 200 18Z"
+          stroke="url(#goldGlow)"
+          strokeWidth="2.5"
+          fill="url(#domeFill)"
+        />
+        <path
+          d="M200 42C173 72 132 88 132 142C132 164 95 178 70 210H330C305 178 268 164 268 142C268 88 227 72 200 42Z"
+          stroke="#6EE7B7"
+          strokeOpacity="0.35"
+          strokeWidth="1.2"
+          strokeDasharray="4 4"
+        />
+        <defs>
+          <linearGradient id="goldGlow" x1="200" y1="18" x2="200" y2="215" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#FDE68A" stopOpacity="0.85" />
+            <stop offset="55%" stopColor="#34D399" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#042F26" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="domeFill" x1="200" y1="18" x2="200" y2="215" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#D97706" stopOpacity="0.18" />
+            <stop offset="60%" stopColor="#10B981" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#021914" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Top Bar: Encrypted Badge + Info & Minimize Controls */}
+      <div className="relative z-10 w-full max-w-md flex items-center justify-between px-6 pt-2">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-[#6EE7B7]/25 text-[11px] text-[#A7F3D0] font-medium shadow-sm">
+          <Lock size={12} className="text-[#34D399]" />
+          <span>{displayInstName}</span>
         </div>
 
-        {/* Student Quick Details Overlay (if expanded) */}
-        {showStudentDetails && (
-          <div className="w-full max-w-sm rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-4 shadow-2xl animate-in slide-in-from-top-4 duration-200 text-xs mt-2">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
-              <span className="font-bold text-[#60A5FA] flex items-center gap-1.5">
-                <Sparkles size={14} /> {effectiveIsCaller ? 'শিক্ষার্থী পরিচিতি' : 'প্রতিষ্ঠানের বিবরণ'}
-              </span>
-              <button onClick={() => setShowStudentDetails(false)} className="text-white/60 hover:text-white">✕</button>
-            </div>
-            <div className="space-y-1.5 text-white/90">
-              <p><span className="text-white/60">প্রতিষ্ঠান:</span> {displayInstName}</p>
-              {student.name && <p><span className="text-white/60">শিক্ষার্থী:</span> {student.name}</p>}
-              {student.class_name && <p><span className="text-white/60">শ্রেণি:</span> {student.class_name}</p>}
-              {student.roll && <p><span className="text-white/60">রোল:</span> {student.roll}</p>}
-              <p><span className="text-white/60">কলকারী:</span> {callerPersonName || displayInstName}</p>
-            </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowStudentDetails((prev) => !prev)}
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white/85 hover:text-white transition-all"
+            title="বিস্তারিত তথ্য"
+          >
+            <Info size={16} />
+          </button>
+          <button
+            onClick={() => setIsMinimized(true)}
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white/85 hover:text-white transition-all"
+            title="মিনিমাইজ"
+          >
+            <Minimize2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Expandable Student / Institution Info Card */}
+      {showStudentDetails && (
+        <div className="relative z-20 w-[90%] max-w-sm rounded-2xl bg-[#0A3A2E]/90 backdrop-blur-2xl border border-[#6EE7B7]/30 p-4 shadow-2xl animate-in slide-in-from-top-4 duration-200 text-xs mt-2">
+          <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
+            <span className="font-bold text-[#6EE7B7] flex items-center gap-1.5">
+              <Sparkles size={14} /> {effectiveIsCaller ? 'শিক্ষার্থী পরিচিতি' : 'কলের বিবরণ'}
+            </span>
+            <button onClick={() => setShowStudentDetails(false)} className="text-white/60 hover:text-white">
+              ✕
+            </button>
           </div>
-        )}
-
-        {/* Center: Avatar, Display Name, Subtitle, and Digital Timer Pill */}
-        <div className="flex flex-col items-center mt-4 sm:mt-8">
-          {/* Avatar (lg: w-24 h-24 text-3xl) */}
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-3xl shadow-xl overflow-hidden border-2 border-white/20 shrink-0">
-            {effectiveIsCaller ? (
-              student.photo_url ? (
-                <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <span>{getInitials(student.name)}</span>
-              )
-            ) : (
-              <GraduationCap className="text-white w-12 h-12" />
-            )}
-          </div>
-
-          <h2 className="text-white text-2xl font-semibold mt-4 mb-1 text-center font-noto">
-            {effectiveIsCaller ? (student.name || 'শিক্ষার্থী') : (displayInstName || 'শিক্ষা প্রতিষ্ঠান')}
-          </h2>
-
-          <p className="text-white/60 text-sm mb-4 font-noto text-center">
-            {effectiveIsCaller ? (
-              <>
-                {student.class_name ? `${student.class_name}` : ''}
-                {student.class_name && student.roll ? ' • ' : ''}
-                {student.roll ? `Roll ${student.roll}` : ''}
-              </>
-            ) : (
-              callerPersonName || (student.name ? `শিক্ষার্থী: ${student.name}` : 'মাদরাসা ভয়েস কল')
-            )}
-          </p>
-
-          {/* Timer / Connection Status Pill */}
-          <div className="bg-white/10 px-5 py-1.5 rounded-full backdrop-blur-sm border border-white/10 flex items-center gap-2 shadow-inner">
-            <span className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400 animate-ping'}`} />
-            <p className="text-white font-mono text-lg tracking-wider font-bold">
-              {status === 'connected' ? formatDuration(duration) : 'সংযোগ হচ্ছে...'}
+          <div className="space-y-1.5 text-white/90 font-noto">
+            <p>
+              <span className="text-[#A7F3D0]/70">প্রতিষ্ঠান:</span> {displayInstName}
             </p>
+            {student.name && (
+              <p>
+                <span className="text-[#A7F3D0]/70">শিক্ষার্থী:</span> {student.name}
+              </p>
+            )}
+            {student.class_name && (
+              <p>
+                <span className="text-[#A7F3D0]/70">শ্রেণি:</span> {student.class_name}
+              </p>
+            )}
+            {student.roll && (
+              <p>
+                <span className="text-[#A7F3D0]/70">রোল:</span> {student.roll}
+              </p>
+            )}
+            {(student.guardian_phone || callData.calleePhone) && (
+              <p>
+                <span className="text-[#A7F3D0]/70">মোবাইল:</span>{' '}
+                <span className="font-mono">{student.guardian_phone || callData.calleePhone}</span>
+              </p>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Center Section: Glowing Concentric Emerald Wave Rings + Avatar + Caller Hierarchy */}
+      <div className="relative z-10 flex flex-col items-center justify-center flex-1 w-full max-w-md px-6 my-auto">
+        {/* Avatar with Design 1 Neon Emerald Segmented Arc Rings */}
+        <div className="relative w-56 h-56 flex items-center justify-center mb-5">
+          {/* Animated Concentric Segmented Emerald Arcs (Design 1 Signature Ring) */}
+          <svg
+            className={`absolute inset-0 w-full h-full ${!isTerminated ? 'animate-pulse' : 'opacity-40'}`}
+            viewBox="0 0 240 240"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ filter: 'drop-shadow(0 0 10px rgba(52, 211, 153, 0.75))' }}
+          >
+            {/* Outer Arcs */}
+            <circle
+              cx="120"
+              cy="120"
+              r="108"
+              stroke="#34D399"
+              strokeOpacity="0.65"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray="115 55 95 75"
+            />
+            {/* Middle Glowing Arcs */}
+            <circle
+              cx="120"
+              cy="120"
+              r="93"
+              stroke="#6EE7B7"
+              strokeOpacity="0.85"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeDasharray="140 45 110 55"
+              transform="rotate(35 120 120)"
+            />
+            {/* Inner Bright Arcs */}
+            <circle
+              cx="120"
+              cy="120"
+              r="79"
+              stroke="#A7F3D0"
+              strokeOpacity="0.95"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray="90 35 120 45"
+              transform="rotate(-25 120 120)"
+            />
+          </svg>
+
+          {/* Soft Pulse Halo when Ringing/Connected */}
+          {!isTerminated && (
+            <div
+              className="absolute w-36 h-36 rounded-full bg-[#34D399]/25 animate-ping"
+              style={{ animationDuration: '2.4s' }}
+            />
+          )}
+
+          {/* Circular Portrait / Avatar */}
+          <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-[#10B981] via-[#059669] to-[#042F26] flex items-center justify-center text-white font-bold text-4xl shadow-[0_0_35px_rgba(16,185,129,0.5)] overflow-hidden border-[3.5px] border-[#D1FAE5] shrink-0">
+            {student.photo_url ? (
+              <img
+                src={student.photo_url}
+                alt={primaryTitle}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : effectiveIsCaller ? (
+              <span>{getInitials(student.name)}</span>
+            ) : (
+              <GraduationCap className="text-[#D1FAE5] w-14 h-14" />
+            )}
+          </div>
+        </div>
+
+        {/* Caller Primary Name */}
+        <h2 className="text-white text-2xl sm:text-[28px] font-bold text-center font-noto tracking-tight leading-snug px-4 drop-shadow">
+          {primaryTitle}
+        </h2>
+
+        {/* Caller Secondary Subtitle (Bengali Name / Madrasa / Student) */}
+        <p className="text-[#A7F3D0]/85 text-base sm:text-[17px] font-noto text-center mt-1 px-4">
+          {secondarySubtitle}
+        </p>
+
+        {/* Status / Timer Line ("Deenora Voice Call • Ringing...") */}
+        <p className="text-[#34D399] text-sm sm:text-[15px] font-medium text-center mt-2 tracking-wide">
+          {statusLineText}
+        </p>
 
         {/* Optional Interactive DTMF Keypad Drawer */}
         {showKeypad && (
-          <div className="w-full max-w-[280px] bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-4 shadow-2xl animate-in zoom-in-95 duration-200 my-2">
+          <div className="w-full max-w-[280px] bg-[#0B3B2E]/90 backdrop-blur-2xl border border-[#6EE7B7]/30 rounded-3xl p-4 shadow-2xl animate-in zoom-in-95 duration-200 mt-4">
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
-              <span className="text-xs text-white/60 font-mono tracking-wider min-h-[18px]">
+              <span className="text-xs text-[#A7F3D0] font-mono tracking-wider min-h-[18px]">
                 {keypadDigits || 'Dial DTMF'}
               </span>
               <button
@@ -310,7 +461,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
                 <button
                   key={d}
                   onClick={() => playTone(d)}
-                  className="py-2.5 rounded-xl bg-white/10 hover:bg-white/25 text-white font-mono font-bold text-base transition-colors active:scale-95"
+                  className="py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-mono font-bold text-base transition-colors active:scale-95"
                 >
                   {d}
                 </button>
@@ -318,276 +469,146 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
             </div>
           </div>
         )}
+      </div>
 
-        {/* 3-Column Action Grid: Mute, Keypad, Speaker */}
-        <div className="w-full max-w-[280px] grid grid-cols-3 gap-y-8 gap-x-4 mb-6">
-          {/* Mute */}
+      {/* Bottom Frosted Glass Control Dock (Design 1 Signature Frosted Panel) */}
+      <div className="relative z-10 w-full max-w-md rounded-t-[38px] bg-[#2A4D44]/60 backdrop-blur-2xl border-t border-white/20 shadow-[0_-12px_45px_rgba(0,0,0,0.45)] px-8 pt-7 pb-9">
+        {/* Top Row of Dock: Mute & Speaker (and Keypad when connected) */}
+        <div className="flex items-center justify-around max-w-[270px] mx-auto mb-7">
+          {/* Mute Button */}
           <div className="flex flex-col items-center gap-2">
             <button
               onClick={onToggleMute}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shadow-md active:scale-90 ${
-                isMuted ? 'bg-white text-[#10233F]' : 'bg-white/20 text-white backdrop-blur hover:bg-white/30'
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all border shadow-lg active:scale-95 ${
+                isMuted
+                  ? 'bg-white text-[#042F26] border-white'
+                  : 'bg-white/15 text-white border-white/30 hover:bg-white/25'
               }`}
-              title={isMuted ? 'আনমিউট' : 'Mute'}
+              title={isMuted ? 'Unmute' : 'Mute'}
             >
-              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+              {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
             </button>
-            <span className="text-white/70 text-xs font-noto">{isMuted ? 'Unmute' : 'Mute'}</span>
+            <span className="text-white/90 text-xs sm:text-[13px] font-medium">
+              {isMuted ? 'Unmute' : 'Mute'}
+            </span>
           </div>
 
-          {/* Keypad */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              onClick={() => setShowKeypad((prev) => !prev)}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shadow-md active:scale-90 ${
-                showKeypad ? 'bg-white text-[#10233F]' : 'bg-white/20 text-white backdrop-blur hover:bg-white/30'
-              }`}
-              title="Keypad"
-            >
-              <Grid className="w-6 h-6" />
-            </button>
-            <span className="text-white/70 text-xs font-noto">Keypad</span>
-          </div>
+          {/* Optional Keypad Button during Connected Call */}
+          {status === 'connected' && (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={() => setShowKeypad((prev) => !prev)}
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all border shadow-lg active:scale-95 ${
+                  showKeypad
+                    ? 'bg-white text-[#042F26] border-white'
+                    : 'bg-white/15 text-white border-white/30 hover:bg-white/25'
+                }`}
+                title="Keypad"
+              >
+                <Grid className="w-7 h-7" />
+              </button>
+              <span className="text-white/90 text-xs sm:text-[13px] font-medium">Keypad</span>
+            </div>
+          )}
 
-          {/* Speaker */}
+          {/* Speaker Button */}
           <div className="flex flex-col items-center gap-2">
             <button
               onClick={onToggleSpeaker}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shadow-md active:scale-90 ${
-                isSpeakerOn ? 'bg-white text-[#10233F]' : 'bg-white/20 text-white backdrop-blur hover:bg-white/30'
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all border shadow-lg active:scale-95 ${
+                isSpeakerOn
+                  ? 'bg-white/25 text-white border-white/40 hover:bg-white/35'
+                  : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20'
               }`}
-              title={isSpeakerOn ? 'স্পিকার' : 'ইয়ারপিস'}
+              title={isSpeakerOn ? 'Speaker' : 'Earpiece'}
             >
-              {isSpeakerOn ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
+              {isSpeakerOn ? <Volume2 className="w-7 h-7" /> : <VolumeX className="w-7 h-7" />}
             </button>
-            <span className="text-white/70 text-xs font-noto">{isSpeakerOn ? 'Speaker' : 'Earpiece'}</span>
+            <span className="text-white/90 text-xs sm:text-[13px] font-medium">Speaker</span>
           </div>
         </div>
 
-        {/* Bottom Red End Call Button */}
-        <div className="mb-4 w-full flex justify-center">
-          <button
-            onClick={onEnd}
-            className="w-20 h-20 bg-[#EF4444] rounded-full flex items-center justify-center shadow-[0_0_24px_rgba(239,68,68,0.45)] hover:bg-red-600 transition-colors active:scale-95"
-            title="কল শেষ করুন"
-          >
-            <PhoneOff className="text-white w-10 h-10" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. ADMIN OUTGOING CALL SCREEN (matches ScreenAdminOutgoing from prototype)
-  // Handles: 'calling', 'ringing', 'connecting', 'reconnecting', and terminal states ONLY for caller
-  if (effectiveIsCaller) {
-    const isTerminated = status === 'rejected' || status === 'ended' || status === 'busy' || status === 'failed';
-    const statusText =
-      status === 'ringing'
-        ? 'অভিভাবকের ফোনে রিং বাজছে... (Ringing)'
-        : status === 'connecting'
-        ? 'সংযোগ স্থাপন হচ্ছে... (Connecting)'
-        : status === 'reconnecting'
-        ? 'পুনরায় সংযোগ করা হচ্ছে... (Reconnecting)'
-        : status === 'busy'
-        ? 'অভিভাবক অন্য কলে ব্যস্ত আছেন (Busy)'
-        : status === 'rejected'
-        ? 'কলটি কেটে দেওয়া হয়েছে (Declined)'
-        : status === 'ended'
-        ? 'কল সমাপ্ত হয়েছে (Call Ended)'
-        : status === 'failed'
-        ? 'সংযোগ স্থাপন ব্যর্থ হয়েছে (Failed)'
-        : 'Calling guardian...';
-
-    return (
-      <div className="fixed inset-0 z-[99999] w-screen h-screen min-h-screen bg-gradient-to-b from-[#071B36] to-[#2563EB] text-white flex flex-col items-center justify-between py-10 px-6 select-none animate-in fade-in duration-300 overflow-hidden">
-        
-        {/* Top Bar with Minimal Controls */}
-        <div className="w-full flex items-center justify-between max-w-md pt-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-[11px] text-white/80 font-medium">
-            <Lock size={12} className="text-emerald-400" />
-            <span>End-to-End Secure Call</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowStudentDetails((prev) => !prev)}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 text-white/80 hover:text-white transition-all text-xs flex items-center gap-1"
-              title="শিক্ষার্থীর তথ্য"
-            >
-              <Info size={16} />
-            </button>
-            <button
-              onClick={() => setIsMinimized(true)}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 text-white/80 hover:text-white transition-all"
-              title="মিনিমাইজ"
-            >
-              <Minimize2 size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Student Quick Profile Summary (if toggled) */}
-        {showStudentDetails && (
-          <div className="w-full max-w-sm rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-4 shadow-2xl animate-in slide-in-from-top-4 duration-200 text-xs mt-2">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
-              <span className="font-bold text-[#60A5FA] flex items-center gap-1.5">
-                <Sparkles size={14} /> শিক্ষার্থী পরিচিতি
-              </span>
-              <button onClick={() => setShowStudentDetails(false)} className="text-white/60 hover:text-white">✕</button>
+        {/* Bottom Row of Dock: Decline / End & Answer */}
+        {status === 'incoming' && !effectiveIsCaller ? (
+          <div className="flex items-center justify-around max-w-[270px] mx-auto">
+            {/* Glowing Red Decline Button */}
+            <div className="flex flex-col items-center gap-2.5">
+              <button
+                onClick={onReject}
+                className="w-[72px] h-[72px] rounded-full bg-gradient-to-b from-[#F87171] to-[#EF4444] border border-red-300/50 flex items-center justify-center shadow-[0_0_28px_rgba(239,68,68,0.65)] active:scale-95 hover:brightness-110 transition-all"
+                title="Decline"
+              >
+                <PhoneOff className="text-white w-8 h-8" />
+              </button>
+              <span className="text-white/90 text-xs sm:text-[13px] font-medium">Decline</span>
             </div>
-            <div className="space-y-1.5 text-white/90">
-              <p><span className="text-white/60">শ্রেণি:</span> {student.class_name || 'N/A'}</p>
-              <p><span className="text-white/60">রোল:</span> {student.roll || 'N/A'}</p>
-              <p><span className="text-white/60">অভিভাবক:</span> {student.guardian_name || 'N/A'}</p>
-              <p><span className="text-white/60">মোবাইল:</span> <span className="font-mono">{student.guardian_phone || callData.calleePhone || 'N/A'}</span></p>
+
+            {/* Glowing Mint-Emerald Answer Button with Soundwave Arcs (Design 1 Signature) */}
+            <div className="flex flex-col items-center gap-2.5">
+              <div className="relative flex items-center justify-center">
+                {/* Left & Right Glowing Wave Arcs around Answer Button */}
+                <svg
+                  className="pointer-events-none absolute -inset-3 w-[96px] h-[96px] animate-pulse"
+                  viewBox="0 0 96 96"
+                  fill="none"
+                >
+                  <path
+                    d="M16 30C9 40 9 56 16 66"
+                    stroke="#6EE7B7"
+                    strokeOpacity="0.65"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M10 24C1 38 1 58 10 72"
+                    stroke="#6EE7B7"
+                    strokeOpacity="0.35"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M80 30C87 40 87 56 80 66"
+                    stroke="#6EE7B7"
+                    strokeOpacity="0.65"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M86 24C95 38 95 58 86 72"
+                    stroke="#6EE7B7"
+                    strokeOpacity="0.35"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+
+                <button
+                  onClick={onAccept}
+                  className="relative w-[72px] h-[72px] rounded-full bg-gradient-to-b from-[#A7F3D0] via-[#6EE7B7] to-[#34D399] border border-emerald-100/70 flex items-center justify-center shadow-[0_0_32px_rgba(52,211,153,0.75)] active:scale-95 hover:brightness-105 transition-all"
+                  title="Answer"
+                >
+                  <Phone className="text-[#042F26] w-8 h-8 fill-current" />
+                </button>
+              </div>
+              <span className="text-white/90 text-xs sm:text-[13px] font-medium">Answer</span>
             </div>
           </div>
-        )}
-
-        {/* Center Section: Calling Status, Ripple Avatar, Student Info & Guardian Card */}
-        <div className="flex flex-col items-center mt-6 w-full max-w-sm">
-          {/* Status Label ("Calling guardian...") */}
-          <p className="text-[#60A5FA] text-sm font-medium tracking-wide uppercase mb-8 text-center font-noto">
-            {statusText}
-          </p>
-
-          {/* Ripple Avatar (xl: w-32 h-32 text-4xl) */}
-          <div className="relative mb-6">
-            {!isTerminated && (
-              <>
-                <div className="absolute inset-0 rounded-full bg-[#60A5FA] animate-ripple" />
-                <div
-                  className="absolute inset-0 rounded-full bg-[#60A5FA] animate-ripple"
-                  style={{ animationDelay: '1s' }}
-                />
-              </>
-            )}
-
-            <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-4xl shadow-2xl overflow-hidden border-2 border-white/25 shrink-0">
-              {student.photo_url ? (
-                <img
-                  src={student.photo_url}
-                  alt={student.name}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span>{getInitials(student.name)}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Student Full Name */}
-          <h2 className="text-white text-3xl font-bold mb-2 text-center font-noto tracking-tight">
-            {student.name || 'শিক্ষার্থী'}
-          </h2>
-
-          {/* Class & Roll */}
-          <p className="text-white/70 text-base mb-8 font-noto text-center">
-            {student.class_name ? `${student.class_name}` : ''}
-            {student.class_name && student.roll ? ' • ' : ''}
-            {student.roll ? `রোল ${student.roll}` : ''}
-          </p>
-
-          {/* Guardian Glass Panel Card */}
-          <div className="w-full rounded-2xl p-4 flex flex-col items-center gap-1 shadow-xl bg-white/10 backdrop-blur-md border border-white/20">
-            <User className="text-[#60A5FA] w-6 h-6 mb-1" />
-            <p className="text-white/90 font-medium font-noto text-center">
-              {student.guardian_name || 'অভিভাবক'} (অভিভাবক)
-            </p>
-            <p className="text-white/60 text-sm font-mono tracking-widest mt-1">
-              {student.guardian_phone || callData.calleePhone || 'N/A'}
-            </p>
-          </div>
-        </div>
-
-        {/* Bottom Red End Call Button */}
-        <div className="mb-6">
-          <button
-            onClick={onEnd}
-            className="w-16 h-16 sm:w-20 sm:h-20 bg-[#EF4444] rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors active:scale-95"
-            title="কল শেষ করুন"
-          >
-            <PhoneOff className="text-white w-8 h-8" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 4. PARENT INCOMING CALL SCREEN (Web fallback matching ScreenParentIncoming from prototype)
-  return (
-    <div className="fixed inset-0 z-[99999] w-screen h-screen min-h-screen bg-gradient-to-b from-[#071B36] via-[#0a2347] to-[#071B36] text-white flex flex-col items-center justify-between py-14 px-6 select-none animate-in fade-in duration-300 overflow-hidden">
-      
-      {/* Top Header */}
-      <div className="w-full flex items-center justify-end max-w-md pt-2">
-        <button
-          onClick={() => setIsMinimized(true)}
-          className="p-2 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 text-white/80 hover:text-white transition-all"
-          title="মিনিমাইজ"
-        >
-          <Minimize2 size={16} />
-        </button>
-      </div>
-
-      {/* Center Details */}
-      <div className="flex flex-col items-center mt-6 w-full max-w-sm">
-        <p className="text-white/60 text-sm uppercase tracking-widest mb-10 font-noto">
-          Incoming Call
-        </p>
-
-        {/* Institution Badge / Icon with Pulsing Effect */}
-        <div className="w-28 h-28 bg-white/5 rounded-3xl flex items-center justify-center mb-8 border border-white/10 shadow-2xl relative">
-          <div className="absolute inset-0 rounded-3xl bg-white/10 animate-pulse" />
-          <GraduationCap className="text-[#60A5FA] w-14 h-14" />
-        </div>
-
-        <h2 className="text-white text-3xl font-bold mb-3 text-center px-4 leading-tight font-noto">
-          {displayInstName}
-        </h2>
-
-        {callerPersonName && (
-          <p className="text-white/80 text-sm font-noto mb-1">
-            {callerPersonName}
-          </p>
-        )}
-
-        <p className="text-[#60A5FA] text-lg font-mono tracking-wider">
-          {student.guardian_phone || callData.calleePhone || student.name || '09638-Deenora'}
-        </p>
-      </div>
-
-      {/* Decline and Accept Buttons or Terminal Status Badge */}
-      {status === 'incoming' ? (
-        <div className="flex w-full justify-between max-w-xs px-4 mb-8">
-          <div className="flex flex-col items-center gap-3">
+        ) : (
+          /* Single Centered Red Decline/End Button for Connected or Outgoing Call */
+          <div className="flex flex-col items-center justify-center">
             <button
-              onClick={onReject}
-              className="w-[72px] h-[72px] bg-[#EF4444] rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 active:scale-95 hover:bg-red-600 transition-all"
-              title="কেটে দিন"
+              onClick={onEnd}
+              className="w-[74px] h-[74px] rounded-full bg-gradient-to-b from-[#F87171] to-[#EF4444] border border-red-300/50 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.65)] active:scale-95 hover:brightness-110 transition-all"
+              title="End Call"
             >
               <PhoneOff className="text-white w-8 h-8" />
             </button>
-            <span className="text-white/70 text-sm font-medium font-noto">Decline</span>
+            <span className="text-white/90 text-xs sm:text-[13px] font-medium mt-2.5">
+              {status === 'connected' ? 'End Call' : 'Decline'}
+            </span>
           </div>
-
-          <div className="flex flex-col items-center gap-3">
-            <button
-              onClick={onAccept}
-              className="w-[72px] h-[72px] bg-[#10B981] rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 hover:bg-emerald-600 transition-all animate-bounce"
-              title="রিসিভ করুন"
-            >
-              <Phone className="text-white w-8 h-8" />
-            </button>
-            <span className="text-white/70 text-sm font-medium font-noto">Accept</span>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-10 px-6 py-2.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-sm font-noto text-white/90">
-          {status === 'busy' ? 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন' : 'কল সমাপ্ত হয়েছে'}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
