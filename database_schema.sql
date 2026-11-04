@@ -408,3 +408,17 @@ CREATE TABLE chat_archive_audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+
+
+-- Table: call_signals (multi-instance backend signaling relay)
+CREATE TABLE IF NOT EXISTS call_signals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    call_id TEXT NOT NULL,
+    event TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    consumed BOOLEAN DEFAULT false
+);
+
+CREATE INDEX IF NOT EXISTS idx_call_signals_call_id_consumed ON call_signals(call_id, consumed);
+CREATE INDEX IF NOT EXISTS idx_call_signals_created_at ON call_signals(created_at);

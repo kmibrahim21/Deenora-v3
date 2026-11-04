@@ -136,8 +136,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://wafcgdcgqkmsngwqhded.supabase.co';
+  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZmNnZGNncWttc25nd3FoZGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjU4ODEsImV4cCI6MjA5MDY0MTg4MX0.KEBjfOmIF5KbEelK--l-r3paOTpBFqlxX8pr4FgtqhY';
   const serviceAccount = parseServiceAccount();
 
   // FIX 2026-10-13: log key SHAPE only (never the key itself) to diagnose paste issues
@@ -749,16 +749,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3b. RELAY CALL SIGNAL (HIGH-PRIORITY FCM BACKEND FALLBACK FOR SIGNALING)
+  // 3b. RELAY CALL SIGNAL (PERSISTENT SUPABASE CALL_SIGNALS + HIGH-PRIORITY FCM BACKEND RELAY)
   if (req.method === 'POST' && action === 'relay_call_signal') {
     try {
       const event = String(req.body?.event || req.body?.type || '').trim();
       const call_id = String(req.body?.call_id || req.body?.payload?.callId || '').trim();
       const payload = req.body?.payload || {};
 
-      console.log(`[Call API] relay_call_signal: event="${event}", call_id="${call_id}"`);
+      const callerId = String(
+        req.body?.caller_id ||
+        req.body?.callerId ||
+        payload?.callerId ||
+        payload?.caller?.id ||
+        payload?.caller_id ||
+        ''
+      ).trim();
 
-      // 1. Cache the signal in memory for fast polling / recovery
+      const institutionId = String(
+        req.body?.institution_id ||
+        req.body?.institutionId ||
+        payload?.institutionId ||
+        payload?.institution_id ||
+        payload?.caller?.institution_id ||
+        ''
+      ).trim();
+
+      const calleePhone = String(
+        req.body?.callee_phone ||
+        req.body?.calleePhone ||
+        payload?.calleePhone ||
+        payload?.callee_phone ||
+        payload?.student?.guardian_phone ||
+        ''
+      ).trim();
+
+      const studentId = String(
+        req.body?.student_id ||
+        req.body?.studentId ||
+        payload?.studentId ||
+        payload?.student_id ||
+        payload?.student?.id ||
+        ''
+      ).trim();
+
+      const senderId = String(
+        req.body?.sender_id ||
+        payload?.senderId ||
+        payload?.rejectedBy ||
+        ''
+      ).trim();
+
+      console.log(`[Call API] relay_call_signal: event="${event}", call_id="${call_id}", callerId="${callerId}", institutionId="${institutionId}"`);
+
+      // 1. INSERT into Supabase call_signals table (persistent across all serverless instances)
+      if (call_id && SUPABASE_URL && SUPABASE_KEY) {
+        try {
+          const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/call_signals`, {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({
+              call_id,
+              event,
+              payload: typeof payload === 'string' ? JSON.parse(payload) : (payload || {}),
+              consumed: false,
+              created_at: new Date().toISOString(),
+            }),
+          });
+          if (!insertRes.ok) {
+            const errBody = await insertRes.text().catch(() => '');
+            console.warn('[Call API] call_signals INSERT warning:', insertRes.status, errBody);
+          }
+        } catch (dbErr) {
+          console.warn('[Call API] call_signals DB error:', dbErr);
+        }
+      }
+
+      // Memory fallback for instant single-instance polling
       if (call_id) {
         if (!activeCallSignals[call_id]) {
           activeCallSignals[call_id] = [];
@@ -774,13 +845,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // 2. Identify the target recipient(s) for the signal
-      const cachedCall = call_id ? activeCallPayloads[call_id]?.payload : null;
-      const callerId = payload?.callerId || payload?.caller?.id || cachedCall?.caller_id;
-      const calleePhone = payload?.calleePhone || payload?.student?.guardian_phone || cachedCall?.callee_phone;
-      const studentId = payload?.studentId || payload?.student?.id || cachedCall?.student_id;
-      const institutionId = payload?.institutionId || cachedCall?.institution_id;
-      const senderId = payload?.senderId || payload?.rejectedBy;
-
       const effectiveServiceAccount = await resolveServiceAccount(institutionId);
       if (!effectiveServiceAccount) {
         return res.status(200).json({
@@ -802,8 +866,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (senderId && callerId && String(senderId) !== String(callerId));
 
       if (isFromCallee) {
-        // Send to caller's device(s)
-        targetTokens = await findTargetFcmTokens(null, null, callerId);
+        // Send to admin caller's device(s) - lookup via caller_id and institution_id from request (not memory!)
+        const adminTokens = new Set<string>();
+
+        if (SUPABASE_URL && SUPABASE_KEY) {
+          // A. Lookup tokens by caller_id (user_id in device_tokens)
+          if (callerId) {
+            try {
+              const uRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&user_id=eq.${encodeURIComponent(callerId)}&order=updated_at.desc&limit=5`,
+                {
+                  headers: {
+                    apikey: SUPABASE_KEY,
+                    Authorization: `Bearer ${SUPABASE_KEY}`,
+                  },
+                }
+              );
+              if (uRes.ok) {
+                const uList = await uRes.json();
+                if (Array.isArray(uList)) {
+                  uList.forEach((t: any) => t?.fcm_token && adminTokens.add(t.fcm_token));
+                }
+              }
+            } catch (uErr) {
+              console.warn('[Call API] Admin token query by user_id error:', uErr);
+            }
+          }
+
+          // B. Lookup tokens by institution_id (all admin/teacher devices for this institution)
+          if (institutionId) {
+            try {
+              const iRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token,user_id&institution_id=eq.${encodeURIComponent(institutionId)}&order=updated_at.desc&limit=10`,
+                {
+                  headers: {
+                    apikey: SUPABASE_KEY,
+                    Authorization: `Bearer ${SUPABASE_KEY}`,
+                  },
+                }
+              );
+              if (iRes.ok) {
+                const iList = await iRes.json();
+                if (Array.isArray(iList)) {
+                  iList.forEach((t: any) => {
+                    if (t?.fcm_token) {
+                      if (!callerId || t.user_id === callerId || adminTokens.size === 0) {
+                        adminTokens.add(t.fcm_token);
+                      }
+                    }
+                  });
+                }
+              }
+            } catch (iErr) {
+              console.warn('[Call API] Admin token query by institution_id error:', iErr);
+            }
+          }
+        }
+
+        // Memory token fallback for callerId if available
+        if (adminTokens.size === 0 && callerId && memoryTokens[`user_${callerId}`]) {
+          adminTokens.add(memoryTokens[`user_${callerId}`].token);
+        }
+
+        targetTokens = Array.from(adminTokens);
       } else {
         // Send to callee's device(s)
         targetTokens = await findTargetFcmTokens(calleePhone, studentId);
@@ -1052,12 +1177,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // 5b. GET RELAYED CALL SIGNALS (HTTP POLLING FALLBACK FOR SIGNALS)
+  // 5b. GET RELAYED CALL SIGNALS (SUPABASE CALL_SIGNALS + HTTP POLLING FALLBACK)
   if (action === 'get_call_signals' || (req.query && req.query.action === 'get_call_signals')) {
     const targetCallId = String(req.body?.call_id || req.query?.call_id || '').trim();
+    if (!targetCallId) {
+      return res.status(200).json({ success: true, signals: [] });
+    }
+
+    let signals: Array<{ event: string; payload: any; timestamp: number }> = [];
+
+    // 1. SELECT from call_signals WHERE call_id = ? AND consumed = false
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const selectUrl = `${SUPABASE_URL}/rest/v1/call_signals?select=id,event,payload,created_at&call_id=eq.${encodeURIComponent(targetCallId)}&consumed=eq.false&order=created_at.asc`;
+        const selectRes = await fetch(selectUrl, {
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+          },
+        });
+
+        if (selectRes.ok) {
+          const rows = await selectRes.json();
+          if (Array.isArray(rows) && rows.length > 0) {
+            signals = rows.map((r: any) => ({
+              event: r.event,
+              payload: r.payload,
+              timestamp: new Date(r.created_at).getTime(),
+            }));
+
+            // 2. Mark as consumed after returning
+            const signalIds = rows.map((r: any) => r.id).filter(Boolean);
+            if (signalIds.length > 0) {
+              fetch(`${SUPABASE_URL}/rest/v1/call_signals?id=in.(${signalIds.join(',')})`, {
+                method: 'PATCH',
+                headers: {
+                  apikey: SUPABASE_KEY,
+                  Authorization: `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({ consumed: true }),
+              }).catch((patchErr) => {
+                console.warn('[Call API] Mark consumed error:', patchErr);
+              });
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[Call API] get_call_signals DB error:', dbErr);
+      }
+
+      // 3. DELETE signals older than 5 minutes (cleanup in background)
+      try {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        fetch(`${SUPABASE_URL}/rest/v1/call_signals?created_at=lt.${encodeURIComponent(fiveMinutesAgo)}`, {
+          method: 'DELETE',
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+          },
+        }).catch(() => {});
+      } catch {}
+    }
+
+    // Fallback: merge with local in-memory buffer if database is pending or returned empty
+    const memSignals = activeCallSignals[targetCallId] || [];
+    if (signals.length === 0 && memSignals.length > 0) {
+      signals = memSignals;
+    }
+
     return res.status(200).json({
       success: true,
-      signals: activeCallSignals[targetCallId] || [],
+      signals,
     });
   }
 

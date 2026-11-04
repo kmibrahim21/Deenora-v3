@@ -1483,6 +1483,10 @@ export class VoiceCallService {
           action: 'relay_call_signal',
           event: event,  // 'call:accept', 'call:reject', 'call:end', etc.
           call_id: payload?.callId || this.activeCallData?.callId,
+          caller_id: (payload as any)?.callerId || payload?.caller?.id || this.activeCallData?.caller?.id || (this.activeCallData as any)?.callerId,
+          institution_id: payload?.institutionId || this.activeCallData?.institutionId || this.currentInstitutionId,
+          callee_phone: payload?.calleePhone || payload?.student?.guardian_phone || (this.activeCallData as any)?.calleePhone,
+          student_id: (payload as any)?.studentId || payload?.student?.id || this.activeCallData?.student?.id,
           payload: payload,
         }),
       });
