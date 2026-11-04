@@ -155,7 +155,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const stdProm = requestManager.cachedFetch(
         'students',
         (q) => {
-          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId);
+          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId).eq('is_active', true);
           if (activeYearId) {
             if (isAdvanceOrHistoricalYear) {
               query = query.eq('academic_year_id', activeYearId);
