@@ -2106,8 +2106,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           {lang === 'bn' ? 'উপস্থিত' : 'Present'}
                         </p>
                         <p className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 leading-none">
-                          {dailyPresentCount}
+                          {dailyPresentCount + lateCount}
                         </p>
+                        {lateCount > 0 && (
+                          <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 mt-0.5 font-noto">
+                            ({dailyPresentCount} + {lateCount} {lang === 'bn' ? 'লেট' : 'Late'})
+                          </span>
+                        )}
                       </button>
 
                       <button

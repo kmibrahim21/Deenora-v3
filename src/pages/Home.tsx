@@ -53,6 +53,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     smsBalance: 0,
     voiceBalance: 0,
     attendanceToday: 0,
+    attendanceTodayStrict: 0,
+    attendanceTodayLate: 0,
     attendanceTodayLeaves: 0,
     attendanceTodayAbsents: 0,
     pendingAttendanceClasses: 0,
@@ -155,7 +157,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const stdProm = requestManager.cachedFetch(
         'students',
         (q) => {
-          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId).eq('is_active', true);
+          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId).eq('is_active', true).range(0, 9999);
           if (activeYearId) {
             if (isAdvanceOrHistoricalYear) {
               query = query.eq('academic_year_id', activeYearId);
@@ -216,7 +218,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           .from('attendance')
           .select('status, student_id, class_id')
           .eq('institution_id', institutionId)
-          .eq('date', today);
+          .eq('date', today)
+          .range(0, 9999);
         
         if (activeYearId) {
           if (isAdvanceOrHistoricalYear) {
@@ -240,6 +243,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       let totalStudents = stdRes.count || allStudents.length;
 
       let attendanceTodayCount = 0;
+      let attendanceTodayStrictCount = 0;
+      let attendanceTodayLateCount = 0;
       let attendanceTodayLeavesCount = 0;
       let attendanceTodayAbsentCount = 0;
       let pendingClassesCount = 0;
@@ -268,17 +273,40 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           }
         });
 
-        // Calculate attendance for every student in a class where attendance was recorded today
+        // Calculate attendance using the EXACT SAME finalStatus precedence logic as Attendance.tsx (Daily Report)
         allStudents.forEach((s) => {
           const classHasTakenAttendance = s.class_id ? recordedClassIds.has(s.class_id) : false;
           if (!classHasTakenAttendance) return;
 
           const statuses = studentAttMap.get(s.id) || [];
-          if (statuses.includes('present') || statuses.includes('late') || statuses.includes('half_day')) {
-            attendanceTodayCount++;
+          let finalStatus = 'not_started';
+          if (!classHasTakenAttendance) {
+            finalStatus = 'not_started';
+          } else if (statuses.length === 0) {
+            finalStatus = 'absent';
           } else if (statuses.includes('leave')) {
-            attendanceTodayLeavesCount++;
+            finalStatus = 'leave';
+          } else if (statuses.includes('late')) {
+            finalStatus = 'late';
+          } else if (statuses.includes('half_day')) {
+            finalStatus = 'half_day';
+          } else if (statuses.includes('present')) {
+            finalStatus = 'present';
           } else {
+            finalStatus = 'absent';
+          }
+
+          if (finalStatus === 'present') {
+            attendanceTodayCount++;
+            attendanceTodayStrictCount++;
+          } else if (finalStatus === 'late') {
+            attendanceTodayCount++;
+            attendanceTodayLateCount++;
+          } else if (finalStatus === 'half_day') {
+            attendanceTodayCount++;
+          } else if (finalStatus === 'leave') {
+            attendanceTodayLeavesCount++;
+          } else if (finalStatus === 'absent') {
             attendanceTodayAbsentCount++;
           }
         });
@@ -332,6 +360,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         smsBalance: singleInst?.sms_balance || 0,
         voiceBalance: singleInst?.balance || 0,
         attendanceToday: attendanceTodayCount,
+        attendanceTodayStrict: attendanceTodayStrictCount,
+        attendanceTodayLate: attendanceTodayLateCount,
         attendanceTodayLeaves: attendanceTodayLeavesCount,
         attendanceTodayAbsents: attendanceTodayAbsentCount,
         pendingAttendanceClasses: pendingClassesCount,
@@ -440,6 +470,11 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
                    <span className="text-sm lg:text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
                      {loadingStats ? '...' : stats.attendanceToday}
                    </span>
+                   {!loadingStats && stats.attendanceTodayLate && stats.attendanceTodayLate > 0 ? (
+                     <span className="text-[8px] lg:text-[10px] font-bold text-amber-700 dark:text-amber-300 font-noto mt-0.5">
+                       ({(stats.attendanceTodayStrict ?? (stats.attendanceToday - stats.attendanceTodayLate))} + {stats.attendanceTodayLate} {lang === 'bn' ? 'লেট' : 'Late'})
+                     </span>
+                   ) : null}
                 </div>
 
                 {/* 2. Absent */}
