@@ -107,7 +107,7 @@ export class VoiceCallService {
   private currentUserId: string = '';
   private currentPhone: string = '';
   private cachedInstitutionName: string = '';
-  private activeCallData: CallPayload | null = null;
+  public activeCallData: CallPayload | null = null;
   private isCaller: boolean = false;
   private isCallAnswered: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];

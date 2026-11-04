@@ -421,13 +421,21 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const acceptCall = useCallback(async () => {
     native('stopRinging');
+    const callId = voiceCallService.activeCallData?.callId || voiceCallService.getActiveCall()?.callId || activeCall?.callId;
+    if (typeof window !== 'undefined' && typeof (window as any).handleNativeCallAction === 'function' && callId) {
+      return await (window as any).handleNativeCallAction('answer', callId);
+    }
     return await voiceCallService.acceptCall();
-  }, []);
+  }, [activeCall]);
 
   const rejectCall = useCallback(async (reason?: string, specificCallId?: string) => {
     native('stopRinging');
-    await voiceCallService.rejectCall(reason, specificCallId, true);
-  }, []);
+    const callId = specificCallId || voiceCallService.activeCallData?.callId || voiceCallService.getActiveCall()?.callId || activeCall?.callId;
+    if (typeof window !== 'undefined' && typeof (window as any).handleNativeCallAction === 'function') {
+      return await (window as any).handleNativeCallAction('decline', callId);
+    }
+    await voiceCallService.rejectCall(reason, specificCallId || callId, true);
+  }, [activeCall]);
 
   const endCall = useCallback(async () => {
     await voiceCallService.endCall();
