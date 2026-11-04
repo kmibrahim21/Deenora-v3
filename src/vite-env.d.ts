@@ -13,6 +13,7 @@ interface ImportMeta {
 interface Window {
   handleNativeCallAction?: (action: string, callId?: string) => Promise<boolean | void> | boolean | void;
   onNativeCallAction?: (action: string, callId?: string) => Promise<boolean | void> | boolean | void;
+  handleCallSignal?: (event: string, payload: any) => Promise<boolean | void> | boolean | void;
   setDeviceFcmToken?: (token: string, phone?: string) => Promise<void> | void;
   AndroidInterface?: {
     downloadFile?: (base64: string, fileName: string, mimeType: string) => void;

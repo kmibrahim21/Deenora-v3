@@ -7,6 +7,9 @@ const memoryTokens: Record<string, { token: string; updatedAt: number }> = {};
 // In-memory active call payload cache for killed-state notification taps
 const activeCallPayloads: Record<string, { payload: any; updatedAt: number }> = {};
 
+// In-memory active call signals buffer for reliable fallback signaling
+const activeCallSignals: Record<string, Array<{ event: string; payload: any; timestamp: number }>> = {};
+
 // OAuth2 cached token for Firebase V1 HTTP API
 let cachedAccessToken: { token: string; expiresAt: number; projectId: string } | null = null;
 
@@ -150,13 +153,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const action = req.query.action || req.body?.action;
 
-  // Helper: Find target FCM tokens by callee_phone or student_id (memory cache + Supabase device_tokens for multi-device support)
+  // Helper: Find target FCM tokens by callee_phone, student_id, or user_id (memory cache + Supabase device_tokens for multi-device support)
   async function findTargetFcmTokens(
-    calleePhone: string | null | undefined,
-    studentId: string | null | undefined
+    calleePhone?: string | null | undefined,
+    studentId?: string | null | undefined,
+    userId?: string | null | undefined
   ): Promise<string[]> {
     const rawPhone = calleePhone ? String(calleePhone).trim() : '';
     const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '').slice(-10) : '';
+    const cleanUserId = userId ? String(userId).trim() : '';
     const foundTokens = new Set<string>();
 
     // 1. Check in-memory token cache
@@ -166,9 +171,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (studentId && memoryTokens[`student_${studentId}`]) {
       foundTokens.add(memoryTokens[`student_${studentId}`].token);
     }
+    if (cleanUserId && memoryTokens[`user_${cleanUserId}`]) {
+      foundTokens.add(memoryTokens[`user_${cleanUserId}`].token);
+    }
 
     // 2. Query Supabase device_tokens table (returns up to 5 active devices per recipient)
-    if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || rawPhone || studentId)) {
+    if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || rawPhone || studentId || cleanUserId)) {
       try {
         const queries: string[] = [];
         if (cleanPhone) {
@@ -179,6 +187,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         if (studentId) {
           queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&student_id=eq.${encodeURIComponent(studentId)}&order=updated_at.desc&limit=5`);
+        }
+        if (cleanUserId) {
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&user_id=eq.${encodeURIComponent(cleanUserId)}&order=updated_at.desc&limit=5`);
         }
 
         for (const qUrl of queries) {
@@ -206,10 +217,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   async function findTargetFcmToken(
-    calleePhone: string | null | undefined,
-    studentId: string | null | undefined
+    calleePhone?: string | null | undefined,
+    studentId?: string | null | undefined,
+    userId?: string | null | undefined
   ): Promise<string | null> {
-    const tokens = await findTargetFcmTokens(calleePhone, studentId);
+    const tokens = await findTargetFcmTokens(calleePhone, studentId, userId);
     return tokens[0] || null;
   }
 
@@ -370,10 +382,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // High-Priority Data Payload expected by FcmService.kt (all values must be strings)
       const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
+      const callerId = String(payload.caller_id || payload.caller?.id || payload.callerId || '');
       const fcmDataPayload: Record<string, string> = {
         type: 'incoming_call',
         call_id: String(call_id || ''),
         caller_name: callerLabel,
+        caller_id: callerId,
         student_name: String(student_name || ''),
         student_id: String(student_id || ''),
         institution_id: String(institution_id || ''),
@@ -735,6 +749,147 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // 3b. RELAY CALL SIGNAL (HIGH-PRIORITY FCM BACKEND FALLBACK FOR SIGNALING)
+  if (req.method === 'POST' && action === 'relay_call_signal') {
+    try {
+      const event = String(req.body?.event || req.body?.type || '').trim();
+      const call_id = String(req.body?.call_id || req.body?.payload?.callId || '').trim();
+      const payload = req.body?.payload || {};
+
+      console.log(`[Call API] relay_call_signal: event="${event}", call_id="${call_id}"`);
+
+      // 1. Cache the signal in memory for fast polling / recovery
+      if (call_id) {
+        if (!activeCallSignals[call_id]) {
+          activeCallSignals[call_id] = [];
+        }
+        activeCallSignals[call_id].push({
+          event,
+          payload,
+          timestamp: Date.now(),
+        });
+        if (activeCallSignals[call_id].length > 20) {
+          activeCallSignals[call_id].shift();
+        }
+      }
+
+      // 2. Identify the target recipient(s) for the signal
+      const cachedCall = call_id ? activeCallPayloads[call_id]?.payload : null;
+      const callerId = payload?.callerId || payload?.caller?.id || cachedCall?.caller_id;
+      const calleePhone = payload?.calleePhone || payload?.student?.guardian_phone || cachedCall?.callee_phone;
+      const studentId = payload?.studentId || payload?.student?.id || cachedCall?.student_id;
+      const institutionId = payload?.institutionId || cachedCall?.institution_id;
+      const senderId = payload?.senderId || payload?.rejectedBy;
+
+      const effectiveServiceAccount = await resolveServiceAccount(institutionId);
+      if (!effectiveServiceAccount) {
+        return res.status(200).json({
+          success: false,
+          fcmSent: false,
+          message: 'Firebase Service Account not configured',
+        });
+      }
+
+      // Determine target devices
+      let targetTokens: string[] = [];
+      const isFromCallee =
+        event === 'call:accept' ||
+        event === 'call:answer' ||
+        event === 'call:reject' ||
+        event === 'call:rejected' ||
+        event === 'call:busy' ||
+        event === 'call:ringing' ||
+        (senderId && callerId && String(senderId) !== String(callerId));
+
+      if (isFromCallee) {
+        // Send to caller's device(s)
+        targetTokens = await findTargetFcmTokens(null, null, callerId);
+      } else {
+        // Send to callee's device(s)
+        targetTokens = await findTargetFcmTokens(calleePhone, studentId);
+      }
+
+      // Fallback: If no tokens found, try finding both caller and callee tokens
+      if (!targetTokens.length) {
+        const callerTokens = await findTargetFcmTokens(null, null, callerId);
+        const calleeTokens = await findTargetFcmTokens(calleePhone, studentId);
+        targetTokens = Array.from(new Set([...callerTokens, ...calleeTokens]));
+      }
+
+      if (!targetTokens.length) {
+        return res.status(200).json({
+          success: true,
+          fcmSent: false,
+          devicesNotified: 0,
+          message: 'No recipient device tokens found for signal relay',
+        });
+      }
+
+      const v1AccessToken = await getFirebaseV1AccessToken(effectiveServiceAccount);
+      if (!v1AccessToken) {
+        return res.status(500).json({
+          success: false,
+          message: 'Could not generate OAuth access token for Firebase HTTP v1.',
+        });
+      }
+
+      // Build data payload expected by Android FcmService
+      const fcmDataPayload: Record<string, string> = {
+        type: 'call_signal',
+        event: event,
+        call_id: String(call_id || ''),
+        sender_id: String(senderId || ''),
+        timestamp: String(Date.now()),
+        payload: typeof payload === 'string' ? payload : JSON.stringify(payload || {}),
+      };
+
+      if (payload?.reason) fcmDataPayload.reason = String(payload.reason);
+      if (payload?.answer?.sdp) fcmDataPayload.answer_sdp = String(payload.answer.sdp);
+      if (payload?.answer?.type) fcmDataPayload.answer_type = String(payload.answer.type);
+      if (payload?.candidate) {
+        fcmDataPayload.candidate = typeof payload.candidate === 'string' ? payload.candidate : JSON.stringify(payload.candidate);
+      }
+
+      const sendResults = await Promise.all(
+        targetTokens.map(async (tok) => {
+          try {
+            const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${v1AccessToken}`,
+              },
+              body: JSON.stringify({
+                message: {
+                  token: tok,
+                  android: {
+                    priority: 'HIGH',
+                    ttl: '30s',
+                  },
+                  data: fcmDataPayload,
+                },
+              }),
+            });
+            const v1Result = await v1Response.json().catch(() => ({}));
+            return { token: tok.slice(0, 10), status: v1Response.status, result: v1Result };
+          } catch (e: any) {
+            return { token: tok.slice(0, 10), error: e.message };
+          }
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        fcmSent: true,
+        devicesNotified: sendResults.length,
+        results: sendResults,
+      });
+    } catch (err: any) {
+      console.error('[Call API] relay_call_signal error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   // 4. SEND GENERIC PUSH NOTIFICATION (notice / result / diary / chat) to parent Android apps
   // Body: { institution_id, title, body, target?: {type:'class'|'all'|'students'|'phones', ...}, conversation_id?, class_name?, sender_id? }
   // Finds parent FCM tokens from device_tokens (matched by guardian phone) and sends
@@ -894,6 +1049,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: false,
       message: 'Call payload not found in cache',
+    });
+  }
+
+  // 5b. GET RELAYED CALL SIGNALS (HTTP POLLING FALLBACK FOR SIGNALS)
+  if (action === 'get_call_signals' || (req.query && req.query.action === 'get_call_signals')) {
+    const targetCallId = String(req.body?.call_id || req.query?.call_id || '').trim();
+    return res.status(200).json({
+      success: true,
+      signals: activeCallSignals[targetCallId] || [],
     });
   }
 

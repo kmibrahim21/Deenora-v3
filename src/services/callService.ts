@@ -145,6 +145,10 @@ export class VoiceCallService {
   private pendingAutoAnswerCallId: string | null = null;
   private autoAnswerTimer: NodeJS.Timeout | null = null;
 
+  // Reliable backend relay signaling & polling fallback state
+  private signalPollingInterval: any = null;
+  private processedSignalTimestamps = new Set<number>();
+
   public hasNativeBridge(): boolean {
     return typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
   }
@@ -565,9 +569,114 @@ export class VoiceCallService {
       const nextMuted = this.toggleMute();
       console.log('[VoiceCall] Native mute_toggle action executed. isMuted:', nextMuted);
       return nextMuted;
+    } else if (act === 'call_signal' || act === 'signal' || act.startsWith('call:')) {
+      const ev = act.startsWith('call:') ? act : 'call_signal';
+      return await this.handleCallSignal(ev, { callId, ...this.activeCallData });
     }
 
     return false;
+  }
+
+  /**
+   * Handle call signal received via Backend API / FCM relay / Native bridge
+   */
+  public async handleCallSignal(event: string, rawPayload: any): Promise<boolean> {
+    try {
+      let payload = rawPayload;
+      if (typeof rawPayload === 'string') {
+        try {
+          payload = JSON.parse(rawPayload);
+        } catch {}
+      }
+      const cleanEvent = String(event || payload?.type || payload?.event || '').trim();
+      const targetCallId = String(payload?.callId || payload?.call_id || '').trim();
+      console.log(`[VoiceCall] [RELAY_SIGNAL] handleCallSignal received: event="${cleanEvent}", callId="${targetCallId}"`, payload);
+
+      if (cleanEvent === 'call:accept' || cleanEvent === 'call:answer') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId) && this.isCaller) {
+          console.log('[VoiceCall] [RELAY_SIGNAL] Caller applying remote answer via relayed signal:', payload);
+          this.stopSignalPolling();
+          await this.handleRemoteAnswer(payload);
+          return true;
+        }
+      } else if (cleanEvent === 'call:reject' || cleanEvent === 'call:rejected') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId)) {
+          console.log('[VoiceCall] [RELAY_SIGNAL] Applying call reject via relayed signal:', payload);
+          this.stopSignalPolling();
+          this.handleCallRejected(payload?.reason || 'কলটি কেটে দেওয়া হয়েছে।');
+          return true;
+        }
+      } else if (cleanEvent === 'call:end' || cleanEvent === 'call:ended') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId)) {
+          console.log('[VoiceCall] [RELAY_SIGNAL] Applying call end via relayed signal:', payload);
+          this.stopSignalPolling();
+          this.handleCallEndedRemotely();
+          return true;
+        }
+      } else if (cleanEvent === 'call:ringing') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId) && this.isCaller) {
+          console.log('[VoiceCall] [RELAY_SIGNAL] Callee phone ringing via relayed signal');
+          this.onStatusChange?.('ringing', this.activeCallData);
+          return true;
+        }
+      } else if (cleanEvent === 'call:busy') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId)) {
+          this.stopSignalPolling();
+          this.handleCalleeBusy(payload?.reason);
+          return true;
+        }
+      } else if (cleanEvent === 'call:candidate') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId)) {
+          await this.handleRemoteCandidate(payload);
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      console.warn('[VoiceCall] handleCallSignal error:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Start polling backend API for relayed signals during call setup (HTTP fallback)
+   */
+  public startSignalPolling(callId: string) {
+    if (!callId) return;
+    this.stopSignalPolling();
+    this.processedSignalTimestamps.clear();
+
+    this.signalPollingInterval = setInterval(async () => {
+      if (!this.activeCallData || this.activeCallData.callId !== callId || this.isCallAnswered) {
+        this.stopSignalPolling();
+        return;
+      }
+      try {
+        const res = await fetch(`/api/call?action=get_call_signals&call_id=${encodeURIComponent(callId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.signals && Array.isArray(data.signals)) {
+            for (const sig of data.signals) {
+              const sigTs = Number(sig?.timestamp || 0);
+              if (sig && sig.event && (!sigTs || !this.processedSignalTimestamps.has(sigTs))) {
+                if (sigTs) this.processedSignalTimestamps.add(sigTs);
+                console.log(`[VoiceCall] [POLL_RELAY] Detected signal via HTTP polling: "${sig.event}"`, sig);
+                await this.handleCallSignal(sig.event, sig.payload);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Silent catch for background poll
+      }
+    }, 1200);
+  }
+
+  public stopSignalPolling() {
+    if (this.signalPollingInterval) {
+      clearInterval(this.signalPollingInterval);
+      this.signalPollingInterval = null;
+    }
   }
 
   public setSpeaker(enabled: boolean): void {
@@ -1364,6 +1473,23 @@ export class VoiceCallService {
     }
 
     await Promise.all(promises);
+
+    // 4. Backend API fallback (reliable, works even if Supabase realtime fails)
+    try {
+      await fetch('/api/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'relay_call_signal',
+          event: event,  // 'call:accept', 'call:reject', 'call:end', etc.
+          call_id: payload?.callId || this.activeCallData?.callId,
+          payload: payload,
+        }),
+      });
+      console.log(`[VoiceCall] [DIAGNOSTIC] "${event}" sent via backend fallback`);
+    } catch (e) {
+      console.warn('[VoiceCall] Backend fallback failed:', e);
+    }
   }
 
   /**
@@ -1858,6 +1984,9 @@ export class VoiceCallService {
       await this.broadcastSignaling('call:initiate', payload);
       console.log('[VoiceCall] Broadcasted call:initiate:', callId);
 
+      // Start reliable backend fallback polling for response signals
+      this.startSignalPolling(callId);
+
       // Trigger High-Priority FCM Push Notification for Android Fcmservice.kt & CallService.kt
       fetch('/api/call', {
         method: 'POST',
@@ -2340,6 +2469,7 @@ export class VoiceCallService {
       this.isCallAnswered = true;
       this.isNativeBridgeActive = false;
       this.currentRingingCallId = null;
+      this.stopSignalPolling();
       callSoundService.stopAll();
       if (this.outgoingRingTimeout) {
         clearTimeout(this.outgoingRingTimeout);
@@ -2629,6 +2759,7 @@ export class VoiceCallService {
    * Cleanup connections, channels and media tracks
    */
   private cleanup() {
+    this.stopSignalPolling();
     dismissIncomingCallNotification();
     callSoundService.stopAll();
 
@@ -2794,10 +2925,16 @@ if (typeof window !== 'undefined') {
     } else if (act === 'incoming' || act === 'incoming_call' || act === 'show_incoming' || act === 'ring') {
       // Trigger incoming call UI with Answer / Decline buttons (no auto-answer)
       return voiceCallService.showIncomingCallUI(callId);
+    } else if (act === 'call_signal' || act === 'signal' || act.startsWith('call:')) {
+      const ev = act.startsWith('call:') ? act : 'call_signal';
+      return voiceCallService.handleCallSignal(ev, { callId, ...voiceCallService.getActiveCall() });
     }
     return voiceCallService.handleNativeAction(action, callId);
   };
   (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
+  (window as any).handleCallSignal = (event: string, payload: any) => {
+    return voiceCallService.handleCallSignal(event, payload);
+  };
   (window as any).showIncomingCallUI = (callId?: string) => {
     return voiceCallService.showIncomingCallUI(callId);
   };

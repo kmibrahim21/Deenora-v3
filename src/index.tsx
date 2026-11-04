@@ -21,11 +21,17 @@ if (typeof window !== 'undefined') {
     } else if (act === 'incoming' || act === 'incoming_call' || act === 'show_incoming' || act === 'ring') {
       // Trigger incoming call UI with Answer / Decline buttons (no auto-answer)
       voiceCallService.showIncomingCallUI(callId);
+    } else if (act === 'call_signal' || act === 'signal' || act.startsWith('call:')) {
+      const ev = act.startsWith('call:') ? act : 'call_signal';
+      voiceCallService.handleCallSignal(ev, { callId, ...voiceCallService.getActiveCall() });
     } else {
       voiceCallService.handleNativeAction(action, callId);
     }
   };
   (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
+  (window as any).handleCallSignal = (event: string, payload: any) => {
+    return voiceCallService.handleCallSignal(event, payload);
+  };
   (window as any).showIncomingCallUI = (callId?: string) => {
     return voiceCallService.showIncomingCallUI(callId);
   };

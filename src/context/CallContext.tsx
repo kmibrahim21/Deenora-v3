@@ -188,11 +188,17 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (cleanAction === 'mute_toggle' || cleanAction === 'togglemute' || cleanAction === 'toggle_mute') {
         const nextMuted = voiceCallService.toggleMute();
         setIsMuted(nextMuted);
+      } else if (cleanAction === 'call_signal' || cleanAction === 'signal' || cleanAction.startsWith('call:')) {
+        const ev = cleanAction.startsWith('call:') ? cleanAction : 'call_signal';
+        await voiceCallService.handleCallSignal(ev, { callId, ...voiceCallService.getActiveCall() });
       }
     };
 
     (window as any).handleNativeCallAction = handleAction;
     (window as any).onNativeCallAction = handleAction;
+    (window as any).handleCallSignal = (event: string, payload: any) => {
+      return voiceCallService.handleCallSignal(event, payload);
+    };
 
     (window as any).setDeviceFcmToken = async (token: string, phone?: string) => {
       console.log('[CallContext] Received setDeviceFcmToken from Android:', token ? `${token.substring(0, 15)}...` : '');
@@ -227,10 +233,16 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           } else if (a === 'incoming' || a === 'incoming_call' || a === 'show_incoming' || a === 'ring') {
             setIsCaller(false);
             return voiceCallService.showIncomingCallUI(cId);
+          } else if (a === 'call_signal' || a === 'signal' || a.startsWith('call:')) {
+            const ev = a.startsWith('call:') ? a : 'call_signal';
+            return voiceCallService.handleCallSignal(ev, { callId: cId, ...voiceCallService.getActiveCall() });
           }
           return voiceCallService.handleNativeAction(act, cId);
         };
         (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
+        (window as any).handleCallSignal = (event: string, payload: any) => {
+          return voiceCallService.handleCallSignal(event, payload);
+        };
       }
     };
   }, [activeCall]);
