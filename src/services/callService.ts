@@ -110,7 +110,9 @@ export class VoiceCallService {
   public activeCallData: CallPayload | null = null;
   private isCaller: boolean = false;
   private isCallAnswered: boolean = false;
+  private isAcceptingCall: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private localIceCandidates: RTCIceCandidateInit[] = [];
   private isSubscribed: boolean = false;
   private subscribePromise: Promise<boolean> | null = null;
   private subscribeResolver: ((val: boolean) => void) | null = null;
@@ -155,6 +157,10 @@ export class VoiceCallService {
 
   public getIsNativeBridgeActive(): boolean {
     return this.isNativeBridgeActive;
+  }
+
+  public getIsCallAnswered(): boolean {
+    return this.isCallAnswered;
   }
 
   public setPendingAutoAnswer(callId: string | null) {
@@ -232,8 +238,7 @@ export class VoiceCallService {
 
     if (currentCall && currentCall.offer) {
       console.log('[VoiceCall] [DIAGNOSTIC] Found active offer matching callId, accepting WebRTC immediately:', currentCall.callId);
-      this.onIncomingCall?.(currentCall);
-      // Set callStatus to 'connected' (NEVER 'calling')
+      // Immediately reflect connected state and proceed with WebRTC answer
       this.onStatusChange?.('connected', currentCall);
       const accepted = await this.acceptCall();
       return accepted;
@@ -244,14 +249,15 @@ export class VoiceCallService {
     console.log('[VoiceCall] [DIAGNOSTIC] Staging auto-answer for upcoming offer:', targetId);
     this.setPendingAutoAnswer(targetId);
     if (currentCall) {
-      this.onIncomingCall?.(currentCall);
-      // Set callStatus to 'connected' (NEVER 'calling')
+      // Set callStatus to 'connected' (NEVER 'calling' or 'incoming')
       this.onStatusChange?.('connected', currentCall);
     }
 
     if (targetId && targetId !== '__ANY__') {
       this.subscribeCallRoom(targetId);
       this.requestOffer(targetId);
+      // Start fallback HTTP signal polling on callee so signals arrive even in background mode
+      this.startSignalPolling(targetId);
     }
     return true;
   }
@@ -988,11 +994,7 @@ export class VoiceCallService {
       } catch {}
     };
     dc.onclose = () => {
-      console.log('[VoiceCall] RTCDataChannel closed');
-      // Only end call if the call was already answered and active
-      if (this.activeCallData && this.peerConnection && this.isCallAnswered) {
-        this.handleCallEndedRemotely();
-      }
+      console.log('[VoiceCall] RTCDataChannel closed (auxiliary channel, not ending audio call)');
     };
   }
 
@@ -1712,6 +1714,7 @@ export class VoiceCallService {
       this.peerConnection = null;
     }
 
+    this.localIceCandidates = [];
     const rtcConfig = await this.getRtcConfiguration();
     const pc = new RTCPeerConnection(rtcConfig);
     this.peerConnection = pc;
@@ -1732,9 +1735,11 @@ export class VoiceCallService {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        const cand = event.candidate.toJSON();
+        this.localIceCandidates.push(cand);
         this.broadcastSignaling('call:candidate', {
           callId,
-          candidate: event.candidate.toJSON(),
+          candidate: cand,
           senderId: this.currentUserId,
           timestamp: Date.now(),
         });
@@ -1856,20 +1861,20 @@ export class VoiceCallService {
         this.onStatusChange?.('connected', this.activeCallData || undefined);
         this.startHeartbeatAndWatchdog();
         this.startDiagnosticLogging(pc);
-      } else if (pc.connectionState === 'disconnected') {
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        console.warn(`[VoiceCall] Connection state "${pc.connectionState}", triggering ICE restart and starting 15s grace period...`);
+        this.triggerIceRestart(`connection_${pc.connectionState}`);
         if (!this.disconnectTimer) {
           this.disconnectTimer = setTimeout(() => {
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-              console.warn('[VoiceCall] Connection state disconnected grace period (15s) expired, ending call');
+              console.warn('[VoiceCall] Connection state grace period (15s) expired, ending call');
               this.handleCallEndedRemotely();
             }
           }, 15000);
         }
-      } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      } else if (pc.connectionState === 'closed') {
         if (this.isCallAnswered) {
           this.handleCallEndedRemotely();
-        } else {
-          console.warn('[VoiceCall] Connection state failed before answer, awaiting candidate recovery or timeout');
         }
       }
     };
@@ -2108,13 +2113,29 @@ export class VoiceCallService {
       targetPhone,
     });
 
-    // 5.1 Guard: If already handling/ringing this exact callId, do not trigger duplicate bridge or restart ring
+    // 5.1 Guard: If already handling/ringing this exact callId, check if auto-answer is pending first!
     if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+      if (payload.offer && !this.activeCallData.offer) {
+        this.activeCallData.offer = payload.offer;
+      }
+      const isAutoAnswerPending = Boolean(
+        this.pendingAutoAnswerCallId &&
+        (this.pendingAutoAnswerCallId === '__ANY__' || this.pendingAutoAnswerCallId === payload.callId)
+      );
+      if (isAutoAnswerPending) {
+        console.log('[VoiceCall] Incoming offer matched pending auto-answer (guard check)! Auto-accepting immediately:', payload.callId);
+        this.setPendingAutoAnswer(null);
+        if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+          try { window.AndroidInterface.stopRinging(); } catch {}
+        }
+        this.activeCallData = payload;
+        this.onStatusChange?.('connected', payload);
+        await this.acceptCall();
+        return;
+      }
+
       if (this.isCallAnswered || this.currentRingingCallId === payload.callId) {
         console.log('[VoiceCall] Duplicate incoming offer ignored for already active/ringing callId:', payload.callId);
-        if (payload.offer && !this.activeCallData.offer) {
-          this.activeCallData.offer = payload.offer;
-        }
         return;
       }
     }
@@ -2259,7 +2280,6 @@ export class VoiceCallService {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
       this.activeCallData = payload;
-      this.onIncomingCall?.(payload);
       this.onStatusChange?.('connected', payload);
       await this.acceptCall();
       return;
@@ -2347,6 +2367,12 @@ export class VoiceCallService {
     // EXPLICIT: role is callee (guardian answering)
     this.isCaller = false;
 
+    if (this.isAcceptingCall || (this.isCallAnswered && this.peerConnection && (this.peerConnection.connectionState === 'connected' || this.peerConnection.iceConnectionState === 'connected'))) {
+      console.log('[VoiceCall] acceptCall already in progress or connected, skipping duplicate execution');
+      return true;
+    }
+    this.isAcceptingCall = true;
+
     if (!this.activeCallData || !this.activeCallData.offer) {
       const stored = this.getActiveCall();
       if (stored && stored.offer) {
@@ -2356,6 +2382,7 @@ export class VoiceCallService {
       } else {
         const targetId = this.activeCallData?.callId || stored?.callId || '__ANY__';
         console.log('[VoiceCall] [DIAGNOSTIC] acceptCall invoked before offer arrived. Staging auto-answer for:', targetId);
+        this.isAcceptingCall = false;
         return await this.answerIncomingCall(targetId);
       }
     }
@@ -2399,7 +2426,9 @@ export class VoiceCallService {
         }
       }
 
-      const answer = await pc.createAnswer();
+      const answer = await pc.createAnswer({
+        offerToReceiveAudio: true,
+      });
       if (answer.sdp) {
         answer.sdp = optimizeOpusSdp(answer.sdp);
       }
@@ -2431,11 +2460,18 @@ export class VoiceCallService {
         this.broadcastSignaling('call:answer', acceptPayload),
       ]);
 
-      // Burst pulse after 80ms to guarantee delivery across network handovers
+      // Burst pulse after 80ms and 200ms to guarantee delivery across network handovers
       setTimeout(() => {
         this.broadcastSignaling('call:accept', acceptPayload).catch(() => {});
         this.broadcastSignaling('call:answer', acceptPayload).catch(() => {});
       }, 80);
+      setTimeout(() => {
+        this.broadcastSignaling('call:accept', acceptPayload).catch(() => {});
+        this.broadcastSignaling('call:answer', acceptPayload).catch(() => {});
+      }, 200);
+
+      // Start fallback HTTP signal polling on callee as well
+      this.startSignalPolling(callId);
 
       this.isCallAnswered = true;
       this.isNativeBridgeActive = false;
@@ -2460,6 +2496,8 @@ export class VoiceCallService {
       callSoundService.stopAll();
       this.rejectCall('কল রিসিভ করতে সমস্যা হয়েছে।', undefined, true);
       return false;
+    } finally {
+      this.isAcceptingCall = false;
     }
   }
 
@@ -2486,6 +2524,19 @@ export class VoiceCallService {
         const candidate = this.pendingCandidates.shift();
         if (candidate) {
           await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+        }
+      }
+
+      // Re-transmit all collected local ICE candidates to Callee to ensure connectivity
+      if (this.localIceCandidates.length > 0) {
+        console.log(`[VoiceCall] [DIAGNOSTIC] Caller re-sending ${this.localIceCandidates.length} collected ICE candidates to Callee for callId: ${this.activeCallData?.callId}`);
+        for (const candidate of this.localIceCandidates) {
+          this.broadcastSignaling('call:candidate', {
+            callId: this.activeCallData?.callId,
+            candidate,
+            senderId: this.currentUserId,
+            timestamp: Date.now(),
+          }).catch(() => {});
         }
       }
 
@@ -2847,7 +2898,9 @@ export class VoiceCallService {
     this.activeCallData = null;
     this.isCaller = false;
     this.isCallAnswered = false;
+    this.isAcceptingCall = false;
     this.pendingCandidates = [];
+    this.localIceCandidates = [];
     this.pendingAutoAnswerCallId = null;
     this.isNativeBridgeActive = false;
     this.isMuted = false;

@@ -165,14 +165,13 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (cleanAction === 'accept_call' || cleanAction === 'answer' || cleanAction === 'accept') {
         native('stopRinging');
         setIsCaller(false);
+        autoAnswerRef.current = null;
         const currentActive = activeCall || voiceCallService.getActiveCall();
         if (currentActive && (!callId || currentActive.callId === callId)) {
           currentActive.role = 'callee';
           currentActive.isCaller = false;
           setActiveCall(currentActive);
           setCallStatus('connected');
-        } else if (callId) {
-          autoAnswerRef.current = callId;
         }
         await voiceCallService.answerIncomingCall(callId);
       } else if (cleanAction === 'incoming' || cleanAction === 'incoming_call' || cleanAction === 'show_incoming' || cleanAction === 'ring') {
@@ -337,6 +336,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Auto-answer when incoming call arrives if user tapped answer on native lockscreen/FCM notification or URL
   useEffect(() => {
     if (callStatus === 'incoming' && activeCall?.callId && (autoAnswerRef.current === activeCall.callId || autoAnswerRef.current === '__ANY__')) {
+      if (voiceCallService.getIsCallAnswered()) {
+        autoAnswerRef.current = null;
+        return;
+      }
       console.log('[CallContext] Auto-answering incoming call matching autoAnswerRef:', activeCall.callId);
       autoAnswerRef.current = null;
       native('stopRinging');
