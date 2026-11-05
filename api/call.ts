@@ -572,11 +572,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Smart Wave 2 Auto-Escalation (3s):
-      // If the app is open, minimized, or wakes up via FcmService, CallService sends 'call:ringing' within ~500ms.
-      // If the user swipe-killed the app on Tecno/HiOS/MIUI (Force-Stopped), Data-Only FCM is blocked by the ROM
-      // and no 'call:ringing' arrives. In that case, automatically send a system-rendered call alert notification
-      // on channel 'deenora_incoming_calls_v22' (which plays the phone's ringtone and opens MainActivity on tap).
+      // Smart Wave 2 Auto-Escalation (Data-Only Retry):
+      // Pure data payload so Google Play Services NEVER displays any system ash notification.
       let wave2Results: any = null;
       let wave2SkippedReason: string | null = null;
       if (call_id) {
@@ -585,9 +582,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (alreadyAcked) {
           wave2SkippedReason = 'Device already acknowledged call (ringing/answered/declined)';
         } else {
-          const callBodyText = student_name
-            ? `ইনকামিং ভয়েস কল (${student_name}) — উত্তর দিতে ট্যাপ করুন`
-            : 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন';
           const wave2DataPayload: Record<string, string> = {
             ...fcmDataPayload,
             CALLER_NAME: callerLabel,
@@ -609,22 +603,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         priority: 'HIGH',
                         ttl: '120s',
                         direct_boot_ok: true,
-                        notification: {
-                          channel_id: 'deenora_incoming_calls_v22',
-                          title: callerLabel,
-                          body: callBodyText,
-                          sound: 'default',
-                          default_sound: true,
-                          default_vibrate_timings: true,
-                          click_action: 'OPEN_ACTIVITY_1',
-                          tag: 'incoming-voice-call',
-                          notification_priority: 'PRIORITY_MAX',
-                          visibility: 'PUBLIC',
-                        },
-                      },
-                      notification: {
-                        title: callerLabel,
-                        body: callBodyText,
                       },
                       data: wave2DataPayload,
                     },
@@ -657,13 +635,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 2b. ESCALATION PUSH — system-rendered notification for swipe-killed phones.
-  // Data-only FCM cannot wake the app on Tecno/HiOS after a recents-swipe, but a
-  // notification payload is rendered by the system itself (verified 2026-10-05:
-  // hybrid notification arrived while the app was closed). The admin client
-  // fires this once if the call is not answered within ~20s. Tapping the
-  // notification opens MainActivity with the data extras → fcm_tap URL →
-  // requestOffer → the caller re-sends the offer → the parent answers.
+  // 2b. ESCALATION PUSH — Data-only retry for background wakeups
   if (req.method === 'POST' && action === 'escalate_call_push') {
     try {
       const payload = req.body?.payload || req.body || {};
@@ -1150,6 +1122,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 4. SEND GENERIC PUSH NOTIFICATION (notice / result / diary / chat) to parent Android apps
+  // Body: { institution_id, title, body, target?: {type:'class'|'all'|'students'|'phones', ...}, conversation_id?, class_name?, sender_id? }
+  // Finds parent FCM tokens from device_tokens (matched by guardian phone) and sends
+  // an FCM v1 DATA message {title, body}. The Android FcmService shows it as a
+  // regular notification (no caller_name => not a call).
   if (req.method === 'POST' && action === 'send_notification_push') {
     try {
       const { institution_id, title, body, target, conversation_id, class_name, sender_id } = req.body || {};
@@ -1228,6 +1204,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else if (/^(general|general-chat|announcement)/i.test(conv)) {
           phones = await allPhones();
         } else {
+          // direct conversation: student id or phone
           const byId = await studentsToPhones([conv]);
           phones = byId.length ? byId : [conv];
         }
@@ -1263,6 +1240,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const data = { title: String(title || 'Deenora'), body: String(body || ''), type: 'notification' };
+      // TEMP DEBUG 2026-10-05: capture which token + what FCM actually says
       const results = await Promise.all(finalTokens.map(async (tok) => {
         try {
           const r = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
@@ -1314,6 +1292,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let signals: Array<{ event: string; payload: any; timestamp: number }> = [];
 
+    // 1. SELECT from call_signals WHERE call_id = ? AND consumed = false
     if (SUPABASE_URL && SUPABASE_KEY) {
       try {
         const selectUrl = `${SUPABASE_URL}/rest/v1/call_signals?select=id,event,payload,created_at&call_id=eq.${encodeURIComponent(targetCallId)}&consumed=eq.false&order=created_at.asc`;
@@ -1333,6 +1312,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               timestamp: new Date(r.created_at).getTime(),
             }));
 
+            // 2. Mark as consumed after returning
             const signalIds = rows.map((r: any) => r.id).filter(Boolean);
             if (signalIds.length > 0) {
               fetch(`${SUPABASE_URL}/rest/v1/call_signals?id=in.(${signalIds.join(',')})`, {
@@ -1354,6 +1334,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.warn('[Call API] get_call_signals DB error:', dbErr);
       }
 
+      // 3. DELETE signals older than 5 minutes (cleanup in background)
       try {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         fetch(`${SUPABASE_URL}/rest/v1/call_signals?created_at=lt.${encodeURIComponent(fiveMinutesAgo)}`, {
@@ -1366,6 +1347,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch {}
     }
 
+    // Fallback: merge with local in-memory buffer if database is pending or returned empty
     const memSignals = activeCallSignals[targetCallId] || [];
     if (signals.length === 0 && memSignals.length > 0) {
       signals = memSignals;
