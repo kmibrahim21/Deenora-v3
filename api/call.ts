@@ -610,7 +610,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         ttl: '120s',
                         direct_boot_ok: true,
                         notification: {
-                          channel_id: 'deenora_incoming_calls_v22',
+                          channel_id: 'deenora_incoming_calls_v23',
                           title: callerLabel,
                           body: callBodyText,
                           sound: 'default',
