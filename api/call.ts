@@ -1,8 +1,3 @@
-# Complete `api/call.ts` Code
-
-You can directly copy the code below and paste it into your `api/call.ts` in Web AI Studio / Vercel.
-
-```typescript
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 
@@ -616,9 +611,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         direct_boot_ok: true,
                         notification: {
                           channel_id: 'deenora_incoming_calls_v22',
-                          title: `📞 ${callerLabel}`,
+                          title: callerLabel,
                           body: callBodyText,
-                          color: '#0D2B58',
                           sound: 'default',
                           default_sound: true,
                           default_vibrate_timings: true,
@@ -629,7 +623,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         },
                       },
                       notification: {
-                        title: `📞 ${callerLabel}`,
+                        title: callerLabel,
                         body: callBodyText,
                       },
                       data: wave2DataPayload,
@@ -1411,4 +1405,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(405).json({ success: false, message: 'Method Not Allowed' });
 }
-```
