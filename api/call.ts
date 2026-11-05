@@ -225,6 +225,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return tokens[0] || null;
   }
 
+  // Helper: Resolve caller display name (replaces generic 'user' with actual institution name)
+  async function resolveCallerLabel(rawCallerName?: string | null, institutionId?: string | null): Promise<string> {
+    const clean = String(rawCallerName || '').trim();
+    if (clean && clean.toLowerCase() !== 'user') {
+      return clean;
+    }
+    if (institutionId && SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const instRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/institutions?select=name&id=eq.${encodeURIComponent(String(institutionId))}&limit=1`,
+          {
+            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+          }
+        );
+        if (instRes.ok) {
+          const instData = await instRes.json();
+          const instName = String(instData?.[0]?.name || '').trim();
+          if (instName && instName.toLowerCase() !== 'user') {
+            return instName;
+          }
+        }
+      } catch {}
+    }
+    return 'মাদরাসা এডমিন';
+  }
+
   // Helper: Resolve effective service account (env or institution settings)
   async function resolveServiceAccount(institutionId?: string): Promise<FirebaseServiceAccount | null> {
     if (serviceAccount) return serviceAccount;
@@ -424,7 +450,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // High-Priority Data Payload expected by FcmService.kt (all values must be strings)
-      const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
+      const callerLabel = await resolveCallerLabel(caller_name, institution_id);
       const callerId = String(payload.caller_id || payload.caller?.id || payload.callerId || '');
       const fcmDataPayload: Record<string, string> = {
         type: 'incoming_call',
@@ -692,7 +718,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
+      const callerLabel = await resolveCallerLabel(caller_name, institution_id);
       const callBodyText = student_name
         ? `ইনকামিং ভয়েস কল (${student_name}) — উত্তর দিতে ট্যাপ করুন`
         : 'ইনকামিং ভয়েস কল — উত্তর দিতে ট্যাপ করুন';
