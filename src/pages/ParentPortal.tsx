@@ -229,8 +229,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return (config?.modules || {}) as any;
   }, [currentInstitution, madrasah]);
 
-  // Live chat is temporarily hidden from parent portal as requested
-  const isLiveChatEnabled = false;
+  // Live chat is enabled in parent portal
+  const isLiveChatEnabled = true;
 
   const [attendance, setAttendance] = useState<Attendance[]>(() => initialCache?.attendance || []);
   const [fees, setFees] = useState<Fee[]>(() => initialCache?.fees || []);
@@ -1027,39 +1027,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           )}
         </AnimatePresence>
 
-        {/* Top Notification Enable Banner */}
-        {showNotifBanner && notifPermission === 'default' && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-5 py-3 flex flex-wrap items-center justify-between gap-2 shadow-md z-30"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-                <BellRing className="w-4 h-4 text-white animate-bounce" />
-              </div>
-              <div className="text-left">
-                <p className="font-black text-xs font-noto">মোবাইল স্ক্রিনে সরাসরি কল ও নোটিশ পেতে নোটিফিকেশন চালু করুন 📞🔔</p>
-                <p className="text-[10px] text-blue-100 font-noto">হোয়াটসঅ্যাপের মতো সরাসরি মোবাইল স্ক্রিনে কল আসা এবং ক্লাসের নোটিশ পাবেন।</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleEnableNotifications}
-                className="px-3.5 py-1.5 bg-white text-blue-700 font-black text-xs rounded-xl shadow-md active:scale-95 transition-all font-noto hover:bg-blue-50 cursor-pointer"
-              >
-                অনুমতি দিন
-              </button>
-              <button
-                onClick={() => setShowNotifBanner(false)}
-                className="p-1 text-white/80 hover:text-white cursor-pointer"
-              >
-                <XCircle size={18} />
-              </button>
-            </div>
-          </motion.div>
-        )}
+
 
         <main className={`flex-1 w-full ${activeTab === 'chat' ? 'h-full overflow-hidden p-0 m-0' : 'overflow-y-auto custom-scrollbar px-3.5 sm:px-5 md:px-8 pt-4 pb-44 md:pb-8'}`}>
         {/* Date Display */}

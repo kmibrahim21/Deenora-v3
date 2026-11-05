@@ -7,7 +7,6 @@ import {
   Volume2,
   VolumeX,
   Grid,
-  GraduationCap,
   Minimize2,
   Maximize2,
   Lock,
@@ -101,14 +100,36 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   const displayInstName = isGenericOrEmail(rawInstName) ? 'Deenora Madrasa' : rawInstName.trim();
   const callerPersonName = !isGenericOrEmail(caller?.name) ? caller?.name?.trim() : '';
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'DM';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
+  // Resolve Institution Logo from callData or cached institution data in localStorage (fallback to /Deenora192.png)
+  const resolveInstitutionLogo = (): string => {
+    const fromCall = (callData as any)?.institutionLogo || (caller as any)?.logo_url;
+    if (fromCall && typeof fromCall === 'string' && fromCall.trim()) return fromCall.trim();
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('parent_data_v2_')) {
+            const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+            const logo = parsed?.data?.institution?.logo_url;
+            if (logo && typeof logo === 'string') return logo;
+          }
+        }
+        const rawProfile =
+          localStorage.getItem('deenora_cache_profile') || localStorage.getItem('cache_profile');
+        if (rawProfile) {
+          const parsed = JSON.parse(rawProfile);
+          const d = parsed?.data || parsed;
+          if (d?.logo_url) return d.logo_url;
+        }
+      } catch {}
     }
-    return name.slice(0, 2).toUpperCase();
+    return '/Deenora192.png';
   };
+
+  const institutionLogoUrl = resolveInstitutionLogo();
+  // Show student photo for admin outgoing call if available, otherwise Institution Logo!
+  const avatarImageUrl =
+    effectiveIsCaller && student.photo_url ? student.photo_url : institutionLogoUrl;
 
   const playTone = (digit: string) => {
     setKeypadDigits((prev) => (prev.length < 16 ? prev + digit : prev));
@@ -134,12 +155,12 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   // Primary & secondary titles matching Design 1 layout
   const primaryTitle = effectiveIsCaller
     ? student.name || 'শিক্ষার্থী'
-    : callerPersonName || displayInstName;
+    : displayInstName;
 
   const secondarySubtitle = effectiveIsCaller
     ? `${student.guardian_name || 'অভিভাবক'}${student.class_name ? ` • ${student.class_name}` : ''}`
     : callerPersonName
-    ? displayInstName
+    ? `${callerPersonName}${student.name ? ` • ${student.name}` : ''}`
     : student.name
     ? `শিক্ষার্থী: ${student.name}`
     : 'মাদরাসা ভয়েস কল';
@@ -161,42 +182,56 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
       ? 'Deenora Voice Call • Failed'
       : 'Deenora Voice Call • Ringing...';
 
-  // 1. FLOATING NOTIFICATION BANNER (Design 1 Layout in Deenora Dark Navy & Royal Blue Theme)
+  // 1. FLOATING NOTIFICATION BANNER (Design 1 Glassy Style with Institution Logo)
   if (isMinimized) {
     return (
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] w-[94%] max-w-[400px] animate-in slide-in-from-top-5 duration-300">
-        <div className="flex items-center gap-3.5 px-4 py-3.5 rounded-[24px] bg-gradient-to-br from-[#0D2B56]/95 via-[#092144]/95 to-[#061730]/95 border border-[#60A5FA]/40 shadow-[0_16px_40px_rgba(0,0,0,0.55)] backdrop-blur-2xl text-white">
-          {/* Left Avatar with Royal Blue Call Badge */}
-          <div className="relative w-14 h-14 shrink-0">
-            <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#1E40AF] to-[#0F296B] border border-[#60A5FA]/45 overflow-hidden flex items-center justify-center text-[#93C5FD] font-bold text-base shadow-md">
-              {student.photo_url ? (
-                <img
-                  src={student.photo_url}
-                  alt={primaryTitle}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <GraduationCap className="w-7 h-7 text-[#93C5FD]" />
-              )}
+        <div
+          className="relative overflow-hidden flex items-center gap-3.5 px-4 py-3.5 rounded-[24px] border border-[#93C5FD]/55 shadow-[0_18px_45px_rgba(3,15,38,0.65)] backdrop-blur-2xl text-white"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(19, 59, 116, 0.88) 0%, rgba(13, 43, 88, 0.86) 55%, rgba(8, 28, 60, 0.90) 100%)',
+          }}
+        >
+          {/* Top Glass Specular Sheen */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-[24px]"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(147, 197, 253, 0.24) 0%, rgba(96, 165, 250, 0.06) 70%, rgba(255, 255, 255, 0) 100%)',
+            }}
+          />
+
+          {/* Left Institution Logo with Green Call Badge (Design 1 Style) */}
+          <div className="relative z-10 w-14 h-14 shrink-0">
+            <div className="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-[#1E40AF] to-[#0B2149] border border-[#93C5FD]/50 overflow-hidden flex items-center justify-center p-0.5 shadow-md">
+              <img
+                src={institutionLogoUrl}
+                alt={displayInstName}
+                className="w-full h-full object-contain rounded-xl bg-white/95"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/Deenora192.png';
+                }}
+              />
             </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#2563EB] border-2 border-[#092144] flex items-center justify-center shadow">
+            <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#16A34A] border-2 border-[#E0F2FE] flex items-center justify-center shadow">
               <Phone size={10} className="text-white fill-current" />
             </span>
           </div>
 
-          {/* Right Info + Pill Action Buttons */}
-          <div className="flex-1 min-w-0">
+          {/* Right Info + Glossy Pill Action Buttons */}
+          <div className="relative z-10 flex-1 min-w-0">
             <div className="flex items-center justify-between gap-1 mb-2">
               <p className="text-xs sm:text-[13px] font-bold text-white truncate font-noto">
                 {displayInstName}{' '}
-                <span className="font-normal text-[#93C5FD]">
+                <span className="font-normal text-[#BAE6FD]">
                   • {status === 'connected' ? formatDuration(duration) : 'Incoming Voice Call'}
                 </span>
               </p>
               <button
                 onClick={() => setIsMinimized(false)}
-                className="p-1 rounded-full hover:bg-white/10 text-white/75 transition-colors shrink-0"
+                className="p-1 rounded-full hover:bg-white/15 text-white/80 transition-colors shrink-0"
                 title="ফুল স্ক্রিন"
               >
                 <Maximize2 size={14} />
@@ -206,7 +241,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
             <div className="flex items-center gap-2.5">
               <button
                 onClick={status === 'incoming' ? onReject : onEnd}
-                className="flex-1 py-2 rounded-full bg-gradient-to-b from-[#F87171] to-[#EF4444] text-white font-bold text-xs shadow-md shadow-red-500/25 active:scale-95 transition-all"
+                className="flex-1 py-2 rounded-full bg-gradient-to-b from-[#FB7185] via-[#EF4444] to-[#DC2626] border border-red-300/40 text-white font-bold text-xs shadow-md shadow-red-500/30 active:scale-95 transition-all"
               >
                 {status === 'incoming' ? 'Decline' : 'End Call'}
               </button>
@@ -214,7 +249,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
               {status === 'incoming' ? (
                 <button
                   onClick={onAccept}
-                  className="flex-1 py-2 rounded-full bg-gradient-to-b from-[#22C55E] to-[#16A34A] text-white font-bold text-xs shadow-md shadow-green-500/25 active:scale-95 transition-all"
+                  className="flex-1 py-2 rounded-full bg-gradient-to-b from-[#A7F3D0] via-[#6EE7B7] to-[#34D399] border border-emerald-200/60 text-[#042F26] font-bold text-xs shadow-md shadow-emerald-500/30 active:scale-95 transition-all"
                 >
                   Answer
                 </button>
@@ -224,7 +259,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
                   className={`flex-1 py-2 rounded-full font-bold text-xs shadow-md active:scale-95 transition-all ${
                     isMuted
                       ? 'bg-white text-[#071B36]'
-                      : 'bg-gradient-to-b from-[#3B82F6] to-[#2563EB] text-white'
+                      : 'bg-gradient-to-b from-[#A7F3D0] via-[#6EE7B7] to-[#34D399] text-[#042F26]'
                   }`}
                 >
                   {isMuted ? 'Unmute' : 'Mute'}
@@ -240,7 +275,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   const isTerminated =
     status === 'rejected' || status === 'ended' || status === 'busy' || status === 'failed';
 
-  // 2. FULL-SCREEN CALL UI — Design 1 Layout in Deenora Brand Dark Navy & Royal Blue (#071B36 / #2563EB)
+  // 2. FULL-SCREEN CALL UI — Design 1 Layout in Deenora Brand Dark Navy & Royal Blue (#071B36 / #2563EB) with Institution Logo
   return (
     <div className="fixed inset-0 z-[99999] w-screen h-screen min-h-screen bg-gradient-to-b from-[#0B2954] via-[#071B36] to-[#041022] text-white flex flex-col items-center justify-between pt-6 pb-0 px-0 select-none animate-in fade-in duration-300 overflow-hidden">
       {/* Ambient Radial Royal Blue Glow */}
@@ -251,7 +286,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
         }}
       />
 
-      {/* Subtle Islamic Geometric Arch / Dome Silhouette at Bottom in Royal Blue & Soft Gold */}
+      {/* Subtle Islamic Geometric Arch / Dome Silhouette at Bottom in Royal Blue */}
       <svg
         className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[440px] h-[260px] opacity-25"
         viewBox="0 0 400 240"
@@ -350,9 +385,9 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
         </div>
       )}
 
-      {/* Center Section: Glowing Concentric Royal Blue Wave Rings + Avatar + Caller Hierarchy */}
+      {/* Center Section: Glowing Concentric Royal Blue Wave Rings + Institution Logo + Caller Hierarchy */}
       <div className="relative z-10 flex flex-col items-center justify-center flex-1 w-full max-w-md px-6 my-auto">
-        {/* Avatar with Design 1 Segmented Glowing Arc Rings in Deenora Blue */}
+        {/* Institution Logo with Design 1 Segmented Glowing Arc Rings in Deenora Blue */}
         <div className="relative w-56 h-56 flex items-center justify-center mb-5">
           {/* Animated Concentric Segmented Royal Blue Arcs */}
           <svg
@@ -407,20 +442,17 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
             />
           )}
 
-          {/* Circular Portrait / Avatar */}
-          <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-[#3B82F6] via-[#2563EB] to-[#0A254A] flex items-center justify-center text-white font-bold text-4xl shadow-[0_0_35px_rgba(37,99,235,0.6)] overflow-hidden border-[3.5px] border-[#DBEAFE] shrink-0">
-            {student.photo_url ? (
-              <img
-                src={student.photo_url}
-                alt={primaryTitle}
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : effectiveIsCaller ? (
-              <span>{getInitials(student.name)}</span>
-            ) : (
-              <GraduationCap className="text-[#DBEAFE] w-14 h-14" />
-            )}
+          {/* Circular Institution Logo / Portrait */}
+          <div className="relative w-32 h-32 rounded-full bg-white flex items-center justify-center shadow-[0_0_35px_rgba(37,99,235,0.65)] overflow-hidden border-[3.5px] border-[#93C5FD] shrink-0 p-1.5">
+            <img
+              src={avatarImageUrl}
+              alt={primaryTitle}
+              className="w-full h-full object-contain rounded-full"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/Deenora192.png';
+              }}
+            />
           </div>
         </div>
 
@@ -543,7 +575,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
               <span className="text-white/90 text-xs sm:text-[13px] font-medium">Decline</span>
             </div>
 
-            {/* Glowing Answer Button with Soundwave Arcs */}
+            {/* Glowing Answer Button with Soundwave Arcs (Design 1 Style) */}
             <div className="flex flex-col items-center gap-2.5">
               <div className="relative flex items-center justify-center">
                 {/* Left & Right Glowing Wave Arcs around Answer Button */}
@@ -554,28 +586,28 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
                 >
                   <path
                     d="M16 30C9 40 9 56 16 66"
-                    stroke="#60A5FA"
+                    stroke="#6EE7B7"
                     strokeOpacity="0.7"
                     strokeWidth="2"
                     strokeLinecap="round"
                   />
                   <path
                     d="M10 24C1 38 1 58 10 72"
-                    stroke="#60A5FA"
+                    stroke="#6EE7B7"
                     strokeOpacity="0.4"
                     strokeWidth="1.8"
                     strokeLinecap="round"
                   />
                   <path
                     d="M80 30C87 40 87 56 80 66"
-                    stroke="#60A5FA"
+                    stroke="#6EE7B7"
                     strokeOpacity="0.7"
                     strokeWidth="2"
                     strokeLinecap="round"
                   />
                   <path
                     d="M86 24C95 38 95 58 86 72"
-                    stroke="#60A5FA"
+                    stroke="#6EE7B7"
                     strokeOpacity="0.4"
                     strokeWidth="1.8"
                     strokeLinecap="round"
@@ -584,10 +616,10 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
 
                 <button
                   onClick={onAccept}
-                  className="relative w-[72px] h-[72px] rounded-full bg-gradient-to-b from-[#22C55E] to-[#16A34A] border border-green-300/60 flex items-center justify-center shadow-[0_0_32px_rgba(34,197,94,0.7)] active:scale-95 hover:brightness-105 transition-all"
+                  className="relative w-[72px] h-[72px] rounded-full bg-gradient-to-b from-[#A7F3D0] via-[#6EE7B7] to-[#34D399] border border-emerald-100/70 flex items-center justify-center shadow-[0_0_32px_rgba(52,211,153,0.7)] active:scale-95 hover:brightness-105 transition-all"
                   title="Answer"
                 >
-                  <Phone className="text-white w-8 h-8 fill-current" />
+                  <Phone className="text-[#042F26] w-8 h-8 fill-current" />
                 </button>
               </div>
               <span className="text-white/90 text-xs sm:text-[13px] font-medium">Answer</span>
