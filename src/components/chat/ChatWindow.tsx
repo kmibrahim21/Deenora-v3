@@ -21,39 +21,28 @@ import {
   CheckCheck, 
   ArrowLeft, 
   Pin, 
-  Search, 
   MoreVertical, 
   X, 
   Star, 
-  Reply, 
   Copy, 
-  Forward, 
   Trash2, 
-  Settings, 
-  CheckSquare,
-  Smile,
   PhoneCall,
   Video,
   Download,
-  File,
   FileText,
   ExternalLink,
-  MicOff,
-  Square,
   Bell,
   BellRing,
   Send,
   Play,
   Pause,
-  Mic,
-  Volume2,
-  VolumeX,
   Loader2,
   MessageSquare,
   Clock,
   AlertCircle,
   RefreshCw,
-  Archive
+  Archive,
+  BadgeCheck
 } from 'lucide-react';
 import { ChatArchiveService } from '../../services/chatArchiveService';
 
@@ -93,7 +82,7 @@ const AudioPlayer: React.FC<{
 }> = ({ url, messageId, clientMessageId, duration, isDark, lang, isMe }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [totalDur, setTotalDur] = useState<number>(duration && duration > 0 ? duration : 0);
+  const [totalDur, setTotalDur] = useState<number>(duration && duration > 0 ? duration : 7);
   const [resolvedUrl, setResolvedUrl] = useState<string>(url || '');
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -101,7 +90,6 @@ const AudioPlayer: React.FC<{
     if (url) {
       setResolvedUrl(url);
     } else {
-      // Check local cached audio storage
       const cached = (messageId && localStorage.getItem(`chat_audio_${messageId}`)) ||
         (clientMessageId && localStorage.getItem(`chat_audio_${clientMessageId}`));
       if (cached) {
@@ -119,7 +107,6 @@ const AudioPlayer: React.FC<{
   const togglePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!resolvedUrl) {
-      // Fallback: create soft synthetic voice preview tone
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
@@ -130,7 +117,7 @@ const AudioPlayer: React.FC<{
           osc.frequency.setValueAtTime(440, ctx.currentTime);
           osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.5);
           gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start();
@@ -160,13 +147,13 @@ const AudioPlayer: React.FC<{
   };
 
   const formatTime = (seconds: number) => {
-    if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
+    if (!seconds || isNaN(seconds) || seconds < 0) return '00:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const effectiveDuration = totalDur || (audioRef.current?.duration && isFinite(audioRef.current.duration) ? audioRef.current.duration : 1);
+  const effectiveDuration = totalDur || (audioRef.current?.duration && isFinite(audioRef.current.duration) ? audioRef.current.duration : 7);
   const progressRatio = Math.min(1, Math.max(0, currentTime / effectiveDuration));
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -180,54 +167,54 @@ const AudioPlayer: React.FC<{
     setCurrentTime(newTime);
   };
 
-  // 16 stylized waveform bar heights
-  const waveformBars = [40, 65, 30, 85, 95, 55, 75, 45, 90, 60, 35, 80, 100, 70, 50, 65];
+  // 24 vertical equalizer waveform bar heights (Matches Design 2 voice bubble)
+  const waveformBars = [
+    30, 55, 80, 40, 95, 60, 35, 85, 100, 50, 75, 45,
+    90, 65, 35, 80, 60, 40, 70, 50, 35, 55, 40, 30
+  ];
 
   return (
-    <div className={`flex items-center gap-2.5 p-2 sm:p-2.5 rounded-2xl min-w-[180px] sm:min-w-[240px] max-w-full overflow-hidden select-none ${
-      isMe ? 'bg-white/15 text-white' : 'bg-slate-100/90 dark:bg-slate-700/60 text-slate-800 dark:text-slate-100'
+    <div className={`flex items-center gap-3 py-1 px-1 min-w-[210px] sm:min-w-[260px] max-w-full overflow-hidden select-none ${
+      isMe ? 'text-white' : 'text-slate-800 dark:text-slate-100'
     }`}>
       <button 
         type="button"
         onClick={togglePlay}
-        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer ${
           isMe 
-            ? 'bg-white text-blue-600' 
-            : 'bg-blue-600 text-white'
+            ? 'bg-white text-[#1D4ED8]' 
+            : 'bg-gradient-to-tr from-[#1E40AF] to-[#2563EB] text-white'
         }`}
         title={isPlaying ? 'Pause' : 'Play voice message'}
       >
         {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
       </button>
 
-      <div className="flex-1 min-w-0 space-y-1.5 cursor-pointer" onClick={handleSeek}>
-        {/* Waveform Visualization Bars */}
-        <div className="flex items-center gap-0.5 sm:gap-1 h-6">
-          {waveformBars.map((heightPercent, idx) => {
-            const barProgress = idx / waveformBars.length;
-            const isFilled = barProgress <= progressRatio;
-            return (
-              <div
-                key={idx}
-                className={`flex-1 rounded-full transition-all duration-150 ${
-                  isMe
-                    ? isFilled ? 'bg-white' : 'bg-white/40'
-                    : isFilled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
-                }`}
-                style={{ height: `${heightPercent}%`, minWidth: '2px' }}
-              />
-            );
-          })}
-        </div>
-
-        {/* Time duration indicator */}
-        <div className={`flex justify-between text-[10px] font-medium font-mono ${
-          isMe ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'
-        }`}>
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(totalDur || (audioRef.current?.duration && isFinite(audioRef.current.duration) ? audioRef.current.duration : 0))}</span>
-        </div>
+      {/* Waveform Visualization Bars */}
+      <div className="flex-1 min-w-0 flex items-center gap-[3px] h-7 cursor-pointer" onClick={handleSeek}>
+        {waveformBars.map((heightPercent, idx) => {
+          const barProgress = idx / waveformBars.length;
+          const isFilled = barProgress <= progressRatio;
+          return (
+            <div
+              key={idx}
+              className={`flex-1 rounded-full transition-all duration-150 ${
+                isMe
+                  ? isFilled ? 'bg-white' : 'bg-white/45'
+                  : isFilled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+              }`}
+              style={{ height: `${heightPercent}%`, minWidth: '2px' }}
+            />
+          );
+        })}
       </div>
+
+      {/* Duration on right (Matches Design 2 "00:07") */}
+      <span className={`text-[11px] font-bold font-mono shrink-0 ${
+        isMe ? 'text-white/95' : 'text-slate-600 dark:text-slate-300'
+      }`}>
+        {formatTime(isPlaying ? currentTime : effectiveDuration)}
+      </span>
 
       {resolvedUrl && (
         <audio 
@@ -351,7 +338,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleBellClick = async () => {
-    const res = await requestPushNotificationPermission();
+    await requestPushNotificationPermission();
     setPushState('granted');
     playNotificationSound();
     sendPushNotification(
@@ -360,6 +347,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     );
     setToastMessage(lang === 'bn' ? 'পুশ নোটিফিকেশন চালু করা হয়েছে! 🔔' : 'Push notifications enabled! 🔔');
   };
+
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -506,32 +494,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [localMessages]);
 
-  if (!conversation) {
-    return (
-      <div className={`flex-1 flex flex-col items-center justify-center p-8 text-center ${
-        isDark ? 'bg-[#0B141A] text-slate-400' : 'bg-[#EFEAE2] text-slate-500'
-      }`}>
-        <div className="w-16 h-16 rounded-3xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 shadow-sm animate-pulse">
-          <Users className="w-8 h-8" />
-        </div>
-        <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
-          {lang === 'bn' ? 'যেকোনো চ্যাট নির্বাচন করুন' : 'Select a Conversation'}
-        </h3>
-        <p className="text-xs max-w-sm text-slate-500 dark:text-slate-400">
-          {lang === 'bn'
-            ? 'ক্লাস গ্রুপ, শিক্ষক বা প্রতিষ্ঠানের নোটিশ বোর্ডের সাথে লাইভ যুক্ত থাকতে যেকোনো একটি চ্যাট নির্বাচন করুন।'
-            : 'Select a conversation from the left menu to start messaging.'}
-        </p>
-      </div>
-    );
-  }
-
   const getRoleLabel = (role?: string) => {
     if (role === 'teacher' || role === 'madrasah_admin' || role === 'super_admin') {
-      return lang === 'bn' ? 'শ্রেণি শিক্ষক' : 'Class Teacher';
+      return lang === 'bn' ? 'শ্রেণি শিক্ষক' : 'Teacher';
     }
     if (role === 'parent' || role === 'guardian') {
-      return lang === 'bn' ? 'অভিভাবক' : 'Parent';
+      return lang === 'bn' ? 'অভিভাবক' : 'Guardian';
     }
     return lang === 'bn' ? 'সদস্য' : 'Member';
   };
@@ -625,7 +593,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
   };
 
-  const handleForwardSend = (targetConvIds: string[], msg: ChatMessage) => {
+  const handleForwardSend = (targetConvIds: string[]) => {
     setToastMessage(
       lang === 'bn'
         ? `${targetConvIds.length} টি চ্যাটে মেসেজ ফরোয়ার্ড করা হয়েছে`
@@ -669,14 +637,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
   };
 
-  // Dedicated Universal Document Downloader (Fixes downloading HTML instead of PDF/DOCX)
+  // Dedicated Universal Document Downloader
   const handleDownloadDocument = async (msg: ChatMessage, fileName: string) => {
     try {
       setToastMessage(lang === 'bn' ? 'ডকুমেন্ট ডাউনলোড হচ্ছে...' : 'Downloading document...');
       const url = msg.attachment_url;
       const cleanFileName = fileName || msg.attachment_name || 'document.pdf';
 
-      // 1. If Base64 data URI (embedded binary payload)
       if (url && url.startsWith('data:')) {
         const parts = url.split(',');
         const mimeMatch = parts[0].match(/:(.*?);/);
@@ -699,7 +666,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
 
-      // 2. If Remote HTTP/HTTPS/Blob URL
       if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:'))) {
         try {
           const res = await fetch(url);
@@ -719,7 +685,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           console.warn('Direct fetch failed, falling back to window.open:', fetchErr);
         }
 
-        // Direct anchor download fallback
         const a = document.createElement('a');
         a.href = url;
         a.target = '_blank';
@@ -731,7 +696,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
 
-      // 3. Fallback for generated documents or missing storage links
       const fallbackContent = `Deenora Educational Document\n============================\nTitle: ${cleanFileName}\nDate: ${new Date().toLocaleDateString('bn-BD')}\nMessage: ${msg.message}\nSender: ${msg.sender_name || 'Admin'}`;
       const blob = new Blob([fallbackContent], { type: 'text/plain;charset=utf-8' });
       const blobUrl = URL.createObjectURL(blob);
@@ -757,7 +721,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     touchTimerRef.current = setTimeout(() => {
       setContextMenuMsg(msg);
       touchTimerRef.current = null;
-    }, 500); // 500ms long press threshold
+    }, 500);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -765,7 +729,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const dx = Math.abs(e.touches[0].clientX - touchStartPos.current.x);
       const dy = Math.abs(e.touches[0].clientY - touchStartPos.current.y);
       if (dx > 8 || dy > 8) {
-        // User is scrolling: cancel long press immediately to avoid freezing screen
         if (touchTimerRef.current) {
           clearTimeout(touchTimerRef.current);
           touchTimerRef.current = null;
@@ -783,7 +746,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const visibleMessages = localMessages.filter(m => !m.deleted_for_me);
-  const quickEmojiList = ['👍', '❤️', '😂', '😮', '🙏', '🕌'];
+  const quickEmojiList = ['❤️', '👍', '😊', '😍', '🙏', '🕌'];
 
   const getMessageDateLabel = (dateStr: string) => {
     try {
@@ -810,29 +773,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   if (!conversation) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center p-8 text-center ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50/70 text-slate-800'
+        isDark ? 'bg-[#061121] text-slate-100' : 'bg-[#F7F5F0] text-slate-800'
       }`}>
         {loading ? (
           <div className="flex flex-col items-center max-w-xs animate-in fade-in duration-300">
             <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 ring-1 ring-blue-500/20 shadow-sm shadow-blue-500/10">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
             </div>
-            <h3 className="text-base font-bold font-noto text-slate-900 dark:text-slate-100 mb-1">
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
               {lang === 'bn' ? 'কনভারসেশন লোড হচ্ছে...' : 'Loading conversation...'}
             </h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-noto">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {lang === 'bn' ? 'অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন' : 'Please wait a moment...'}
             </p>
           </div>
         ) : (
           <div className="flex flex-col items-center max-w-xs">
-            <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-950/40 text-blue-500 flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-3xl bg-blue-600/10 text-blue-600 flex items-center justify-center mb-4">
               <MessageSquare className="w-8 h-8 stroke-[1.5]" />
             </div>
-            <h3 className="text-base font-bold font-noto text-slate-800 dark:text-slate-200 mb-1">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
               {lang === 'bn' ? 'কোনো চ্যাট নির্বাচন করা হয়নি' : 'No conversation selected'}
             </h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-noto">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {lang === 'bn' ? 'বাম পাশের তালিকা থেকে একটি গ্রুপ বা চ্যাট নির্বাচন করুন' : 'Select a group or chat from the sidebar to start messaging'}
             </p>
           </div>
@@ -847,8 +810,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className={`flex-1 flex flex-col h-full relative ${
       isDark
-        ? 'bg-slate-950 text-slate-100'
-        : 'bg-slate-50/70 text-slate-800'
+        ? 'bg-[#061121] text-slate-100'
+        : 'bg-[#F7F5F0] text-slate-800'
     }`}>
       
       {/* Toast Notification */}
@@ -866,7 +829,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Multi-Select Header (Replaces top bar in Select Mode) */}
       {isSelectMode ? (
-        <div className="p-3 px-4 bg-blue-600 text-white flex items-center justify-between shadow-md z-30">
+        <div className="p-3 px-4 bg-[#0A254D] text-white flex items-center justify-between shadow-md z-30">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -903,12 +866,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       ) : (
-        /* Elegant Compact Header (No giant blue toolbar) */
+        /* Design 2 Luxury Pearl/White Top Header with Verified Badge & Action Buttons */
         <div 
-          className={`px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sticky top-0 z-30 transition-colors backdrop-blur-md border-b shadow-2xs ${
+          className={`px-3 sm:px-5 py-3 flex items-center justify-between gap-2 sticky top-0 z-30 transition-colors backdrop-blur-md border-b ${
             isDark 
-              ? 'bg-slate-900/95 border-slate-800 text-slate-100' 
-              : 'bg-white/95 border-slate-200/80 text-slate-800'
+              ? 'bg-[#081529]/95 border-slate-800 text-slate-100' 
+              : 'bg-white/95 border-[#E6E2D8] text-slate-900 shadow-[0_2px_10px_rgba(15,23,42,0.03)]'
           }`}
           style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
         >
@@ -916,22 +879,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             {onBackMobile && (
               <button
                 onClick={onBackMobile}
-                className="md:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all shrink-0"
+                className="md:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95 transition-all shrink-0 cursor-pointer"
                 title={lang === 'bn' ? 'ফিরে যান' : 'Back'}
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
 
-            {/* Avatar */}
+            {/* Circular Avatar */}
             <div className="relative shrink-0 cursor-pointer" onClick={onOpenInfo}>
               <div
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-xs ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ${
+                  isDark ? 'ring-slate-800' : 'ring-blue-100'
+                } ${
                   conversation.type === 'announcement'
-                    ? 'bg-gradient-to-tr from-amber-500 to-rose-500'
+                    ? 'bg-gradient-to-tr from-emerald-500 to-teal-500'
                     : conversation.type === 'class_group'
-                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600'
-                    : 'bg-gradient-to-tr from-blue-500 to-cyan-500'
+                    ? 'bg-gradient-to-tr from-[#0F2952] via-[#1E40AF] to-[#2563EB]'
+                    : 'bg-gradient-to-tr from-blue-600 to-indigo-600'
                 }`}
               >
                 {conversation.type === 'announcement' ? (
@@ -942,38 +907,44 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   conversation.name.charAt(0)
                 )}
               </div>
-              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ${isDark ? 'ring-slate-900' : 'ring-white'}`} />
+              <span className={`absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full ring-2 ${isDark ? 'ring-slate-900' : 'ring-white'}`} />
             </div>
 
             <div className="min-w-0 cursor-pointer" onClick={onOpenInfo}>
-              <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100 truncate leading-snug">
-                {conversation.name}
-              </h2>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white truncate leading-snug">
+                  {conversation.name}
+                </h2>
+                <BadgeCheck className="w-4 h-4 text-[#2563EB] fill-[#2563EB]/15 shrink-0" />
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
                 {conversation.type === 'class_group' ? (
                   <span>
-                    {guardianCount} {lang === 'bn' ? 'অভিভাবক' : 'guardians'} · {teacherCount} {lang === 'bn' ? 'শিক্ষক' : 'teachers'}
+                    {guardianCount} {lang === 'bn' ? 'অভিভাবক' : 'Guardians'} | {teacherCount} {lang === 'bn' ? 'শিক্ষক' : 'Teachers'}
                   </span>
                 ) : conversation.type === 'announcement' ? (
-                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                     {lang === 'bn' ? 'প্রাতিষ্ঠানিক নোটিশ বোর্ড' : 'Official Notice Board'}
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    {lang === 'bn' ? 'সক্রিয় (Active)' : 'Active now'}
+                  <span>
+                    {lang === 'bn' ? 'অভিভাবক-শিক্ষক লাইভ চ্যাট' : 'Guardian-Teacher Live Chat'}
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Header Controls */}
-          <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 shrink-0">
+          {/* Right Header Controls (Design 2 Rounded Square Action Buttons) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {onStartVoiceCall && (
               <button
                 onClick={onStartVoiceCall}
-                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
+                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                    : 'bg-white border-slate-200/90 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 shadow-2xs'
+                }`}
                 title={lang === 'bn' ? 'ভয়েস কল' : 'Voice Call'}
               >
                 <PhoneCall className="w-4 h-4" />
@@ -981,8 +952,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             )}
 
             <button
+              onClick={onOpenInfo}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-[#1E40AF] to-[#2563EB] hover:from-[#1D4ED8] hover:to-[#1E3A8A] text-white flex items-center justify-center shadow-sm shadow-blue-600/25 active:scale-95 transition-all cursor-pointer"
+              title={lang === 'bn' ? 'গ্রুপ তথ্য / ভিডিও' : 'Group Info'}
+            >
+              <Video className="w-4 h-4 fill-current" />
+            </button>
+
+            <button
+              onClick={() => setShowPinnedAnnouncement(!showPinnedAnnouncement)}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+                showPinnedAnnouncement
+                  ? isDark
+                    ? 'bg-blue-950/60 border-blue-700 text-blue-300'
+                    : 'bg-white border-slate-200/90 text-slate-700 hover:bg-blue-50 shadow-2xs'
+                  : isDark
+                  ? 'bg-slate-800 border-slate-700 text-slate-400'
+                  : 'bg-slate-100 border-slate-200 text-slate-400'
+              }`}
+              title={lang === 'bn' ? 'পিন করা নোটিশ' : 'Pinned Notice'}
+            >
+              <Pin className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={handleBellClick}
-              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all relative"
+              className={`hidden sm:flex w-9 h-9 sm:w-10 sm:h-10 rounded-xl border items-center justify-center active:scale-95 transition-all cursor-pointer ${
+                isDark
+                  ? 'bg-slate-800 border-slate-700 text-slate-200'
+                  : 'bg-white border-slate-200/90 text-slate-700 hover:bg-blue-50 shadow-2xs'
+              }`}
               title={
                 pushState === 'granted'
                   ? (lang === 'bn' ? 'নোটিফিকেশন সক্রিয়' : 'Push active')
@@ -998,7 +997,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             <button
               onClick={() => setShowSettingsModal(true)}
-              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+                isDark
+                  ? 'bg-slate-800 border-slate-700 text-slate-200'
+                  : 'bg-white border-slate-200/90 text-slate-700 hover:bg-slate-100 shadow-2xs'
+              }`}
               title={lang === 'bn' ? 'মেনু সেটিংস' : 'Menu Settings'}
             >
               <MoreVertical className="w-4 h-4" />
@@ -1007,484 +1010,519 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* Pinned Announcement Card Banner */}
-      {showPinnedAnnouncement && conversation.type === 'class_group' && !isSelectMode && (
-        <div className="m-3 mb-0 p-3 rounded-2xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 flex items-start justify-between gap-3 shadow-2xs backdrop-blur-md animate-in fade-in duration-200 z-10">
-          <div className="flex items-start gap-2.5 min-w-0">
-            <div className="p-1.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
-              <Pin className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300">
-                {lang === 'bn' ? 'পিন করা ঘোষণা (Pinned Announcement)' : 'Pinned Announcement'}
-              </h4>
-              <p className="text-xs text-slate-700 dark:text-slate-200 mt-0.5 font-medium leading-relaxed">
-                {lang === 'bn'
-                  ? 'আগামীকাল সকাল ১০টায় অভিভাবক সভা অনুষ্ঠিত হবে। সকল অভিভাবকের উপস্থিতি কাম্য।'
-                  : 'Parents meeting will be held tomorrow at 10:00 AM. All guardians are requested to attend.'}
-              </p>
-            </div>
+      {/* Design 2 Full-Width Deep Royal-Navy Pinned Notice Banner */}
+      {showPinnedAnnouncement && !isSelectMode && (
+        <div className="w-full px-4 py-2.5 bg-gradient-to-r from-[#081F44] via-[#0F2F63] to-[#081F44] text-white flex items-center justify-between gap-3 shadow-md border-b border-blue-900/50 z-20 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-sm shrink-0">📌</span>
+            <p className="text-xs sm:text-[13px] text-white/95 font-medium truncate">
+              <span className="font-bold text-amber-300 mr-1.5">
+                {lang === 'bn' ? 'Pinned Notice:' : 'Pinned Notice:'}
+              </span>
+              {lang === 'bn'
+                ? 'আগামীকাল সকাল ১০টায় অভিভাবক সভা অনুষ্ঠিত হবে। সকল অভিভাবকের উপস্থিতি কাম্য 🙏'
+                : 'Parents meeting will be held tomorrow at 10:00 AM. All guardians are requested to attend 🙏'}
+            </p>
           </div>
           <button
             onClick={() => setShowPinnedAnnouncement(false)}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
+            className="text-blue-200/70 hover:text-white p-1 rounded-lg transition-colors shrink-0 cursor-pointer"
+            title={lang === 'bn' ? 'বন্ধ করুন' : 'Dismiss'}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Messages Scroll Area */}
+      {/* Messages Scroll Area on Luxury Warm Pearl Canvas with Centered Islamic Star Watermark */}
       <div 
         ref={scrollRef} 
-        className={`flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 relative ${
+        className={`flex-1 p-3 sm:p-5 overflow-y-auto space-y-4 relative ${
           isDark 
-            ? 'bg-slate-950 text-slate-100' 
-            : 'bg-slate-50/70 text-slate-800'
+            ? 'bg-[#061121] text-slate-100' 
+            : 'bg-[#F7F5F0] text-slate-800'
         }`}
         style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}
       >
-        {loading ? (
-          <div className="space-y-4 py-4 animate-pulse">
-            <div className="flex items-start gap-2 max-w-[70%]">
-              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
-              <div className="p-4 rounded-2xl rounded-tl-none bg-slate-200 dark:bg-slate-800 w-48 h-14" />
-            </div>
-            <div className="flex items-start gap-2 max-w-[70%] ml-auto flex-row-reverse">
-              <div className="p-4 rounded-2xl rounded-tr-none bg-blue-100 dark:bg-blue-950/60 w-56 h-16" />
-            </div>
-            <div className="flex items-start gap-2 max-w-[70%]">
-              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
-              <div className="p-4 rounded-2xl rounded-tl-none bg-slate-200 dark:bg-slate-800 w-64 h-12" />
-            </div>
-          </div>
-        ) : visibleMessages.length === 0 ? (
-          <div className="text-center py-16 px-4 space-y-3">
-            <div className="w-14 h-14 rounded-3xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center shadow-xs">
-              <Users className="w-7 h-7" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                {lang === 'bn' ? 'কোনো বার্তা নেই' : 'No messages yet'}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                {lang === 'bn' ? 'এই কথোপকথনে প্রথম বার্তাটি পাঠিয়ে আলোচনা শুরু করুন।' : "Your institution's conversations will appear here. Start the discussion!"}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Archived Messages Banner (V3 Optimization) */}
-            {archivedCountForConv > 0 && !hasLoadedArchived && (
-              <div className="flex justify-center my-2">
-                <button
-                  type="button"
-                  onClick={handleLoadArchivedHistory}
-                  disabled={isLoadingArchived}
-                  className="px-3 py-1.5 rounded-full bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                >
-                  <Archive className="w-3.5 h-3.5" />
-                  {isLoadingArchived ? (
-                    <span>{lang === 'bn' ? 'আর্কাইভ লোড হচ্ছে...' : 'Loading archive...'}</span>
-                  ) : (
-                    <span>
-                      {lang === 'bn'
-                        ? `${archivedCountForConv} টি পূর্ববর্তী বার্তা লোড করুন`
-                        : `Load ${archivedCountForConv} archived messages`}
-                    </span>
-                  )}
-                </button>
+        {/* Subtle Centered Islamic 8-Point Star Geometric Mandala Watermark (Design 2) */}
+        <div className="sticky top-1/4 left-0 right-0 flex items-center justify-center pointer-events-none select-none z-0 h-0 overflow-visible">
+          <svg
+            viewBox="0 0 200 200"
+            className={`w-64 h-64 sm:w-80 sm:h-80 ${
+              isDark ? 'text-blue-400 opacity-[0.03]' : 'text-[#8C7A5B] opacity-[0.055]'
+            }`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.2"
+          >
+            <g transform="translate(100,100)">
+              <rect x="-55" y="-55" width="110" height="110" />
+              <rect x="-55" y="-55" width="110" height="110" transform="rotate(45)" />
+              <rect x="-38" y="-38" width="76" height="76" transform="rotate(22.5)" />
+              <rect x="-38" y="-38" width="76" height="76" transform="rotate(67.5)" />
+              <circle r="55" />
+              <circle r="38" />
+              <circle r="18" />
+              <path d="M0,-78 L16,-22 L78,0 L16,22 L0,78 L-16,22 L-78,0 L-16,-22 Z" />
+              <path d="M0,-78 L16,-22 L78,0 L16,22 L0,78 L-16,22 L-78,0 L-16,-22 Z" transform="rotate(45)" />
+            </g>
+          </svg>
+        </div>
+
+        <div className="relative z-10 space-y-4">
+          {loading ? (
+            <div className="space-y-4 py-4 animate-pulse">
+              <div className="flex items-start gap-2.5 max-w-[70%]">
+                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
+                <div className="p-4 rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 w-52 h-16 shadow-xs" />
               </div>
-            )}
+              <div className="flex items-start gap-2.5 max-w-[70%] ml-auto flex-row-reverse">
+                <div className="p-4 rounded-2xl rounded-tr-xs bg-blue-600/40 w-60 h-16" />
+              </div>
+              <div className="flex items-start gap-2.5 max-w-[70%]">
+                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
+                <div className="p-4 rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 w-64 h-14 shadow-xs" />
+              </div>
+            </div>
+          ) : visibleMessages.length === 0 ? (
+            <div className="text-center py-16 px-4 space-y-3">
+              <div className="w-14 h-14 rounded-3xl bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center shadow-sm border border-slate-200/70 dark:border-slate-700">
+                <Users className="w-7 h-7" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  {lang === 'bn' ? 'কোনো বার্তা নেই' : 'No messages yet'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                  {lang === 'bn' ? 'এই কথোপকথনে প্রথম বার্তাটি পাঠিয়ে আলোচনা শুরু করুন।' : "Your institution's conversations will appear here. Start the discussion!"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Archived Messages Banner (V3 Optimization) */}
+              {archivedCountForConv > 0 && !hasLoadedArchived && (
+                <div className="flex justify-center my-2">
+                  <button
+                    type="button"
+                    onClick={handleLoadArchivedHistory}
+                    disabled={isLoadingArchived}
+                    className="px-3.5 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-50 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    {isLoadingArchived ? (
+                      <span>{lang === 'bn' ? 'আর্কাইভ লোড হচ্ছে...' : 'Loading archive...'}</span>
+                    ) : (
+                      <span>
+                        {lang === 'bn'
+                          ? `${archivedCountForConv} টি পূর্ববর্তী বার্তা লোড করুন`
+                          : `Load ${archivedCountForConv} archived messages`}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
 
-            {visibleMessages.map((m) => {
-            const isMe = m.sender_id === currentUser?.id;
-            const senderName = m.sender_profile?.full_name || (m as any).sender_name || (lang === 'bn' ? 'শিক্ষক / সদস্য' : 'Teacher/Member');
-            const role = m.sender_profile?.role || ((m as any).sender_id?.startsWith('parent') ? 'parent' : 'teacher');
-            const isTeacherOrAdmin = role === 'teacher' || role === 'madrasah_admin' || role === 'super_admin';
-            const roleBadge = getRoleLabel(role);
-            const isSelected = selectedMsgIds.includes(m.id);
-            const msgReactions = reactions[m.id] || [];
+              {visibleMessages.map((m, msgIndex) => {
+                const isMe = m.sender_id === currentUser?.id;
+                const senderName = m.sender_profile?.full_name || (m as any).sender_name || (lang === 'bn' ? 'অভিভাবক / শিক্ষক' : 'Guardian / Teacher');
+                const role = m.sender_profile?.role || ((m as any).sender_id?.startsWith('parent') ? 'parent' : 'teacher');
+                const roleBadge = getRoleLabel(role);
+                const isSelected = selectedMsgIds.includes(m.id);
+                const msgReactions = reactions[m.id] || [];
 
-            // Replied target message if any
-            const repliedTarget = m.reply_to_message_id
-              ? localMessages.find(msg => msg.id === m.reply_to_message_id)
-              : m.reply_to_message;
+                const repliedTarget = m.reply_to_message_id
+                  ? localMessages.find(msg => msg.id === m.reply_to_message_id)
+                  : m.reply_to_message;
 
-            const messageDateLabel = getMessageDateLabel(m.created_at);
-            const showDateHeader = messageDateLabel !== lastDateLabel;
-            if (showDateHeader) {
-              lastDateLabel = messageDateLabel;
-            }
+                const messageDateLabel = getMessageDateLabel(m.created_at);
+                const showDateHeader = messageDateLabel !== lastDateLabel;
+                if (showDateHeader) {
+                  lastDateLabel = messageDateLabel;
+                }
 
-            return (
-              <React.Fragment key={m.id}>
-                {showDateHeader && (
-                  <div className="flex justify-center my-3 sticky top-2 z-10 pointer-events-none">
-                    <span className="px-3.5 py-1 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-2xs border border-slate-200/80 dark:border-slate-700/80">
-                      {messageDateLabel}
-                    </span>
-                  </div>
-                )}
+                const isLastOutgoing = isMe && msgIndex === visibleMessages.length - 1;
 
-                <div
-                  onTouchStart={(e) => handleTouchStart(m, e)}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchCancel={handleTouchEnd}
-                  onClick={() => {
-                    if (isSelectMode) {
-                      toggleSelectMessage(m.id);
-                    }
-                  }}
-                  className={`flex items-start gap-2 max-w-[85%] sm:max-w-[75%] md:max-w-[420px] transition-all cursor-pointer group ${
-                    isMe ? 'ml-auto flex-row-reverse' : 'mr-auto'
-                  } ${isSelected ? 'scale-[1.01] opacity-90' : ''}`}
-                >
-                  {/* Selection Checkbox in Select Mode */}
-                  {isSelectMode && (
-                    <div
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 self-center transition-all ${
-                        isSelected
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-slate-400 dark:border-slate-600 bg-white/50'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </div>
-                  )}
-
-                  {/* Sender Avatar for incoming messages */}
-                  {!isMe && (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm mt-1">
-                      {senderName.charAt(0)}
-                    </div>
-                  )}
-
-                  {/* Bubble Container */}
-                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0 max-w-full relative group/bubble`}>
-                    
-                    {/* Sender Name & Role Badge (Incoming only) */}
-                    {!isMe && (
-                      <div className="flex items-center gap-1.5 mb-1 px-1">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                          {senderName}
+                return (
+                  <React.Fragment key={m.id}>
+                    {showDateHeader && (
+                      <div className="flex justify-center my-3 sticky top-2 z-10 pointer-events-none">
+                        <span className="px-4 py-1 rounded-full bg-white/95 dark:bg-slate-800/95 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-xs border border-[#E5E0D5] dark:border-slate-700">
+                          {messageDateLabel}
                         </span>
-                        {isTeacherOrAdmin ? (
-                          <span className="px-1.5 py-0.2 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[9px] font-bold border border-blue-100 dark:border-blue-900/40">
-                            {roleBadge}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            • {roleBadge}
-                          </span>
-                        )}
                       </div>
                     )}
 
-                    {/* Brand Style Message Bubble */}
                     <div
-                      className={`px-3 sm:px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs relative break-words max-w-full overflow-hidden ${
-                        isMe
-                          ? 'bg-blue-600 text-white rounded-tr-xs ml-auto shadow-sm shadow-blue-500/20'
-                          : isDark
-                          ? 'bg-slate-850 border border-slate-800 text-slate-100 rounded-tl-xs'
-                          : 'bg-white border border-slate-200/80 text-slate-900 rounded-tl-xs'
-                      }`}
+                      onTouchStart={(e) => handleTouchStart(m, e)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={handleTouchEnd}
+                      onClick={() => {
+                        if (isSelectMode) {
+                          toggleSelectMessage(m.id);
+                        }
+                      }}
+                      className={`flex items-start gap-2.5 max-w-[88%] sm:max-w-[75%] md:max-w-[450px] transition-all cursor-pointer group ${
+                        isMe ? 'ml-auto flex-row-reverse' : 'mr-auto'
+                      } ${isSelected ? 'scale-[1.01] opacity-90' : ''}`}
                     >
-                      {/* Embedded Replied Message Quote Box */}
-                      {repliedTarget && (
-                        <div className={`mb-2 p-2 px-2.5 rounded-xl border-l-4 text-xs space-y-0.5 ${
-                          isMe ? 'bg-white/15 border-l-white/60' : 'bg-slate-100 dark:bg-slate-800 border-l-blue-600 dark:border-l-blue-400'
-                        }`}>
-                          <span className={`font-bold text-[10px] block ${
-                            isMe ? 'text-white' : 'text-blue-600 dark:text-blue-400'
-                          }`}>
-                            {'sender_name' in repliedTarget && repliedTarget.sender_name
-                              ? repliedTarget.sender_name
-                              : 'sender_profile' in repliedTarget && repliedTarget.sender_profile?.full_name
-                              ? repliedTarget.sender_profile.full_name
-                              : lang === 'bn' ? 'সদস্য' : 'User'}
-                          </span>
-                          <p className="text-slate-600 dark:text-slate-300 text-[11px] truncate">
-                            {repliedTarget.message}
-                          </p>
+                      {/* Selection Checkbox in Select Mode */}
+                      {isSelectMode && (
+                        <div
+                          className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 self-center transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 border-blue-600 text-white'
+                              : 'border-slate-400 dark:border-slate-600 bg-white/50'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       )}
 
-                      {/* Main Message Content */}
-                      <div className={`space-y-1.5 min-w-0 max-w-full overflow-hidden ${m.is_deleted ? 'italic text-slate-500' : ''}`}>
-                        {(() => {
-                          // Extract audio URL if stored in attachment_url or message JSON
-                          const extractAudioUrl = (): string => {
-                            if (m.attachment_url) return m.attachment_url;
-                            if (typeof m.message === 'string' && (m.message.startsWith('{') || m.message.startsWith('['))) {
-                              try {
-                                const p = JSON.parse(m.message);
-                                return p.attachment_url || p.voice_url || p.audio_url || '';
-                              } catch {}
-                            }
-                            return '';
-                          };
+                      {/* Circular Sender Avatar for Incoming Messages (Design 2) */}
+                      {!isMe && (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#0F2952] to-[#2563EB] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm ring-2 ring-white dark:ring-slate-800 mt-0.5">
+                          {senderName.charAt(0)}
+                        </div>
+                      )}
 
-                          const voiceUrl = extractAudioUrl();
-                          const isVoiceMessage = !m.is_deleted && (
-                            m.message_type === 'voice' ||
-                            Boolean(m.voice_duration) ||
-                            Boolean(voiceUrl && (voiceUrl.startsWith('data:audio') || voiceUrl.includes('chat-audio') || voiceUrl.includes('.webm') || voiceUrl.includes('.mp3') || voiceUrl.includes('.ogg') || voiceUrl.includes('.wav') || voiceUrl.includes('.m4a'))) ||
-                            (typeof m.message === 'string' && (m.message.includes('🎤 ভয়েস মেসেজ') || m.message.includes('🎤 Voice') || m.message.includes('"message_type":"voice"')))
-                          );
+                      {/* Bubble Container */}
+                      <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0 max-w-full relative group/bubble`}>
+                        
+                        {/* Design 2 Message Bubble (White Card for Incoming / 3D Royal Blue Gradient for Outgoing) */}
+                        <div
+                          className={`px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm leading-relaxed relative break-words max-w-full overflow-hidden ${
+                            isMe
+                              ? 'bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#1D4ED8] text-white rounded-tr-xs ml-auto shadow-[0_6px_18px_rgba(37,99,235,0.26)] border border-blue-400/25'
+                              : isDark
+                              ? 'bg-slate-800/95 border border-slate-700 text-slate-100 rounded-tl-xs shadow-sm'
+                              : 'bg-white border border-[#E8E4DC] text-slate-900 rounded-tl-xs shadow-[0_3px_14px_rgba(15,23,42,0.05)]'
+                          }`}
+                        >
+                          {/* Sender Name + Dark Navy Role Pill Badge inside top of Incoming Card (Matches Design 2) */}
+                          {!isMe && (
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                                {senderName}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-[#0F2952] text-white text-[10px] font-bold tracking-wide shrink-0 shadow-2xs">
+                                {roleBadge}
+                              </span>
+                            </div>
+                          )}
 
-                          const isDocMessage = !m.is_deleted && !isVoiceMessage && (
-                            m.message_type === 'document' || 
-                            Boolean(m.attachment_name) || 
-                            m.message.includes('📄 [') || 
-                            m.message.includes('.pdf') || 
-                            m.message.includes('.docx') || 
-                            m.message.includes('.xlsx') || 
-                            m.message.startsWith('Receipt_') ||
-                            Boolean(m.attachment_url)
-                          );
+                          {/* Embedded Replied Message Quote Box */}
+                          {repliedTarget && (
+                            <div className={`mb-2 p-2 px-2.5 rounded-xl border-l-4 text-xs space-y-0.5 ${
+                              isMe ? 'bg-white/15 border-l-white/70' : 'bg-slate-100 dark:bg-slate-700/70 border-l-[#1E40AF]'
+                            }`}>
+                              <span className={`font-bold text-[10px] block ${
+                                isMe ? 'text-white' : 'text-[#1E40AF] dark:text-blue-400'
+                              }`}>
+                                {'sender_name' in repliedTarget && repliedTarget.sender_name
+                                  ? repliedTarget.sender_name
+                                  : 'sender_profile' in repliedTarget && repliedTarget.sender_profile?.full_name
+                                  ? repliedTarget.sender_profile.full_name
+                                  : lang === 'bn' ? 'সদস্য' : 'User'}
+                              </span>
+                              <p className={`text-[11px] truncate ${isMe ? 'text-blue-100' : 'text-slate-600 dark:text-slate-300'}`}>
+                                {repliedTarget.message}
+                              </p>
+                            </div>
+                          )}
 
-                          const docFileName = m.attachment_name || 
-                            m.message.match(/\[(.*?)\]/)?.[1] || 
-                            (m.message.startsWith('Receipt_') || m.message.endsWith('.pdf') || m.message.endsWith('.docx') 
-                              ? m.message.trim() 
-                              : (lang === 'bn' ? 'ডকুমেন্ট ফাইল' : 'Document File'));
+                          {/* Main Message Content */}
+                          <div className={`space-y-1.5 min-w-0 max-w-full overflow-hidden ${m.is_deleted ? 'italic opacity-75' : ''}`}>
+                            {(() => {
+                              const extractAudioUrl = (): string => {
+                                if (m.attachment_url) return m.attachment_url;
+                                if (typeof m.message === 'string' && (m.message.startsWith('{') || m.message.startsWith('['))) {
+                                  try {
+                                    const p = JSON.parse(m.message);
+                                    return p.attachment_url || p.voice_url || p.audio_url || '';
+                                  } catch {}
+                                }
+                                return '';
+                              };
 
-                          const fileExt = (docFileName.split('.').pop() || 'PDF').toUpperCase();
+                              const voiceUrl = extractAudioUrl();
+                              const isVoiceMessage = !m.is_deleted && (
+                                m.message_type === 'voice' ||
+                                Boolean(m.voice_duration) ||
+                                Boolean(voiceUrl && (voiceUrl.startsWith('data:audio') || voiceUrl.includes('chat-audio') || voiceUrl.includes('.webm') || voiceUrl.includes('.mp3') || voiceUrl.includes('.ogg') || voiceUrl.includes('.wav') || voiceUrl.includes('.m4a'))) ||
+                                (typeof m.message === 'string' && (m.message.includes('🎤 ভয়েস মেসেজ') || m.message.includes('🎤 Voice') || m.message.includes('"message_type":"voice"')))
+                              );
 
-                          // Check if message is ONLY a document pointer/placeholder (like "📄 [Receipt...pdf]" or "[Receipt...pdf]" or "Receipt_...")
-                          const rawCaption = m.message
-                            .replace(/📄?\s*\[.*?\]/g, '')
-                            .replace(docFileName, '')
-                            .replace(/Receipt_[^\s]+/g, '')
-                            .trim();
+                              const isDocMessage = !m.is_deleted && !isVoiceMessage && (
+                                m.message_type === 'document' || 
+                                Boolean(m.attachment_name) || 
+                                m.message.includes('📄 [') || 
+                                m.message.includes('.pdf') || 
+                                m.message.includes('.docx') || 
+                                m.message.includes('.xlsx') || 
+                                m.message.startsWith('Receipt_') ||
+                                Boolean(m.attachment_url)
+                              );
 
-                          const hasRealCaption = !isDocMessage && !isVoiceMessage;
+                              const docFileName = m.attachment_name || 
+                                m.message.match(/\[(.*?)\]/)?.[1] || 
+                                (m.message.startsWith('Receipt_') || m.message.endsWith('.pdf') || m.message.endsWith('.docx') 
+                                  ? m.message.trim() 
+                                  : (lang === 'bn' ? 'Fee Receipt.pdf' : 'Document.pdf'));
 
-                          return (
-                            <>
-                              {/* Document Attachment Card */}
-                              {isDocMessage && (
-                                <div className={`flex items-center gap-2.5 sm:gap-3 p-2.5 rounded-xl border mb-1.5 w-full max-w-full overflow-hidden transition-all ${
-                                  isMe 
-                                    ? 'bg-black/15 border-white/20 hover:bg-black/25 text-white' 
-                                    : isDark 
-                                    ? 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-800 text-slate-100' 
-                                    : 'bg-slate-50 border-slate-200/90 hover:bg-slate-100/90 text-slate-800'
-                                }`}>
-                                  {/* File Type Icon Badge */}
-                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold shadow-xs ${
-                                    fileExt === 'PDF'
-                                      ? isMe ? 'bg-rose-500/30 text-rose-100 border border-rose-300/30' : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/50'
-                                      : fileExt === 'DOC' || fileExt === 'DOCX'
-                                      ? isMe ? 'bg-blue-500/30 text-blue-100 border border-blue-300/30' : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/50'
-                                      : fileExt === 'XLS' || fileExt === 'XLSX'
-                                      ? isMe ? 'bg-emerald-500/30 text-emerald-100 border border-emerald-300/30' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-900/50'
-                                      : isMe ? 'bg-white/20 text-white' : 'bg-blue-600 text-white'
-                                  }`}>
-                                    <FileText className="w-5 h-5 stroke-[2]" />
-                                  </div>
+                              const fileExt = (docFileName.split('.').pop() || 'PDF').toUpperCase();
 
-                                  {/* File Metadata */}
-                                  <div className="flex-1 min-w-0 pr-1 overflow-hidden">
-                                    <p 
-                                      className="text-xs sm:text-sm font-bold truncate leading-tight tracking-tight select-all block"
-                                      title={docFileName}
+                              const rawCaption = m.message
+                                .replace(/📄?\s*\[.*?\]/g, '')
+                                .replace(docFileName, '')
+                                .replace(/Receipt_[^\s]+/g, '')
+                                .trim();
+
+                              const hasRealCaption = !isDocMessage && !isVoiceMessage;
+
+                              return (
+                                <>
+                                  {/* Design 2 Rich PDF / Document Attachment Card (Red PDF Badge) */}
+                                  {isDocMessage && (
+                                    <div
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownloadDocument(m, docFileName);
+                                      }}
+                                      className={`flex items-center gap-3 p-1.5 rounded-xl w-full min-w-[210px] sm:min-w-[250px] max-w-full overflow-hidden transition-all cursor-pointer ${
+                                        isMe 
+                                          ? 'text-white' 
+                                          : isDark 
+                                          ? 'bg-slate-900/60 text-slate-100 p-2.5 border border-slate-700' 
+                                          : 'bg-slate-50/90 text-slate-800 p-2.5 border border-slate-200/80'
+                                      }`}
                                     >
-                                      {docFileName}
-                                    </p>
-                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] font-medium opacity-75">
-                                      <span className="font-mono uppercase font-bold text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10">
-                                        {fileExt}
-                                      </span>
-                                      <span>•</span>
-                                      <span>
-                                        {m.attachment_size 
-                                          ? `${(m.attachment_size / 1024).toFixed(0)} KB` 
-                                          : (lang === 'bn' ? 'ডকুমেন্ট ফাইল' : 'Document File')}
-                                      </span>
+                                      {/* Red PDF Icon Badge (Matches Design 2) */}
+                                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-red-600 text-white flex flex-col items-center justify-center shrink-0 shadow-md shadow-rose-900/20 border border-rose-400/40">
+                                        <FileText className="w-4 h-4 stroke-[2.2]" />
+                                        <span className="text-[8px] font-black uppercase tracking-wider mt-0.5 leading-none">
+                                          {fileExt}
+                                        </span>
+                                      </div>
+
+                                      {/* File Metadata */}
+                                      <div className="flex-1 min-w-0 pr-1 overflow-hidden">
+                                        <p 
+                                          className="text-xs sm:text-sm font-extrabold truncate leading-tight tracking-tight select-all block"
+                                          title={docFileName}
+                                        >
+                                          {docFileName}
+                                        </p>
+                                        <div className={`flex items-center gap-1.5 mt-1 text-[10px] font-semibold ${
+                                          isMe ? 'text-blue-100/85' : 'text-slate-500 dark:text-slate-400'
+                                        }`}>
+                                          <span className="uppercase">{fileExt}</span>
+                                          <span>•</span>
+                                          <span>
+                                            {m.attachment_size 
+                                              ? `${(m.attachment_size / 1024).toFixed(0)} KB` 
+                                              : 'PDF MB'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {/* Download Action Button */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadDocument(m, docFileName);
+                                        }}
+                                        className={`w-8 h-8 rounded-lg shrink-0 transition-transform active:scale-90 flex items-center justify-center cursor-pointer ${
+                                          isMe 
+                                            ? 'bg-white/15 hover:bg-white/25 text-white' 
+                                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                                        }`}
+                                        title={lang === 'bn' ? 'ডাউনলোড করুন' : 'Download'}
+                                      >
+                                        <Download className="w-4 h-4" />
+                                      </button>
                                     </div>
-                                  </div>
+                                  )}
 
-                                  {/* Download / Open Action (Handles Base64, Storage URLs, and PDF conversion seamlessly) */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDownloadDocument(m, docFileName);
-                                    }}
-                                    className={`w-9 h-9 rounded-xl shrink-0 transition-transform active:scale-90 flex items-center justify-center cursor-pointer ${
-                                      isMe 
-                                        ? 'bg-white/20 hover:bg-white/30 text-white' 
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
-                                    }`}
-                                    title={lang === 'bn' ? 'ডাউনলোড করুন' : 'Download'}
-                                  >
-                                    <Download className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
+                                  {/* Voice Message Rendering */}
+                                  {isVoiceMessage && (
+                                    <AudioPlayer 
+                                      url={voiceUrl} 
+                                      messageId={m.id}
+                                      clientMessageId={m.client_message_id}
+                                      duration={m.voice_duration} 
+                                      isDark={isDark}
+                                      lang={lang}
+                                      isMe={isMe}
+                                    />
+                                  )}
 
-                              {/* Voice Message Rendering */}
-                              {isVoiceMessage && (
-                                <AudioPlayer 
-                                  url={voiceUrl} 
-                                  messageId={m.id}
-                                  clientMessageId={m.client_message_id}
-                                  duration={m.voice_duration} 
-                                  isDark={isDark}
-                                  lang={lang}
-                                  isMe={isMe}
-                                />
-                              )}
+                                  {/* Caption / Text Rendering */}
+                                  {hasRealCaption && (
+                                    <p className="whitespace-pre-wrap font-medium break-words leading-relaxed text-xs sm:text-[13.5px]">
+                                      {m.is_deleted ? m.message : linkify(isDocMessage ? rawCaption : m.message)}
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
 
-                              {/* Caption / Text Rendering (Hidden if message is only the document placeholder or voice) */}
-                              {hasRealCaption && (
-                                <p className="whitespace-pre-wrap font-normal break-words leading-relaxed text-xs sm:text-sm">
-                                  {m.is_deleted ? m.message : linkify(isDocMessage ? rawCaption : m.message)}
-                                </p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
+                          {/* Quick Reaction Bar Trigger on Hover */}
+                          {!isSelectMode && (
+                            <div className="absolute -top-3 right-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-md z-20">
+                              {quickEmojiList.slice(0, 4).map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleReaction(m.id, emoji);
+                                  }}
+                                  className="hover:scale-125 transition-transform text-xs p-0.5 cursor-pointer"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setContextMenuMsg(m);
+                                }}
+                                className="p-0.5 text-slate-400 hover:text-blue-600 cursor-pointer"
+                              >
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
 
-                      {/* Quick Reaction Bar Trigger Button */}
-                      {!isSelectMode && (
-                        <div className="absolute -top-3 right-0 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-md z-10">
-                          {quickEmojiList.slice(0, 4).map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleReaction(m.id, emoji);
-                              }}
-                              className="hover:scale-125 transition-transform text-xs p-0.5"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                          <button
+                          {/* Bottom Timestamp & Delivery Status */}
+                          <div
+                            className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] font-semibold ${
+                              isMe ? 'text-blue-100/85' : 'text-slate-400'
+                            }`}
+                          >
+                            {m.is_starred && (
+                              <Star className={`w-3 h-3 fill-current shrink-0 ${isMe ? 'text-white' : 'text-amber-500'}`} />
+                            )}
+
+                            {m.is_edited && (
+                              <span className={`text-[9px] italic ${isMe ? 'text-blue-100/70' : 'text-slate-400'}`}>
+                                {lang === 'bn' ? 'সম্পাদিত' : 'edited'}
+                              </span>
+                            )}
+
+                            <span>
+                              {new Date(m.created_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+
+                            {isMe && (
+                              m.status === 'failed' ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onRetryMessage && (m.client_message_id || m.id)) {
+                                      onRetryMessage(m.client_message_id || m.id);
+                                    }
+                                  }}
+                                  className="flex items-center gap-1 text-rose-200 hover:text-white bg-rose-900/50 hover:bg-rose-800/80 px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer"
+                                  title="পাঠানো যায়নি — পুনরায় চেষ্টা করতে ক্লিক করুন"
+                                >
+                                  <AlertCircle className="w-3.5 h-3.5 text-rose-300" />
+                                  <span>পুনরায় পাঠান</span>
+                                  <RefreshCw className="w-3 h-3" />
+                                </button>
+                              ) : (m.status === 'pending' || m.status === 'sending' || m.synced === 0) ? (
+                                <span className="flex items-center gap-0.5 text-white/70" title="পাঠানো হচ্ছে...">
+                                  <Clock className="w-3.5 h-3.5 text-white/70 animate-pulse" />
+                                </span>
+                              ) : (m.status === 'read' || m.read_at) ? (
+                                <span title="পড়া হয়েছে (Read)">
+                                  <CheckCheck className="w-3.5 h-3.5 text-cyan-200" />
+                                </span>
+                              ) : (m.status === 'delivered' || m.delivered_at) ? (
+                                <span title="পৌঁছেছে (Delivered)">
+                                  <CheckCheck className="w-3.5 h-3.5 text-white" />
+                                </span>
+                              ) : (
+                                <span title="সার্ভারে পাঠানো হয়েছে (Sent)">
+                                  <Check className="w-3.5 h-3.5 text-white/85" />
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Floating Emoji Reaction Pill below Incoming/Reacted Card (Matches Design 2 "❤️ 👍 😊") */}
+                        {(msgReactions.length > 0 || !isMe) && (
+                          <div
                             onClick={(e) => {
                               e.stopPropagation();
-                              setContextMenuMsg(m);
+                              handleToggleReaction(m.id, '❤️');
                             }}
-                            className="p-0.5 text-slate-400 hover:text-blue-600"
+                            className={`flex items-center gap-1 -mt-2 px-2.5 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-[#E5E0D5] dark:border-slate-700 shadow-sm text-[11px] z-10 cursor-pointer hover:scale-105 transition-transform ${
+                              isMe ? 'mr-3 self-end' : 'ml-3 self-start'
+                            }`}
+                            title={lang === 'bn' ? 'রিঅ্যাকশন দিন' : 'React'}
                           >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Bottom Timestamp & Delivery Status */}
-                      <div
-                        className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] font-medium ${
-                          isMe ? 'text-blue-100/75' : 'text-slate-400'
-                        }`}
-                      >
-                        {/* Star Indicator */}
-                        {m.is_starred && (
-                          <Star className={`w-3 h-3 fill-current shrink-0 ${isMe ? 'text-white' : 'text-amber-500'}`} />
+                            {msgReactions.length > 0 ? (
+                              msgReactions.map((emoji) => <span key={emoji}>{emoji}</span>)
+                            ) : (
+                              <>
+                                <span>❤️</span>
+                                <span>👍</span>
+                                <span>😊</span>
+                              </>
+                            )}
+                          </div>
                         )}
 
-                        {/* Edited Badge */}
-                        {m.is_edited && (
-                          <span className={`text-[9px] italic ${isMe ? 'text-blue-100/60' : 'text-slate-400'}`}>
-                            {lang === 'bn' ? 'সম্পাদিত' : 'edited'}
+                        {/* "Delivered" label below the latest outgoing message (Matches Design 2) */}
+                        {isLastOutgoing && m.status !== 'failed' && (
+                          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-1 mr-1">
+                            Delivered
                           </span>
-                        )}
-
-                        <span>
-                          {new Date(m.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-
-                        {/* Delivery Status */}
-                        {isMe && (
-                          m.status === 'failed' ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onRetryMessage && (m.client_message_id || m.id)) {
-                                  onRetryMessage(m.client_message_id || m.id);
-                                }
-                              }}
-                              className="flex items-center gap-1 text-rose-300 hover:text-white bg-rose-900/50 hover:bg-rose-800/80 px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer"
-                              title="পাঠানো যায়নি — পুনরায় চেষ্টা করতে ক্লিক করুন"
-                            >
-                              <AlertCircle className="w-3.5 h-3.5 text-rose-300" />
-                              <span>পুনরায় পাঠান</span>
-                              <RefreshCw className="w-3 h-3" />
-                            </button>
-                          ) : (m.status === 'pending' || m.status === 'sending' || m.synced === 0) ? (
-                            <span className="flex items-center gap-0.5 text-white/60" title="পাঠানো হচ্ছে...">
-                              <Clock className="w-3.5 h-3.5 text-white/70 animate-pulse" />
-                            </span>
-                          ) : (m.status === 'read' || m.read_at) ? (
-                            <span title="পড়া হয়েছে (Read)">
-                              <CheckCheck className="w-3.5 h-3.5 text-cyan-200" />
-                            </span>
-                          ) : (m.status === 'delivered' || m.delivered_at) ? (
-                            <span title="পৌঁছেছে (Delivered)">
-                              <CheckCheck className="w-3.5 h-3.5 text-white" />
-                            </span>
-                          ) : (
-                            <span title="সার্ভারে পাঠানো হয়েছে (Sent)">
-                              <Check className="w-3.5 h-3.5 text-white/80" />
-                            </span>
-                          )
                         )}
                       </div>
                     </div>
-
-                    {/* Attached Emoji Reactions Badge Box */}
-                    {msgReactions.length > 0 && (
-                      <div className={`flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs text-[11px] ${
-                        isMe ? 'self-end' : 'self-start'
-                      }`}>
-                        {msgReactions.map(emoji => (
-                          <span key={emoji}>{emoji}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </React.Fragment>
-            );
-          })}
-          </>
-        )}
+                  </React.Fragment>
+                );
+              })}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Floating Input Composer */}
+      {/* Voice Recording Bar OR Luxury Pill Composer */}
       {isRecording ? (
         <div className={`p-3 px-4 border-t flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 ${
-          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'
+          isDark ? 'bg-[#081529] border-slate-800' : 'bg-white border-[#E6E2D8]'
         }`}>
           <div className="flex items-center gap-3 text-rose-500 font-bold animate-pulse">
             <div className="w-3 h-3 bg-rose-500 rounded-full" />
             <span className="text-sm font-mono">{formatDuration(recordingDuration)}</span>
           </div>
-          <div className="flex-1 text-center text-xs text-slate-500">
+          <div className="flex-1 text-center text-xs text-slate-500 font-medium">
             {lang === 'bn' ? 'ভয়েস রেকর্ড হচ্ছে...' : 'Recording voice message...'}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => stopRecording(true)}
-              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 transition-colors"
+              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
             >
               <Trash2 className="w-5 h-5" />
             </button>
             <button
               onClick={() => stopRecording(false)}
-              className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm hover:bg-blue-700 active:scale-95 transition-all"
+              className="px-4 py-2 rounded-full bg-gradient-to-r from-[#1E40AF] to-[#2563EB] text-white font-bold text-xs flex items-center gap-1.5 shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
             >
-              <Send className="w-4 h-4" />
+              <span>Send</span>
+              <Send className="w-3.5 h-3.5 fill-current" />
             </button>
           </div>
         </div>

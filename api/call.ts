@@ -140,6 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZmNnZGNncWttc25nd3FoZGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjU4ODEsImV4cCI6MjA5MDY0MTg4MX0.KEBjfOmIF5KbEelK--l-r3paOTpBFqlxX8pr4FgtqhY';
   const serviceAccount = parseServiceAccount();
 
+  // FIX 2026-10-13: log key SHAPE only (never the key itself) to diagnose paste issues
   if (serviceAccount) {
     const pk = serviceAccount.private_key;
     console.log('[Call API] private key shape:', {
@@ -152,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const action = req.query.action || req.body?.action;
 
-  // Helper: Find target FCM tokens by callee_phone, student_id, or user_id
+  // Helper: Find target FCM tokens by callee_phone, student_id, or user_id (memory cache + Supabase device_tokens for multi-device support)
   async function findTargetFcmTokens(
     calleePhone?: string | null | undefined,
     studentId?: string | null | undefined,
@@ -163,6 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cleanUserId = userId ? String(userId).trim() : '';
     const foundTokens = new Set<string>();
 
+    // 1. Check in-memory token cache
     if (cleanPhone && memoryTokens[`phone_${cleanPhone}`]) {
       foundTokens.add(memoryTokens[`phone_${cleanPhone}`].token);
     }
@@ -173,6 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       foundTokens.add(memoryTokens[`user_${cleanUserId}`].token);
     }
 
+    // 2. Query Supabase device_tokens table (returns up to 5 active devices per recipient)
     if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || rawPhone || studentId || cleanUserId)) {
       try {
         const queries: string[] = [];
@@ -222,6 +225,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return tokens[0] || null;
   }
 
+  // Helper: Resolve effective service account (env or institution settings)
   async function resolveServiceAccount(institutionId?: string): Promise<FirebaseServiceAccount | null> {
     if (serviceAccount) return serviceAccount;
     if (institutionId && SUPABASE_URL && SUPABASE_KEY) {
@@ -253,6 +257,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: 'FCM token is required' });
       }
 
+      // Store in memory cache
       if (phone) {
         const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
         memoryTokens[`phone_${cleanPhone}`] = { token, updatedAt: Date.now() };
@@ -264,11 +269,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         memoryTokens[`user_${user_id}`] = { token, updatedAt: Date.now() };
       }
 
+      // Try saving to Supabase device_tokens table if available.
       let dbDebug: any = null;
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
           const { device_id, device_name } = req.body || {};
 
+          // Best-effort dedupe: same device er purono token row muche felo, upsert er age
           if (device_id) {
             try {
               await fetch(
@@ -311,6 +318,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.log('[Call API] device_tokens upsert:', dbRes.status, dbText.slice(0, 300));
           dbDebug = { status: dbRes.status, ok: dbRes.ok, body: dbText.slice(0, 300) };
 
+          // Auto-prune stale tokens if more than 5 devices registered for same phone number
           if (phone) {
             const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
             fetch(`${SUPABASE_URL}/rest/v1/device_tokens?select=id,fcm_token&phone=ilike.*${cleanPhone}*&order=updated_at.desc`, {
@@ -397,12 +405,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callee_phone,
       } = payload;
 
+      // Find all target tokens for multi-device simultaneous ring
       const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
       console.log('[Call API] initiate_call_push attempt:', JSON.stringify({
         devicesNotified: targetTokens.length,
         call_id: String(payload.call_id || ''),
       }));
 
+      // Check institution config for service account if not in env
       const effectiveServiceAccount = await resolveServiceAccount(institution_id);
 
       if (!effectiveServiceAccount) {
@@ -413,6 +423,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // High-Priority Data Payload expected by FcmService.kt (all values must be strings)
       const callerLabel = String(caller_name || 'মাদরাসা এডমিন');
       const callerId = String(payload.caller_id || payload.caller?.id || payload.callerId || '');
       const fcmDataPayload: Record<string, string> = {
@@ -452,7 +463,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // Wave 1 (0s): Pure Data-Only High-Priority Push to wake FcmService -> CallService
+      // Send call push to ALL active devices for simultaneous ringing
       const sendResults = await Promise.all(
         targetTokens.map(async (tok) => {
           try {
@@ -501,6 +512,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
       );
 
+      // Prune dead/unregistered tokens (best-effort, push ke fail korbe na)
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
           const deadTokens: string[] = [];
@@ -571,22 +583,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         priority: 'HIGH',
                         ttl: '120s',
                         direct_boot_ok: true,
-                        notification: {
-                          channel_id: 'deenora_calls_alert_v19',
-                          title: callerLabel,
-                          body: callBodyText,
-                          sound: 'default',
-                          default_sound: true,
-                          default_vibrate_timings: true,
-                          click_action: 'OPEN_ACTIVITY_1',
-                          tag: 'incoming-voice-call',
-                          notification_priority: 'PRIORITY_MAX',
-                          visibility: 'PUBLIC',
-                        },
-                      },
-                      notification: {
-                        title: callerLabel,
-                        body: callBodyText,
                       },
                       data: wave2DataPayload,
                     },
@@ -620,6 +616,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 2b. ESCALATION PUSH — system-rendered notification for swipe-killed phones.
+  // Data-only FCM cannot wake the app on Tecno/HiOS after a recents-swipe, but a
+  // notification payload is rendered by the system itself (verified 2026-10-05:
+  // hybrid notification arrived while the app was closed). The admin client
+  // fires this once if the call is not answered within ~20s. Tapping the
+  // notification opens MainActivity with the data extras → fcm_tap URL →
+  // requestOffer → the caller re-sends the offer → the parent answers.
   if (req.method === 'POST' && action === 'escalate_call_push') {
     try {
       const payload = req.body?.payload || req.body || {};
@@ -713,22 +715,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     priority: 'HIGH',
                     ttl: '120s',
                     direct_boot_ok: true,
-                    notification: {
-                      channel_id: 'deenora_calls_alert_v19',
-                      title: callerLabel,
-                      body: callBodyText,
-                      sound: 'default',
-                      default_sound: true,
-                      default_vibrate_timings: true,
-                      click_action: 'OPEN_ACTIVITY_1',
-                      tag: 'incoming-voice-call',
-                      notification_priority: 'PRIORITY_MAX',
-                      visibility: 'PUBLIC',
-                    },
-                  },
-                  notification: {
-                    title: callerLabel,
-                    body: callBodyText,
                   },
                   data: fcmDataPayload,
                   apns: {
@@ -776,7 +762,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3. CANCEL CALL PUSH TO DISMISS ANDROID INCOMING CALL UI AND STOP RINGING
+  // 3. TASK 4a: CANCEL CALL PUSH TO DISMISS ANDROID INCOMING CALL UI AND STOP RINGING
   if (req.method === 'POST' && action === 'cancel_call_push') {
     try {
       const payload = req.body?.payload || req.body || {};
@@ -907,6 +893,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log(`[Call API] relay_call_signal: event="${event}", call_id="${call_id}", callerId="${callerId}", institutionId="${institutionId}"`);
 
+      // 1. INSERT into Supabase call_signals table (persistent across all serverless instances)
       if (call_id && SUPABASE_URL && SUPABASE_KEY) {
         try {
           const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/call_signals`, {
@@ -934,6 +921,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      // Memory fallback for instant single-instance polling
       if (call_id) {
         if (!activeCallSignals[call_id]) {
           activeCallSignals[call_id] = [];
@@ -948,6 +936,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      // 2. Identify the target recipient(s) for the signal
       const effectiveServiceAccount = await resolveServiceAccount(institutionId);
       if (!effectiveServiceAccount) {
         return res.status(200).json({
@@ -957,6 +946,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // Determine target devices
       let targetTokens: string[] = [];
       const isFromCallee =
         event === 'call:accept' ||
@@ -968,9 +958,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (senderId && callerId && String(senderId) !== String(callerId));
 
       if (isFromCallee) {
+        // Send to admin caller's device(s) - lookup via caller_id and institution_id from request (not memory!)
         const adminTokens = new Set<string>();
 
         if (SUPABASE_URL && SUPABASE_KEY) {
+          // A. Lookup tokens by caller_id (user_id in device_tokens)
           if (callerId) {
             try {
               const uRes = await fetch(
@@ -993,6 +985,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
 
+          // B. Lookup tokens by institution_id (all admin/teacher devices for this institution)
           if (institutionId) {
             try {
               const iRes = await fetch(
@@ -1022,15 +1015,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
+        // Memory token fallback for callerId if available
         if (adminTokens.size === 0 && callerId && memoryTokens[`user_${callerId}`]) {
           adminTokens.add(memoryTokens[`user_${callerId}`].token);
         }
 
         targetTokens = Array.from(adminTokens);
       } else {
+        // Send to callee's device(s)
         targetTokens = await findTargetFcmTokens(calleePhone, studentId);
       }
 
+      // Fallback: If no tokens found, try finding both caller and callee tokens
       if (!targetTokens.length) {
         const callerTokens = await findTargetFcmTokens(null, null, callerId);
         const calleeTokens = await findTargetFcmTokens(calleePhone, studentId);
@@ -1054,6 +1050,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // Build data payload expected by Android FcmService
       const fcmDataPayload: Record<string, string> = {
         type: 'call_signal',
         event: event,
@@ -1110,7 +1107,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 4. SEND GENERIC PUSH NOTIFICATION
+  // 4. SEND GENERIC PUSH NOTIFICATION (notice / result / diary / chat) to parent Android apps
+  // Body: { institution_id, title, body, target?: {type:'class'|'all'|'students'|'phones', ...}, conversation_id?, class_name?, sender_id? }
+  // Finds parent FCM tokens from device_tokens (matched by guardian phone) and sends
+  // an FCM v1 DATA message {title, body}. The Android FcmService shows it as a
+  // regular notification (no caller_name => not a call).
   if (req.method === 'POST' && action === 'send_notification_push') {
     try {
       const { institution_id, title, body, target, conversation_id, class_name, sender_id } = req.body || {};
@@ -1189,6 +1190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else if (/^(general|general-chat|announcement)/i.test(conv)) {
           phones = await allPhones();
         } else {
+          // direct conversation: student id or phone
           const byId = await studentsToPhones([conv]);
           phones = byId.length ? byId : [conv];
         }
@@ -1206,6 +1208,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, sent: 0, message: 'No recipient phones resolved' });
       }
 
+      // Match phones to registered FCM tokens (single bulk query, match in JS)
       const tokens = await sbGet(`device_tokens?select=fcm_token,phone&order=updated_at.desc&limit=10000`);
       const phoneToToken = new Map<string, string>();
       for (const t of tokens || []) {
@@ -1223,6 +1226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const data = { title: String(title || 'Deenora'), body: String(body || ''), type: 'notification' };
+      // TEMP DEBUG 2026-10-05: capture which token + what FCM actually says
       const results = await Promise.all(finalTokens.map(async (tok) => {
         try {
           const r = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
@@ -1274,6 +1278,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let signals: Array<{ event: string; payload: any; timestamp: number }> = [];
 
+    // 1. SELECT from call_signals WHERE call_id = ? AND consumed = false
     if (SUPABASE_URL && SUPABASE_KEY) {
       try {
         const selectUrl = `${SUPABASE_URL}/rest/v1/call_signals?select=id,event,payload,created_at&call_id=eq.${encodeURIComponent(targetCallId)}&consumed=eq.false&order=created_at.asc`;
@@ -1293,6 +1298,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               timestamp: new Date(r.created_at).getTime(),
             }));
 
+            // 2. Mark as consumed after returning
             const signalIds = rows.map((r: any) => r.id).filter(Boolean);
             if (signalIds.length > 0) {
               fetch(`${SUPABASE_URL}/rest/v1/call_signals?id=in.(${signalIds.join(',')})`, {
@@ -1314,6 +1320,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.warn('[Call API] get_call_signals DB error:', dbErr);
       }
 
+      // 3. DELETE signals older than 5 minutes (cleanup in background)
       try {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         fetch(`${SUPABASE_URL}/rest/v1/call_signals?created_at=lt.${encodeURIComponent(fiveMinutesAgo)}`, {
@@ -1326,6 +1333,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch {}
     }
 
+    // Fallback: merge with local in-memory buffer if database is pending or returned empty
     const memSignals = activeCallSignals[targetCallId] || [];
     if (signals.length === 0 && memSignals.length > 0) {
       signals = memSignals;
