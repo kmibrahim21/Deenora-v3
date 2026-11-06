@@ -730,6 +730,37 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         })();
       }
 
+      // Smartphone App Push & In-App Notification (Only if Parent Portal is active)
+      if (config?.modules?.parent_portal === true) {
+        (async () => {
+          try {
+            const { NotificationService } = await import('../../services/NotificationService');
+            const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+            const dateObj = new Date(selectedMonth + '-01');
+            const formattedMonth = bnMonths[dateObj.getMonth()] || selectedMonth;
+            const stClass = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
+
+            await NotificationService.sendFeeNotification({
+              institutionId: madrasah.id,
+              institutionName: madrasah.name,
+              institutionConfig: config,
+              student: {
+                id: currentStudent.id,
+                student_name: currentStudent.student_name,
+                roll: currentStudent.roll,
+                guardian_phone: currentStudent.guardian_phone,
+                guardian_phone_2: currentStudent.guardian_phone_2,
+                class_name: stClass,
+              },
+              amount: totalAmt,
+              month: formattedMonth,
+            });
+          } catch (notifErr) {
+            console.warn('School fee notification notice:', notifErr);
+          }
+        })();
+      }
+
       await Promise.all([ledgerPromise, cachePromise]);
       
       if (triggerRefresh) triggerRefresh();

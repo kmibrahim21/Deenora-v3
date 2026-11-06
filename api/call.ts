@@ -1096,8 +1096,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!SUPABASE_URL || !SUPABASE_KEY) {
         return res.status(500).json({ success: false, message: 'Server configuration error' });
       }
-      if (!serviceAccount) {
-        return res.status(500).json({ success: false, message: 'Firebase service account not configured' });
+      const effectiveSa = await resolveServiceAccount(institution_id);
+      if (!effectiveSa) {
+        return res.status(200).json({ success: false, sent: 0, message: 'Firebase service account not configured' });
       }
 
       const sbGet = async (path: string): Promise<any[]> => {
@@ -1192,22 +1193,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, sent: 0, matched: 0, message: 'No registered device tokens for recipients yet (parents need to open the Android app once)' });
       }
 
-      const accessToken = await getFirebaseV1AccessToken(serviceAccount);
+      const accessToken = await getFirebaseV1AccessToken(effectiveSa);
       if (!accessToken) {
         return res.status(500).json({ success: false, message: 'Could not get Firebase access token' });
       }
 
-      const data = { title: String(title || 'Deenora'), body: String(body || ''), type: 'notification' };
-      // TEMP DEBUG 2026-10-05: capture which token + what FCM actually says
+      const cleanTitle = String(title || 'Deenora').trim();
+      const cleanBody = String(body || '').trim();
+      const notifType = String(req.body?.type || 'notification');
+      const data = { 
+        title: cleanTitle, 
+        body: cleanBody, 
+        type: notifType,
+        click_action: '/parent-portal'
+      };
+
       const results = await Promise.all(finalTokens.map(async (tok) => {
         try {
-          const r = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
+          const r = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveSa.project_id}/messages:send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
             body: JSON.stringify({
               message: {
                 token: tok,
-                android: { priority: 'HIGH', ttl: '3600s' },
+                android: { 
+                  priority: 'HIGH', 
+                  ttl: '3600s',
+                  notification: {
+                    title: cleanTitle,
+                    body: cleanBody,
+                    sound: 'default',
+                    channel_id: 'deenora_notifications',
+                  }
+                },
+                notification: {
+                  title: cleanTitle,
+                  body: cleanBody,
+                },
                 data,
               },
             }),

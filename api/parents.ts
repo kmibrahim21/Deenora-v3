@@ -27,6 +27,27 @@ export default async function handler(req, res) {
     }
     
     const body = req.body || {};
+
+    if (action === 'mark_notifications_read' || action === 'mark_read') {
+      const { notification_ids, guardian_phone, student_id } = body;
+      try {
+        if (Array.isArray(notification_ids) && notification_ids.length > 0) {
+          await supabase
+            .from('app_notifications')
+            .update({ is_read: true })
+            .in('id', notification_ids);
+        } else if (guardian_phone || student_id) {
+          let q = supabase.from('app_notifications').update({ is_read: true }).eq('is_read', false);
+          if (student_id) q = q.eq('student_id', student_id);
+          else if (guardian_phone) q = q.eq('guardian_phone', guardian_phone);
+          await q;
+        }
+        return res.status(200).json({ success: true });
+      } catch (markErr: any) {
+        return res.status(500).json({ error: markErr.message });
+      }
+    }
+
     const { phone, reg_no, student_id } = body;
     const qPhone = String(phone || req.query.phone || url.searchParams.get('phone') || '').trim();
     const qRegNo = String(reg_no || req.query.reg_no || url.searchParams.get('reg_no') || '').trim();
@@ -584,6 +605,31 @@ export default async function handler(req, res) {
         children.unshift(currentChildObj);
       }
 
+      // Fetch In-App Notifications
+      let notifications: any[] = [];
+      try {
+        const cleanPhone = qPhone.replace(/\D/g, '');
+        const last10 = cleanPhone.slice(-10);
+        const conds = new Set<string>();
+        if (student.id) conds.add(`student_id.eq.${student.id}`);
+        if (qPhone) conds.add(`guardian_phone.eq.${qPhone}`);
+        if (last10) conds.add(`guardian_phone.ilike.%${last10}`);
+        if (student.guardian_phone) conds.add(`guardian_phone.eq.${student.guardian_phone}`);
+
+        const { data: notifData } = await supabase
+          .from('app_notifications')
+          .select('*')
+          .or(Array.from(conds).join(','))
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (notifData && Array.isArray(notifData)) {
+          notifications = notifData;
+        }
+      } catch (notifErr) {
+        console.warn('Error fetching notifications in parents API:', notifErr);
+      }
+
       return res.status(200).json({
         student,
         children,
@@ -595,7 +641,8 @@ export default async function handler(req, res) {
         notices: notices || [],
         events: upcomingEvents || [],
         classTotal: classTotal || 0,
-        institution: student.institutions
+        institution: student.institutions,
+        notifications: notifications || []
       });
     }
 

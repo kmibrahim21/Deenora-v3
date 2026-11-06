@@ -35,6 +35,7 @@ import {
   History as HistoryIcon,
   Users,
   AlertCircle,
+  AlertTriangle,
   Wallet,
   WalletCards,
   ReceiptText,
@@ -74,6 +75,32 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Attendance, Fee, Language, Institution } from 'types';
 import { hardReload } from 'utils/reloadUtils';
 import { generateResultPDF } from 'utils/pdfGenerator';
+import { NotificationService, AppNotification } from '../services/NotificationService';
+
+const toBanglaNum = (num: any): string => {
+  if (num === null || num === undefined) return '';
+  return String(num).replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d, 10)]);
+};
+
+const formatRelativeTimeBn = (isoDate: string): string => {
+  if (!isoDate) return '';
+  try {
+    const d = new Date(isoDate);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diffSec < 60) return 'এইমাত্র';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${toBanglaNum(diffMin)} মিনিট আগে`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${toBanglaNum(diffHour)} ঘণ্টা আগে`;
+    const diffDays = Math.floor(diffHour / 24);
+    if (diffDays === 1) return 'গতকাল';
+    if (diffDays < 7) return `${toBanglaNum(diffDays)} দিন আগে`;
+    return new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'short' }).format(d);
+  } catch {
+    return '';
+  }
+};
 
 const ExpandableText: React.FC<{ text: string; maxChars?: number }> = ({ text, maxChars = 100 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -255,6 +282,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
   const [showNotifBanner, setShowNotifBanner] = useState<boolean>(false);
   const [notifToast, setNotifToast] = useState<string | null>(null);
+  const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
+  const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false);
+  const [notifFilter, setNotifFilter] = useState<'all' | 'attendance' | 'fee' | 'unread'>('all');
+  const [markingAllRead, setMarkingAllRead] = useState<boolean>(false);
+
+  const unreadNotifCount = useMemo(() => {
+    return appNotifications.filter(n => !n.is_read).length;
+  }, [appNotifications]);
+
   const [speakingRemark, setSpeakingRemark] = useState<boolean>(false);
   const [copiedRemark, setCopiedRemark] = useState<boolean>(false);
 
@@ -461,7 +497,116 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     setNotices(data.notices || []);
     setEvents(data.events || []);
     setClassTotal(data.classTotal || 0);
+    if (data.notifications && Array.isArray(data.notifications)) {
+      setAppNotifications(data.notifications);
+    }
   }, []);
+
+  const getParentPhone = useCallback(() => {
+    try {
+      const parentSession = JSON.parse(localStorage.getItem('parent_session') || '{}');
+      return student?.guardian_phone || parentSession.guardian_phone || '';
+    } catch {
+      return student?.guardian_phone || '';
+    }
+  }, [student?.guardian_phone]);
+
+  const fetchAppNotifications = useCallback(async () => {
+    const activePhone = getParentPhone();
+    const activeStudentId = student?.id || studentId;
+    if (!activePhone && !activeStudentId) return;
+
+    try {
+      const items = await NotificationService.getInAppNotifications({
+        guardianPhone: activePhone,
+        studentId: activeStudentId,
+        institutionId: currentInstitution?.id || madrasah?.id || student?.institution_id,
+        limit: 50,
+      });
+      if (items && Array.isArray(items)) {
+        setAppNotifications(items);
+      }
+    } catch (err) {
+      console.warn('Error fetching app notifications:', err);
+    }
+  }, [student?.id, studentId, getParentPhone, currentInstitution?.id, madrasah?.id, student?.institution_id]);
+
+  useEffect(() => {
+    fetchAppNotifications();
+
+    const activePhone = getParentPhone();
+    const activeStudentId = student?.id || studentId;
+    if (!activePhone && !activeStudentId) return;
+
+    const channel = supabase
+      .channel(`parent-notifications-stream-${activeStudentId || activePhone}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'app_notifications',
+        },
+        (payload) => {
+          const newNotif = payload.new as AppNotification;
+          const cleanActivePhone = String(activePhone || '').replace(/\D/g, '').slice(-10);
+          const cleanNotifPhone = String(newNotif.guardian_phone || '').replace(/\D/g, '').slice(-10);
+          const isForStudent = activeStudentId && newNotif.student_id === activeStudentId;
+          const isForPhone = cleanActivePhone && cleanNotifPhone && (cleanActivePhone === cleanNotifPhone);
+
+          if (isForStudent || isForPhone) {
+            setAppNotifications(prev => [newNotif, ...prev.filter(n => n.id !== newNotif.id)]);
+            playNotificationSound();
+            setNotifToast(newNotif.title || 'নতুন নোটিফিকেশন এসেছে 🔔');
+            setTimeout(() => setNotifToast(null), 4000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [student?.id, studentId, getParentPhone, fetchAppNotifications]);
+
+  const handleMarkAsRead = async (notifId: string) => {
+    setAppNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
+    try {
+      await NotificationService.markAsRead([notifId]);
+      fetch('/api/parents/mark_read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notification_ids: [notifId] })
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('markAsRead error:', e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    setMarkingAllRead(true);
+    setAppNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    try {
+      const activePhone = getParentPhone();
+      const activeStudentId = student?.id || studentId;
+      await NotificationService.markAllAsRead({
+        guardianPhone: activePhone,
+        studentId: activeStudentId,
+      });
+      fetch('/api/parents/mark_read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guardian_phone: activePhone,
+          student_id: activeStudentId,
+        })
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('markAllAsRead error:', e);
+    } finally {
+      setMarkingAllRead(false);
+    }
+  };
 
   // Hook into global push notifications & live message sync
   useGlobalNotifications({
@@ -999,27 +1144,30 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   <span>টেস্ট নোটিফিকেশন</span>
                 </button>
               )}
+              {/* Notification Center Trigger Button */}
               <button 
-                onClick={handleEnableNotifications} 
-                className={`p-2.5 md:p-3 rounded-xl transition-all border flex items-center gap-1.5 font-bold text-xs font-noto cursor-pointer ${
-                  notifPermission === 'granted'
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                    : notifPermission === 'denied'
-                    ? 'bg-amber-50 text-amber-600 border-amber-200'
-                    : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-md'
+                onClick={() => setShowNotificationCenter(true)} 
+                className={`p-2.5 md:p-3 rounded-xl transition-all border flex items-center gap-2 font-bold text-xs font-noto cursor-pointer relative shadow-xs ${
+                  unreadNotifCount > 0
+                    ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 shadow-amber-500/10'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
-                title={
-                  notifPermission === 'granted'
-                    ? 'নোটিফিকেশন সক্রিয় আছে'
-                    : notifPermission === 'denied'
-                    ? 'ব্রাউজারে নোটিফিকেশন ব্লক করা রয়েছে'
-                    : 'নোটিফিকেশন চালু করুন'
-                }
+                title="নোটিফিকেশন সেন্টার দেখুন"
               >
-                <BellRing size={18} className={notifPermission === 'default' ? 'animate-bounce' : ''} />
-                <span className="hidden sm:inline">
-                  {notifPermission === 'granted' ? 'অন' : notifPermission === 'denied' ? 'ব্লকড' : 'নোটিফিকেশন'}
-                </span>
+                <div className="relative flex items-center justify-center">
+                  <Bell size={18} className={unreadNotifCount > 0 ? 'text-amber-600' : 'text-slate-600'} />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute -top-2.5 -right-2.5 bg-rose-500 text-white text-[9px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                      {unreadNotifCount > 9 ? '৯+' : toBanglaNum(unreadNotifCount)}
+                    </span>
+                  )}
+                </div>
+                <span className="hidden sm:inline">নোটিফিকেশন</span>
+                {unreadNotifCount > 0 && (
+                  <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white">
+                    {toBanglaNum(unreadNotifCount)} নতুন
+                  </span>
+                )}
               </button>
               <button onClick={() => fetchData()} className="p-2.5 md:p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all border border-slate-100 hover:border-blue-100 group cursor-pointer">
                 <RefreshCw size={18} className={`${refreshing ? 'animate-spin' : ''} group-active:rotate-180 transition-transform`} />
@@ -1027,6 +1175,237 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             </div>
           </header>
         )}
+
+        {/* Notification Center Modal / Slide-over Drawer */}
+        <AnimatePresence>
+          {showNotificationCenter && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                className="w-full max-w-lg bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-left relative"
+              >
+                {/* Top Colorful Gradient */}
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500" />
+
+                {/* Modal Header */}
+                <div className="p-5 md:p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                      <BellRing size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-black text-slate-900 font-noto tracking-tight">
+                          নোটিফিকেশন সেন্টার
+                        </h2>
+                        {unreadNotifCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">
+                            {toBanglaNum(unreadNotifCount)} অপঠিত
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] font-bold text-slate-400 font-noto mt-0.5">
+                        হাজিরা, ফি ও প্রতিষ্ঠানের যাবতীয় নোটিফিকেশন হিস্টোরি
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setShowNotificationCenter(false)}
+                    className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Push Notification Permission Quick-Action Banner */}
+                {notifPermission !== 'granted' && (
+                  <div className="mx-5 mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                        <Smartphone size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-blue-950 font-noto truncate">
+                          স্মার্টফোন পুশ অ্যালার্ট চালু করুন
+                        </p>
+                        <p className="text-[10px] text-blue-700/80 font-noto">
+                          অ্যাপ বন্ধ থাকলেও মোবাইলের নোটিফিকেশন বারে মেসেজ পাবেন
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleEnableNotifications}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] font-noto shrink-0 cursor-pointer shadow-sm transition-all active:scale-95"
+                    >
+                      চালু করুন
+                    </button>
+                  </div>
+                )}
+
+                {/* Filter Chips & Mark All Read */}
+                <div className="px-5 pt-3 pb-2 flex items-center justify-between gap-2 border-b border-slate-50">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                    {[
+                      { id: 'all', label: 'সবগুলো', count: appNotifications.length },
+                      { id: 'attendance', label: 'হাজিরা', count: appNotifications.filter(n => n.type === 'attendance').length },
+                      { id: 'fee', label: 'ফি আদায়', count: appNotifications.filter(n => n.type === 'fee').length },
+                      { id: 'unread', label: 'অপঠিত', count: unreadNotifCount },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setNotifFilter(f.id as any)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold font-noto transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                          notifFilter === f.id
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        <span>{f.label}</span>
+                        {f.count > 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                            notifFilter === f.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {toBanglaNum(f.count)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {unreadNotifCount > 0 && (
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      disabled={markingAllRead}
+                      className="text-[11px] font-black text-emerald-600 hover:text-emerald-700 font-noto shrink-0 hover:underline cursor-pointer flex items-center gap-1 px-1"
+                    >
+                      {markingAllRead ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                      <span>সবগুলো পঠিত করুন</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Notifications List */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
+                  {(() => {
+                    const filtered = appNotifications.filter(n => {
+                      if (notifFilter === 'unread') return !n.is_read;
+                      if (notifFilter === 'attendance') return n.type === 'attendance';
+                      if (notifFilter === 'fee') return n.type === 'fee';
+                      return true;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="py-14 text-center flex flex-col items-center justify-center space-y-3">
+                          <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-300">
+                            <Bell size={28} className="opacity-40" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-700 font-noto">
+                              {notifFilter === 'unread' ? 'কোনো অপঠিত নোটিফিকেশন নেই' : 'কোনো নোটিফিকেশন পাওয়া যায়নি'}
+                            </p>
+                            <p className="text-xs text-slate-400 font-noto mt-0.5">
+                              হাজিরা অনুপস্থিতি বা ফি আদায়ের সকল বার্তা এখানে সংরক্ষিত থাকবে।
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return filtered.map(notif => {
+                      const isUnread = !notif.is_read;
+                      const isAttendance = notif.type === 'attendance';
+                      const isFee = notif.type === 'fee';
+
+                      return (
+                        <div
+                          key={notif.id}
+                          onClick={() => {
+                            if (isUnread) handleMarkAsRead(notif.id);
+                          }}
+                          className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
+                            isUnread
+                              ? 'bg-emerald-50/30 border-emerald-200/90 shadow-sm hover:bg-emerald-50/50'
+                              : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/50'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Icon badge */}
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              isAttendance
+                                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                : isFee
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : 'bg-blue-100 text-blue-700 border border-blue-200'
+                            }`}>
+                              {isAttendance ? (
+                                <AlertTriangle size={18} />
+                              ) : isFee ? (
+                                <ReceiptText size={18} />
+                              ) : (
+                                <Bell size={18} />
+                              )}
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <h4 className={`text-xs font-black font-noto leading-tight ${isUnread ? 'text-slate-900' : 'text-slate-700'}`}>
+                                    {notif.title}
+                                  </h4>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
+                                    isAttendance 
+                                      ? 'bg-amber-100 text-amber-800' 
+                                      : isFee 
+                                      ? 'bg-emerald-100 text-emerald-800' 
+                                      : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400 font-noto shrink-0">
+                                  {formatRelativeTimeBn(notif.created_at)}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-600 font-noto mt-1.5 leading-relaxed whitespace-pre-wrap">
+                                {notif.message}
+                              </p>
+
+                              {isUnread && (
+                                <div className="mt-2 flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider font-noto">
+                                    অপঠিত (ক্লিক করে পঠিত করুন)
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-noto px-6">
+                  <span>সর্বমোট নোটিফিকেশন: {toBanglaNum(appNotifications.length)} টি</span>
+                  <button
+                    onClick={() => setShowNotificationCenter(false)}
+                    className="font-black text-slate-700 hover:text-blue-600 cursor-pointer"
+                  >
+                    বন্ধ করুন
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Notification Alert Toast */}
         <AnimatePresence>

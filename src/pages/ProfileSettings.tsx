@@ -23,13 +23,19 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
-  ListOrdered
+  ListOrdered,
+  Bell,
+  BellRing,
+  Send,
+  Save,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
 import { Institution, Language } from '../types';
 import { requestManager } from '../services/RequestManager';
 import { downloadBlob } from '../utils/fileDownloader';
+import { NotificationService, DEFAULT_NOTIFICATION_SETTINGS } from '../services/NotificationService';
 
 interface Props {
   madrasah: Institution | null;
@@ -77,6 +83,18 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
   const [featureDeleteClass, setFeatureDeleteClass] = useState((madrasah?.config_json as any)?.features?.delete_class ?? false);
   const [featureDeleteAccounting, setFeatureDeleteAccounting] = useState((madrasah?.config_json as any)?.features?.delete_accounting ?? false);
+
+  // Smartphone App Push Notification Configuration states
+  const [notifSettingsLoaded, setNotifSettingsLoaded] = useState(false);
+  const [notifAttendanceEnabled, setNotifAttendanceEnabled] = useState(false);
+  const [notifFeeEnabled, setNotifFeeEnabled] = useState(false);
+  const [notifAbsentTitle, setNotifAbsentTitle] = useState('অনুপস্থিতি নোটিফিকেশন');
+  const [notifAbsentBodyTemplate, setNotifAbsentBodyTemplate] = useState('আস-সালামু আলাইকুম, {student_name} (রোল: {roll}, শ্রেণি: {class_name}) আজ {date} তারিখে ক্লাসে অনুপস্থিত রয়েছে।');
+  const [notifFeeTitle, setNotifFeeTitle] = useState('ফি আদায় নোটিফিকেশন');
+  const [notifFeeBodyTemplate, setNotifFeeBodyTemplate] = useState('আস-সালামু আলাইকুম, {student_name}-এর বেতন বাবদ {amount} ৳ সফলভাবে জমা হয়েছে। মাস: {month}।');
+  const [savingNotifSettings, setSavingNotifSettings] = useState(false);
+  const [notifSaveSuccess, setNotifSaveSuccess] = useState(false);
+  const [testingNotifPush, setTestingNotifPush] = useState(false);
 
   // Registration Number Auto-Generator & Bulk Delete states
   const [regExamplePattern, setRegExamplePattern] = useState('Abc001');
@@ -343,6 +361,87 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         }
       });
   }, [madrasah?.id]);
+
+  useEffect(() => {
+    const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
+    if (!madrasah?.id || !isParentPortalActive) return;
+    let isMounted = true;
+    NotificationService.getSettings(madrasah.id)
+      .then((settings) => {
+        if (!isMounted) return;
+        setNotifAttendanceEnabled(settings.attendance_notify_enabled);
+        setNotifFeeEnabled(settings.fee_notify_enabled);
+        setNotifAbsentTitle(settings.absent_title || DEFAULT_NOTIFICATION_SETTINGS.absent_title);
+        setNotifAbsentBodyTemplate(settings.absent_body_template || DEFAULT_NOTIFICATION_SETTINGS.absent_body_template);
+        setNotifFeeTitle(settings.fee_title || DEFAULT_NOTIFICATION_SETTINGS.fee_title);
+        setNotifFeeBodyTemplate(settings.fee_body_template || DEFAULT_NOTIFICATION_SETTINGS.fee_body_template);
+        setNotifSettingsLoaded(true);
+      })
+      .catch((err) => {
+        console.warn('Failed to load notification settings:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [madrasah?.id]);
+
+  const handleSaveNotifSettings = async () => {
+    if (!madrasah?.id) return;
+    setSavingNotifSettings(true);
+    try {
+      await NotificationService.saveSettings(madrasah.id, {
+        attendance_notify_enabled: notifAttendanceEnabled,
+        fee_notify_enabled: notifFeeEnabled,
+        absent_title: notifAbsentTitle,
+        absent_body_template: notifAbsentBodyTemplate,
+        fee_title: notifFeeTitle,
+        fee_body_template: notifFeeBodyTemplate,
+      });
+      setNotifSaveSuccess(true);
+      setTimeout(() => setNotifSaveSuccess(false), 3000);
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'সফল হয়েছে!' : 'Success!',
+        message: lang === 'bn' ? 'স্মার্টফোন পুশ নোটিফিকেশন কনফিগারেশন সফলভাবে সংরক্ষিত হয়েছে।' : 'Push notification settings saved successfully.',
+      });
+    } catch (err: any) {
+      alert(err.message || 'Error saving notification settings');
+    } finally {
+      setSavingNotifSettings(false);
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    if (!madrasah?.id) return;
+    setTestingNotifPush(true);
+    try {
+      const res = await fetch('/api/call?action=send_notification_push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          institution_id: madrasah.id,
+          title: notifAbsentTitle || 'Deenora পুশ নোটিফিকেশন টেস্ট',
+          body: 'এটি একটি টেস্ট নোটিফিকেশন। অভিভাবক অ্যাপে সফলভাবে নোটিফিকেশন পৌঁছাচ্ছে। 🔔',
+          type: 'general',
+          target: { type: 'all' },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'টেস্ট নোটিফিকেশন প্রেরিত' : 'Test Sent',
+        message: lang === 'bn' 
+          ? `টেস্ট পুশ নোটিফিকেশন কমান্ড সফলভাবে সম্পন্ন হয়েছে। (সংযুক্ত ডিভাইস: ${data?.sent ?? data?.matched ?? 0} টি)`
+          : `Test push sent to registered devices: ${data?.sent ?? data?.matched ?? 0}`,
+      });
+    } catch (err: any) {
+      alert('টেস্ট পুশ নোটিফিকেশন পাঠানো যায়নি: ' + err.message);
+    } finally {
+      setTestingNotifPush(false);
+    }
+  };
 
   const getRegLivePreview = () => {
     const example = regExamplePattern.trim() || 'Abc001';
@@ -783,6 +882,19 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         }).eq('id', madrasah.id);
         
         if (error) throw error;
+      }
+
+      // Auto-save notification settings if loaded and Parent Portal is active
+      const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
+      if (isParentPortalActive && notifSettingsLoaded) {
+        NotificationService.saveSettings(madrasah.id, {
+          attendance_notify_enabled: notifAttendanceEnabled,
+          fee_notify_enabled: notifFeeEnabled,
+          absent_title: notifAbsentTitle,
+          absent_body_template: notifAbsentBodyTemplate,
+          fee_title: notifFeeTitle,
+          fee_body_template: notifFeeBodyTemplate,
+        }).catch(err => console.warn('Auto-save notif settings in handleUpdate notice:', err));
       }
       
       // Update local cache so UI doesn't bounce
@@ -1296,6 +1408,318 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
               </div>
             </motion.div>
           </div>
+
+          {/* Smartphone Push & In-App Notification Configuration Card - Only if Parent Portal is active */}
+          {Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.22 }}
+            className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'}`}
+          >
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} shadow-inner`}>
+                  <BellRing size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className={`text-base font-black font-noto tracking-tight ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                      {lang === 'bn' ? 'স্মার্টফোন পুশ নোটিফিকেশন কনফিগারেশন' : 'Smartphone Push Notification Configuration'}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      FCM + In-App
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-400 font-noto mt-0.5">
+                    {lang === 'bn' 
+                      ? 'শিক্ষার্থীর হাজিরা ও বেতন আদায়ের সাথে সাথে অভিভাবকের মোবাইল অ্যাপে স্বয়ংক্রিয় পুশ অ্যালার্ট ও ইন-অ্যাপ নোটিফিকেশন'
+                      : 'Automatic smartphone push alerts & in-app notifications for attendance and fee collection'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSendTestPush}
+                  disabled={testingNotifPush}
+                  className={`px-3.5 py-2.5 rounded-xl border text-[11px] font-bold font-noto flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                    isDark 
+                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' 
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                  title={lang === 'bn' ? 'টেস্ট নোটিফিকেশন পাঠান' : 'Send Test Notification'}
+                >
+                  {testingNotifPush ? <Loader2 size={14} className="animate-spin text-emerald-500" /> : <Smartphone size={14} className="text-emerald-500" />}
+                  <span>{lang === 'bn' ? 'টেস্ট নোটিফিকেশন' : 'Test Push'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveNotifSettings}
+                  disabled={savingNotifSettings}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black font-noto uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {savingNotifSettings ? <Loader2 size={14} className="animate-spin" /> : notifSaveSuccess ? <Check size={14} /> : <Save size={14} />}
+                  <span>{notifSaveSuccess ? (lang === 'bn' ? 'সংরক্ষিত!' : 'Saved!') : (lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save Settings')}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Notification Sections */}
+            <div className="space-y-6">
+              
+              {/* 1. Attendance Absence Push Notification Toggle & Template */}
+              <div className={`p-5 rounded-2xl border transition-all ${
+                notifAttendanceEnabled 
+                  ? (isDark ? 'bg-blue-500/5 border-blue-500/30' : 'bg-blue-50/40 border-blue-200/80')
+                  : (isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200/60')
+              }`}>
+                {/* Toggle Header */}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                      notifAttendanceEnabled 
+                        ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30' 
+                        : (isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500')
+                    }`}>
+                      <AlertTriangle size={18} />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-black font-noto ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                        {lang === 'bn' ? 'অনুপস্থিতি হলে নোটিফিকেশন পাঠানো হবে' : 'Send Push Notification for Absentees'}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold font-noto">
+                        {lang === 'bn' ? 'হাজিরা নেওয়ার সময় শিক্ষার্থী অনুপস্থিত থাকলে তৎক্ষণাৎ পুশ ও ইন-অ্যাপ নোটিফিকেশন পৌঁছাবে' : 'Notify guardians when student is marked absent during attendance'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={notifAttendanceEnabled}
+                      onChange={(e) => setNotifAttendanceEnabled(e.target.checked)}
+                    />
+                    <div className={`w-12 h-6.5 rounded-full transition-all duration-300 relative ${
+                      isDark ? 'bg-slate-700' : 'bg-slate-200'
+                    } peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-[22px] shadow-inner`}></div>
+                  </label>
+                </div>
+
+                {/* Expanded Settings when Active */}
+                <AnimatePresence>
+                  {notifAttendanceEnabled && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-5 pt-4 border-t border-blue-200/50 dark:border-blue-500/20 space-y-4"
+                    >
+                      {/* Title Input */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-1">
+                          {lang === 'bn' ? 'নোটিফিকেশন শিরোনাম (Title)' : 'Notification Title'}
+                        </label>
+                        <input
+                          type="text"
+                          value={notifAbsentTitle}
+                          onChange={(e) => setNotifAbsentTitle(e.target.value)}
+                          placeholder="অনুপস্থিতি নোটিফিকেশন"
+                          className={`w-full h-11 px-4 rounded-xl border font-bold text-xs outline-none transition-all ${
+                            isDark 
+                              ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' 
+                              : 'bg-white border-slate-200 text-slate-800 focus:border-blue-500 shadow-sm'
+                          }`}
+                        />
+                      </div>
+
+                      {/* Template Textarea */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between px-1">
+                          <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                            {lang === 'bn' ? 'মেসেজ টেমপ্লেট (Message Template)' : 'Message Template'}
+                          </label>
+                          <span className="text-[9px] font-bold text-slate-400 font-noto">
+                            {lang === 'bn' ? 'নিচের ট্যাগগুলোতে ক্লিক করে মেসেজে যোগ করুন' : 'Click tags below to insert'}
+                          </span>
+                        </div>
+
+                        <textarea
+                          rows={3}
+                          value={notifAbsentBodyTemplate}
+                          onChange={(e) => setNotifAbsentBodyTemplate(e.target.value)}
+                          placeholder="আস-সালামু আলাইকুম, {student_name} আজ {date} তারিখে ক্লাসে অনুপস্থিত রয়েছে।"
+                          className={`w-full p-3.5 rounded-xl border font-noto text-xs leading-relaxed outline-none transition-all resize-y ${
+                            isDark 
+                              ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' 
+                              : 'bg-white border-slate-200 text-slate-800 focus:border-blue-500 shadow-sm'
+                          }`}
+                        />
+
+                        {/* Clickable Variable Tags */}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            {lang === 'bn' ? 'উপলব্ধ ভ্যারিয়েবলসমূহ:' : 'Available Tags:'}
+                          </span>
+                          {[
+                            { tag: '{student_name}', label: 'শিক্ষার্থীর নাম' },
+                            { tag: '{class_name}', label: 'শ্রেণি' },
+                            { tag: '{roll}', label: 'রোল নম্বর' },
+                            { tag: '{date}', label: 'তারিখ' },
+                          ].map((t) => (
+                            <button
+                              key={t.tag}
+                              type="button"
+                              onClick={() => setNotifAbsentBodyTemplate(prev => prev + ' ' + t.tag)}
+                              className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold font-mono transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                                isDark
+                                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20'
+                                  : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs'
+                              }`}
+                              title={`ক্লিক করে ${t.tag} যোগ করুন`}
+                            >
+                              <span>{t.tag}</span>
+                              <span className="text-[9px] font-sans opacity-70 ml-1">({t.label})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* 2. Fee Payment Push Notification Toggle & Template */}
+              <div className={`p-5 rounded-2xl border transition-all ${
+                notifFeeEnabled 
+                  ? (isDark ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-emerald-50/40 border-emerald-200/80')
+                  : (isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200/60')
+              }`}>
+                {/* Toggle Header */}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                      notifFeeEnabled 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30' 
+                        : (isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500')
+                    }`}>
+                      <CheckCircle2 size={18} />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-black font-noto ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                        {lang === 'bn' ? 'ফি আদায় হলে নোটিফিকেশন পাঠানো হবে' : 'Send Push Notification on Fee Payment'}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold font-noto">
+                        {lang === 'bn' ? 'অভিভাবকের কাছ থেকে যেকোনো ফি জমা নেওয়ার সাথে সাথে ডিজিটাল রসিদ ও নোটিফিকেশন পাঠানো হবে' : 'Notify guardians instantly whenever tuition or other fees are collected'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={notifFeeEnabled}
+                      onChange={(e) => setNotifFeeEnabled(e.target.checked)}
+                    />
+                    <div className={`w-12 h-6.5 rounded-full transition-all duration-300 relative ${
+                      isDark ? 'bg-slate-700' : 'bg-slate-200'
+                    } peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-[22px] shadow-inner`}></div>
+                  </label>
+                </div>
+
+                {/* Expanded Settings when Active */}
+                <AnimatePresence>
+                  {notifFeeEnabled && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-5 pt-4 border-t border-emerald-200/50 dark:border-emerald-500/20 space-y-4"
+                    >
+                      {/* Title Input */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-1">
+                          {lang === 'bn' ? 'নোটিফিকেশন শিরোনাম (Title)' : 'Notification Title'}
+                        </label>
+                        <input
+                          type="text"
+                          value={notifFeeTitle}
+                          onChange={(e) => setNotifFeeTitle(e.target.value)}
+                          placeholder="ফি আদায় নোটিফিকেশন"
+                          className={`w-full h-11 px-4 rounded-xl border font-bold text-xs outline-none transition-all ${
+                            isDark 
+                              ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' 
+                              : 'bg-white border-slate-200 text-slate-800 focus:border-emerald-500 shadow-sm'
+                          }`}
+                        />
+                      </div>
+
+                      {/* Template Textarea */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between px-1">
+                          <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                            {lang === 'bn' ? 'মেসেজ টেমপ্লেট (Message Template)' : 'Message Template'}
+                          </label>
+                          <span className="text-[9px] font-bold text-slate-400 font-noto">
+                            {lang === 'bn' ? 'নিচের ট্যাগগুলোতে ক্লিক করে মেসেজে যোগ করুন' : 'Click tags below to insert'}
+                          </span>
+                        </div>
+
+                        <textarea
+                          rows={3}
+                          value={notifFeeBodyTemplate}
+                          onChange={(e) => setNotifFeeBodyTemplate(e.target.value)}
+                          placeholder="আস-সালামু আলাইকুম, {student_name}-এর বেতন বাবদ {amount} ৳ সফলভাবে জমা হয়েছে। মাস: {month}।"
+                          className={`w-full p-3.5 rounded-xl border font-noto text-xs leading-relaxed outline-none transition-all resize-y ${
+                            isDark 
+                              ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' 
+                              : 'bg-white border-slate-200 text-slate-800 focus:border-emerald-500 shadow-sm'
+                          }`}
+                        />
+
+                        {/* Clickable Variable Tags */}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            {lang === 'bn' ? 'উপলব্ধ ভ্যারিয়েবলসমূহ:' : 'Available Tags:'}
+                          </span>
+                          {[
+                            { tag: '{student_name}', label: 'শিক্ষার্থীর নাম' },
+                            { tag: '{amount}', label: 'আদায়কৃত টাকা' },
+                            { tag: '{month}', label: 'মাস' },
+                            { tag: '{date}', label: 'তারিখ' },
+                            { tag: '{roll}', label: 'রোল' },
+                            { tag: '{class_name}', label: 'শ্রেণি' },
+                          ].map((t) => (
+                            <button
+                              key={t.tag}
+                              type="button"
+                              onClick={() => setNotifFeeBodyTemplate(prev => prev + ' ' + t.tag)}
+                              className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold font-mono transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                                isDark
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                                  : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 shadow-xs'
+                              }`}
+                              title={`ক্লিক করে ${t.tag} যোগ করুন`}
+                            >
+                              <span>{t.tag}</span>
+                              <span className="text-[9px] font-sans opacity-70 ml-1">({t.label})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+            </div>
+          </motion.div>
+          )}
 
           {/* Registration Number Auto Generator & Bulk Delete Section */}
           <motion.div 

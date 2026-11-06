@@ -299,6 +299,32 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
             })();
         }
 
+        // Smartphone App Push & In-App Notification (Only if Parent Portal is active)
+        if (config?.modules?.parent_portal === true) {
+            (async () => {
+                try {
+                    const { NotificationService } = await import('../../services/NotificationService');
+                    await NotificationService.sendFeeNotification({
+                        institutionId: madrasah.id,
+                        institutionName: madrasah.name,
+                        institutionConfig: config,
+                        student: {
+                            id: student.student_id || student.id,
+                            student_name: student.student_name,
+                            roll: student.roll,
+                            guardian_phone: student.guardian_phone,
+                            guardian_phone_2: student.guardian_phone_2,
+                            class_name: classNameToSave,
+                        },
+                        amount: totalPaid,
+                        month: monthsNames,
+                    });
+                } catch (notifErr) {
+                    console.warn('Fee push notification notice:', notifErr);
+                }
+            })();
+        }
+
         await Promise.all([ledgerPromise, cachePromise]);
         fetchStudentAccountingData();
     } catch (err: any) {

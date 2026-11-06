@@ -11,6 +11,7 @@ import { CacheService } from 'services/cacheService';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { SupabaseWrapper } from 'services/supabaseWrapper';
 import { SyncEngine } from 'services/syncEngine';
+import { NotificationService } from 'services/NotificationService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
 import jsPDF from 'jspdf';
@@ -1282,6 +1283,34 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           }
         } catch (autoSmsErr) {
           console.error("Auto SMS error: ", autoSmsErr);
+        }
+      }
+
+      // Smartphone App Push & In-App Notification Trigger for Absent students (Only if Parent Portal is active)
+      const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
+      if (isParentPortalActive) {
+        try {
+          const absentees = students.filter(s => attendance[s.id] === 'absent');
+          if (absentees.length > 0) {
+            NotificationService.sendAbsentNotifications({
+              institutionId: madrasah.id,
+              institutionName: madrasah.name,
+              institutionConfig: madrasah.config_json,
+              date,
+              className: selectedClass?.class_name || '',
+              absentees: absentees.map(s => ({
+                id: s.id,
+                student_name: s.student_name,
+                name_en: s.name_en,
+                roll: s.roll,
+                guardian_phone: s.guardian_phone,
+                guardian_phone_2: s.guardian_phone_2,
+                class_name: selectedClass?.class_name || '',
+              })),
+            }).catch(pushErr => console.warn('[Attendance] Push notification notice:', pushErr));
+          }
+        } catch (pushErr) {
+          console.warn('[Attendance] Push trigger notice:', pushErr);
         }
       }
 

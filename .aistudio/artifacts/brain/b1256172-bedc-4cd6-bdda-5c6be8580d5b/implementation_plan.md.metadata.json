@@ -1,6 +1,6 @@
 {
-  "summary": "Detailed implementation plan for adding fee category management in Fee Settings, default categories with frequency behaviors, admission & monthly fee processing, receipt/print grouping, and an intelligent one-click fee conversion migration tool.",
-  "updatedAt": "2026-10-19T09:19:11.625450616Z",
+  "summary": "Documented the parent portal conditional constraint for push notifications and verified end-to-end integration across settings, attendance submission, and fee collection engines.",
+  "updatedAt": "2026-11-06T12:14:52.912241546Z",
   "requestFeedback": true,
   "userFacing": true
 }
