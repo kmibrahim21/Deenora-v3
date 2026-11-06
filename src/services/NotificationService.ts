@@ -253,28 +253,34 @@ export const NotificationService = {
         }
       }
 
-      // 2. Dispatch FCM Push Notifications via backend
+      // 2. Dispatch FCM Push Notifications individually so each parent gets their child's specific template message
       try {
-        const firstAbsent = absentees[0];
-        const sampleBody = inAppRows[0]?.message || 'আপনার সন্তান আজ ক্লাসে অনুপস্থিত রয়েছে।';
+        const notifTitle = settings.absent_title || 'অনুপস্থিতি নোটিফিকেশন';
 
-        await fetch('/api/call?action=send_notification_push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            institution_id: institutionId,
-            title: settings.absent_title || 'অনুপস্থিতি নোটিফিকেশন',
-            body: absentees.length === 1 
-              ? sampleBody 
-              : `${absentees.length} জন শিক্ষার্থীর অনুপস্থিতি সংক্রান্ত নোটিফিকেশন।`,
-            type: 'attendance',
-            target: {
-              type: 'students',
-              student_ids: studentIdsToNotify,
-              phones: phonesToNotify,
-            },
-          }),
-        });
+        // Send push for each absent student in parallel
+        await Promise.allSettled(
+          inAppRows.map(row => {
+            const studentPhones = row.guardian_phone ? [row.guardian_phone] : [];
+            const studentIds = row.student_id ? [row.student_id] : [];
+            if (!studentIds.length && !studentPhones.length) return Promise.resolve();
+
+            return fetch('/api/call?action=send_notification_push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                institution_id: institutionId,
+                title: notifTitle,
+                body: row.message,
+                type: 'attendance',
+                target: {
+                  type: 'students',
+                  student_ids: studentIds,
+                  phones: studentPhones,
+                },
+              }),
+            });
+          })
+        );
       } catch (fcmErr) {
         console.warn('[NotificationService] FCM push dispatch notice:', fcmErr);
       }
