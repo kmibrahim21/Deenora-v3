@@ -572,52 +572,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Smart Wave 2 Auto-Escalation (Data-Only Retry):
-      // Pure data payload so Google Play Services NEVER displays any system ash notification.
-      let wave2Results: any = null;
-      let wave2SkippedReason: string | null = null;
-      if (call_id) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        const alreadyAcked = await hasCallBeenAcknowledged(String(call_id));
-        if (alreadyAcked) {
-          wave2SkippedReason = 'Device already acknowledged call (ringing/answered/declined)';
-        } else {
-          const wave2DataPayload: Record<string, string> = {
-            ...fcmDataPayload,
-            CALLER_NAME: callerLabel,
-            CALL_ID: String(call_id || ''),
-          };
-          wave2Results = await Promise.all(
-            targetTokens.map(async (tok) => {
-              try {
-                const v2Res = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${v1AccessToken}`,
-                  },
-                  body: JSON.stringify({
-                    message: {
-                      token: tok,
-                      android: {
-                        priority: 'HIGH',
-                        ttl: '120s',
-                        direct_boot_ok: true,
-                      },
-                      data: wave2DataPayload,
-                    },
-                  }),
-                });
-                const v2Json = await v2Res.json().catch(() => ({}));
-                return { token: tok.slice(0, 10), status: v2Res.status, result: v2Json };
-              } catch (e: any) {
-                return { token: tok.slice(0, 10), error: e.message };
-              }
-            })
-          );
-        }
-      }
-
       return res.status(200).json({
         success: true,
         fcmSent: true,
@@ -625,8 +579,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         devicesNotified: sendResults.length,
         targetTokenFound: true,
         fcmResults: sendResults,
-        wave2Results,
-        wave2SkippedReason,
         payload: fcmDataPayload,
       });
     } catch (err: any) {
@@ -635,7 +587,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 2b. ESCALATION PUSH — Data-only retry for background wakeups
+  // 2b. ESCALATION PUSH — system-rendered notification for swipe-killed phones.
+  // Data-only FCM cannot wake the app on Tecno/HiOS after a recents-swipe, but a
+  // notification payload is rendered by the system itself (verified 2026-10-05:
+  // hybrid notification arrived while the app was closed). The admin client
+  // fires this once if the call is not answered within ~20s. Tapping the
+  // notification opens MainActivity with the data extras → fcm_tap URL →
+  // requestOffer → the caller re-sends the offer → the parent answers.
   if (req.method === 'POST' && action === 'escalate_call_push') {
     try {
       const payload = req.body?.payload || req.body || {};
