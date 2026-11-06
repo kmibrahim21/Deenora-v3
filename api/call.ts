@@ -1181,13 +1181,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, sent: 0, message: 'No recipient phones resolved' });
       }
 
-      // Match phones to registered FCM tokens (single bulk query, match in JS)
-      const tokens = await sbGet(`device_tokens?select=fcm_token,phone&order=updated_at.desc&limit=10000`);
+      // Match phones to registered FCM tokens (check memory cache first, then query database with filter)
       const phoneToToken = new Map<string, string>();
-      for (const t of tokens || []) {
-        const p = normPhone(t.phone);
-        if (p && t.fcm_token && !phoneToToken.has(p)) phoneToToken.set(p, t.fcm_token);
+
+      // 1. Instant lookup from memory cache
+      for (const p of uniquePhones) {
+        if (memoryTokens[`phone_${p}`]?.token) {
+          phoneToToken.set(p, memoryTokens[`phone_${p}`].token);
+        }
       }
+
+      // 2. Query DB specifically for the target phones if needed
+      const missingPhones = uniquePhones.filter(p => !phoneToToken.has(p));
+      if (missingPhones.length > 0) {
+        const filterStr = missingPhones.map(p => `ilike.*${p}*`).join(',');
+        const tokens = await sbGet(`device_tokens?select=fcm_token,phone&or=(${filterStr})&order=updated_at.desc&limit=1000`);
+        for (const t of tokens || []) {
+          const p = normPhone(t.phone);
+          if (p && t.fcm_token && !phoneToToken.has(p)) {
+            phoneToToken.set(p, t.fcm_token);
+          }
+        }
+      }
+
+      // 3. Fallback for broadcast/unmatched tokens
+      if (phoneToToken.size === 0) {
+        const tokens = await sbGet(`device_tokens?select=fcm_token,phone&order=updated_at.desc&limit=1000`);
+        for (const t of tokens || []) {
+          const p = normPhone(t.phone);
+          if (p && t.fcm_token && !phoneToToken.has(p)) {
+            phoneToToken.set(p, t.fcm_token);
+          }
+        }
+      }
+
       const finalTokens = [...new Set(uniquePhones.map(p => phoneToToken.get(p)).filter(Boolean) as string[])];
       if (!finalTokens.length) {
         return res.status(200).json({ success: true, sent: 0, matched: 0, message: 'No registered device tokens for recipients yet (parents need to open the Android app once)' });
@@ -1204,7 +1231,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const data = { 
         title: cleanTitle, 
         body: cleanBody, 
-        type: notifType,
+        type: 'app_notification',
+        notif_type: notifType,
+        is_call: 'false',
+        caller_name: '',
+        call_id: '',
         click_action: '/parent-portal'
       };
 
@@ -1223,7 +1254,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     title: cleanTitle,
                     body: cleanBody,
                     sound: 'default',
-                    channel_id: 'deenora_notifications',
+                    channel_id: 'deenora_general_alerts',
+                    notification_priority: 'PRIORITY_HIGH',
+                    default_sound: true,
+                    default_vibrate_timings: true
                   }
                 },
                 notification: {
