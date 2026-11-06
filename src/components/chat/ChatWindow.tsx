@@ -42,7 +42,8 @@ import {
   AlertCircle,
   RefreshCw,
   Archive,
-  BadgeCheck
+  BadgeCheck,
+  Info
 } from 'lucide-react';
 import { ChatArchiveService } from '../../services/chatArchiveService';
 
@@ -175,15 +176,15 @@ const AudioPlayer: React.FC<{
 
   return (
     <div className={`flex items-center gap-3 py-1 px-1 min-w-[210px] sm:min-w-[260px] max-w-full overflow-hidden select-none ${
-      isMe ? 'text-white' : 'text-slate-800 dark:text-slate-100'
+      isMe ? 'text-white' : (isDark ? 'text-slate-100' : 'text-slate-800')
     }`}>
       <button 
         type="button"
         onClick={togglePlay}
         className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer ${
           isMe 
-            ? 'bg-white text-[#1D4ED8]' 
-            : 'bg-gradient-to-tr from-[#1E40AF] to-[#2563EB] text-white'
+            ? 'bg-white text-blue-600' 
+            : 'bg-blue-600 text-white'
         }`}
         title={isPlaying ? 'Pause' : 'Play voice message'}
       >
@@ -201,7 +202,7 @@ const AudioPlayer: React.FC<{
               className={`flex-1 rounded-full transition-all duration-150 ${
                 isMe
                   ? isFilled ? 'bg-white' : 'bg-white/45'
-                  : isFilled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                  : isFilled ? 'bg-blue-600' : (isDark ? 'bg-slate-600' : 'bg-slate-200')
               }`}
               style={{ height: `${heightPercent}%`, minWidth: '2px' }}
             />
@@ -209,9 +210,9 @@ const AudioPlayer: React.FC<{
         })}
       </div>
 
-      {/* Duration on right (Matches Design 2 "00:07") */}
+      {/* Duration on right */}
       <span className={`text-[11px] font-bold font-mono shrink-0 ${
-        isMe ? 'text-white/95' : 'text-slate-600 dark:text-slate-300'
+        isMe ? 'text-white/95' : (isDark ? 'text-slate-300' : 'text-slate-600')
       }`}>
         {formatTime(isPlaying ? currentTime : effectiveDuration)}
       </span>
@@ -470,7 +471,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             href={part}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 dark:text-blue-400 underline hover:no-underline break-all"
+            className={`${isDark ? 'text-blue-400' : 'text-blue-600'} underline hover:no-underline break-all`}
             onClick={(e) => e.stopPropagation()}
           >
             {part}
@@ -773,17 +774,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   if (!conversation) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center p-8 text-center ${
-        isDark ? 'bg-[#061121] text-slate-100' : 'bg-[#F7F5F0] text-slate-800'
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
       }`}>
         {loading ? (
           <div className="flex flex-col items-center max-w-xs animate-in fade-in duration-300">
-            <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 ring-1 ring-blue-500/20 shadow-sm shadow-blue-500/10">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-4 ring-1 ring-blue-500/20 shadow-sm shadow-blue-500/10 ${
+              isDark ? 'bg-blue-950/60 text-blue-400' : 'bg-blue-50 text-blue-600'
+            }`}>
+              <Loader2 className={`w-8 h-8 animate-spin ${isDark ? 'text-blue-400' : 'text-blue-600'}`} strokeWidth={2.5} />
             </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
+            <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
               {lang === 'bn' ? 'কনভারসেশন লোড হচ্ছে...' : 'Loading conversation...'}
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               {lang === 'bn' ? 'অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন' : 'Please wait a moment...'}
             </p>
           </div>
@@ -792,10 +795,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="w-16 h-16 rounded-3xl bg-blue-600/10 text-blue-600 flex items-center justify-center mb-4">
               <MessageSquare className="w-8 h-8 stroke-[1.5]" />
             </div>
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
+            <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               {lang === 'bn' ? 'কোনো চ্যাট নির্বাচন করা হয়নি' : 'No conversation selected'}
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               {lang === 'bn' ? 'বাম পাশের তালিকা থেকে একটি গ্রুপ বা চ্যাট নির্বাচন করুন' : 'Select a group or chat from the sidebar to start messaging'}
             </p>
           </div>
@@ -810,8 +813,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className={`flex-1 flex flex-col h-full relative ${
       isDark
-        ? 'bg-[#061121] text-slate-100'
-        : 'bg-[#F7F5F0] text-slate-800'
+        ? 'bg-slate-950 text-slate-100'
+        : 'bg-slate-50 text-slate-800'
     }`}>
       
       {/* Toast Notification */}
@@ -829,7 +832,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Multi-Select Header (Replaces top bar in Select Mode) */}
       {isSelectMode ? (
-        <div className="p-3 px-4 bg-[#0A254D] text-white flex items-center justify-between shadow-md z-30">
+        <div className={`p-3 px-4 text-white flex items-center justify-between shadow-md z-30 ${
+          isDark ? 'bg-slate-900' : 'bg-blue-600'
+        }`}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -871,7 +876,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           className={`px-3 sm:px-5 py-3 flex items-center justify-between gap-2 sticky top-0 z-30 transition-colors backdrop-blur-md border-b ${
             isDark 
               ? 'bg-[#081529]/95 border-slate-800 text-slate-100' 
-              : 'bg-white/95 border-[#E6E2D8] text-slate-900 shadow-[0_2px_10px_rgba(15,23,42,0.03)]'
+              : 'bg-white/95 border-slate-200/80 text-slate-900 shadow-2xs'
           }`}
           style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
         >
@@ -879,7 +884,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             {onBackMobile && (
               <button
                 onClick={onBackMobile}
-                className="md:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95 transition-all shrink-0 cursor-pointer"
+                className={`md:hidden p-2 rounded-xl active:scale-95 transition-all shrink-0 cursor-pointer ${
+                  isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                }`}
                 title={lang === 'bn' ? 'ফিরে যান' : 'Back'}
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -895,7 +902,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   conversation.type === 'announcement'
                     ? 'bg-gradient-to-tr from-emerald-500 to-teal-500'
                     : conversation.type === 'class_group'
-                    ? 'bg-gradient-to-tr from-[#0F2952] via-[#1E40AF] to-[#2563EB]'
+                    ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-700'
                     : 'bg-gradient-to-tr from-blue-600 to-indigo-600'
                 }`}
               >
@@ -912,18 +919,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             <div className="min-w-0 cursor-pointer" onClick={onOpenInfo}>
               <div className="flex items-center gap-1.5">
-                <h2 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white truncate leading-snug">
+                <h2 className={`font-extrabold text-sm sm:text-base truncate leading-snug ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}>
                   {conversation.name}
                 </h2>
-                <BadgeCheck className="w-4 h-4 text-[#2563EB] fill-[#2563EB]/15 shrink-0" />
+                <BadgeCheck className="w-4 h-4 text-blue-600 fill-blue-600/15 shrink-0" />
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+              <div className={`flex items-center gap-1.5 text-[11px] sm:text-xs font-medium truncate ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}>
                 {conversation.type === 'class_group' ? (
                   <span>
                     {guardianCount} {lang === 'bn' ? 'অভিভাবক' : 'Guardians'} | {teacherCount} {lang === 'bn' ? 'শিক্ষক' : 'Teachers'}
                   </span>
                 ) : conversation.type === 'announcement' ? (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                  <span className="text-emerald-600 font-semibold">
                     {lang === 'bn' ? 'প্রাতিষ্ঠানিক নোটিশ বোর্ড' : 'Official Notice Board'}
                   </span>
                 ) : (
@@ -937,7 +948,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           {/* Right Header Controls (Design 2 Rounded Square Action Buttons) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {onStartVoiceCall && (
+            {/* Voice call button - Disabled/hidden for parents and in class groups */}
+            {onStartVoiceCall && userRole !== 'parent' && conversation.type !== 'class_group' && conversation.type !== 'announcement' && (
               <button
                 onClick={onStartVoiceCall}
                 className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
@@ -951,13 +963,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             )}
 
-            <button
-              onClick={onOpenInfo}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-[#1E40AF] to-[#2563EB] hover:from-[#1D4ED8] hover:to-[#1E3A8A] text-white flex items-center justify-center shadow-sm shadow-blue-600/25 active:scale-95 transition-all cursor-pointer"
-              title={lang === 'bn' ? 'গ্রুপ তথ্য / ভিডিও' : 'Group Info'}
-            >
-              <Video className="w-4 h-4 fill-current" />
-            </button>
+            {/* Group details or Info button - For class groups, show Users info icon, never a video call icon */}
+            {conversation.type === 'class_group' ? (
+              <button
+                onClick={onOpenInfo}
+                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                    : 'bg-white border-slate-200/90 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 shadow-2xs'
+                }`}
+                title={lang === 'bn' ? 'গ্রুপের বিস্তারিত ও শিক্ষকবৃন্দ' : 'Group Info & Teachers'}
+              >
+                <Users className="w-4 h-4" />
+              </button>
+            ) : userRole !== 'parent' ? (
+              <button
+                onClick={onOpenInfo}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-[#1E40AF] to-[#2563EB] hover:from-[#1D4ED8] hover:to-[#1E3A8A] text-white flex items-center justify-center shadow-sm shadow-blue-600/25 active:scale-95 transition-all cursor-pointer"
+                title={lang === 'bn' ? 'তথ্য' : 'Info'}
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            ) : null}
 
             <button
               onClick={() => setShowPinnedAnnouncement(!showPinnedAnnouncement)}
@@ -989,7 +1016,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               }
             >
               {pushState === 'granted' ? (
-                <BellRing className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <BellRing className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
               ) : (
                 <Bell className="w-4 h-4" />
               )}
@@ -1010,13 +1037,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* Design 2 Full-Width Deep Royal-Navy Pinned Notice Banner */}
+      {/* Pinned Notice Banner */}
       {showPinnedAnnouncement && !isSelectMode && (
-        <div className="w-full px-4 py-2.5 bg-gradient-to-r from-[#081F44] via-[#0F2F63] to-[#081F44] text-white flex items-center justify-between gap-3 shadow-md border-b border-blue-900/50 z-20 animate-in fade-in duration-200">
+        <div className={`w-full px-4 py-2.5 flex items-center justify-between gap-3 border-b z-20 animate-in fade-in duration-200 ${
+          isDark
+            ? 'bg-gradient-to-r from-[#081F44] via-[#0F2F63] to-[#081F44] text-white border-blue-900/50 shadow-md'
+            : 'bg-blue-50/90 border-blue-100 text-blue-950 shadow-2xs'
+        }`}>
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="text-sm shrink-0">📌</span>
-            <p className="text-xs sm:text-[13px] text-white/95 font-medium truncate">
-              <span className="font-bold text-amber-300 mr-1.5">
+            <p className="text-xs sm:text-[13px] font-medium truncate">
+              <span className={`font-bold mr-1.5 ${isDark ? 'text-amber-300' : 'text-blue-700'}`}>
                 {lang === 'bn' ? 'Pinned Notice:' : 'Pinned Notice:'}
               </span>
               {lang === 'bn'
@@ -1026,7 +1057,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
           <button
             onClick={() => setShowPinnedAnnouncement(false)}
-            className="text-blue-200/70 hover:text-white p-1 rounded-lg transition-colors shrink-0 cursor-pointer"
+            className={`p-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
+              isDark ? 'text-blue-200/70 hover:text-white' : 'text-blue-600/70 hover:text-blue-900'
+            }`}
             title={lang === 'bn' ? 'বন্ধ করুন' : 'Dismiss'}
           >
             <X className="w-4 h-4" />
@@ -1034,66 +1067,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* Messages Scroll Area on Luxury Warm Pearl Canvas with Centered Islamic Star Watermark */}
+      {/* Messages Scroll Area */}
       <div 
         ref={scrollRef} 
         className={`flex-1 p-3 sm:p-5 overflow-y-auto space-y-4 relative ${
           isDark 
             ? 'bg-[#061121] text-slate-100' 
-            : 'bg-[#F7F5F0] text-slate-800'
+            : 'bg-slate-50 text-slate-800'
         }`}
         style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}
       >
-        {/* Subtle Centered Islamic 8-Point Star Geometric Mandala Watermark (Design 2) */}
-        <div className="sticky top-1/4 left-0 right-0 flex items-center justify-center pointer-events-none select-none z-0 h-0 overflow-visible">
-          <svg
-            viewBox="0 0 200 200"
-            className={`w-64 h-64 sm:w-80 sm:h-80 ${
-              isDark ? 'text-blue-400 opacity-[0.03]' : 'text-[#8C7A5B] opacity-[0.055]'
-            }`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.2"
-          >
-            <g transform="translate(100,100)">
-              <rect x="-55" y="-55" width="110" height="110" />
-              <rect x="-55" y="-55" width="110" height="110" transform="rotate(45)" />
-              <rect x="-38" y="-38" width="76" height="76" transform="rotate(22.5)" />
-              <rect x="-38" y="-38" width="76" height="76" transform="rotate(67.5)" />
-              <circle r="55" />
-              <circle r="38" />
-              <circle r="18" />
-              <path d="M0,-78 L16,-22 L78,0 L16,22 L0,78 L-16,22 L-78,0 L-16,-22 Z" />
-              <path d="M0,-78 L16,-22 L78,0 L16,22 L0,78 L-16,22 L-78,0 L-16,-22 Z" transform="rotate(45)" />
-            </g>
-          </svg>
-        </div>
-
         <div className="relative z-10 space-y-4">
           {loading ? (
             <div className="space-y-4 py-4 animate-pulse">
               <div className="flex items-start gap-2.5 max-w-[70%]">
-                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
-                <div className="p-4 rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 w-52 h-16 shadow-xs" />
+                <div className={`w-9 h-9 rounded-full shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                <div className={`p-4 rounded-2xl rounded-tl-xs w-52 h-16 shadow-2xs ${isDark ? 'bg-slate-800' : 'bg-white'}`} />
               </div>
               <div className="flex items-start gap-2.5 max-w-[70%] ml-auto flex-row-reverse">
                 <div className="p-4 rounded-2xl rounded-tr-xs bg-blue-600/40 w-60 h-16" />
               </div>
               <div className="flex items-start gap-2.5 max-w-[70%]">
-                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
-                <div className="p-4 rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 w-64 h-14 shadow-xs" />
+                <div className={`w-9 h-9 rounded-full shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                <div className={`p-4 rounded-2xl rounded-tl-xs w-64 h-14 shadow-2xs ${isDark ? 'bg-slate-800' : 'bg-white'}`} />
               </div>
             </div>
           ) : visibleMessages.length === 0 ? (
             <div className="text-center py-16 px-4 space-y-3">
-              <div className="w-14 h-14 rounded-3xl bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center shadow-sm border border-slate-200/70 dark:border-slate-700">
+              <div className={`w-14 h-14 rounded-3xl mx-auto flex items-center justify-center shadow-sm border ${
+                isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200/80'
+              }`}>
                 <Users className="w-7 h-7" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                <h3 className={`text-sm font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
                   {lang === 'bn' ? 'কোনো বার্তা নেই' : 'No messages yet'}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                <p className={`text-xs mt-1 max-w-xs mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                   {lang === 'bn' ? 'এই কথোপকথনে প্রথম বার্তাটি পাঠিয়ে আলোচনা শুরু করুন।' : "Your institution's conversations will appear here. Start the discussion!"}
                 </p>
               </div>
@@ -1107,7 +1117,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     type="button"
                     onClick={handleLoadArchivedHistory}
                     disabled={isLoadingArchived}
-                    className="px-3.5 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-50 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    className={`px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-blue-800 text-blue-300 hover:bg-slate-700'
+                        : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
+                    }`}
                   >
                     <Archive className="w-3.5 h-3.5" />
                     {isLoadingArchived ? (
@@ -1147,7 +1161,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <React.Fragment key={m.id}>
                     {showDateHeader && (
                       <div className="flex justify-center my-3 sticky top-2 z-10 pointer-events-none">
-                        <span className="px-4 py-1 rounded-full bg-white/95 dark:bg-slate-800/95 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-xs border border-[#E5E0D5] dark:border-slate-700">
+                        <span className={`px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-2xs border ${
+                          isDark
+                            ? 'bg-slate-800/95 text-slate-300 border-slate-700'
+                            : 'bg-white/95 text-slate-600 border-slate-200/80'
+                        }`}>
                           {messageDateLabel}
                         </span>
                       </div>
@@ -1173,16 +1191,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 self-center transition-all ${
                             isSelected
                               ? 'bg-blue-600 border-blue-600 text-white'
-                              : 'border-slate-400 dark:border-slate-600 bg-white/50'
+                              : isDark
+                              ? 'border-slate-600 bg-slate-800'
+                              : 'border-slate-300 bg-white'
                           }`}
                         >
                           {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       )}
 
-                      {/* Circular Sender Avatar for Incoming Messages (Design 2) */}
+                      {/* Circular Sender Avatar for Incoming Messages */}
                       {!isMe && (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#0F2952] to-[#2563EB] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm ring-2 ring-white dark:ring-slate-800 mt-0.5">
+                        <div className={`w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 mt-0.5 ${
+                          isDark ? 'ring-slate-800' : 'ring-white'
+                        }`}>
                           {senderName.charAt(0)}
                         </div>
                       )}
@@ -1190,23 +1212,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       {/* Bubble Container */}
                       <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0 max-w-full relative group/bubble`}>
                         
-                        {/* Design 2 Message Bubble (White Card for Incoming / 3D Royal Blue Gradient for Outgoing) */}
+                        {/* Message Bubble (White Card for Incoming / Blue 600 for Outgoing) */}
                         <div
                           className={`px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm leading-relaxed relative break-words max-w-full overflow-hidden ${
                             isMe
-                              ? 'bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#1D4ED8] text-white rounded-tr-xs ml-auto shadow-[0_6px_18px_rgba(37,99,235,0.26)] border border-blue-400/25'
+                              ? 'bg-blue-600 text-white rounded-tr-xs ml-auto shadow-sm shadow-blue-500/20'
                               : isDark
-                              ? 'bg-slate-800/95 border border-slate-700 text-slate-100 rounded-tl-xs shadow-sm'
-                              : 'bg-white border border-[#E8E4DC] text-slate-900 rounded-tl-xs shadow-[0_3px_14px_rgba(15,23,42,0.05)]'
+                              ? 'bg-slate-800/95 border border-slate-700 text-slate-100 rounded-tl-xs shadow-xs'
+                              : 'bg-white border border-slate-200/80 text-slate-900 rounded-tl-xs shadow-2xs'
                           }`}
                         >
-                          {/* Sender Name + Dark Navy Role Pill Badge inside top of Incoming Card (Matches Design 2) */}
+                          {/* Sender Name + Role Pill Badge inside top of Incoming Card */}
                           {!isMe && (
                             <div className="flex items-center gap-2 mb-1.5">
-                              <span className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                              <span className={`text-xs font-extrabold truncate ${
+                                isDark ? 'text-white' : 'text-slate-900'
+                              }`}>
                                 {senderName}
                               </span>
-                              <span className="px-2 py-0.5 rounded-md bg-[#0F2952] text-white text-[10px] font-bold tracking-wide shrink-0 shadow-2xs">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide shrink-0 border ${
+                                isDark
+                                  ? 'bg-slate-700 text-blue-300 border-slate-600'
+                                  : 'bg-blue-50 text-blue-700 border-blue-100'
+                              }`}>
                                 {roleBadge}
                               </span>
                             </div>
@@ -1215,10 +1243,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           {/* Embedded Replied Message Quote Box */}
                           {repliedTarget && (
                             <div className={`mb-2 p-2 px-2.5 rounded-xl border-l-4 text-xs space-y-0.5 ${
-                              isMe ? 'bg-white/15 border-l-white/70' : 'bg-slate-100 dark:bg-slate-700/70 border-l-[#1E40AF]'
+                              isMe 
+                                ? 'bg-white/15 border-l-white/70' 
+                                : isDark
+                                ? 'bg-slate-700/70 border-l-blue-400'
+                                : 'bg-slate-100 border-l-blue-600'
                             }`}>
                               <span className={`font-bold text-[10px] block ${
-                                isMe ? 'text-white' : 'text-[#1E40AF] dark:text-blue-400'
+                                isMe 
+                                  ? 'text-white' 
+                                  : isDark
+                                  ? 'text-blue-400'
+                                  : 'text-blue-700'
                               }`}>
                                 {'sender_name' in repliedTarget && repliedTarget.sender_name
                                   ? repliedTarget.sender_name
@@ -1226,7 +1262,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   ? repliedTarget.sender_profile.full_name
                                   : lang === 'bn' ? 'সদস্য' : 'User'}
                               </span>
-                              <p className={`text-[11px] truncate ${isMe ? 'text-blue-100' : 'text-slate-600 dark:text-slate-300'}`}>
+                              <p className={`text-[11px] truncate ${
+                                isMe 
+                                  ? 'text-blue-100' 
+                                  : isDark
+                                  ? 'text-slate-300'
+                                  : 'text-slate-600'
+                              }`}>
                                 {repliedTarget.message}
                               </p>
                             </div>
@@ -1315,7 +1357,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                           {docFileName}
                                         </p>
                                         <div className={`flex items-center gap-1.5 mt-1 text-[10px] font-semibold ${
-                                          isMe ? 'text-blue-100/85' : 'text-slate-500 dark:text-slate-400'
+                                          isMe ? 'text-blue-100/85' : (isDark ? 'text-slate-400' : 'text-slate-500')
                                         }`}>
                                           <span className="uppercase">{fileExt}</span>
                                           <span>•</span>
@@ -1372,7 +1414,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                           {/* Quick Reaction Bar Trigger on Hover */}
                           {!isSelectMode && (
-                            <div className="absolute -top-3 right-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-md z-20">
+                            <div className={`absolute -top-3 right-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center gap-1 border rounded-full px-1.5 py-0.5 shadow-md z-20 ${
+                              isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                            }`}>
                               {quickEmojiList.slice(0, 4).map((emoji) => (
                                 <button
                                   key={emoji}
@@ -1458,33 +1502,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           </div>
                         </div>
 
-                        {/* Floating Emoji Reaction Pill below Incoming/Reacted Card (Matches Design 2 "❤️ 👍 😊") */}
-                        {(msgReactions.length > 0 || !isMe) && (
+                        {/* Floating Emoji Reaction Pill (Only when actual reactions exist) */}
+                        {msgReactions.length > 0 && (
                           <div
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleToggleReaction(m.id, '❤️');
+                              handleToggleReaction(m.id, msgReactions[0]);
                             }}
-                            className={`flex items-center gap-1 -mt-2 px-2.5 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-[#E5E0D5] dark:border-slate-700 shadow-sm text-[11px] z-10 cursor-pointer hover:scale-105 transition-transform ${
-                              isMe ? 'mr-3 self-end' : 'ml-3 self-start'
-                            }`}
-                            title={lang === 'bn' ? 'রিঅ্যাকশন দিন' : 'React'}
+                            className={`flex items-center gap-1 -mt-2 px-2 py-0.5 rounded-full border shadow-2xs text-[11px] z-10 cursor-pointer hover:scale-105 transition-transform ${
+                              isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                            } ${isMe ? 'mr-3 self-end' : 'ml-3 self-start'}`}
+                            title={lang === 'bn' ? 'রিঅ্যাকশন' : 'Reactions'}
                           >
-                            {msgReactions.length > 0 ? (
-                              msgReactions.map((emoji) => <span key={emoji}>{emoji}</span>)
-                            ) : (
-                              <>
-                                <span>❤️</span>
-                                <span>👍</span>
-                                <span>😊</span>
-                              </>
-                            )}
+                            {msgReactions.map((emoji) => <span key={emoji}>{emoji}</span>)}
                           </div>
                         )}
 
-                        {/* "Delivered" label below the latest outgoing message (Matches Design 2) */}
+                        {/* "Delivered" label below the latest outgoing message */}
                         {isLastOutgoing && m.status !== 'failed' && (
-                          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-1 mr-1">
+                          <span className={`text-[10px] font-semibold mt-1 mr-1 ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
                             Delivered
                           </span>
                         )}
@@ -1513,7 +1551,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => stopRecording(true)}
-              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
+              className={`p-2.5 rounded-xl ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'} hover:text-rose-500 transition-colors cursor-pointer`}
             >
               <Trash2 className="w-5 h-5" />
             </button>

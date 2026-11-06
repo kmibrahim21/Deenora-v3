@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://wafcgdcgqkmsngwqhded.supabase.co';
@@ -11,14 +10,47 @@ if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KE
 const finalUrl = supabaseUrl || '';
 const finalKey = supabaseAnonKey || '';
 
-console.log("Supabase Client Init:", { 
-  url: finalUrl ? `${finalUrl.substring(0, 15)}...` : 'MISSING',
-  hasKey: !!finalKey 
-});
+/**
+ * Resilient fetch wrapper with exponential backoff for transient 503 / PGRST002 ("sorry, too many clients already")
+ * and temporary network hiccups. Prevents frontend crashes and blank screens during database connection spikes.
+ */
+const resilientClientFetch: typeof fetch = async (input, init = {}) => {
+  const MAX_RETRIES = 3;
+  let attempt = 0;
+
+  while (true) {
+    try {
+      const response = await fetch(input, init);
+
+      // Handle 503 (Too many clients / Service Unavailable) or 502/504 Bad Gateway/Gateway Timeout
+      if (response.status === 503 || response.status === 502 || response.status === 504) {
+        if (attempt < MAX_RETRIES) {
+          attempt++;
+          // Exponential backoff with jitter: 200ms, 500ms, 1100ms
+          const backoffMs = Math.min(200 * Math.pow(2, attempt) + Math.random() * 150, 2500);
+          console.warn(`[SupabaseClient] HTTP ${response.status} (Database under load), retrying in ${Math.round(backoffMs)}ms (Attempt ${attempt}/${MAX_RETRIES})...`);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue;
+        }
+      }
+
+      return response;
+    } catch (err: any) {
+      if (attempt < MAX_RETRIES && (err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed to fetch'))) {
+        attempt++;
+        const backoffMs = Math.min(200 * Math.pow(2, attempt) + Math.random() * 150, 2500);
+        console.warn(`[SupabaseClient] Network error (${err.message}), retrying in ${Math.round(backoffMs)}ms (Attempt ${attempt}/${MAX_RETRIES})...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+};
 
 /**
  * Global Supabase client instance.
- * Persistent session enabled for PWA functionality.
+ * Configured with resilient retry logic, connection pooling tolerance, and persistent session for PWA.
  */
 export const supabase = createClient(finalUrl, finalKey, {
   auth: {
@@ -28,8 +60,11 @@ export const supabase = createClient(finalUrl, finalKey, {
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'madrasah_auth_token',
     flowType: 'pkce',
-    lock: <R>(name: string, acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
+    lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
       return fn();
     }
+  },
+  global: {
+    fetch: resilientClientFetch
   }
 });

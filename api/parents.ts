@@ -1,6 +1,8 @@
 
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
+const supabase = getSupabaseAdmin();
+
 export default async function handler(req, res) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   let pathname = url.pathname;
@@ -19,7 +21,6 @@ export default async function handler(req, res) {
   console.log(`Parents API: ${req.method} ${pathname} (action: ${action})`);
 
   try {
-    const supabase = getSupabaseAdmin();
     
     if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
       try { req.body = JSON.parse(req.body); } catch (e) {}

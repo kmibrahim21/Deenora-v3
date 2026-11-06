@@ -2,6 +2,8 @@
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 import * as crypto from 'crypto';
 
+const supabase = getSupabaseAdmin();
+
 export default async function handler(req, res) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   let pathname = url.pathname;
@@ -22,7 +24,6 @@ export default async function handler(req, res) {
   console.log(`Teachers API: ${req.method} ${pathname} (action: ${action})`);
 
   try {
-    const supabase = getSupabaseAdmin();
     
     // Ensure body is parsed if it's a string (Vercel usually does this, but just in case)
     if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {

@@ -294,7 +294,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 
   return (
     <div className={`h-full w-full flex flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
-      <div className="flex-1 flex overflow-hidden w-full h-full bg-white dark:bg-slate-900">
+      <div className={`flex-1 flex overflow-hidden w-full h-full ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
         {/* Left Sidebar (Visible on Desktop OR when mobile chat is NOT active) */}
         <div className={`w-full md:w-auto ${showMobileChat ? 'hidden md:flex' : 'flex'} flex-col h-full shrink-0`}>
           <ChatSidebar
@@ -321,7 +321,11 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             onOpenInfo={() => setShowGroupInfo(true)}
             onOpenBackup={() => setShowBackupModal(true)}
             onBackMobile={() => setShowMobileChat(false)}
-            onStartVoiceCall={onStartVoiceCall ? () => onStartVoiceCall(activeConversation?.name) : undefined}
+            onStartVoiceCall={
+              onStartVoiceCall && userRole !== 'parent' && activeConversation?.type !== 'class_group'
+                ? () => onStartVoiceCall(activeConversation?.name)
+                : undefined
+            }
             onRetryMessage={retryMessage}
             lang={lang}
             isDark={isDark}

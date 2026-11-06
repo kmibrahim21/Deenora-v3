@@ -1,13 +1,11 @@
 import { Request, Response } from 'express';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 import crypto from 'crypto';
 
-// Initialize Supabase admin client
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Initialize Supabase admin client via singleton
+const supabase = getSupabaseAdmin();
 
 // In-memory set to prevent duplicate generation
 const generatingPdfs = new Set<string>();
