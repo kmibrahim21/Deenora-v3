@@ -1286,8 +1286,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
       }
 
-      // Smartphone App Push & In-App Notification Trigger for Absent students (Only if Parent Portal is active)
-      const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
+      // Smartphone App Push & In-App Notification Trigger for Absent students
+      let instConfig = madrasah?.config_json as any;
+      if (typeof instConfig === 'string') {
+        try { instConfig = JSON.parse(instConfig); } catch { instConfig = {}; }
+      }
+      const isParentPortalActive = instConfig?.modules?.parent_portal !== false;
       if (isParentPortalActive) {
         try {
           const absentees = students.filter(s => attendance[s.id] === 'absent');
@@ -1295,7 +1299,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             NotificationService.sendAbsentNotifications({
               institutionId: madrasah.id,
               institutionName: madrasah.name,
-              institutionConfig: madrasah.config_json,
+              institutionConfig: instConfig,
               date,
               className: selectedClass?.class_name || '',
               absentees: absentees.map(s => ({

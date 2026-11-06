@@ -720,7 +720,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       }
 
       // Smartphone App Push & In-App Notification (Only if Parent Portal is active)
-      if (config?.modules?.parent_portal === true) {
+      if (config?.modules?.parent_portal !== false) {
         (async () => {
           try {
             const { NotificationService } = await import('../../services/NotificationService');

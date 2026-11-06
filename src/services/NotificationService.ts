@@ -26,8 +26,8 @@ export interface AppNotification {
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: Omit<NotificationSettings, 'institution_id'> = {
-  attendance_notify_enabled: false,
-  fee_notify_enabled: false,
+  attendance_notify_enabled: true,
+  fee_notify_enabled: true,
   absent_title: 'অনুপস্থিতি নোটিফিকেশন',
   absent_body_template: 'আস-সালামু আলাইকুম, {student_name} (রোল: {roll}, শ্রেণি: {class_name}) আজ {date} তারিখে ক্লাসে অনুপস্থিত রয়েছে।',
   present_title: 'উপস্থিতি নোটিফিকেশন',
@@ -71,8 +71,8 @@ export const NotificationService = {
 
       return {
         institution_id: institutionId,
-        attendance_notify_enabled: Boolean(data.attendance_notify_enabled),
-        fee_notify_enabled: Boolean(data.fee_notify_enabled),
+        attendance_notify_enabled: data.attendance_notify_enabled !== false,
+        fee_notify_enabled: data.fee_notify_enabled !== false,
         absent_title: data.absent_title || DEFAULT_NOTIFICATION_SETTINGS.absent_title,
         absent_body_template: data.absent_body_template || DEFAULT_NOTIFICATION_SETTINGS.absent_body_template,
         present_title: data.present_title || DEFAULT_NOTIFICATION_SETTINGS.present_title,
@@ -98,8 +98,8 @@ export const NotificationService = {
 
     const payload = {
       institution_id: institutionId,
-      attendance_notify_enabled: settings.attendance_notify_enabled ?? false,
-      fee_notify_enabled: settings.fee_notify_enabled ?? false,
+      attendance_notify_enabled: settings.attendance_notify_enabled ?? true,
+      fee_notify_enabled: settings.fee_notify_enabled ?? true,
       absent_title: settings.absent_title?.trim() || DEFAULT_NOTIFICATION_SETTINGS.absent_title,
       absent_body_template: settings.absent_body_template?.trim() || DEFAULT_NOTIFICATION_SETTINGS.absent_body_template,
       present_title: settings.present_title?.trim() || DEFAULT_NOTIFICATION_SETTINGS.present_title,
@@ -125,10 +125,14 @@ export const NotificationService = {
    * Checks whether the Parent Portal module is enabled for an institution
    */
   isParentPortalEnabled: async (institutionId: string, instConfig?: any): Promise<boolean> => {
-    if (instConfig?.modules?.parent_portal !== undefined) {
-      return Boolean(instConfig.modules.parent_portal === true);
+    let config = instConfig;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch { config = null; }
     }
-    if (!institutionId) return false;
+    if (config?.modules?.parent_portal !== undefined) {
+      return Boolean(config.modules.parent_portal !== false);
+    }
+    if (!institutionId) return true;
     try {
       const { data } = await supabase
         .from('institutions')
@@ -136,13 +140,16 @@ export const NotificationService = {
         .eq('id', institutionId)
         .maybeSingle();
 
-      const config = typeof data?.config_json === 'string'
+      const dbConfig = typeof data?.config_json === 'string'
         ? JSON.parse(data.config_json)
         : (data?.config_json || {});
 
-      return Boolean(config?.modules?.parent_portal === true);
+      if (dbConfig?.modules?.parent_portal !== undefined) {
+        return Boolean(dbConfig.modules.parent_portal !== false);
+      }
+      return true;
     } catch {
-      return false;
+      return true;
     }
   },
 
