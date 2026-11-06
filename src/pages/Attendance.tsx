@@ -18,7 +18,6 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SmartDatePicker } from '../components/common/SmartDatePicker';
 import { CompactMonthPicker } from '../components/finance/CompactMonthPicker';
-import { pushToParents } from '../lib/notifyParents';
 
 interface AttendanceProps {
   lang: Language;
@@ -1288,24 +1287,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
 
       // Smartphone App Push & In-App Notification Trigger for Absent students (Only if Parent Portal is active)
-      const absentStudentIds = students
-        .filter(s => attendance[s.id] === 'absent')
-        .map(s => s.id);
-
-      // Trigger native FCM push to parents
-      if (absentStudentIds.length > 0 && madrasah?.id) {
-        try {
-          pushToParents({
-            institution_id: madrasah.id,
-            target: { type: 'students', student_ids: absentStudentIds },
-            title: 'হাজিরা নোটিফিকেশন',
-            body: `আজকের উপস্থিতি: আপনার সন্তান আজ প্রতিষ্ঠানে অনুপস্থিত রয়েছে। তারিখ: ${new Date().toLocaleDateString('bn-BD')}`
-          });
-        } catch (pushErr) {
-          console.warn('[Attendance] pushToParents notice:', pushErr);
-        }
-      }
-
       const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
       if (isParentPortalActive) {
         try {
