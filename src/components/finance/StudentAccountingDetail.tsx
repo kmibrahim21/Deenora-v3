@@ -19,6 +19,7 @@ import {
   MONTH_DEFINITIONS
 } from '../../utils/feeCategoryHelper';
 import { CompactMonthPicker } from './CompactMonthPicker';
+import { pushToParents } from '../../lib/notifyParents';
 
 interface StudentAccountingDetailProps {
   student: any;
@@ -323,6 +324,23 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     console.warn('Fee push notification notice:', notifErr);
                 }
             })();
+        }
+
+        // Direct Native FCM push to parents for collected fees
+        const targetStudentId = student?.student_id || student?.id;
+        if (targetStudentId && madrasah?.id) {
+          try {
+            const studentName = student.student_name || student.name_bn || student.name || 'শিক্ষার্থী';
+            const receiptNo = createdFeeIds && createdFeeIds.length > 0 ? createdFeeIds[0] : 'N/A';
+            pushToParents({
+              institution_id: madrasah.id,
+              target: { type: 'students', student_ids: [targetStudentId] },
+              title: 'ফি আদায়ের রশিদ',
+              body: `${studentName}-এর ${totalPaid} টাকা ফি সফলভাবে গ্রহণ করা হয়েছে। রশিদ নং: ${receiptNo}`
+            });
+          } catch (fcmErr) {
+            console.warn('[StudentAccountingDetail] pushToParents notice:', fcmErr);
+          }
         }
 
         await Promise.all([ledgerPromise, cachePromise]);

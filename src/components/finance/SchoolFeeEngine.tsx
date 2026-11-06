@@ -23,6 +23,7 @@ import {
 import { FeeCategoryManagerModal } from './FeeCategoryManagerModal';
 import { FeeCategoryMigrationModal } from './FeeCategoryMigrationModal';
 import { CompactMonthPicker } from './CompactMonthPicker';
+import { pushToParents } from '../../lib/notifyParents';
 
 interface SchoolFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -667,6 +668,23 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           feeItems: feeCategories,
         }
       });
+
+      // Direct Native FCM push to parents for collected fee receipt
+      const targetStudentId = currentStudent?.student_id || currentStudent?.id;
+      if (targetStudentId && madrasah?.id) {
+        try {
+          const stName = currentStudent.student_name || currentStudent.name_bn || currentStudent.name || 'শিক্ষার্থী';
+          const receiptNo = feeIdToSave || 'N/A';
+          pushToParents({
+            institution_id: madrasah.id,
+            target: { type: 'students', student_ids: [targetStudentId] },
+            title: 'ফি আদায়ের রশিদ',
+            body: `${stName}-এর ${totalAmt} টাকা ফি সফলভাবে গ্রহণ করা হয়েছে। রশিদ নং: ${receiptNo}`
+          });
+        } catch (fcmPushErr) {
+          console.warn('[SchoolFeeEngine] pushToParents notice:', fcmPushErr);
+        }
+      }
 
       const sId = currentStudent.student_id;
 
