@@ -91,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .in('institution_id', searchInstIds),
         supabase
           .from('teachers')
-          .select('name, phone')
+          .select('name:teacher_name, phone:mobile, teacher_name, mobile')
           .in('institution_id', searchInstIds)
       ]);
 

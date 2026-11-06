@@ -162,11 +162,18 @@ export default async function handler(req, res) {
         .order('month', { ascending: false });
 
       // 2.1 Fee Structures & Settings (New for correct calculations)
-      const { data: feeStructures } = await supabase
+      let feeStructuresQuery = supabase
         .from('fee_structures')
         .select('*')
-        .eq('institution_id', student.institution_id)
-        .or(`class_id.eq.${student.class_id},class_id.is.null`);
+        .eq('institution_id', student.institution_id);
+
+      if (student.class_id) {
+        feeStructuresQuery = feeStructuresQuery.or(`class_id.eq.${student.class_id},class_id.is.null`);
+      } else {
+        feeStructuresQuery = feeStructuresQuery.is('class_id', null);
+      }
+
+      const { data: feeStructures } = await feeStructuresQuery;
 
       const { data: studentFeeSettings } = await supabase
         .from('student_fee_settings')

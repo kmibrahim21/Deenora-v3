@@ -576,7 +576,7 @@ export const SMSService = {
             .eq('institution_id', institutionId),
           supabase
             .from('teachers')
-            .select('name, phone')
+            .select('name:teacher_name, phone:mobile, teacher_name, mobile')
             .eq('institution_id', institutionId)
         ]);
 

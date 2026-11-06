@@ -220,7 +220,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       const queryDates = Array.from(new Set([localDate, utcDate]));
       const { data: logs } = await supabase
         .from('attendance')
-        .select('id, student_id, date, arrival_time, status, created_at, session, notes, students(student_name, roll, biometric_id, classes(class_name))')
+        .select('id, student_id, date, arrival_time, status, created_at, session, students(student_name, roll, biometric_id, classes(class_name))')
         .eq('institution_id', madrasah.id)
         .in('date', queryDates)
         .order('created_at', { ascending: false })
@@ -258,7 +258,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       const queryDates = Array.from(new Set([localDate, utcDate]));
       const { data: recentLogs } = await supabase
         .from('attendance')
-        .select('id, created_at, notes, arrival_time, date, students(student_name, biometric_id)')
+        .select('id, created_at, arrival_time, date, students(student_name, biometric_id)')
         .eq('institution_id', madrasah.id)
         .in('date', queryDates)
         .order('created_at', { ascending: false })

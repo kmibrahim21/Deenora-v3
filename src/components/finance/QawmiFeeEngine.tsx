@@ -463,8 +463,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     // 1. Fetch structures
     const { data: structures } = await requestManager.cachedFetch(
       'fee_structures',
-      (q) => q.select('*').eq('institution_id', madrasah.id).or(`class_id.eq.${student.class_id},class_id.is.null`),
-      `structures:${madrasah.id}:${student.class_id}`,
+      (q) => {
+        const base = q.select('*').eq('institution_id', madrasah.id);
+        return student.class_id ? base.or(`class_id.eq.${student.class_id},class_id.is.null`) : base.is('class_id', null);
+      },
+      `structures:${madrasah.id}:${student.class_id || 'unassigned'}`,
       CACHE_TTLS.LONG
     );
     if (!structures) {
