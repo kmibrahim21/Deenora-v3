@@ -1118,8 +1118,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const studentsToPhones = async (ids: string[]) => {
         const clean = (ids || []).filter(isUuid);
         if (!clean.length) return [];
-        const rows = await sbGet(`students?select=guardian_phone&id=in.(${clean.join(',')})&is_active=eq.true&limit=2000`);
-        return rows.map(r => r.guardian_phone).filter(Boolean);
+        const rows = await sbGet(`students?select=guardian_phone,guardian_phone_2&id=in.(${clean.join(',')})&limit=2000`);
+        const phs: string[] = [];
+        for (const r of rows || []) {
+          if (r.guardian_phone) phs.push(r.guardian_phone);
+          if (r.guardian_phone_2) phs.push(r.guardian_phone_2);
+        }
+        return phs;
       };
 
       const classToPhones = async (nameOrId: string) => {
@@ -1131,13 +1136,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           classIds = (cls || []).map((c: any) => c.id).filter(isUuid);
         }
         if (!classIds.length) return [];
-        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&class_id=in.(${classIds.join(',')})&is_active=eq.true&limit=3000`);
-        return rows.map(r => r.guardian_phone).filter(Boolean);
+        const rows = await sbGet(`students?select=guardian_phone,guardian_phone_2&institution_id=eq.${institution_id}&class_id=in.(${classIds.join(',')})&limit=3000`);
+        const phs: string[] = [];
+        for (const r of rows || []) {
+          if (r.guardian_phone) phs.push(r.guardian_phone);
+          if (r.guardian_phone_2) phs.push(r.guardian_phone_2);
+        }
+        return phs;
       };
 
       const allPhones = async () => {
-        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&is_active=eq.true&limit=5000`);
-        return rows.map(r => r.guardian_phone).filter(Boolean);
+        const rows = await sbGet(`students?select=guardian_phone,guardian_phone_2&institution_id=eq.${institution_id}&limit=5000`);
+        const phs: string[] = [];
+        for (const r of rows || []) {
+          if (r.guardian_phone) phs.push(r.guardian_phone);
+          if (r.guardian_phone_2) phs.push(r.guardian_phone_2);
+        }
+        return phs;
       };
 
       const isAllTarget = (n: any) => ['all', 'app_notice', 'app_holiday', 'app_ptm', 'app_event'].includes(String(n || '').toLowerCase());
@@ -1147,10 +1162,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       let phones: any[] = [];
+      if (Array.isArray(target?.phones) && target.phones.length > 0) {
+        phones.push(...target.phones);
+      }
       if (target?.type === 'students' && Array.isArray(target.student_ids)) {
-        phones = await studentsToPhones(target.student_ids);
+        const dbPhones = await studentsToPhones(target.student_ids);
+        phones.push(...dbPhones);
       } else if (target?.type === 'phones' && Array.isArray(target.phones)) {
-        phones = target.phones;
+        phones.push(...target.phones);
       } else if (target?.type === 'class' && target.class_name) {
         phones = await classToPhones(target.class_name);
       } else if (target?.type === 'all') {
@@ -1194,8 +1213,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 2. Query DB specifically for the target phones if needed
       const missingPhones = uniquePhones.filter(p => !phoneToToken.has(p));
       if (missingPhones.length > 0) {
-        const filterStr = missingPhones.map(p => `ilike.*${p}*`).join(',');
-        const tokens = await sbGet(`device_tokens?select=fcm_token,phone&or=(${filterStr})&order=updated_at.desc&limit=1000`);
+        const filterStr = missingPhones.map(p => `phone.ilike.*${p}*`).join(',');
+        const tokens = await sbGet(`device_tokens?select=fcm_token,phone,student_id&or=(${filterStr})&order=updated_at.desc&limit=1000`);
         for (const t of tokens || []) {
           const p = normPhone(t.phone);
           if (p && t.fcm_token && !phoneToToken.has(p)) {
@@ -1204,8 +1223,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // 3. Fallback for broadcast/unmatched tokens
-      if (phoneToToken.size === 0) {
+      // 3. Also match device_tokens directly by student_id if provided
+      const targetStudentIds = (Array.isArray(target?.student_ids) ? target.student_ids : []).filter(isUuid);
+      const studentTokensSet = new Set<string>();
+      if (targetStudentIds.length > 0) {
+        const sTokens = await sbGet(`device_tokens?select=fcm_token,student_id&student_id=in.(${targetStudentIds.join(',')})&limit=200`);
+        for (const st of sTokens || []) {
+          if (st.fcm_token) studentTokensSet.add(st.fcm_token);
+        }
+      }
+
+      // 4. Fallback for broadcast/unmatched tokens
+      if (phoneToToken.size === 0 && studentTokensSet.size === 0) {
         const tokens = await sbGet(`device_tokens?select=fcm_token,phone&order=updated_at.desc&limit=1000`);
         for (const t of tokens || []) {
           const p = normPhone(t.phone);
@@ -1215,7 +1244,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      const finalTokens = [...new Set(uniquePhones.map(p => phoneToToken.get(p)).filter(Boolean) as string[])];
+      const finalTokens = [
+        ...new Set([
+          ...uniquePhones.map(p => phoneToToken.get(p)).filter(Boolean),
+          ...Array.from(studentTokensSet),
+        ])
+      ] as string[];
       if (!finalTokens.length) {
         return res.status(200).json({ success: true, sent: 0, matched: 0, message: 'No registered device tokens for recipients yet (parents need to open the Android app once)' });
       }
