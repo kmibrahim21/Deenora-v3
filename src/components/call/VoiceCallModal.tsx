@@ -35,7 +35,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   isCaller,
   duration,
   isMuted,
-  isSpeakerOn = true,
+  isSpeakerOn = false,
   onAccept,
   onReject,
   onEnd,

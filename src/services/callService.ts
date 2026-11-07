@@ -125,7 +125,7 @@ export class VoiceCallService {
   private watchdogInterval: NodeJS.Timeout | null = null;
   private lastPingReceived: number = Date.now();
   private statsInterval: NodeJS.Timeout | null = null;
-  private isSpeakerOn: boolean = true;
+  private isSpeakerOn: boolean = false;
   private isMuted: boolean = false;
 
   // Realtime connection health & auto-reconnect state
@@ -687,14 +687,18 @@ export class VoiceCallService {
 
   public setSpeaker(enabled: boolean): void {
     this.isSpeakerOn = enabled;
-    // Android Native AudioManager bridge for hardware earpiece vs loudspeaker switching
-    if (typeof window !== 'undefined' && (window as any).AndroidInterface?.setAudioMode) {
+    if (typeof window !== 'undefined' && (window as any).AndroidInterface) {
       try {
-        (window as any).AndroidInterface.setAudioMode(enabled ? 'speaker' : 'earpiece');
+        if (typeof (window as any).AndroidInterface.setAudioMode === 'function') {
+          (window as any).AndroidInterface.setAudioMode(enabled ? 'speaker' : 'earpiece');
+        }
+        if (typeof (window as any).AndroidInterface.setSpeakerphone === 'function') {
+          (window as any).AndroidInterface.setSpeakerphone(enabled);
+        }
       } catch {}
     }
     if (this.remoteAudioElement) {
-      this.remoteAudioElement.volume = enabled ? 1.0 : 0.3;
+      this.remoteAudioElement.volume = 1.0;
       if ('setSinkId' in this.remoteAudioElement) {
         try {
           if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {

@@ -34,7 +34,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isCaller, setIsCaller] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
+  const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(false);
   const [pendingCallRequest, setPendingCallRequest] = useState<{
     student: CallStudentInfo;
     caller?: CallParticipantInfo;
@@ -52,9 +52,11 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     if (callStatus === 'connected') {
       native('callStarted');
+      voiceCallService.setSpeaker(false);
     } else if (callStatus === 'ended' || callStatus === 'rejected' || callStatus === 'busy' || callStatus === 'failed' || callStatus === 'idle') {
       native('stopRinging');
       native('callEnded');
+      setIsSpeakerOn(false);
     }
   }, [callStatus]);
 
@@ -68,13 +70,15 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       if (status === 'connected') {
         setDuration(0);
+        setIsSpeakerOn(false);
+        voiceCallService.setSpeaker(false);
       } else if (status === 'busy') {
         setTimeout(() => {
           setCallStatus('idle');
           setActiveCall(null);
           setDuration(0);
           setIsMuted(false);
-          setIsSpeakerOn(true);
+          setIsSpeakerOn(false);
         }, 3200);
       } else if (status === 'idle' || status === 'ended' || status === 'rejected' || status === 'failed') {
         setTimeout(() => {
@@ -82,7 +86,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setActiveCall(null);
           setDuration(0);
           setIsMuted(false);
-          setIsSpeakerOn(true);
+          setIsSpeakerOn(false);
         }, 1200);
       }
     };
