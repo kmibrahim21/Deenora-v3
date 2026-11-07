@@ -98,6 +98,8 @@ export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatM
     attachment_name: attachmentName,
     attachment_size: attachmentSize,
     voice_duration: rawVoiceDuration ? Number(rawVoiceDuration) : undefined,
+    reply_to_message_id: row.reply_to_message_id || row.reply_to_id || parsedPayload?.reply_to_message_id || parsedPayload?.reply_to_id || undefined,
+    reply_to_message: row.reply_to_message || parsedPayload?.reply_to_message || undefined,
     created_at: row.created_at || new Date().toISOString(),
     is_edited: row.is_edited || false,
     is_deleted: row.is_deleted || false,
@@ -664,7 +666,9 @@ export class ChatService {
     attachmentUrl?: string,
     voiceDuration?: number,
     attachmentName?: string,
-    attachmentSize?: number
+    attachmentSize?: number,
+    replyToId?: string,
+    replyToMessage?: any
   ): Promise<ChatMessage> {
     // Fail safely if institutionId or required parameters are missing
     if (!institutionId || !institutionId.trim()) {
@@ -706,7 +710,9 @@ export class ChatService {
       messageType === 'voice' ||
       messageType === 'document' ||
       attachmentName ||
-      voiceDuration
+      voiceDuration ||
+      replyToId ||
+      replyToMessage
     );
 
     const defaultText = messageText ? messageText.trim() : (messageType === 'voice' ? '🎤 ভয়েস মেসেজ' : (attachmentName || 'ডকুমেন্ট'));
@@ -719,6 +725,9 @@ export class ChatService {
           attachment_name: attachmentName,
           attachment_size: attachmentSize,
           voice_duration: voiceDuration,
+          reply_to_id: replyToId,
+          reply_to_message_id: replyToId,
+          reply_to_message: replyToMessage,
           conversation_id: cleanConversationId,
           sender_id: cleanSenderId,
           sender_name: cleanSenderName,
@@ -742,6 +751,8 @@ export class ChatService {
       attachment_name: attachmentName,
       attachment_size: attachmentSize,
       voice_duration: voiceDuration,
+      reply_to_message_id: replyToId,
+      reply_to_message: replyToMessage,
       created_at: new Date().toISOString(),
       is_edited: false,
       is_deleted: false,
@@ -774,6 +785,8 @@ export class ChatService {
       attachment_name: attachmentName,
       attachment_size: attachmentSize,
       voice_duration: voiceDuration,
+      reply_to_message_id: replyToId,
+      reply_to_message: replyToMessage,
       created_at: newMessage.created_at,
       status: 'pending',
       retry_count: 0
@@ -819,7 +832,10 @@ export class ChatService {
         attachment_url: finalAttachmentUrl,
         attachment_name: attachmentName,
         attachment_size: attachmentSize,
-        voice_duration: voiceDuration
+        voice_duration: voiceDuration,
+        reply_to_id: replyToId,
+        reply_to_message_id: replyToId,
+        reply_to_message: replyToMessage
       };
 
       const { data: dbData1, error: dbError1 } = await supabase
@@ -852,7 +868,10 @@ export class ChatService {
           attachment_url: finalAttachmentUrl,
           attachment_name: attachmentName,
           attachment_size: attachmentSize,
-          voice_duration: voiceDuration
+          voice_duration: voiceDuration,
+          reply_to_id: replyToId,
+          reply_to_message_id: replyToId,
+          reply_to_message: replyToMessage
         };
 
         const { data: dbData2, error: dbError2 } = await supabase

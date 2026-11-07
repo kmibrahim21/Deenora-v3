@@ -149,7 +149,38 @@ export async function downloadBlob(blob: Blob, fileName: string, mimeType: strin
 export async function downloadFromUrl(url: string, fileName: string, mimeType: string = 'application/pdf'): Promise<boolean> {
   const win = window as any;
 
-  // 1. Android Native Bridge with URL support (e.g. downloadFromUrl)
+  // 0. If URL is a data: URI (e.g. base64 PDF or Image), handle via Blob & native Base64 bridge
+  if (url.startsWith('data:')) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        await downloadBlob(blob, fileName, mimeType);
+        return true;
+      }
+    } catch (e) {
+      // Manual Base64 decode to Blob fallback
+      try {
+        const parts = url.split(',');
+        const rawBase64 = parts[1];
+        const byteString = atob(rawBase64);
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const resolvedMime = mimeMatch ? mimeMatch[1] : mimeType;
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        const blob = new Blob([ab], { type: resolvedMime });
+        await downloadBlob(blob, fileName, resolvedMime);
+        return true;
+      } catch (decodeErr) {
+        console.warn('[FileDownloader] data: URI blob conversion failed:', decodeErr);
+      }
+    }
+  }
+
+  // 1. Android Native Bridge with URL support (only for http/https URLs)
   if (typeof win.AndroidInterface?.downloadFromUrl === 'function') {
     try {
       win.AndroidInterface.downloadFromUrl(url, fileName, mimeType);

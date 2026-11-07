@@ -289,7 +289,9 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     const senderId = currentUserId || 'admin-user';
     const senderName = profile?.full_name || (profile as any)?.name || (userRole === 'parent' ? 'অভিভাবক' : 'এডমিন / শিক্ষক');
     const className = activeConversation?.class_id || undefined;
-    sendMessage(senderId, text, senderName, className, messageType, attachmentUrl, voiceDuration, attachmentName, attachmentSize);
+    const replyTarget = replyToId ? messages.find(m => m.id === replyToId || m.client_message_id === replyToId) : undefined;
+    const replyToMsg = replyTarget ? { id: replyTarget.id, sender_name: replyTarget.sender_name || (replyTarget.sender_profile as any)?.full_name || 'User', message: replyTarget.message, message_type: replyTarget.message_type } : undefined;
+    sendMessage(senderId, text, senderName, className, messageType, attachmentUrl, voiceDuration, attachmentName, attachmentSize, replyToId, replyToMsg);
   };
 
   return (

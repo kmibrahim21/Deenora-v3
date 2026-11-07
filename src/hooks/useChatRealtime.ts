@@ -235,7 +235,9 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     attachmentUrl?: string,
     voiceDuration?: number,
     attachmentName?: string,
-    attachmentSize?: number
+    attachmentSize?: number,
+    replyToId?: string,
+    replyToMessage?: any
   ) => {
     if (!conversationId || !institutionId || (!text.trim() && messageType === 'text' && !attachmentUrl)) return;
 
@@ -256,6 +258,8 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       attachment_name: attachmentName,
       attachment_size: attachmentSize,
       voice_duration: voiceDuration,
+      reply_to_message_id: replyToId,
+      reply_to_message: replyToMessage,
       created_at: new Date().toISOString(),
       status: 'pending',
       synced: 0,
@@ -284,7 +288,9 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
         attachmentUrl,
         voiceDuration,
         attachmentName,
-        attachmentSize
+        attachmentSize,
+        replyToId,
+        replyToMessage
       );
       
       // Reconcile optimistic message with server response

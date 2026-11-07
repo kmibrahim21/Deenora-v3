@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabase';
+import { downloadFromUrl } from '../utils/fileDownloader';
 import { 
   Paperclip,
   Eye,
@@ -233,6 +234,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   }, [readDiaryIds]);
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [galleryImages, setGalleryImages] = useState<Array<{ url: string; name?: string }>>([]);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState<number>(0);
   const [student, setStudent] = useState<any>(() => initialCache?.student || null);
   const [children, setChildren] = useState<any[]>(() => initialCache?.children || []);
   const [switchingChildId, setSwitchingChildId] = useState<string | null>(null);
@@ -3005,163 +3008,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 </div>
               </div>
 
-              {activeNoticeTab === 'routine' ? (
-                <div>
-                  {publishedClassRoutines.length === 0 ? (
-                    <div className="bg-white/50 border border-dashed border-slate-200 p-12 rounded-[3rem] text-center space-y-4">
-                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
-                        <Calendar size={40} className="text-slate-300" />
-                      </div>
-                      <div>
-                        <p className="text-base font-black text-slate-700 font-noto">কোনো পরীক্ষার রুটিন প্রকাশিত হয়নি</p>
-                        <p className="text-xs text-slate-400 font-medium font-noto mt-1">আপনার শ্রেণির জন্য পরীক্ষার রুটিন পাবলিশ করা হলে এখানে দেখতে পাবেন।</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {publishedClassRoutines.map((routine, rIdx) => (
-                        <motion.div
-                          key={routine.id || rIdx}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: rIdx * 0.08 }}
-                          className="bg-white border border-slate-100 rounded-[2.5rem] p-5 sm:p-7 shadow-premium relative overflow-hidden group hover:border-blue-200 transition-all duration-300"
-                        >
-                          {/* Header */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                                  {student?.classes?.class_name || 'নিজ শ্রেণি'}
-                                </span>
-                                {routine.createdAt && (
-                                  <span className="text-[10px] text-slate-400 font-bold font-noto">
-                                    প্রকাশ: {new Date(routine.createdAt).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                  </span>
-                                )}
-                              </div>
-                              <h3 className="text-lg sm:text-xl font-black text-slate-900 font-noto tracking-tight">
-                                {routine.name}
-                              </h3>
-                            </div>
-                            
-                            {/* Shifts time */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {(routine.routineMorningTime || routine.routineMorningStart) && (
-                                <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-100 px-3 py-1.5 rounded-xl text-blue-700">
-                                  <Clock size={12} className="text-blue-500" />
-                                  <span className="text-[10px] font-black font-noto">
-                                    সকাল: {routine.routineMorningTime || `${routine.routineMorningStart} - ${routine.routineMorningEnd}`}
-                                  </span>
-                                </div>
-                              )}
-                              {routine.hasAfternoon && (routine.routineAfternoonTime || routine.routineAfternoonStart) && (
-                                <div className="flex items-center gap-1.5 bg-purple-50/70 border border-purple-100 px-3 py-1.5 rounded-xl text-purple-700">
-                                  <Clock size={12} className="text-purple-500" />
-                                  <span className="text-[10px] font-black font-noto">
-                                    বিকাল: {routine.routineAfternoonTime || `${routine.routineAfternoonStart} - ${routine.routineAfternoonEnd}`}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Routine Table */}
-                          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left border-collapse min-w-[480px]">
-                                <thead>
-                                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-wider font-noto">
-                                    <th className="py-3 px-4 w-[160px]">তারিখ ও বার</th>
-                                    <th className="py-3 px-4">সকালের পরীক্ষা</th>
-                                    {routine.hasAfternoon && (
-                                      <th className="py-3 px-4">বিকালের পরীক্ষা</th>
-                                    )}
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50 font-noto">
-                                  {routine.days.map((d: any, dIdx: number) => (
-                                    <tr key={d.id || dIdx} className="hover:bg-slate-50/50 transition-colors">
-                                      <td className="py-3.5 px-4 align-top">
-                                        <p className="text-xs font-black text-slate-800">{d.date}</p>
-                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">{d.day}</p>
-                                      </td>
-                                      <td className="py-3.5 px-4 align-top">
-                                        {d.morningSubject && d.morningSubject !== '—' ? (
-                                          <div className="space-y-1">
-                                            <span className="inline-block text-xs font-black text-blue-900 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100">
-                                              {d.morningSubject}
-                                            </span>
-                                            {(d.morningTime || d.morningRoom) && (
-                                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
-                                                {d.morningTime && <span>সময়: {d.morningTime}</span>}
-                                                {d.morningRoom && <span>• কক্ষ: {d.morningRoom}</span>}
-                                              </div>
-                                            )}
-                                          </div>
-                                        ) : (
-                                          <span className="text-xs text-slate-300 font-bold">—</span>
-                                        )}
-                                      </td>
-                                      {routine.hasAfternoon && (
-                                        <td className="py-3.5 px-4 align-top">
-                                          {d.afternoonSubject && d.afternoonSubject !== '—' ? (
-                                            <div className="space-y-1">
-                                              <span className="inline-block text-xs font-black text-purple-900 bg-purple-50/80 px-2.5 py-1 rounded-lg border border-purple-100">
-                                                {d.afternoonSubject}
-                                              </span>
-                                              {(d.afternoonTime || d.afternoonRoom) && (
-                                                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
-                                                  {d.afternoonTime && <span>সময়: {d.afternoonTime}</span>}
-                                                  {d.afternoonRoom && <span>• কক্ষ: {d.afternoonRoom}</span>}
-                                                </div>
-                                              )}
-                                            </div>
-                                          ) : (
-                                            <span className="text-xs text-slate-300 font-bold">—</span>
-                                          )}
-                                        </td>
-                                      )}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-
-                          {/* Instructions */}
-                          {routine.routineInstructions && routine.routineInstructions.length > 0 && (
-                            <div className="mt-5 p-4 rounded-2xl bg-amber-50/50 border border-amber-100/60 font-noto">
-                              <div className="flex items-center gap-2 mb-2 text-amber-800 text-xs font-black">
-                                <Info size={14} className="text-amber-600" />
-                                <span>পরীক্ষার্থীদের জন্য বিশেষ নির্দেশনাবলী:</span>
-                              </div>
-                              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-amber-900/80 font-bold">
-                                {routine.routineInstructions.map((inst: string, iIdx: number) => (
-                                  <li key={iIdx} className="flex items-start gap-1.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
-                                    <span>{inst}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {/* Principal info */}
-                          {routine.routinePrincipalName && (
-                            <div className="mt-4 flex justify-end">
-                              <div className="text-right">
-                                <p className="text-xs font-black text-slate-700 font-noto">{routine.routinePrincipalName}</p>
-                                <p className="text-[10px] font-bold text-slate-400 font-noto">কর্তৃপক্ষ / প্রতিষ্ঠান প্রধান</p>
-                              </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (() => {
+              {activeNoticeTab === 'routine' ? (() => {
                 const studentClassName = (student?.classes?.class_name || student?.class_name || student?.class || '').trim().toLowerCase();
                 const studentClassId = String(student?.class_id || student?.classes?.id || '').trim().toLowerCase();
 
@@ -3191,7 +3038,306 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
                   const cleanNorm = norm.replace(/[\s_-]+/g, '');
                   const cleanSName = studentClassName.replace(/[\s_-]+/g, '');
-                  if (cleanNorm && cleanSName && cleanNorm === cleanSName) return true;
+                  if (cleanNorm && cleanSName && (cleanNorm === cleanSName || cleanNorm.includes(cleanSName) || cleanSName.includes(cleanNorm))) return true;
+
+                  return false;
+                };
+
+                const classMessageRoutines = notices.filter(n => {
+                  let parsed: any = {};
+                  try {
+                    parsed = typeof n.message === 'string' ? JSON.parse(n.message) : (n.message || {});
+                  } catch { parsed = {}; }
+                  if (parsed?.status === 'draft') return false;
+                  const lowerMsgClass = (n.class_name || '').trim().toLowerCase();
+                  const isRoutine = 
+                    lowerMsgClass.startsWith('app_routine_') || 
+                    lowerMsgClass === 'app_routine' || 
+                    Array.isArray(parsed?.rows) || 
+                    (n.title && (n.title.toLowerCase().includes('routine') || n.title.includes('রুটিন')));
+                  if (!isRoutine) return false;
+                  const target = lowerMsgClass.replace(/^app_routine_/i, '').trim() || parsed?.classGroup || n.class_name;
+                  return isClassMatch(target);
+                });
+
+                const totalRoutinesCount = publishedClassRoutines.length + classMessageRoutines.length;
+
+                if (totalRoutinesCount === 0) {
+                  return (
+                    <div className="bg-white/50 border border-dashed border-slate-200 p-12 rounded-[3rem] text-center space-y-4">
+                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
+                        <Calendar size={40} className="text-slate-300" />
+                      </div>
+                      <div>
+                        <p className="text-base font-black text-slate-700 font-noto">কোনো রুটিন প্রকাশিত হয়নি</p>
+                        <p className="text-xs text-slate-400 font-medium font-noto mt-1">আপনার শ্রেণির জন্য ক্লাস বা পরীক্ষার রুটিন পাবলিশ করা হলে এখানে দেখতে পাবেন।</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-6">
+                    {/* 1. Exam Routines from Result Engine */}
+                    {publishedClassRoutines.map((routine, rIdx) => (
+                      <motion.div
+                        key={routine.id || `exam-rt-${rIdx}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: rIdx * 0.08 }}
+                        className="bg-white border border-slate-100 rounded-[2.5rem] p-5 sm:p-7 shadow-premium relative overflow-hidden group hover:border-blue-200 transition-all duration-300"
+                      >
+                        {/* Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                {student?.classes?.class_name || 'নিজ শ্রেণি'} • পরীক্ষার রুটিন
+                              </span>
+                              {routine.createdAt && (
+                                <span className="text-[10px] text-slate-400 font-bold font-noto">
+                                  প্রকাশ: {new Date(routine.createdAt).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-lg sm:text-xl font-black text-slate-900 font-noto tracking-tight">
+                              {routine.name}
+                            </h3>
+                          </div>
+                          
+                          {/* Shifts time */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {(routine.routineMorningTime || routine.routineMorningStart) && (
+                              <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-100 px-3 py-1.5 rounded-xl text-blue-700">
+                                <Clock size={12} className="text-blue-500" />
+                                <span className="text-[10px] font-black font-noto">
+                                  সকাল: {routine.routineMorningTime || `${routine.routineMorningStart} - ${routine.routineMorningEnd}`}
+                                </span>
+                              </div>
+                            )}
+                            {routine.hasAfternoon && (routine.routineAfternoonTime || routine.routineAfternoonStart) && (
+                              <div className="flex items-center gap-1.5 bg-purple-50/70 border border-purple-100 px-3 py-1.5 rounded-xl text-purple-700">
+                                <Clock size={12} className="text-purple-500" />
+                                <span className="text-[10px] font-black font-noto">
+                                  বিকাল: {routine.routineAfternoonTime || `${routine.routineAfternoonStart} - ${routine.routineAfternoonEnd}`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Routine Table */}
+                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse min-w-[480px]">
+                              <thead>
+                                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-wider font-noto">
+                                  <th className="py-3 px-4 w-[160px]">তারিখ ও বার</th>
+                                  <th className="py-3 px-4">সকালের পরীক্ষা</th>
+                                  {routine.hasAfternoon && (
+                                    <th className="py-3 px-4">বিকালের পরীক্ষা</th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50 font-noto">
+                                {routine.days.map((d: any, dIdx: number) => (
+                                  <tr key={d.id || dIdx} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="py-3.5 px-4 align-top">
+                                      <p className="text-xs font-black text-slate-800">{d.date}</p>
+                                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">{d.day}</p>
+                                    </td>
+                                    <td className="py-3.5 px-4 align-top">
+                                      {d.morningSubject && d.morningSubject !== '—' ? (
+                                        <div className="space-y-1">
+                                          <span className="inline-block text-xs font-black text-blue-900 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100">
+                                            {d.morningSubject}
+                                          </span>
+                                          {(d.morningTime || d.morningRoom) && (
+                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                                              {d.morningTime && <span>সময়: {d.morningTime}</span>}
+                                              {d.morningRoom && <span>• কক্ষ: {d.morningRoom}</span>}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-slate-300 font-bold">—</span>
+                                      )}
+                                    </td>
+                                    {routine.hasAfternoon && (
+                                      <td className="py-3.5 px-4 align-top">
+                                        {d.afternoonSubject && d.afternoonSubject !== '—' ? (
+                                          <div className="space-y-1">
+                                            <span className="inline-block text-xs font-black text-purple-900 bg-purple-50/80 px-2.5 py-1 rounded-lg border border-purple-100">
+                                              {d.afternoonSubject}
+                                            </span>
+                                            {(d.afternoonTime || d.afternoonRoom) && (
+                                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                                                {d.afternoonTime && <span>সময়: {d.afternoonTime}</span>}
+                                                {d.afternoonRoom && <span>• কক্ষ: {d.afternoonRoom}</span>}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-slate-300 font-bold">—</span>
+                                        )}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Instructions */}
+                        {routine.routineInstructions && routine.routineInstructions.length > 0 && (
+                          <div className="mt-5 p-4 rounded-2xl bg-amber-50/50 border border-amber-100/60 font-noto">
+                            <div className="flex items-center gap-2 mb-2 text-amber-800 text-xs font-black">
+                              <Info size={14} className="text-amber-600" />
+                              <span>পরীক্ষার্থীদের জন্য বিশেষ নির্দেশনাবলী:</span>
+                            </div>
+                            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-amber-900/80 font-bold">
+                              {routine.routineInstructions.map((inst: string, iIdx: number) => (
+                                <li key={iIdx} className="flex items-start gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                                  <span>{inst}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Principal info */}
+                        {routine.routinePrincipalName && (
+                          <div className="mt-4 flex justify-end">
+                            <div className="text-right">
+                              <p className="text-xs font-black text-slate-700 font-noto">{routine.routinePrincipalName}</p>
+                              <p className="text-[10px] font-bold text-slate-400 font-noto">কর্তৃপক্ষ / প্রতিষ্ঠান প্রধান</p>
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+
+                    {/* 2. Class Routines from Messages / Admin Communication Panel */}
+                    {classMessageRoutines.map((msg, mIdx) => {
+                      let parsed: any = {};
+                      try {
+                        parsed = typeof msg.message === 'string' ? JSON.parse(msg.message) : (msg.message || {});
+                      } catch { parsed = {}; }
+
+                      const rows: any[] = Array.isArray(parsed.rows) ? parsed.rows : [];
+                      const targetClassDisplay = msg.class_name?.replace(/^APP_ROUTINE_/i, '').trim() || student?.classes?.class_name || 'ক্লাস রুটিন';
+
+                      return (
+                        <motion.div
+                          key={msg.id || `msg-rt-${mIdx}`}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: mIdx * 0.08 }}
+                          className="bg-white border border-slate-100 rounded-[2.5rem] p-5 sm:p-7 shadow-premium relative overflow-hidden group hover:border-emerald-200 transition-all duration-300"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                  {targetClassDisplay} • নিয়মিত ক্লাস রুটিন
+                                </span>
+                                {parsed.effectiveDate && (
+                                  <span className="text-[10px] text-slate-500 font-bold font-noto bg-slate-100 px-2.5 py-0.5 rounded-full">
+                                    কার্যকরী তারিখ: {parsed.effectiveDate}
+                                  </span>
+                                )}
+                              </div>
+                              <h3 className="text-lg sm:text-xl font-black text-slate-900 font-noto tracking-tight">
+                                {msg.title || `${targetClassDisplay} এর ক্লাস রুটিন`}
+                              </h3>
+                            </div>
+                          </div>
+
+                          {/* Routine Table */}
+                          {rows.length > 0 && (
+                            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200/80">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-center border-collapse min-w-[540px] text-xs font-noto">
+                                  <thead>
+                                    <tr className="bg-slate-100/80 text-slate-700 text-[11px] font-black uppercase tracking-wider border-b border-slate-200">
+                                      <th className="py-3 px-3 w-[120px] border-r border-slate-200">সময় / ঘণ্টা</th>
+                                      <th className="py-3 px-2 border-r border-slate-200">রবিবার</th>
+                                      <th className="py-3 px-2 border-r border-slate-200">সোমবার</th>
+                                      <th className="py-3 px-2 border-r border-slate-200">মঙ্গলবার</th>
+                                      <th className="py-3 px-2 border-r border-slate-200">বুধবার</th>
+                                      <th className="py-3 px-2">বৃহস্পতিবার</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
+                                    {rows.map((row, rk) => (
+                                      row.isBreak ? (
+                                        <tr key={row.id || rk} className="bg-amber-50/60 font-bold text-amber-800">
+                                          <td colSpan={6} className="py-2.5 px-3 text-center">
+                                            {row.label || 'বিরতি / Break'} {row.time ? `(${row.time})` : ''}
+                                          </td>
+                                        </tr>
+                                      ) : (
+                                        <tr key={row.id || rk} className="hover:bg-slate-50/70 transition-colors">
+                                          <td className="py-2.5 px-3 font-bold text-slate-900 bg-slate-50/50 border-r border-slate-200">
+                                            {row.time || '-'}
+                                          </td>
+                                          <td className="py-2.5 px-2 border-r border-slate-200">{row.Sunday || '-'}</td>
+                                          <td className="py-2.5 px-2 border-r border-slate-200">{row.Monday || '-'}</td>
+                                          <td className="py-2.5 px-2 border-r border-slate-200">{row.Tuesday || '-'}</td>
+                                          <td className="py-2.5 px-2 border-r border-slate-200">{row.Wednesday || '-'}</td>
+                                          <td className="py-2.5 px-2">{row.Thursday || '-'}</td>
+                                        </tr>
+                                      )
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {parsed.note && (
+                            <div className="mt-4 p-3.5 bg-amber-50/60 rounded-2xl border border-amber-100 text-amber-900 text-xs font-noto">
+                              <span className="font-bold">নোট: </span>{parsed.note}
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                );
+              })() : (() => {
+                const studentClassName = (student?.classes?.class_name || student?.class_name || student?.class || '').trim().toLowerCase();
+                const studentClassId = String(student?.class_id || student?.classes?.id || '').trim().toLowerCase();
+
+                const isClassMatch = (targetClass: string | null | undefined): boolean => {
+                  if (!targetClass) return true;
+                  const norm = targetClass.trim().toLowerCase();
+                  if (
+                    norm === 'all' || 
+                    norm === 'all classes' || 
+                    norm === 'all_classes' || 
+                    norm === 'সকল' || 
+                    norm === 'সকল শ্রেণী' || 
+                    norm === 'সকল শ্রেণি' || 
+                    norm === 'সকলের জন্য' || 
+                    norm === 'সব' || 
+                    norm === 'সব শ্রেণি' || 
+                    norm === 'সব শ্রেণী' ||
+                    norm === 'all parents' ||
+                    norm === 'all students'
+                  ) {
+                    return true;
+                  }
+
+                  if (!studentClassName && !studentClassId) return false;
+                  if (studentClassName && norm === studentClassName) return true;
+                  if (studentClassId && norm === studentClassId) return true;
+
+                  const cleanNorm = norm.replace(/[\s_-]+/g, '');
+                  const cleanSName = studentClassName.replace(/[\s_-]+/g, '');
+                  if (cleanNorm && cleanSName && (cleanNorm === cleanSName || cleanNorm.includes(cleanSName) || cleanSName.includes(cleanNorm))) return true;
 
                   return false;
                 };
@@ -3214,45 +3360,69 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   const lowerMsgClass = msgClass.toLowerCase();
                   const targetClassGroup = (parsed?.classGroup || parsed?.target_class || parsed?.class || '').trim();
 
-                  if (activeNoticeTab === 'notice') {
-                    // Regular notices, holidays, PTMs, events
-                    const isNoticeType = 
-                      lowerMsgClass === 'app_notice' || 
-                      lowerMsgClass === 'app_holiday' || 
-                      lowerMsgClass === 'app_ptm' || 
-                      lowerMsgClass === 'app_event' ||
-                      lowerMsgClass === 'all' || 
-                      lowerMsgClass === 'সকলের জন্য' ||
-                      (!lowerMsgClass.startsWith('app_') && !Array.isArray(parsed?.subjects));
+                  // Robust category isolation
+                  const isRoutineItem = 
+                    lowerMsgClass.startsWith('app_routine_') || 
+                    lowerMsgClass === 'app_routine' || 
+                    Array.isArray(parsed?.rows) ||
+                    (n.title && (n.title.toLowerCase().includes('routine') || n.title.includes('রুটিন')));
 
-                    if (!isNoticeType) return false;
-                    
+                  const isSyllabusItem = 
+                    !isRoutineItem && (
+                      lowerMsgClass.startsWith('app_syllabus_') || 
+                      lowerMsgClass === 'app_syllabus' ||
+                      Boolean(parsed?.syllabus) ||
+                      (n.title && (n.title.toLowerCase().includes('syllabus') || n.title.includes('সিলেবাস')))
+                    );
+
+                  const isSuggestionItem = 
+                    !isRoutineItem && !isSyllabusItem && (
+                      lowerMsgClass.startsWith('app_suggestion_') || 
+                      lowerMsgClass === 'app_suggestion' ||
+                      Boolean(parsed?.suggestion) ||
+                      (n.title && (n.title.toLowerCase().includes('suggestion') || n.title.includes('সাজেশন')))
+                    );
+
+                  const isDiaryItem = 
+                    !isRoutineItem && !isSyllabusItem && !isSuggestionItem && (
+                      lowerMsgClass === 'app_diary' ||
+                      parsed?.version === 'v2' ||
+                      Boolean(parsed?.lesson) ||
+                      Boolean(parsed?.homework) ||
+                      Boolean(parsed?.activities) ||
+                      Boolean(parsed?.period) ||
+                      Boolean(parsed?.subject && (parsed?.details || parsed?.homework || parsed?.lesson)) ||
+                      (Array.isArray(parsed?.subjects) && parsed.subjects.length > 0) ||
+                      (n.title && (n.title.includes('ডায়েরি') || n.title.includes('ডায়রি') || n.title.toLowerCase().includes('diary')))
+                    );
+
+                  const isNoticeItem = !isRoutineItem && !isSyllabusItem && !isSuggestionItem && !isDiaryItem;
+
+                  // 1. Notice Tab (Only General Notices, Holidays, PTMs, Events)
+                  if (activeNoticeTab === 'notice') {
+                    if (!isNoticeItem) return false;
                     const target = targetClassGroup || (lowerMsgClass === 'all' || lowerMsgClass === 'সকলের জন্য' ? 'all' : (lowerMsgClass.startsWith('app_') ? 'all' : msgClass));
                     return isClassMatch(target);
                   }
 
+                  // 2. Diary Tab (Only Daily Diaries)
                   if (activeNoticeTab === 'diary') {
-                    // Diary entries
-                    const isDiaryType = 
-                      lowerMsgClass === 'app_diary' || 
-                      (!lowerMsgClass.startsWith('app_') && (Array.isArray(parsed?.subjects) || parsed?.activities || parsed?.homework || parsed?.note));
-
-                    if (!isDiaryType) return false;
-
-                    const target = lowerMsgClass === 'app_diary' ? targetClassGroup : msgClass;
+                    if (!isDiaryItem) return false;
+                    const target = lowerMsgClass === 'app_diary' ? (targetClassGroup || 'all') : (targetClassGroup || msgClass);
                     return isClassMatch(target);
                   }
 
-                  
-                  if (activeNoticeTab === 'suggestion') {
-                    if (!lowerMsgClass.startsWith('app_suggestion_')) return false;
-                    const target = msgClass.replace(/^APP_SUGGESTION_/i, '').trim();
-                    return isClassMatch(target);
-                  }
-
+                  // 3. Syllabus Tab (Only Syllabus)
                   if (activeNoticeTab === 'syllabus') {
-                    if (!lowerMsgClass.startsWith('app_syllabus_')) return false;
-                    const target = msgClass.replace(/^APP_SYLLABUS_/i, '').trim();
+                    if (!isSyllabusItem) return false;
+                    const target = msgClass.replace(/^APP_SYLLABUS_/i, '').trim() || targetClassGroup;
+                    return isClassMatch(target);
+                  }
+
+                  // 4. Suggestion Tab (Only Suggestions)
+                  if (activeNoticeTab === 'suggestion') {
+                    if (!isSuggestionItem) return false;
+                    const target = msgClass.replace(/^APP_SUGGESTION_/i, '').trim() || targetClassGroup;
                     return isClassMatch(target);
                   }
 
@@ -3327,35 +3497,88 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                         {(() => {
                           try {
                             const parsed = typeof notice.message === 'string' ? JSON.parse(notice.message) : (notice.message || {});
+                            const mainText = parsed.details || parsed.desc || parsed.content || parsed.text || '';
+                            const imageAttachments = Array.isArray(parsed.attachments) 
+                              ? parsed.attachments.filter((a: any) => a.type !== 'pdf') 
+                              : [];
+
                             return (
                               <div className="space-y-3">
-                                {parsed.desc && <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-noto whitespace-pre-wrap">{parsed.desc}</p>}
-                                
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {parsed.activities && (
-                                    <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100/50 group-hover:bg-white transition-colors">
-                                      <div className="flex items-center gap-2 mb-1.5">
-                                        <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
-                                          <BookOpen size={10} />
-                                        </div>
-                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ক্লাসের কাজ</p>
-                                      </div>
-                                      <p className="text-[11px] md:text-xs text-slate-700 leading-snug whitespace-pre-wrap font-noto">{parsed.activities}</p>
-                                    </div>
-                                  )}
-                                  {parsed.homework && (
-                                    <div className="bg-blue-50/20 p-3 rounded-2xl border border-blue-100/20 group-hover:bg-white transition-colors">
-                                      <div className="flex items-center gap-2 mb-1.5">
-                                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-500">
-                                          <Smartphone size={10} />
-                                        </div>
-                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">বাড়ির কাজ</p>
-                                      </div>
-                                      <p className="text-[11px] md:text-xs text-blue-800/80 leading-snug whitespace-pre-wrap font-noto">{parsed.homework}</p>
-                                    </div>
-                                  )}
-                                </div>
+                                {/* Badges for Subject, Lesson, Period, Date, Exam */}
+                                {(parsed.subject || parsed.lesson || parsed.period || parsed.exam || parsed.session) && (
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                    {parsed.subject && (
+                                      <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-100 flex items-center gap-1.5 shadow-2xs font-noto">
+                                        <BookOpen size={12} className="text-blue-500" />
+                                        <span>বিষয়: {parsed.subject}</span>
+                                      </span>
+                                    )}
+                                    {parsed.lesson && (
+                                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100 flex items-center gap-1.5 shadow-2xs font-noto">
+                                        <span>অধ্যায়/পাঠ: {parsed.lesson}</span>
+                                      </span>
+                                    )}
+                                    {parsed.period && (
+                                      <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold border border-purple-100 flex items-center gap-1.5 shadow-2xs font-noto">
+                                        <Clock size={12} className="text-purple-500" />
+                                        <span>{parsed.period}</span>
+                                      </span>
+                                    )}
+                                    {parsed.exam && (
+                                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-100 flex items-center gap-1.5 shadow-2xs font-noto">
+                                        <GraduationCap size={12} className="text-emerald-500" />
+                                        <span>{parsed.exam}</span>
+                                      </span>
+                                    )}
+                                    {parsed.session && (
+                                      <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-100 shadow-2xs font-noto">
+                                        {parsed.session}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
 
+                                {/* Main Text / Details / Lecture Discussion */}
+                                {mainText && (
+                                  <div className="bg-slate-50/70 p-3.5 md:p-4 rounded-2xl border border-slate-100 text-slate-700 text-xs md:text-sm font-noto leading-relaxed whitespace-pre-wrap">
+                                    {parsed.details && (
+                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 font-noto">
+                                        {activeNoticeTab === 'diary' ? 'আজকের ক্লাসের পড়া ও বিবরণ:' : 'বিবরণ:'}
+                                      </p>
+                                    )}
+                                    <p>{mainText}</p>
+                                  </div>
+                                )}
+
+                                {/* Class Activities & Homework Grid */}
+                                {(parsed.activities || parsed.homework) && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {parsed.activities && (
+                                      <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100/50 group-hover:bg-white transition-colors">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                          <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
+                                            <BookOpen size={10} />
+                                          </div>
+                                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest font-noto">ক্লাসের কাজ</p>
+                                        </div>
+                                        <p className="text-[11px] md:text-xs text-slate-700 leading-snug whitespace-pre-wrap font-noto">{parsed.activities}</p>
+                                      </div>
+                                    )}
+                                    {parsed.homework && (
+                                      <div className="bg-blue-50/20 p-3 rounded-2xl border border-blue-100/20 group-hover:bg-white transition-colors">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                          <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-500">
+                                            <Smartphone size={10} />
+                                          </div>
+                                          <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest font-noto">বাড়ির কাজ / হোমওয়ার্ক</p>
+                                        </div>
+                                        <p className="text-[11px] md:text-xs text-blue-800/80 leading-snug whitespace-pre-wrap font-noto">{parsed.homework}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Notes */}
                                 {parsed.note && (
                                   <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-100 text-amber-900 text-xs leading-relaxed font-noto">
                                     <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1 font-noto">বিশেষ দ্রষ্টব্য / নোট:</p>
@@ -3363,45 +3586,74 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   </div>
                                 )}
 
-                                {parsed.exam && (
-                                  <div className="flex items-center gap-2 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-100 mb-2 w-fit">
-                                    <GraduationCap size={14} className="text-purple-600" />
-                                    <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider font-noto">{parsed.exam}</span>
+                                {/* Text-based Syllabus or Suggestion bodies */}
+                                {parsed.syllabus && typeof parsed.syllabus === 'string' && (
+                                  <div className="bg-indigo-50/50 p-3.5 rounded-2xl border border-indigo-100 text-indigo-950 text-xs font-noto whitespace-pre-wrap">
+                                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1 font-noto">সিলেবাস বিবরণ:</p>
+                                    <p>{parsed.syllabus}</p>
                                   </div>
                                 )}
+                                {parsed.suggestion && typeof parsed.suggestion === 'string' && (
+                                  <div className="bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-100 text-emerald-950 text-xs font-noto whitespace-pre-wrap">
+                                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 font-noto">সাজেশন বিবরণ:</p>
+                                    <p>{parsed.suggestion}</p>
+                                  </div>
+                                )}
+
+                                {/* Multi-subject accordion if present */}
                                 {parsed.subjects && Array.isArray(parsed.subjects) && parsed.subjects.length > 0 && (
                                   <SyllabusAccordion subjects={parsed.subjects} />
                                 )}
 
+                                {/* Attachments: PDFs and Image Gallery Cards */}
                                 {parsed.attachments && Array.isArray(parsed.attachments) && parsed.attachments.length > 0 && (
                                   <div className="space-y-2 pt-2.5 border-t border-slate-100">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                      <Paperclip size={12} className="text-blue-500" /> সংযুক্ত ফাইল / ছবি:
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 font-noto">
+                                      <Paperclip size={12} className="text-blue-500" /> সংযুক্ত ফাইল / ছবি ({parsed.attachments.length}টি):
                                     </p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                       {parsed.attachments.map((att: any, attIdx: number) => (
                                         att.type === 'pdf' ? (
-                                          <a
+                                          <button
                                             key={attIdx}
-                                            href={att.url}
-                                            download={att.name}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="flex items-center gap-2 p-2.5 bg-red-50 hover:bg-red-100 border border-red-100 rounded-xl transition-all text-xs font-bold text-red-700"
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              downloadFromUrl(att.url, att.name || 'document.pdf', 'application/pdf');
+                                            }}
+                                            className="flex items-center gap-2 p-2.5 bg-red-50 hover:bg-red-100 border border-red-100 rounded-xl transition-all text-xs font-bold text-red-700 text-left w-full cursor-pointer active:scale-95 shadow-2xs"
                                           >
                                             <FileText size={18} className="text-red-500 shrink-0" />
-                                            <span className="truncate flex-1">{att.name}</span>
+                                            <span className="truncate flex-1 font-noto">{att.name || 'ডকুমেন্ট.pdf'}</span>
                                             <Download size={14} className="shrink-0 text-red-400" />
-                                          </a>
+                                          </button>
                                         ) : (
                                           <div
                                             key={attIdx}
-                                            onClick={() => setZoomedImage(att.url)}
-                                            className="relative group rounded-xl overflow-hidden border border-slate-200 cursor-pointer aspect-video bg-slate-100"
+                                            onClick={() => {
+                                              const imgIndex = imageAttachments.findIndex((img: any) => img.url === att.url);
+                                              setGalleryImages(imageAttachments);
+                                              setActiveGalleryIndex(imgIndex >= 0 ? imgIndex : 0);
+                                              setZoomedImage(att.url);
+                                            }}
+                                            className="relative group rounded-xl overflow-hidden border border-slate-200 cursor-pointer aspect-video bg-slate-100 shadow-2xs"
                                           >
-                                            <img src={att.url} alt={att.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold">
-                                              <Eye size={16} />
+                                            <img src={att.url} alt={att.name || 'সংযুক্ত ছবি'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2.5 transition-opacity text-white text-xs font-bold font-noto">
+                                              <span className="flex items-center gap-1 bg-white/20 px-2.5 py-1 rounded-full backdrop-blur-xs hover:bg-white/30 transition-colors">
+                                                <Eye size={13} /> স্লাইডে দেখুন
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  downloadFromUrl(att.url, att.name || 'Attachment.jpg', 'image/jpeg');
+                                                }}
+                                                className="p-1.5 bg-white/20 hover:bg-white/40 text-white rounded-full backdrop-blur-xs transition-transform active:scale-90"
+                                                title="ডাউনলোড করুন"
+                                              >
+                                                <Download size={14} />
+                                              </button>
                                             </div>
                                           </div>
                                         )
@@ -3419,7 +3671,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                           prev.includes(notice.id) ? prev.filter(id => id !== notice.id) : [...prev, notice.id]
                                         );
                                       }}
-                                      className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                      className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer font-noto ${
                                         readDiaryIds.includes(notice.id)
                                           ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-xs'
                                           : 'bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200/80'
@@ -3532,15 +3784,106 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       </div>
       )}
       {zoomedImage && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
-          <button
-            type="button"
-            onClick={() => setZoomedImage(null)}
-            className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 text-white rounded-full flex items-center justify-center transition-colors"
-          >
-            <X size={20} />
-          </button>
-          <img src={zoomedImage} alt="Attachment" className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl" />
+        <div 
+          className="fixed inset-0 bg-black/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-3 sm:p-6 select-none"
+          onClick={() => {
+            setZoomedImage(null);
+            setGalleryImages([]);
+          }}
+        >
+          {/* Top Bar with Download, Image Counter, and Close */}
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20 pointer-events-none">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const curImage = galleryImages[activeGalleryIndex] || { url: zoomedImage, name: 'Notice_Attachment.jpg' };
+                downloadFromUrl(curImage.url, curImage.name || `Image_${activeGalleryIndex + 1}.jpg`, 'image/jpeg');
+              }}
+              className="pointer-events-auto px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-full flex items-center gap-2 backdrop-blur-md transition-all font-bold text-xs shadow-lg cursor-pointer active:scale-95 border border-white/20 font-noto"
+            >
+              <Download size={16} />
+              <span>ছবি ডাউনলোড</span>
+            </button>
+
+            {galleryImages.length > 1 && (
+              <div className="pointer-events-auto px-3.5 py-1.5 bg-black/50 border border-white/20 text-white text-xs font-black rounded-full backdrop-blur-md">
+                {activeGalleryIndex + 1} / {galleryImages.length}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoomedImage(null);
+                setGalleryImages([]);
+              }}
+              className="pointer-events-auto w-10 h-10 bg-white/20 hover:bg-white/30 text-white rounded-full flex items-center justify-center transition-colors border border-white/20 cursor-pointer active:scale-95"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Main Image with Navigation Buttons */}
+          <div className="relative max-w-full max-h-[82vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {galleryImages.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const prevIndex = activeGalleryIndex > 0 ? activeGalleryIndex - 1 : galleryImages.length - 1;
+                  setActiveGalleryIndex(prevIndex);
+                  setZoomedImage(galleryImages[prevIndex].url);
+                }}
+                className="absolute -left-2 sm:-left-12 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 hover:bg-white/35 active:scale-95 text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all cursor-pointer z-10 shadow-xl"
+                title="পূর্ববর্তী ছবি"
+              >
+                <ChevronLeft size={24} />
+              </button>
+            )}
+
+            <img 
+              src={zoomedImage} 
+              alt="Attachment Preview" 
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl transition-all duration-200" 
+            />
+
+            {galleryImages.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextIndex = activeGalleryIndex < galleryImages.length - 1 ? activeGalleryIndex + 1 : 0;
+                  setActiveGalleryIndex(nextIndex);
+                  setZoomedImage(galleryImages[nextIndex].url);
+                }}
+                className="absolute -right-2 sm:-right-12 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 hover:bg-white/35 active:scale-95 text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all cursor-pointer z-10 shadow-xl"
+                title="পরবর্তী ছবি"
+              >
+                <ChevronRight size={24} />
+              </button>
+            )}
+          </div>
+
+          {/* Dots Indicator */}
+          {galleryImages.length > 1 && (
+            <div className="absolute bottom-5 flex items-center gap-2 z-20 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+              {galleryImages.map((img, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    setActiveGalleryIndex(idx);
+                    setZoomedImage(img.url);
+                  }}
+                  className={`transition-all rounded-full ${
+                    idx === activeGalleryIndex ? 'w-6 h-2 bg-blue-500' : 'w-2 h-2 bg-white/40 hover:bg-white/70'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
       </div>
