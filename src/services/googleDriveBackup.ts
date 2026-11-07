@@ -398,12 +398,23 @@ export const signInWithGis = async (): Promise<{ user: GoogleDriveUser; accessTo
   });
 };
 
+export const isMobileOrAndroidApp = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /android|iphone|ipad/i.test(navigator.userAgent) || !!(window as any).AndroidInterface;
+};
+
 /**
  * Unified Google Sign-In with Popup.
+ * Strategy 0: Direct Redirect for Mobile / Android WebView (bypasses window.opener null issue).
  * Strategy 1: Google Identity Services (GIS) Token Client (Direct popup, no cross-site iframe, works on custom domains).
  * Strategy 2: Firebase Auth popup fallback.
  */
 export const googleSignIn = async (): Promise<{ user: GoogleDriveUser; accessToken: string } | null> => {
+  if (isMobileOrAndroidApp()) {
+    googleSignInDirectRedirect();
+    return null;
+  }
+
   isSigningIn = true;
   
   // Strategy 1: Google Identity Services (GIS) Token Client

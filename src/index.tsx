@@ -39,6 +39,13 @@ if (typeof window !== 'undefined') {
 
 // Instantly capture Google OAuth redirect token from hash if returning from redirect safely
 if (typeof window !== 'undefined') {
+  if (window.location.hash && window.location.hash.includes('access_token=')) {
+    try {
+      if (!(window as any).AndroidInterface) {
+        window.location.href = 'deenora://oauth' + window.location.hash;
+      }
+    } catch(e) {}
+  }
   try {
     checkOAuthRedirectToken();
   } catch (err) {

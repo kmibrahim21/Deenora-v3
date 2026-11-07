@@ -11,6 +11,7 @@ import {
   initAuth, 
   googleSignIn, 
   googleSignInDirectRedirect,
+  isMobileOrAndroidApp,
   getFriendlyAuthErrorMessage,
   logoutGoogle, 
   encryptData, 
@@ -104,6 +105,10 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   }, []);
 
   const handleGoogleConnect = async () => {
+    if (isMobileOrAndroidApp()) {
+      googleSignInDirectRedirect();
+      return;
+    }
     setGdriveLoading(true);
     try {
       const res = await googleSignIn();
