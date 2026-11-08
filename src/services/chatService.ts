@@ -29,9 +29,21 @@ export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatM
   let rawAttachmentUrl =
     row.attachment_url ||
     parsedPayload?.attachment_url ||
+    parsedPayload?.url ||
+    parsedPayload?.pdf_url ||
+    parsedPayload?.file_url ||
+    parsedPayload?.receipt_url ||
     parsedPayload?.voice_url ||
     parsedPayload?.audio_url ||
+    (Array.isArray(parsedPayload?.attachments) && parsedPayload.attachments[0]?.url) ||
     undefined;
+
+  if (!rawAttachmentUrl && typeof row.message === 'string') {
+    const urlMatch = row.message.match(/(https?:\/\/[^\s<>"')]+|data:application\/pdf[^)\s"'>]+|data:image\/[^)\s"'>]+)/);
+    if (urlMatch) {
+      rawAttachmentUrl = urlMatch[0];
+    }
+  }
 
   const rawVoiceDuration =
     row.voice_duration ??
@@ -163,7 +175,7 @@ export class ChatService {
         }
       }
 
-      // For Admins (super_admin / madrasah_admin): fetch ALL conversations in the institution for complete super-vision
+      // For Admins (super_admin / madrasah_admin): fetch ALL conversations and direct chats in the institution for complete supervision
       if (userRole === 'super_admin' || userRole === 'madrasah_admin') {
         try {
           const { data: allInstConvs } = await supabase
@@ -178,6 +190,49 @@ export class ChatService {
               }
             });
           }
+
+          // Scan messages table for any active direct chats between parents and teachers
+          const { data: recentMsgs } = await supabase
+            .from('messages')
+            .select('conversation_id, sender_id, sender_name, title, class_name, message, created_at')
+            .eq('institution_id', institutionId)
+            .order('created_at', { ascending: false })
+            .limit(300);
+
+          if (recentMsgs && recentMsgs.length > 0) {
+            recentMsgs.forEach((rm: any) => {
+              const cid = rm.conversation_id;
+              if (cid && !dbConversations.some(dc => dc.id === cid)) {
+                let convType: 'direct' | 'class_group' | 'announcement' | 'teacher_staff' = 'direct';
+                let convName = rm.title || rm.sender_name || 'কথোপকথন';
+
+                if (cid.startsWith('class-group-')) {
+                  convType = 'class_group';
+                  convName = `${rm.class_name || 'ক্লাস'} গ্রুপ`;
+                } else if (cid.startsWith('staff-')) {
+                  convType = 'teacher_staff';
+                  convName = 'শিক্ষক ও স্টাফ কামরা';
+                } else if (cid.startsWith('announcement-')) {
+                  convType = 'announcement';
+                  convName = 'প্রতিষ্ঠান নোটিশ বোর্ড';
+                } else if (cid.startsWith('direct-')) {
+                  convType = 'direct';
+                  convName = `${rm.sender_name || 'সদস্য'} (ডিরেক্ট চ্যাট)`;
+                }
+
+                dbConversations.push({
+                  id: cid,
+                  institution_id: institutionId,
+                  type: convType,
+                  name: convName,
+                  is_announcement_only: false,
+                  created_at: rm.created_at || new Date().toISOString(),
+                  updated_at: rm.created_at || new Date().toISOString(),
+                  unread_count: 0
+                });
+              }
+            });
+          }
         } catch (adminErr) {
           console.warn('[ChatService] Error fetching all institution conversations for admin:', adminErr);
         }
@@ -185,7 +240,11 @@ export class ChatService {
 
       // Filter classes for parent if userRole is parent and userClassId is specified
       let filteredClasses = classesList;
-      const normBengali = (str: string) => (str || '').replace(/শ্রেণী/g, 'শ্রেণি').replace(/[\s_-]+/g, '').toLowerCase();
+      const normBengali = (str: string) => (str || '')
+        .replace(/class[-_]?group[-_]?/gi, '')
+        .replace(/শ্রেণী/g, 'শ্রেণি')
+        .replace(/[\s_-]+/g, '')
+        .toLowerCase();
 
       if (userRole === 'parent' && userClassId) {
         const matching = classesList.filter(c => {
@@ -271,16 +330,36 @@ export class ChatService {
           return false;
         });
 
-        // Auto-generate direct 1-on-1 chat boxes with all active teachers for the parent
+        // Auto-generate direct 1-on-1 chat boxes with all active teachers for the parent/user
         try {
           const { data: teachersData } = await supabase
             .from('teachers')
-            .select('id, name, designation, phone, photo_url')
-            .eq('institution_id', institutionId)
-            .eq('is_active', true);
+            .select('id, name, designation, phone, photo_url, is_active')
+            .eq('institution_id', institutionId);
 
-          if (teachersData && teachersData.length > 0) {
-            for (const t of teachersData) {
+          const activeTeachers: any[] = (teachersData || []).filter((t: any) => t.is_active !== false && t.name);
+
+          // Fallback to profiles if teachers table has no records
+          if (activeTeachers.length === 0) {
+            const { data: profTeachers } = await supabase
+              .from('profiles')
+              .select('id, full_name, role, photo_url')
+              .eq('institution_id', institutionId)
+              .in('role', ['teacher', 'staff']);
+            if (profTeachers) {
+              profTeachers.forEach((pt: any) => {
+                activeTeachers.push({
+                  id: pt.id,
+                  name: pt.full_name,
+                  designation: 'শিক্ষক',
+                  photo_url: pt.photo_url
+                });
+              });
+            }
+          }
+
+          if (activeTeachers.length > 0) {
+            for (const t of activeTeachers) {
               const directId = 'direct-' + [userId, 'teacher-' + t.id].sort().join('-');
               const alreadyExists = finalConversations.some(c => c.id === directId);
               if (!alreadyExists) {
@@ -290,6 +369,7 @@ export class ChatService {
                   type: 'direct',
                   name: t.name + (t.designation ? ' (' + t.designation + ')' : ' (শিক্ষক)'),
                   avatar_url: t.photo_url || undefined,
+                  is_announcement_only: false,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                   unread_count: 0

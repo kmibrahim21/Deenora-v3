@@ -3991,6 +3991,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   full_name: `${student?.student_name ? student.student_name + ' (অভিভাবক)' : 'অভিভাবক'}`,
                   role: 'parent',
                   class_id: student?.class_id || student?.classes?.id,
+                  class_name: student?.class_name || student?.classes?.class_name || student?.classes?.name || '',
                   is_active: true,
                   created_at: new Date().toISOString()
                 }}

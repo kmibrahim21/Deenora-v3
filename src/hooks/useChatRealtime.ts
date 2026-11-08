@@ -138,12 +138,8 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
 
       const isMatch =
         newMsg.conversation_id === currentActive ||
-        (newMsg.conversation_id && newMsg.conversation_id === activeRaw) ||
-        (newMsg.class_name && (newMsg.class_name === currentActive || newMsg.class_name === activeRaw)) ||
-        (currentActive.startsWith('class-group-') && (
-          (newMsg.conversation_id && newMsg.conversation_id.startsWith('class-group-')) ||
-          (newMsg.class_name && (newMsg.class_name.startsWith('class-group-') || newMsg.class_name === activeRaw))
-        ));
+        (newMsg.conversation_id && (newMsg.conversation_id === activeRaw || `class-group-${newMsg.conversation_id}` === currentActive)) ||
+        (newMsg.class_name && (newMsg.class_name === currentActive || newMsg.class_name === activeRaw || `class-group-${newMsg.class_name}` === currentActive));
 
       if (!isMatch) return;
 

@@ -34,7 +34,36 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const institutionId = institution?.id || profile?.institution_id || null;
   const currentUserId = profile?.id || (profile as any)?.user_id || institution?.id || 'admin-user';
   const userRole = profile?.role || 'madrasah_admin';
+  const isAdmin = userRole === 'super_admin' || userRole === 'madrasah_admin';
   const userClassId = (profile as any)?.class_id || (classes && classes[0]?.id) || null;
+  const userClassName = (profile as any)?.class_name || (classes && (classes[0]?.class_name || (classes[0] as any)?.name)) || null;
+
+  const isClassForMe = (targetClass: string | null | undefined): boolean => {
+    if (!targetClass) return false;
+    const norm = (s: string) => (s || '')
+      .replace(/class[-_]?group[-_]?/gi, '')
+      .replace(/শ্রেণী/g, 'শ্রেণি')
+      .replace(/[\s_-]+/g, '')
+      .toLowerCase();
+
+    const t = norm(targetClass);
+    const uId = norm(userClassId || '');
+    const uName = norm(userClassName || '');
+
+    if (t === 'all' || t === 'সকল' || t === 'সকলশ্রেণি' || t === 'সবশ্রেণি') return true;
+    if (uId && (t === uId || t.includes(uId) || uId.includes(t))) return true;
+    if (uName && (t === uName || t.includes(uName) || uName.includes(t))) return true;
+
+    if (classes && classes.length > 0) {
+      for (const c of classes) {
+        const cId = norm(c.id);
+        const cName = norm(c.class_name || (c as any).name);
+        if (cId && (t === cId || t.includes(cId) || cId.includes(t))) return true;
+        if (cName && (t === cName || t.includes(cName) || cName.includes(t))) return true;
+      }
+    }
+    return false;
+  };
 
   // Instant local cache initialization for 0-latency startup
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -199,29 +228,35 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       if (!msg) return;
 
       // 1. Strict filtering for Parents:
-      // - Disallow any staff rooms
-      // - Disallow class groups not matching parent's class
-      // - Disallow direct chats not involving the parent
       if (userRole === 'parent') {
+        // Disallow staff room messages
         if (msg.conversation_id?.startsWith('staff-')) return;
 
-        if (msg.conversation_id?.startsWith('class-group-') || msg.class_name) {
-          const isMyClass = 
-            (userClassId && msg.conversation_id === `class-group-${userClassId}`) ||
-            (userClassId && msg.class_name === userClassId);
-          if (!isMyClass) return;
+        // Class group messages MUST belong to the parent's actual class
+        const isClassGroup = msg.conversation_id?.startsWith('class-group-') || Boolean(msg.class_name);
+        if (isClassGroup) {
+          const matchConv = msg.conversation_id ? isClassForMe(msg.conversation_id) : false;
+          const matchName = msg.class_name ? isClassForMe(msg.class_name) : false;
+          if (!matchConv && !matchName) {
+            return; // Not my class -> silently ignore!
+          }
         }
 
+        // Direct chats MUST involve the parent
         if (msg.conversation_id?.startsWith('direct-')) {
           const isMyDirect = 
             (currentUserId && msg.conversation_id.includes(currentUserId)) ||
             msg.sender_id === currentUserId;
           if (!isMyDirect) return;
         }
+
+        // Disallow any other unrecognized conversations
+        if (!isClassGroup && !msg.conversation_id?.startsWith('direct-') && !msg.conversation_id?.startsWith('announcement-')) {
+          return;
+        }
       }
 
       // 2. Strict filtering for Teachers:
-      // - Disallow direct chats not involving the teacher
       if (userRole === 'teacher') {
         if (msg.conversation_id?.startsWith('direct-')) {
           const isMyDirect = 
@@ -239,7 +274,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           // Match conversation ID or class group ID
           const isMatch = conv.id === msg.conversation_id || 
                         conv.class_id === msg.class_name ||
-                        (conv.id.startsWith('class-group-') && msg.class_name && conv.id.includes(msg.class_name));
+                        (conv.id.startsWith('class-group-') && msg.class_name && (conv.id.replace('class-group-', '') === msg.class_name || conv.class_id === msg.class_name));
 
           if (isMatch) {
             matched = true;
@@ -255,16 +290,11 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           return conv;
         });
 
-        // If conversation is brand new and not yet in list, prepend it
+        // If conversation is brand new and not yet in list:
         if (!matched && msg.conversation_id) {
-          // Extra guard for parents: DO NOT create a new conversation card if the message belongs to another class or someone else's direct chat
-          if (userRole === 'parent') {
-            const isAnnouncement = msg.conversation_id.startsWith('announcement-');
-            const isMyClassGroup = Boolean(userClassId && (msg.conversation_id === `class-group-${userClassId}` || msg.class_name === userClassId));
-            const isMyDirect = Boolean(currentUserId && (msg.conversation_id.includes(currentUserId) || msg.sender_id === currentUserId));
-            if (!isAnnouncement && !isMyClassGroup && !isMyDirect) {
-              return updated;
-            }
+          // CRITICAL: NEVER auto-create random conversation cards for parents or teachers!
+          if (!isAdmin) {
+            return updated;
           }
 
           const isNotMe = msg.sender_id !== currentUserId;
@@ -352,6 +382,8 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             lang={lang}
             isDark={isDark}
             loading={conversationsLoading}
+            userRole={userRole}
+            isAdmin={isAdmin}
           />
         </div>
 
@@ -376,6 +408,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             onRetryMessage={retryMessage}
             lang={lang}
             isDark={isDark}
+            isAdmin={isAdmin}
           />
         </div>
       </div>

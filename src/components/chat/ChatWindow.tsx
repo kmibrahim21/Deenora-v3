@@ -71,6 +71,7 @@ interface ChatWindowProps {
   onOpenBackup?: () => void;
   lang?: 'bn' | 'en';
   isDark?: boolean;
+  isAdmin?: boolean;
 }
 
 const AudioPlayer: React.FC<{ 
@@ -259,6 +260,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onOpenBackup,
   lang = 'bn',
   isDark = false,
+  isAdmin = false,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -643,11 +645,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const handleDownloadDocument = async (msg: ChatMessage, fileName: string) => {
     try {
       setToastMessage(lang === 'bn' ? 'ডকুমেন্ট ডাউনলোড হচ্ছে...' : 'Downloading document...');
-      const url = msg.attachment_url;
+      let url = msg.attachment_url;
       const cleanFileName = fileName || msg.attachment_name || 'document.pdf';
 
+      // 1. If attachment_url is not directly present, extract from message or payload
+      if (!url && typeof msg.message === 'string') {
+        const urlMatch = msg.message.match(/(https?:\/\/[^\s<>"')]+|data:application\/pdf[^)\s"'>]+|data:image\/[^)\s"'>]+)/);
+        if (urlMatch) {
+          url = urlMatch[0];
+        } else if (msg.message.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(msg.message);
+            url = parsed.attachment_url || parsed.url || parsed.pdf_url || parsed.file_url || parsed.receipt_url || (Array.isArray(parsed.attachments) ? parsed.attachments[0]?.url : undefined);
+          } catch {}
+        }
+      }
+
+      // 2. Check offline local storage cache
+      if (!url && msg.client_message_id) {
+        try {
+          url = localStorage.getItem(`chat_file_${msg.client_message_id}`) || localStorage.getItem(`chat_file_${msg.id}`) || undefined;
+        } catch {}
+      }
+
       if (!url) {
-        setToastMessage(lang === 'bn' ? 'ফাইল পাওয়া যায়নি' : 'File not found');
+        setToastMessage(lang === 'bn' ? 'ফাইল পাওয়া যায়নি বা সংযোগ ত্রুটি' : 'File not found or connection error');
         return;
       }
 
@@ -1032,6 +1054,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Admin Monitoring / Supervision Indicator Banner */}
+      {isAdmin && conversation.type === 'direct' && (
+        <div className={`w-full px-4 py-2 flex items-center justify-between gap-3 border-b z-20 font-noto ${
+          isDark
+            ? 'bg-amber-950/40 border-amber-800/40 text-amber-300'
+            : 'bg-amber-50 border-amber-200 text-amber-900 shadow-2xs'
+        }`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <Shield className="w-4 h-4 text-amber-600 shrink-0" />
+            <p className="text-xs font-bold truncate">
+              {lang === 'bn' 
+                ? 'এডমিন পর্যবেক্ষণ মোড: আপনি শিক্ষক ও অভিভাবকের মধ্যকার বার্তা ও ইতিহাস পর্যবেক্ষণ করছেন।' 
+                : 'Admin Supervision Mode: You are monitoring this parent-teacher conversation.'}
+            </p>
+          </div>
+          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-200 font-black shrink-0 border border-amber-300/40">
+            {lang === 'bn' ? 'তত্ত্বাবধান' : 'Monitoring'}
+          </span>
         </div>
       )}
 

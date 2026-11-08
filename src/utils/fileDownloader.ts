@@ -180,7 +180,7 @@ export async function downloadFromUrl(url: string, fileName: string, mimeType: s
     }
   }
 
-  // 1. Android Native Bridge with URL support (only for http/https URLs)
+  // 1. Android Native Bridge with direct downloadFromUrl support
   if (typeof win.AndroidInterface?.downloadFromUrl === 'function') {
     try {
       win.AndroidInterface.downloadFromUrl(url, fileName, mimeType);
@@ -198,25 +198,19 @@ export async function downloadFromUrl(url: string, fileName: string, mimeType: s
     }
   }
 
-  // 2. Android Native Bridge with Blob / Base64 support
-  const androidBridge = getAndroidBridge();
-  if (androidBridge) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const blob = await res.blob();
-        await downloadBlob(blob, fileName, mimeType);
-        return true;
-      }
-    } catch (bridgeErr) {
-      console.warn('[FileDownloader] downloadFromUrl bridge fetch failed:', bridgeErr);
+  // 2. Universal Blob Fetch (Handles CORS, In-Origin Blob URL, and Native Bridge conversion)
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (res.ok) {
+      const blob = await res.blob();
+      await downloadBlob(blob, fileName, mimeType);
+      return true;
     }
+  } catch (fetchErr) {
+    console.warn('[FileDownloader] Universal blob fetch failed, falling back to direct anchor:', fetchErr);
   }
 
-  // 3. Direct Anchor Click without target="_blank"
-  // CRITICAL: NEVER set target="_blank" in Android WebViews because links with target="_blank"
-  // are ignored if WebChromeClient.onCreateWindow is not implemented in the Android app.
-  // Direct same-frame click with download attribute triggers Android WebView's native DownloadListener!
+  // 3. Direct Anchor Click Fallback
   try {
     const a = document.createElement('a');
     a.style.display = 'none';
@@ -227,25 +221,10 @@ export async function downloadFromUrl(url: string, fileName: string, mimeType: s
     setTimeout(() => {
       try { document.body.removeChild(a); } catch {}
     }, 1000);
+    return true;
   } catch (err) {
     console.warn('[FileDownloader] Direct anchor download failed:', err);
   }
-
-  // 4. In case of embedded Android WebView without bridge, fetch blob and stage via /api/download
-  if (isAndroidWebView()) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const blob = await res.blob();
-        await downloadBlob(blob, fileName, mimeType);
-        return true;
-      }
-    } catch (fetchErr) {
-      console.warn('[FileDownloader] Blob fetch fallback failed:', fetchErr);
-    }
-  }
-
-  return true;
 }
 
 /**

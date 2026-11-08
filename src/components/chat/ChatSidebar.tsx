@@ -24,6 +24,8 @@ interface ChatSidebarProps {
   lang?: 'bn' | 'en';
   isDark?: boolean;
   loading?: boolean;
+  userRole?: string;
+  isAdmin?: boolean;
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({
@@ -35,9 +37,11 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   lang = 'bn',
   isDark = false,
   loading = false,
+  userRole,
+  isAdmin = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'all' | 'direct' | 'class' | 'announcement'>('all');
+  const [filter, setFilter] = useState<'all' | 'direct' | 'class' | 'announcement' | 'monitor'>('all');
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
@@ -48,6 +52,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       if (filter === 'class') return c.type === 'class_group';
       if (filter === 'announcement') return c.type === 'announcement';
       if (filter === 'direct') return c.type === 'direct' || c.type === 'teacher_staff';
+      if (filter === 'monitor') return true; // Show all conversations for monitoring
       return true;
     });
   }, [conversations, searchTerm, filter]);
@@ -364,9 +369,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           {[
             { key: 'all', label: lang === 'bn' ? 'সব' : 'All' },
-            { key: 'direct', label: lang === 'bn' ? 'ব্যক্তিগত' : 'Personal' },
-            { key: 'class', label: lang === 'bn' ? 'আমার ক্লাস' : 'My Classes' },
+            { key: 'class', label: lang === 'bn' ? 'ক্লাস গ্রুপ' : 'Classes' },
+            { key: 'direct', label: lang === 'bn' ? 'শিক্ষক ও ব্যক্তিগত' : 'Teachers' },
             { key: 'announcement', label: lang === 'bn' ? 'নোটিশ' : 'Notice' },
+            ...(isAdmin || userRole === 'super_admin' || userRole === 'madrasah_admin'
+              ? [{ key: 'monitor', label: lang === 'bn' ? '🛡️ মনিটরিং' : '🛡️ Monitor' }]
+              : [])
           ].map((tab) => {
             const isActive = filter === tab.key;
             return (
