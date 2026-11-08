@@ -757,6 +757,25 @@ export class VoiceCallService {
       this.remoteAudioElement = new Audio();
       this.remoteAudioElement.autoplay = true;
       (this.remoteAudioElement as any).playsInline = true;
+      this.remoteAudioElement.muted = false;
+      this.remoteAudioElement.style.display = 'none';
+
+      // Attach to document.body if not attached to bypass background autoplay suppression in mobile WebViews / Chrome
+      const attachAudioToDom = () => {
+        if (typeof document !== 'undefined' && document.body && this.remoteAudioElement && !this.remoteAudioElement.parentElement) {
+          try {
+            document.body.appendChild(this.remoteAudioElement);
+          } catch {}
+        }
+      };
+
+      if (typeof document !== 'undefined') {
+        if (document.body) {
+          attachAudioToDom();
+        } else {
+          document.addEventListener('DOMContentLoaded', attachAudioToDom, { once: true });
+        }
+      }
 
       // Auto-hangup ONLY when tab/window is explicitly closed (never on mobile pagehide/dialog focus)
       this.handleUnload = () => {
@@ -1723,6 +1742,13 @@ export class VoiceCallService {
     const pc = new RTCPeerConnection(rtcConfig);
     this.peerConnection = pc;
 
+    // Explicitly enforce bidirectional audio transceiver ('sendrecv') so callee audio is never dropped or marked recvonly
+    try {
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+    } catch (e) {
+      console.warn('[VoiceCall] addTransceiver notice:', e);
+    }
+
     // Zero-latency hangup & control DataChannel
     if (this.isCaller) {
       try {
@@ -1764,6 +1790,12 @@ export class VoiceCallService {
 
       if (this.remoteAudioElement) {
         try {
+          if (typeof document !== 'undefined' && document.body && !this.remoteAudioElement.parentElement) {
+            try {
+              this.remoteAudioElement.style.display = 'none';
+              document.body.appendChild(this.remoteAudioElement);
+            } catch {}
+          }
           this.remoteAudioElement.srcObject = remoteStream;
           this.remoteAudioElement.muted = false; // verify unmuted!
           this.remoteAudioElement.volume = this.isSpeakerOn ? 1.0 : 0.85;
@@ -2428,7 +2460,10 @@ export class VoiceCallService {
 
       const stream = await this.acquireLocalStream();
       if (stream) {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        stream.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+          pc.addTrack(track, stream);
+        });
       }
 
       await pc.setRemoteDescription(new RTCSessionDescription(this.activeCallData.offer));

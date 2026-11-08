@@ -300,6 +300,103 @@ export const NotificationService = {
   },
 
   /**
+   * Triggers present push & in-app notifications when attendance is submitted
+   */
+  sendPresentNotifications: async (params: {
+    institutionId: string;
+    institutionName?: string;
+    institutionConfig?: any;
+    date: string;
+    className?: string;
+    presents: Array<{
+      id: string;
+      student_name: string;
+      name_en?: string;
+      roll?: string | number;
+      guardian_phone?: string;
+      guardian_phone_2?: string;
+      class_name?: string;
+      arrival_time?: string;
+    }>;
+  }): Promise<{ sent: number; inAppCreated: number }> => {
+    const { institutionId, institutionName, date, className, presents } = params;
+    if (!presents || presents.length === 0) return { sent: 0, inAppCreated: 0 };
+
+    const settings = await NotificationService.getSettings(institutionId);
+    if (settings.attendance_notify_enabled === false) return { sent: 0, inAppCreated: 0 };
+
+    const notifTitle = settings.present_title || 'উপস্থিতি নোটিফিকেশন';
+    const template = settings.present_body_template || 'আস-সালামু আলাইকুম, {student_name} আজ {date} তারিখে ক্লাসে উপস্থিত হয়েছে।';
+
+    const inAppRows = presents.map(student => {
+      let msg = template
+        .replace(/{student_name}/g, student.student_name || 'শিক্ষার্থী')
+        .replace(/{roll}/g, String(student.roll || ''))
+        .replace(/{class_name}/g, className || student.class_name || '')
+        .replace(/{date}/g, date)
+        .replace(/{institution_name}/g, institutionName || 'প্রতিষ্ঠান');
+      
+      if (student.arrival_time) {
+        msg += ` (প্রবেশ: ${student.arrival_time})`;
+      }
+
+      return {
+        institution_id: institutionId,
+        student_id: student.id,
+        guardian_phone: student.guardian_phone || null,
+        title: notifTitle,
+        message: msg,
+        type: 'attendance' as const,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      };
+    });
+
+    // Save to in-app notifications (try app_notifications then notifications)
+    try {
+      const { error: insErr } = await supabase.from('app_notifications').insert(inAppRows);
+      if (insErr) {
+        try {
+          await supabase.from('notifications').insert(inAppRows);
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('[NotificationService] In-app notifications insert notice:', err);
+    }
+
+    // Dispatch FCM Push Notifications individually
+    try {
+      await Promise.allSettled(
+        inAppRows.map(row => {
+          const studentPhones = row.guardian_phone ? [row.guardian_phone] : [];
+          const studentIds = row.student_id ? [row.student_id] : [];
+          if (!studentIds.length && !studentPhones.length) return Promise.resolve();
+
+          return fetch('/api/call?action=send_notification_push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              institution_id: institutionId,
+              title: notifTitle,
+              body: row.message,
+              type: 'attendance',
+              target: {
+                type: 'students',
+                student_ids: studentIds,
+                phones: studentPhones,
+              },
+            }),
+          });
+        })
+      );
+    } catch (fcmErr) {
+      console.warn('[NotificationService] FCM push dispatch notice:', fcmErr);
+    }
+
+    return { sent: presents.length, inAppCreated: inAppRows.length };
+  },
+
+  /**
    * Triggers fee payment push & in-app notification when a payment is received
    */
   sendFeeNotification: async (params: {

@@ -1313,6 +1313,27 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               })),
             }).catch(pushErr => console.warn('[Attendance] Push notification notice:', pushErr));
           }
+
+          const presentStudents = students.filter(s => attendance[s.id] === 'present' || attendance[s.id] === 'late');
+          if (presentStudents.length > 0) {
+            NotificationService.sendPresentNotifications({
+              institutionId: madrasah.id,
+              institutionName: madrasah.name,
+              institutionConfig: instConfig,
+              date,
+              className: selectedClass?.class_name || '',
+              presents: presentStudents.map(s => ({
+                id: s.id,
+                student_name: s.student_name,
+                name_en: s.name_en,
+                roll: s.roll,
+                guardian_phone: s.guardian_phone,
+                guardian_phone_2: s.guardian_phone_2,
+                class_name: selectedClass?.class_name || '',
+                arrival_time: arrivalTime[s.id] || undefined,
+              })),
+            }).catch(pushErr => console.warn('[Attendance] Present push notification notice:', pushErr));
+          }
         } catch (pushErr) {
           console.warn('[Attendance] Push trigger notice:', pushErr);
         }
