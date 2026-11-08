@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Conversation } from '../../types';
+import { getCleanClassName, getDisplayConversationName } from '../../services/chatService';
 import { 
   Search, 
   Users, 
@@ -93,11 +94,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   // Render Class Story Circular Ring
   const renderStoryRing = (c: Conversation, idx: number, isSelected: boolean) => {
-    const cleanLabel = (c.name || '')
-      .replace(/\(.*?\)/g, '')
-      .replace(/শ্রেণি|শ্রেণী|গ্রুপ|অভিভাবক|শিক্ষক/g, '')
-      .trim()
-      .split(' ')[0] || 'Class';
+    const cleanLabel = getCleanClassName(c.name, 'ক্লাস');
 
     if (c.type === 'announcement' || (idx === 0 && c.name?.includes('প্রতিষ্ঠান'))) {
       return (
@@ -145,7 +142,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         <div
           className={`w-full h-full rounded-full ${style.inner} border-2 ${isDark ? 'border-slate-900' : 'border-white'} flex items-center justify-center px-1 text-center font-bold`}
         >
-          <span className="text-[11px] font-extrabold tracking-tight leading-none truncate max-w-[44px]">
+          <span className="text-[11px] font-extrabold tracking-tight leading-none truncate max-w-[46px]">
             {cleanLabel}
           </span>
         </div>
@@ -172,12 +169,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       ];
       const hash = (name || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
       const chosen = gradients[hash % gradients.length];
-      const shortBadge = name.replace(/[^0-9A-Za-z]/g, '').slice(0, 3) || 'CLS';
+      const cleanClass = getCleanClassName(name, 'ক্লাস');
+      const shortBadge = cleanClass.slice(0, 4);
 
       return (
-        <div className={`w-12 h-12 rounded-full bg-gradient-to-tr ${chosen} text-white flex flex-col items-center justify-center shrink-0 shadow-sm relative`}>
+        <div className={`w-12 h-12 rounded-full bg-gradient-to-tr ${chosen} text-white flex flex-col items-center justify-center shrink-0 shadow-sm relative px-1 text-center`}>
           <GraduationCap className="w-4 h-4" />
-          <span className="text-[8px] font-black uppercase tracking-tighter opacity-95 leading-none mt-0.5">
+          <span className="text-[8px] font-black uppercase tracking-tighter opacity-95 leading-none mt-0.5 truncate max-w-[40px]">
             {shortBadge}
           </span>
         </div>
@@ -327,18 +325,16 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               const isSelected = c.id === activeConversationId;
               const shortTitle = c.type === 'announcement'
                 ? (lang === 'bn' ? 'প্রতিষ্ঠান' : 'Notice')
-                : (c.name || '')
-                    .replace(/\(.*?\)/g, '')
-                    .replace(/শ্রেণি|শ্রেণী|গ্রুপ/g, '')
-                    .trim()
-                    .split(' ')[0] || c.name;
+                : (c.type === 'teacher_staff'
+                  ? (lang === 'bn' ? 'শিক্ষক রুম' : 'Staff')
+                  : getCleanClassName(c.name, 'ক্লাস'));
 
               return (
                 <button
                   key={c.id}
                   onClick={() => onSelectConversation(c.id)}
                   className="flex flex-col items-center gap-1.5 shrink-0 group focus:outline-none cursor-pointer"
-                  title={c.name}
+                  title={getDisplayConversationName(c, lang)}
                 >
                   <div className="relative">
                     {renderStoryRing(c, idx, isSelected)}
@@ -348,7 +344,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                       }`} />
                     ) : null}
                   </div>
-                  <span className={`text-[11px] font-semibold max-w-[60px] truncate text-center transition-colors ${
+                  <span className={`text-[11px] font-semibold max-w-[70px] truncate text-center transition-colors ${
                     isSelected
                       ? isDark ? 'text-blue-400 font-bold' : 'text-blue-600 font-bold'
                       : isDark

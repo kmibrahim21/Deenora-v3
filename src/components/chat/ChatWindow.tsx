@@ -16,6 +16,7 @@ import {
 } from '../../lib/pushNotifications';
 import { 
   Users, 
+  Shield,
   Megaphone, 
   Check, 
   CheckCheck, 
@@ -46,6 +47,7 @@ import {
   Info
 } from 'lucide-react';
 import { ChatArchiveService } from '../../services/chatArchiveService';
+import { getCleanClassName, getDisplayConversationName } from '../../services/chatService';
 import { downloadFromUrl } from '../../utils/fileDownloader';
 
 interface ChatWindowProps {
@@ -912,7 +914,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <h2 className={`font-extrabold text-sm sm:text-base truncate leading-snug ${
                   isDark ? 'text-white' : 'text-slate-900'
                 }`}>
-                  {conversation.name}
+                  {getDisplayConversationName(conversation, lang)}
                 </h2>
                 <BadgeCheck className="w-4 h-4 text-blue-600 fill-blue-600/15 shrink-0" />
               </div>

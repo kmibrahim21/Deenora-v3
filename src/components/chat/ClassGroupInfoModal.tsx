@@ -1,6 +1,7 @@
 import React from 'react';
 import { Conversation, Profile } from '../../types';
 import { Users, Shield, User, X, CheckCircle2 } from 'lucide-react';
+import { getDisplayConversationName } from '../../services/chatService';
 
 interface ClassGroupInfoModalProps {
   conversation: Conversation | null;
@@ -35,7 +36,7 @@ export const ClassGroupInfoModal: React.FC<ClassGroupInfoModalProps> = ({
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base leading-tight">{conversation.name}</h3>
+              <h3 className="font-bold text-base leading-tight">{getDisplayConversationName(conversation, lang)}</h3>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {lang === 'bn' ? 'গ্রুপের বিস্তারিত ও সদস্যবৃন্দ' : 'Group Details & Members'}
               </p>

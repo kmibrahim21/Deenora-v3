@@ -189,6 +189,7 @@ export interface Profile {
   email?: string;
   role: UserRole;
   class_id?: string;
+  class_name?: string;
   is_active: boolean;
   created_at: string;
   permissions?: {
@@ -568,6 +569,7 @@ export interface Conversation {
   institution_id: string;
   type: ConversationType;
   name?: string;
+  avatar_url?: string;
   class_id?: string;
   section_id?: string;
   is_announcement_only?: boolean;

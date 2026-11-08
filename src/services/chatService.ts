@@ -131,6 +131,49 @@ export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatM
   };
 }
 
+/**
+ * Extracts a clean, human-readable class name from any raw class name or conversation title.
+ * Removes UUIDs, class-group- prefixes, and parentheses suffixes.
+ */
+export function getCleanClassName(rawName?: string | null, fallback: string = 'ক্লাস'): string {
+  if (!rawName) return fallback;
+  let clean = String(rawName).trim();
+
+  // Remove parentheses and their contents, e.g., " (অভিভাবক ও শিক্ষক গ্রুপ)"
+  clean = clean.replace(/\(.*?\)/g, '').trim();
+
+  // Remove prefixes like "class-group-", "direct-", "announcement-", "staff-"
+  clean = clean.replace(/^(class[-_]?group[-_]?|direct[-_]?|announcement[-_]?|staff[-_]?)/gi, '').trim();
+
+  // If clean string is a UUID (e.g. 381a94f0-120a-421b-8012-981758812918), fallback
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+    return fallback;
+  }
+
+  // Remove trailing " গ্রুপ", " চ্যাট", " group"
+  clean = clean.replace(/\s*(গ্রুপ|চ্যাট|group|chat)$/gi, '').trim();
+
+  return clean || fallback;
+}
+
+/**
+ * Returns a full formatted conversation title for display in headers and lists.
+ */
+export function getDisplayConversationName(conv?: Conversation | null, lang: 'bn' | 'en' = 'bn'): string {
+  if (!conv) return '';
+  if (conv.type === 'announcement' || conv.id?.startsWith('announcement-')) {
+    return lang === 'bn' ? 'প্রতিষ্ঠান নোটিশ বোর্ড (অফিসিয়াল)' : 'Institution Notice Board';
+  }
+  if (conv.type === 'teacher_staff' || conv.id?.startsWith('staff-')) {
+    return lang === 'bn' ? 'শিক্ষক ও স্টাফ কামরা' : 'Teachers & Staff Room';
+  }
+  if (conv.type === 'class_group' || conv.id?.startsWith('class-group-')) {
+    const cleanClass = getCleanClassName(conv.name, 'ক্লাস');
+    return lang === 'bn' ? `${cleanClass} (অভিভাবক ও শিক্ষক গ্রুপ)` : `${cleanClass} (Parents & Teachers Group)`;
+  }
+  return conv.name || (lang === 'bn' ? 'কথোপকথন' : 'Conversation');
+}
+
 export class ChatService {
   /**
    * Fetches or initializes all conversations accessible by a user in an institution.
@@ -208,13 +251,13 @@ export class ChatService {
 
                 if (cid.startsWith('class-group-')) {
                   convType = 'class_group';
-                  convName = `${rm.class_name || 'ক্লাস'} গ্রুপ`;
+                  convName = `${rm.class_name || 'ক্লাস'} (অভিভাবক ও শিক্ষক গ্রুপ)`;
                 } else if (cid.startsWith('staff-')) {
                   convType = 'teacher_staff';
                   convName = 'শিক্ষক ও স্টাফ কামরা';
                 } else if (cid.startsWith('announcement-')) {
                   convType = 'announcement';
-                  convName = 'প্রতিষ্ঠান নোটিশ বোর্ড';
+                  convName = 'প্রতিষ্ঠান নোটিশ বোর্ড (অফিসিয়াল)';
                 } else if (cid.startsWith('direct-')) {
                   convType = 'direct';
                   convName = `${rm.sender_name || 'সদস্য'} (ডিরেক্ট চ্যাট)`;
@@ -258,22 +301,41 @@ export class ChatService {
         }
       }
 
-      // 2. Build or merge default/auto-generated class groups & announcements
-      const mappedConversations: Conversation[] = [...dbConversations];
+      // 2. Build and reconcile class group conversations with actual class names
+      const mappedConversations: Conversation[] = [];
 
-      // Auto-generate Class Group conversations for active classes if not present
+      // Add non-class-group conversations first
+      dbConversations.forEach(c => {
+        if (c.type !== 'class_group' && !c.id.startsWith('class-group-')) {
+          mappedConversations.push(c);
+        }
+      });
+
+      // Auto-generate or reconcile Class Group conversations for active classes
       for (const cls of filteredClasses) {
         const classGroupId = `class-group-${cls.id}`;
-        const exists = mappedConversations.some(
-          c => c.class_id === cls.id || c.id === classGroupId || normBengali(c.name).includes(normBengali(cls.name))
+        const realClassName = cls.name || 'ক্লাস';
+        const realName = `${realClassName} (অভিভাবক ও শিক্ষক গ্রুপ)`;
+
+        const existingIndex = dbConversations.findIndex(
+          c => (c.type === 'class_group' || c.id.startsWith('class-group-')) &&
+               (c.class_id === cls.id || c.id === classGroupId || c.id.includes(cls.id) || normBengali(c.name).includes(normBengali(cls.name)))
         );
 
-        if (!exists) {
+        if (existingIndex >= 0) {
+          const existing = dbConversations[existingIndex];
+          mappedConversations.push({
+            ...existing,
+            id: classGroupId,
+            class_id: cls.id,
+            name: realName
+          });
+        } else {
           mappedConversations.push({
             id: classGroupId,
             institution_id: institutionId,
             type: 'class_group',
-            name: `${cls.name} (অভিভাবক ও শিক্ষক গ্রুপ)`,
+            name: realName,
             class_id: cls.id,
             is_announcement_only: false,
             created_at: new Date().toISOString(),
@@ -282,6 +344,17 @@ export class ChatService {
           });
         }
       }
+
+      // Sanitize any remaining class_group conversations in dbConversations that weren't matched
+      dbConversations.forEach(c => {
+        if ((c.type === 'class_group' || c.id.startsWith('class-group-')) && !mappedConversations.some(mc => mc.id === c.id)) {
+          const cleanClass = getCleanClassName(c.name, 'ক্লাস');
+          mappedConversations.push({
+            ...c,
+            name: `${cleanClass} (অভিভাবক ও শিক্ষক গ্রুপ)`
+          });
+        }
+      });
 
       // Ensure Institution Announcement Channel exists
       if (!mappedConversations.some(c => c.type === 'announcement')) {

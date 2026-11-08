@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Send, X, Check, Users, Megaphone, CheckSquare } from 'lucide-react';
 import { Conversation, ChatMessage } from '../../types';
+import { getDisplayConversationName } from '../../services/chatService';
 
 interface ForwardModalProps {
   message: ChatMessage | null;
@@ -140,7 +141,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
 
                     <div className="truncate">
                       <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
-                        {conv.name}
+                        {getDisplayConversationName(conv, lang)}
                       </h4>
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">
                         {conv.type === 'class_group'

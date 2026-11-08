@@ -5,7 +5,7 @@ import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ChatWindow } from '../components/chat/ChatWindow';
 import { ClassGroupInfoModal } from '../components/chat/ClassGroupInfoModal';
 import { ChatBackupModal } from '../components/chat/ChatBackupModal';
-import { ChatService, formatRowToChatMessage } from '../services/chatService';
+import { ChatService, formatRowToChatMessage, getCleanClassName } from '../services/chatService';
 import { ChatLocalStore } from '../services/chatLocalStore';
 import { useChatRealtime } from '../hooks/useChatRealtime';
 
@@ -363,7 +363,8 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   ) => {
     const senderId = currentUserId || 'admin-user';
     const senderName = profile?.full_name || (profile as any)?.name || (userRole === 'parent' ? 'অভিভাবক' : 'এডমিন / শিক্ষক');
-    const className = activeConversation?.class_id || undefined;
+    const rawClassName = activeConversation?.name || activeConversation?.class_id || undefined;
+    const className = rawClassName ? getCleanClassName(rawClassName, rawClassName) : undefined;
     const replyTarget = replyToId ? messages.find(m => m.id === replyToId || m.client_message_id === replyToId) : undefined;
     const replyToMsg = replyTarget ? { id: replyTarget.id, sender_name: replyTarget.sender_name || (replyTarget.sender_profile as any)?.full_name || 'User', message: replyTarget.message, message_type: replyTarget.message_type } : undefined;
     sendMessage(senderId, text, senderName, className, messageType, attachmentUrl, voiceDuration, attachmentName, attachmentSize, replyToId, replyToMsg);

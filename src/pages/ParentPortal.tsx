@@ -3730,7 +3730,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                         <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-[80px] -mr-20 -mt-20 opacity-10 transition-colors ${
                           notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-500' : 
                           notice.class_name === 'APP_PTM' ? 'bg-purple-500' : 
-                          activeNoticeTab === 'diary' ? 'bg-blue-500' : activeNoticeTab === 'suggestion' ? 'bg-emerald-500' : 'bg-blue-500'
+                          activeNoticeTab === 'suggestion' ? 'bg-emerald-500' : 'bg-blue-500'
                         }`} />
                         
                         <div className="flex flex-row items-center gap-3 md:gap-4 text-left relative z-10 w-full pb-3 border-b border-slate-50">
@@ -3741,26 +3741,20 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           }`}>
                             {notice.class_name === 'APP_HOLIDAY' ? <Calendar size={20} /> : 
                              notice.class_name === 'APP_PTM' ? <Users size={20} /> : 
-                             activeNoticeTab === 'diary' ? <BookOpen size={20} /> : activeNoticeTab === 'suggestion' ? <BookOpen size={20} /> : <MessageSquare size={20} />}
+                             activeNoticeTab === 'suggestion' ? <BookOpen size={20} /> : <MessageSquare size={20} />}
                           </div>
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                              {activeNoticeTab !== 'diary' ? (
-                                <span className={`text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border whitespace-nowrap ${
-                                  notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 
-                                  notice.class_name === 'APP_PTM' ? 'bg-purple-50 border-purple-100 text-purple-600' : 
-                                  activeNoticeTab === 'suggestion' ? 'bg-emerald-100/50 border-emerald-200 text-emerald-700' : 'bg-blue-100/50 border-blue-200 text-blue-700'
-                                }`}>
+                              <span className={`text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                                notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 
+                                notice.class_name === 'APP_PTM' ? 'bg-purple-50 border-purple-100 text-purple-600' : 
+                                activeNoticeTab === 'suggestion' ? 'bg-emerald-100/50 border-emerald-200 text-emerald-700' : 'bg-blue-100/50 border-blue-200 text-blue-700'
+                              }`}>
                                   {notice.class_name === 'APP_HOLIDAY' ? 'ছুটি' : 
                                    notice.class_name === 'APP_PTM' ? 'মিটিং' : 
                                    notice.class_name === 'all' ? 'সকলের জন্য' : 'সাধারণ'}
                                 </span>
-                              ) : (
-                                <span className="text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border whitespace-nowrap bg-blue-50 border-blue-100 text-blue-700">
-                                  {notice.class_name?.startsWith('APP_') ? 'ডায়েরি' : notice.class_name}
-                                </span>
-                              )}
                               <h3 className="text-sm md:text-xl font-black text-slate-900 leading-tight font-noto tracking-tight flex-1 truncate">{notice.title}</h3>
                               <span className="text-[9px] font-bold text-slate-400 font-noto whitespace-nowrap ml-auto">
                                 {new Date(notice.created_at).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' })}
@@ -3820,7 +3814,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   <div className="bg-slate-50/70 p-3.5 md:p-4 rounded-2xl border border-slate-100 text-slate-700 text-xs md:text-sm font-noto leading-relaxed whitespace-pre-wrap">
                                     {parsed.details && (
                                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 font-noto">
-                                        {activeNoticeTab === 'diary' ? 'আজকের ক্লাসের পড়া ও বিবরণ:' : 'বিবরণ:'}
+                                        {(activeNoticeTab as any) === 'diary' ? 'আজকের ক্লাসের পড়া ও বিবরণ:' : 'বিবরণ:'}
                                       </p>
                                     )}
                                     <p>{mainText}</p>
@@ -3939,7 +3933,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   </div>
                                 )}
 
-                                {activeNoticeTab === 'diary' && (
+                                {(activeNoticeTab as any) === 'diary' && (
                                   <div className="pt-2.5 flex justify-end">
                                     <button
                                       type="button"
