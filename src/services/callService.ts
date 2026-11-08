@@ -2093,11 +2093,18 @@ export class VoiceCallService {
     const myPhone = this.normPhone(this.currentPhone || this.currentUserId);
     const targetPhone = this.normPhone(payload.calleePhone || payload.student?.guardian_phone);
 
-    const isIdMatch = Boolean(myId && targetStudentId && (myId === targetStudentId || myId.includes(targetStudentId) || targetStudentId.includes(myId)));
-    const isPhoneMatch = Boolean(myPhone && targetPhone && myPhone === targetPhone);
-    const isParentPrefix = myId.startsWith('parent') && (myId.includes(targetStudentId) || (targetPhone && myId.includes(targetPhone)));
-    
-    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix;
+    const isTargetingAdmin = Boolean(
+      targetStudentId.startsWith('admin') || 
+      (payload.student as any)?.target_type === 'admin'
+    );
+    const isAdminUser = Boolean(
+      this.currentInstitutionId && 
+      payload.institutionId && 
+      this.currentInstitutionId === payload.institutionId && 
+      !myId.startsWith('parent')
+    );
+
+    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix || (isTargetingAdmin && isAdminUser);
 
     if (!isForMe) {
       console.log('[VoiceCall] Incoming offer ignored: Call is not targeted for current user/student/phone', {

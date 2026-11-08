@@ -1536,12 +1536,28 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 onClick={() => {
                   const adminInstId = currentInstitution?.id || madrasah?.id || student?.institution_id || '';
                   const adminName = `${currentInstitution?.name || madrasah?.name || 'মাদ্রাসা'} (অ্যাডমিন / প্রধান শিক্ষক)`;
-                  startCall({
-                    id: `admin-${adminInstId}`,
-                    name: adminName,
-                    guardian_phone: (currentInstitution as any)?.mobile || (madrasah as any)?.mobile || madrasah?.phone || '',
-                    photo_url: currentInstitution?.logo_url || madrasah?.logo_url
-                  });
+                  const parentName = student?.student_name 
+                    ? `${student.student_name} (${student?.guardian_name ? student.guardian_name + ' - ' : ''}অভিভাবক)`
+                    : 'অভিভাবক';
+
+                  startCall(
+                    {
+                      id: `admin-${adminInstId}`,
+                      name: adminName,
+                      guardian_phone: (currentInstitution as any)?.mobile || (madrasah as any)?.mobile || madrasah?.phone || '',
+                      photo_url: currentInstitution?.logo_url || madrasah?.logo_url,
+                      target_type: 'admin'
+                    } as any,
+                    {
+                      id: student?.guardian_phone ? `parent-${student.guardian_phone}` : (student?.id ? `parent-${student.id}` : 'parent-user'),
+                      name: parentName,
+                      role: 'parent',
+                      phone: student?.guardian_phone || '',
+                      student_id: student?.id || studentId || '',
+                      student_name: student?.student_name || ''
+                    } as any,
+                    adminInstId
+                  );
                 }}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer font-noto"
                 title="মাদ্রাসার প্রধান শিক্ষক / অ্যাডমিনকে ইন-অ্যাপ ভয়েস কল দিন"

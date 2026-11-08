@@ -431,11 +431,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callee_phone,
       } = payload;
 
-      // Find all target tokens for multi-device simultaneous ring
-      const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
+      const isCallingAdmin = Boolean(
+        student_id?.startsWith('admin') || 
+        payload.target_type === 'admin' || 
+        payload.callee_role === 'admin'
+      );
+
+      let targetTokens: string[] = [];
+      if (isCallingAdmin && institution_id) {
+        try {
+          const qUrl = `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&institution_id=eq.${encodeURIComponent(institution_id)}&user_id=not.is.null&order=updated_at.desc&limit=10`;
+          const res = await fetch(qUrl, {
+            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+          });
+          if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list)) {
+              list.forEach((t: any) => { if (t?.fcm_token) targetTokens.push(t.fcm_token); });
+            }
+          }
+        } catch (e) {
+          console.warn('[Call API] Admin token query notice:', e);
+        }
+      } else {
+        targetTokens = await findTargetFcmTokens(callee_phone, student_id, payload.user_id);
+      }
+      targetTokens = Array.from(new Set(targetTokens));
+
       console.log('[Call API] initiate_call_push attempt:', JSON.stringify({
         devicesNotified: targetTokens.length,
         call_id: String(payload.call_id || ''),
+        isCallingAdmin,
       }));
 
       // Check institution config for service account if not in env
@@ -615,10 +641,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const targetTokens = await findTargetFcmTokens(callee_phone, student_id);
+      const isCallingAdminEscalation = Boolean(
+        student_id?.startsWith('admin') || 
+        payload.target_type === 'admin' || 
+        payload.callee_role === 'admin'
+      );
+
+      let targetTokens: string[] = [];
+      if (isCallingAdminEscalation && institution_id) {
+        try {
+          const qUrl = `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&institution_id=eq.${encodeURIComponent(institution_id)}&user_id=not.is.null&order=updated_at.desc&limit=10`;
+          const res = await fetch(qUrl, {
+            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+          });
+          if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list)) {
+              list.forEach((t: any) => { if (t?.fcm_token) targetTokens.push(t.fcm_token); });
+            }
+          }
+        } catch (e) {
+          console.warn('[Call API] Admin token query notice:', e);
+        }
+      } else {
+        targetTokens = await findTargetFcmTokens(callee_phone, student_id, payload.user_id);
+      }
+      targetTokens = Array.from(new Set(targetTokens));
+
       console.log('[Call API] escalate_call_push attempt:', JSON.stringify({
         devicesNotified: targetTokens.length,
         call_id: String(payload.call_id || ''),
+        isCallingAdmin: isCallingAdminEscalation,
       }));
 
       const effectiveServiceAccount = await resolveServiceAccount(institution_id);
