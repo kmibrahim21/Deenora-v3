@@ -60,8 +60,8 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-// Smart remarks import removed
 import { ChatApp } from './ChatApp';
+import { useBackHandler } from '../utils/backHandler';
 import { useVoiceCall } from '../context/CallContext';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
 import { registerNativePushToken } from '../lib/notifyParents';
@@ -244,6 +244,52 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     formattedDate: string;
     className: string;
   } | null>(null);
+
+  // Hardware/Gesture Back-Button Handlers for Parent Portal
+  // 1. Zoomed Image Modal (Priority 10)
+  useBackHandler('parent-zoomed-image', () => {
+    if (zoomedImage !== null) {
+      setZoomedImage(null);
+      return true;
+    }
+    return false;
+  }, Boolean(zoomedImage), 10);
+
+  // 2. Selected Diary Subject Modal (Priority 9)
+  useBackHandler('parent-diary-subject-modal', () => {
+    if (selectedDiarySubject !== null) {
+      setSelectedDiarySubject(null);
+      return true;
+    }
+    return false;
+  }, Boolean(selectedDiarySubject), 9);
+
+  // 3. Gallery Images Modal (Priority 9)
+  useBackHandler('parent-gallery-images', () => {
+    if (galleryImages.length > 0) {
+      setGalleryImages([]);
+      return true;
+    }
+    return false;
+  }, galleryImages.length > 0, 9);
+
+  // 4. Notice Sub-Tabs Navigation (Priority 6)
+  useBackHandler('parent-notice-subtab', () => {
+    if (activeTab === 'notices' && activeNoticeTab !== 'notice') {
+      setActiveNoticeTab('notice');
+      return true;
+    }
+    return false;
+  }, activeTab === 'notices' && activeNoticeTab !== 'notice', 6);
+
+  // 5. Main Parent Portal Sub-Tabs Navigation (Priority 5)
+  useBackHandler('parent-portal-tab', () => {
+    if (activeTab !== 'home') {
+      setActiveTab('home');
+      return true;
+    }
+    return false;
+  }, activeTab !== 'home', 5);
   const [student, setStudent] = useState<any>(() => initialCache?.student || null);
   const [children, setChildren] = useState<any[]>(() => initialCache?.children || []);
   const [switchingChildId, setSwitchingChildId] = useState<string | null>(null);

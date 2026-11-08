@@ -4,6 +4,7 @@ import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as
 import { supabase } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
+import { useBackHandler } from '../utils/backHandler';
 
 interface TeacherAccountProps {
   lang: Language;
@@ -93,6 +94,39 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
   const [selectedAttendanceMonth, setSelectedAttendanceMonth] = useState<string>('all');
 
   const supportNumber = '01629780297';
+
+  // Hardware/Gesture Back-Button Handlers for Teacher Account
+  useBackHandler('teacher-success-modal', () => {
+    if (showSuccessModal.show) {
+      setShowSuccessModal({ show: false, title: '', message: '' });
+      return true;
+    }
+    return false;
+  }, showSuccessModal.show, 10);
+
+  useBackHandler('teacher-support-modal', () => {
+    if (showSupportModal) {
+      setShowSupportModal(false);
+      return true;
+    }
+    return false;
+  }, showSupportModal, 10);
+
+  useBackHandler('teacher-change-password', () => {
+    if (isChangingPassword) {
+      setIsChangingPassword(false);
+      return true;
+    }
+    return false;
+  }, isChangingPassword, 9);
+
+  useBackHandler('teacher-section-tab', () => {
+    if (activeSection !== 'main') {
+      setActiveSection('main');
+      return true;
+    }
+    return false;
+  }, activeSection !== 'main', 5);
 
   // Extract academic and display config
   const modules = React.useMemo(() => {

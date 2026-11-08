@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Building2, ChevronDown, Check, Plus, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 import { Institution, Language } from 'types';
 import { BranchManagementModal } from './BranchManagementModal';
+import { useBackHandler } from '../../utils/backHandler';
 
 interface BranchItem {
   id: string;
@@ -34,6 +35,22 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
   const [loading, setLoading] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useBackHandler('branch-manage-modal', () => {
+    if (showManageModal) {
+      setShowManageModal(false);
+      return true;
+    }
+    return false;
+  }, showManageModal, 10);
+
+  useBackHandler('branch-switcher-dropdown', () => {
+    if (isOpen) {
+      setIsOpen(false);
+      return true;
+    }
+    return false;
+  }, isOpen, 8);
 
   const isDark = madrasah?.theme === 'dark';
 

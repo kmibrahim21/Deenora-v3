@@ -1015,12 +1015,20 @@ export class ChatService {
 
     // 2. Ensure conversation row exists in Supabase DB
     try {
+      const isClassGrp = cleanConversationId.startsWith('class-group-');
+      const cleanCls = className ? getCleanClassName(className, 'ক্লাস') : undefined;
+      const convType = isClassGrp ? 'class_group' : (cleanConversationId.startsWith('announcement-') ? 'announcement' : (cleanConversationId.startsWith('staff-') ? 'teacher_staff' : 'direct'));
+      const convName = isClassGrp
+        ? `${cleanCls || 'ক্লাস'} (অভিভাবক ও শিক্ষক গ্রুপ)`
+        : (cleanConversationId.startsWith('announcement-') ? 'প্রতিষ্ঠান নোটিশ বোর্ড (অফিসিয়াল)' : (cleanConversationId.startsWith('staff-') ? 'শিক্ষক ও স্টাফ কামরা' : 'চ্যাট রুম'));
+
       await supabase.from('conversations').upsert([
         {
           id: cleanConversationId,
           institution_id: cleanInstitutionId,
-          type: cleanConversationId.startsWith('class-group-') ? 'class_group' : (cleanConversationId.startsWith('announcement-') ? 'announcement' : 'direct'),
-          name: className ? `${className} (অভিভাবক ও শিক্ষক গ্রুপ)` : 'চ্যাট রুম',
+          type: convType,
+          name: convName,
+          class_id: isClassGrp ? (cleanConversationId.replace('class-group-', '') || className) : undefined,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }

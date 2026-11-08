@@ -8,6 +8,7 @@ import { ChatBackupModal } from '../components/chat/ChatBackupModal';
 import { ChatService, formatRowToChatMessage, getCleanClassName } from '../services/chatService';
 import { ChatLocalStore } from '../services/chatLocalStore';
 import { useChatRealtime } from '../hooks/useChatRealtime';
+import { useBackHandler } from '../utils/backHandler';
 
 interface ChatAppProps {
   institution: Institution | null;
@@ -35,33 +36,52 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const currentUserId = profile?.id || (profile as any)?.user_id || institution?.id || 'admin-user';
   const userRole = profile?.role || 'madrasah_admin';
   const isAdmin = userRole === 'super_admin' || userRole === 'madrasah_admin';
-  const userClassId = (profile as any)?.class_id || (classes && classes[0]?.id) || null;
-  const userClassName = (profile as any)?.class_name || (classes && (classes[0]?.class_name || (classes[0] as any)?.name)) || null;
+  const userClassId = (profile as any)?.class_id || (classes && classes.length === 1 ? classes[0]?.id : null);
+  const userClassName = (profile as any)?.class_name || (classes && classes.length === 1 ? (classes[0]?.class_name || (classes[0] as any)?.name) : null);
 
   const isClassForMe = (targetClass: string | null | undefined): boolean => {
     if (!targetClass) return false;
+    if (isAdmin || userRole === 'teacher') return true; // Admins & Teachers access all class groups
+    if (userRole === 'parent' && !userClassId && !userClassName) return true; // Parent fallback
+
+    const cleanT = getCleanClassName(targetClass, targetClass);
     const norm = (s: string) => (s || '')
       .replace(/class[-_]?group[-_]?/gi, '')
+      .replace(/\(অভিভাবক\s*ও\s*শিক্ষক\s*গ্রুপ\)/gi, '')
       .replace(/শ্রেণী/g, 'শ্রেণি')
       .replace(/[\s_-]+/g, '')
       .toLowerCase();
 
-    const t = norm(targetClass);
+    const tNorm = norm(targetClass);
+    const cleanTNorm = norm(cleanT);
     const uId = norm(userClassId || '');
     const uName = norm(userClassName || '');
 
-    if (t === 'all' || t === 'সকল' || t === 'সকলশ্রেণি' || t === 'সবশ্রেণি') return true;
-    if (uId && (t === uId || t.includes(uId) || uId.includes(t))) return true;
-    if (uName && (t === uName || t.includes(uName) || uName.includes(t))) return true;
+    if (tNorm === 'all' || tNorm === 'সকল' || tNorm === 'সকলশ্রেণি' || tNorm === 'সবশ্রেণি') return true;
+    if (cleanTNorm === 'all' || cleanTNorm === 'সকল') return true;
 
+    // Direct match against user student's class ID or class Name
+    if (uId && (tNorm === uId || tNorm.includes(uId) || uId.includes(tNorm))) return true;
+    if (uName && (tNorm === uName || tNorm.includes(uName) || uName.includes(tNorm) || cleanTNorm === uName)) return true;
+
+    // Match against any class in provided classes prop
     if (classes && classes.length > 0) {
       for (const c of classes) {
         const cId = norm(c.id);
         const cName = norm(c.class_name || (c as any).name);
-        if (cId && (t === cId || t.includes(cId) || cId.includes(t))) return true;
-        if (cName && (t === cName || t.includes(cName) || cName.includes(t))) return true;
+        const isMyClass = (uId && cId === uId) || (uName && cName === uName);
+
+        if (isMyClass || !userClassId) {
+          if (cId && (tNorm === cId || tNorm.includes(cId) || cId.includes(tNorm))) return true;
+          if (cName && (tNorm === cName || tNorm.includes(cName) || cName.includes(tNorm) || cleanTNorm === cName)) return true;
+        }
       }
     }
+
+    if (userClassId && (targetClass.includes(userClassId) || (userClassId.length > 8 && targetClass.includes(userClassId.substring(0, 8))))) {
+      return true;
+    }
+
     return false;
   };
 
@@ -108,6 +128,31 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const [showGroupInfo, setShowGroupInfo] = useState<boolean>(false);
   const [showMobileChat, setShowMobileChat] = useState<boolean>(false);
   const [showBackupModal, setShowBackupModal] = useState<boolean>(false);
+
+  // Hardware/Gesture Back-Button Handlers for Chat Module
+  useBackHandler('chat-group-info-modal', () => {
+    if (showGroupInfo) {
+      setShowGroupInfo(false);
+      return true;
+    }
+    return false;
+  }, Boolean(showGroupInfo), 10);
+
+  useBackHandler('chat-backup-modal', () => {
+    if (showBackupModal) {
+      setShowBackupModal(false);
+      return true;
+    }
+    return false;
+  }, Boolean(showBackupModal), 10);
+
+  useBackHandler('chat-mobile-window', () => {
+    if (showMobileChat) {
+      setShowMobileChat(false);
+      return true;
+    }
+    return false;
+  }, Boolean(showMobileChat), 8);
 
   // Notify parent of mobile chat view state change
   useEffect(() => {
@@ -271,10 +316,46 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       setConversations(prev => {
         let matched = false;
         const updated = prev.map(conv => {
-          // Match conversation ID or class group ID
-          const isMatch = conv.id === msg.conversation_id || 
-                        conv.class_id === msg.class_name ||
-                        (conv.id.startsWith('class-group-') && msg.class_name && (conv.id.replace('class-group-', '') === msg.class_name || conv.class_id === msg.class_name));
+          const normBengali = (s?: string) => (s || '').replace(/[\s_()-]+/g, '').toLowerCase();
+
+          let isMatch = conv.id === msg.conversation_id;
+
+          // Class group matching logic
+          const isConvClass = conv.type === 'class_group' || conv.id.startsWith('class-group-');
+          const isMsgClass = msg.conversation_id?.startsWith('class-group-') || Boolean(msg.class_name);
+
+          if (!isMatch && isConvClass && isMsgClass) {
+            if (conv.class_id && (msg.class_name === conv.class_id || msg.conversation_id?.includes(conv.class_id))) {
+              isMatch = true;
+            }
+            const cRaw = conv.id.replace('class-group-', '');
+            const mRaw = (msg.conversation_id || '').replace('class-group-', '');
+            if (cRaw && mRaw && (cRaw === mRaw || cRaw === msg.class_name || mRaw === conv.class_id)) {
+              isMatch = true;
+            }
+            const cleanC = getCleanClassName(conv.name, '');
+            const cleanM = getCleanClassName(msg.class_name || msg.conversation_id, '');
+            if (cleanC && cleanM && (cleanC === cleanM || normBengali(cleanC) === normBengali(cleanM))) {
+              isMatch = true;
+            }
+          }
+
+          // Direct chat matching logic
+          if (!isMatch && conv.type === 'direct' && msg.conversation_id?.startsWith('direct-')) {
+            const p1 = conv.id.replace('direct-', '').split('-').sort().join('-');
+            const p2 = msg.conversation_id.replace('direct-', '').split('-').sort().join('-');
+            if (p1 === p2) isMatch = true;
+          }
+
+          // Announcement matching logic
+          if (!isMatch && (conv.type === 'announcement' || conv.id.startsWith('announcement-')) && msg.conversation_id?.startsWith('announcement-')) {
+            isMatch = true;
+          }
+
+          // Staff room matching logic
+          if (!isMatch && (conv.type === 'teacher_staff' || conv.id.startsWith('staff-')) && msg.conversation_id?.startsWith('staff-')) {
+            isMatch = true;
+          }
 
           if (isMatch) {
             matched = true;
@@ -292,17 +373,41 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 
         // If conversation is brand new and not yet in list:
         if (!matched && msg.conversation_id) {
-          // CRITICAL: NEVER auto-create random conversation cards for parents or teachers!
+          const isMsgClassGroup = msg.conversation_id.startsWith('class-group-') || Boolean(msg.class_name);
+
           if (!isAdmin) {
-            return updated;
+            if (msg.conversation_id.startsWith('direct-')) {
+              const isMyDirect = (currentUserId && msg.conversation_id.includes(currentUserId)) || msg.sender_id === currentUserId;
+              if (!isMyDirect) return updated;
+            } else if (msg.conversation_id.startsWith('staff-') && userRole === 'parent') {
+              return updated;
+            }
           }
 
           const isNotMe = msg.sender_id !== currentUserId;
-          const newConv = {
-            id: msg.conversation_id,
+          let newConvType: 'class_group' | 'direct' | 'announcement' | 'teacher_staff' = 'direct';
+          let newConvName = msg.sender_name || (msg.sender_profile as any)?.full_name || 'নতুন কথোপকথন';
+
+          if (isMsgClassGroup) {
+            newConvType = 'class_group';
+            const cleanCls = getCleanClassName(msg.class_name || msg.conversation_id, 'ক্লাস');
+            newConvName = `${cleanCls} (অভিভাবক ও শিক্ষক গ্রুপ)`;
+          } else if (msg.conversation_id.startsWith('announcement-')) {
+            newConvType = 'announcement';
+            newConvName = 'প্রতিষ্ঠান নোটিশ বোর্ড (অফিসিয়াল)';
+          } else if (msg.conversation_id.startsWith('staff-')) {
+            newConvType = 'teacher_staff';
+            newConvName = 'শিক্ষক ও স্টাফ কামরা';
+          }
+
+          const newConvId = isMsgClassGroup && !msg.conversation_id.startsWith('class-group-') ? `class-group-${msg.conversation_id}` : msg.conversation_id;
+
+          const newConv: Conversation = {
+            id: newConvId,
             institution_id: institutionId,
-            type: msg.conversation_id.startsWith('class-group-') ? ('class_group' as const) : ('direct' as const),
-            name: msg.sender_name || (msg.sender_profile as any)?.full_name || 'নতুন কথোপকথন',
+            type: newConvType,
+            name: newConvName,
+            class_id: isMsgClassGroup ? (msg.class_name || msg.conversation_id.replace('class-group-', '')) : undefined,
             last_message: msg,
             unread_count: isNotMe ? 1 : 0,
             created_at: msg.created_at,

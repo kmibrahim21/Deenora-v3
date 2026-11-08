@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { OfflineService } from "services/OfflineService";
 import { useSyncEngine } from "hooks/useOffline";
 import { useAndroidBackHandler } from "hooks/useAndroidBackHandler";
+import { useBackHandler } from "utils/backHandler";
 import { OfflineIndicator } from "components/OfflineIndicator";
 import { useAuth } from "hooks/useAuth";
 import { hardReload } from "utils/reloadUtils";
@@ -111,7 +112,6 @@ const App: React.FC = () => {
     return "home";
   });
   const [isMobileChatActive, setIsMobileChatActive] = useState(false);
-  useAndroidBackHandler(view, setView);
   const [walletTab, setWalletTab] = useState<
     "templates" | "bulk-sms" | "history" | "recharge"
   >("bulk-sms");
@@ -136,6 +136,33 @@ const App: React.FC = () => {
     title: "",
     message: "",
   });
+
+  useAndroidBackHandler(view, setView, profile?.role, lang);
+
+  // Global Back Handlers in App.tsx
+  useBackHandler('app-status-modal', () => {
+    if (statusModal.show) {
+      setStatusModal(prev => ({ ...prev, show: false }));
+      return true;
+    }
+    return false;
+  }, statusModal.show, 10);
+
+  useBackHandler('app-selected-student', () => {
+    if (selectedStudent !== null) {
+      setSelectedStudent(null);
+      return true;
+    }
+    return false;
+  }, selectedStudent !== null, 9);
+
+  useBackHandler('app-selected-class', () => {
+    if (selectedClass !== null) {
+      setSelectedClass(null);
+      return true;
+    }
+    return false;
+  }, selectedClass !== null, 9);
 
   const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
