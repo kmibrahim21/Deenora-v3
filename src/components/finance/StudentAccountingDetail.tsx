@@ -563,7 +563,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         'fee_structures',
         (q) => {
           const base = q.select('id, fee_name, amount, due_date, start_date').eq('institution_id', madrasah.id);
-          return student.class_id ? base.or(`class_id.eq.${student.class_id},class_id.is.null`) : base.is('class_id', null);
+          const validClassId = (student?.class_id && student.class_id !== 'null' && student.class_id !== 'undefined') ? String(student.class_id).trim() : null;
+          return validClassId ? base.or(`class_id.eq.${validClassId},class_id.is.null`) : base.is('class_id', null);
         },
         `accounting-structures-${student.class_id || 'unassigned'}`,
         CACHE_TTLS.LONG

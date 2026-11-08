@@ -407,10 +407,10 @@ export class ChatService {
         try {
           const { data: teachersData } = await supabase
             .from('teachers')
-            .select('id, name, designation, phone, photo_url, is_active')
+            .select('id, teacher_name, mobile, name:teacher_name, phone:mobile, designation, photo_url, is_active')
             .eq('institution_id', institutionId);
 
-          const activeTeachers: any[] = (teachersData || []).filter((t: any) => t.is_active !== false && t.name);
+          const activeTeachers: any[] = (teachersData || []).filter((t: any) => t.is_active !== false && (t.name || t.teacher_name));
 
           // Fallback to profiles if teachers table has no records
           if (activeTeachers.length === 0) {

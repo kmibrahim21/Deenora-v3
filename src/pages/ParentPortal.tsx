@@ -1110,12 +1110,20 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       <div className="hidden lg:flex w-72 flex-col border-r h-full fixed top-0 left-0 z-50 bg-white border-blue-100 shadow-sm">
         <div className="p-6 border-b border-blue-100/60 flex flex-col justify-center">
           <div className="flex items-center gap-4">
-             <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden shrink-0 bg-slate-50 border border-slate-100">
-               {madrasah?.logo_url ? (
-                 <img src={madrasah.logo_url} className="w-full h-full object-contain" alt="Logo" />
-               ) : (
-                 <BookOpen size={24} className="text-blue-600" />
+             <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden shrink-0 bg-slate-50 border border-slate-100 relative">
+               {madrasah?.logo_url && (
+                 <img
+                   src={madrasah.logo_url}
+                   className="w-full h-full object-contain"
+                   alt="Logo"
+                   onError={(e) => {
+                     e.currentTarget.style.display = 'none';
+                     const fb = e.currentTarget.parentElement?.querySelector('.fallback-logo-parent');
+                     if (fb) (fb as HTMLElement).style.display = 'flex';
+                   }}
+                 />
                )}
+               <BookOpen size={24} className={`text-blue-600 fallback-logo-parent ${madrasah?.logo_url ? 'hidden' : 'flex'}`} />
              </div>
              <div className="min-w-0">
                <h1 className="text-lg font-black leading-tight tracking-tight font-noto line-clamp-3 text-[#1E293B]">

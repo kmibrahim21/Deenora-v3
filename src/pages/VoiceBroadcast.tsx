@@ -949,7 +949,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const fetchTeachers = async () => {
     if (!madrasah) return;
     try {
-      const { data } = await supabase.from('teachers').select('*').eq('institution_id', madrasah.id).eq('is_active', true);
+      const { data } = await supabase.from('teachers').select('id, teacher_name, mobile, name:teacher_name, phone:mobile, designation, photo_url, is_active, status, permissions').eq('institution_id', madrasah.id).eq('is_active', true);
       if (data) {
         const today = new Date().toISOString().split('T')[0];
         const formattedTeachers = data.map(t => {

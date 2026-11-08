@@ -117,7 +117,7 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
 
       const [stRes, tcRes, clRes] = await Promise.all([
         supabase.from('students').select('id, student_name, roll, class_id').eq('institution_id', madrasah.id),
-        supabase.from('teachers').select('id, name:teacher_name').eq('institution_id', madrasah.id).eq('is_active', true),
+        supabase.from('teachers').select('id, teacher_name, mobile, name:teacher_name, phone:mobile').eq('institution_id', madrasah.id).eq('is_active', true),
         clProm
       ]);
       if (stRes.data) setStudents(stRes.data);

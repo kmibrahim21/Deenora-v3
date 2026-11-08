@@ -141,15 +141,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const serviceAccount = parseServiceAccount();
 
   // FIX 2026-10-13: log key SHAPE only (never the key itself) to diagnose paste issues
-  if (serviceAccount) {
-    const pk = serviceAccount.private_key;
-    console.log('[Call API] private key shape:', {
-      len: pk.length,
-      hasBegin: pk.includes('BEGIN PRIVATE KEY'),
-      hasEnd: pk.includes('END PRIVATE KEY'),
-      newlines: (pk.match(/\n/g) || []).length,
-    });
-  }
+  // if (serviceAccount) {
+  //   const pk = serviceAccount.private_key;
+  //   console.log('[Call API] private key shape:', {
+  //     len: pk.length,
+  //     hasBegin: pk.includes('BEGIN PRIVATE KEY'),
+  //     hasEnd: pk.includes('END PRIVATE KEY'),
+  //     newlines: (pk.match(/\n/g) || []).length,
+  //   });
+  // }
 
   const action = req.query.action || req.body?.action;
 
