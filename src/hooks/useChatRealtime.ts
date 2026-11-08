@@ -139,7 +139,11 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       const isMatch =
         newMsg.conversation_id === currentActive ||
         (newMsg.conversation_id && (newMsg.conversation_id === activeRaw || `class-group-${newMsg.conversation_id}` === currentActive)) ||
-        (newMsg.class_name && (newMsg.class_name === currentActive || newMsg.class_name === activeRaw || `class-group-${newMsg.class_name}` === currentActive));
+        (newMsg.class_name && (newMsg.class_name === currentActive || newMsg.class_name === activeRaw || `class-group-${newMsg.class_name}` === currentActive)) ||
+        (currentActive.startsWith('class-group-') && (
+          (newMsg.conversation_id && (newMsg.conversation_id.includes(activeRaw) || activeRaw.includes(newMsg.conversation_id))) ||
+          (newMsg.class_name && (newMsg.class_name.includes(activeRaw) || activeRaw.includes(newMsg.class_name)))
+        ));
 
       if (!isMatch) return;
 

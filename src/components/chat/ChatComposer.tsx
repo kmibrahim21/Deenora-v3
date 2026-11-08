@@ -59,7 +59,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     }
   }, [editingMessage]);
 
-  const canPost = !isAnnouncementOnly || userRole === 'super_admin' || userRole === 'madrasah_admin' || userRole === 'teacher';
+  const isAdminUser = userRole === 'super_admin' || userRole === 'madrasah_admin';
+  const canPost = !isAnnouncementOnly || isAdminUser;
 
   const popularEmojis = [
     '😊', '👍', '❤️', '🙏', '👏', '😂',
@@ -154,12 +155,12 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
 
   if (!canPost) {
     return (
-      <div className={`p-4 text-center text-xs ${
+      <div className={`p-4 text-center text-xs font-bold ${
         isDark 
           ? 'text-amber-400 bg-amber-950/20 border-amber-900/30' 
-          : 'text-amber-700 bg-amber-50/90 border-amber-200/60'
+          : 'text-amber-800 bg-amber-50/95 border-amber-200/80'
       } border-t`}>
-        🔒 {lang === 'bn' ? 'শুধুমাত্র শিক্ষক ও এডমিন এই চ্যানেলে বার্তা পাঠাতে পারেন।' : 'Only Teachers & Admins can post in this channel.'}
+        🔒 {lang === 'bn' ? 'শুধুমাত্র প্রতিষ্ঠান প্রধান বা অ্যাডমিন এই অফিশিয়াল নোটিশ বোর্ডে বার্তা পাঠাতে পারবেন।' : 'Only institution admins can post in this official notice board.'}
       </div>
     );
   }

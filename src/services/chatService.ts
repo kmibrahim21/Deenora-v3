@@ -657,44 +657,35 @@ export class ChatService {
    */
   static async getLastMessage(conversationId: string): Promise<ChatMessage | undefined> {
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const isClassGroup = conversationId.startsWith('class-group-');
+      const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
 
-      if (error || !data) {
-        // Fallback: try by class_name
-        const isClassGroup = conversationId.startsWith('class-group-');
-        const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
-        if (classIdRaw) {
-          const { data: classLast } = await supabase
-            .from('messages')
-            .select('*')
-            .eq('class_name', classIdRaw)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          if (classLast) {
-            return formatRowToChatMessage(classLast, conversationId);
-          }
-        }
-
-        // Check local storage fallback
-        const localKey = `deenora_chat_msg_${conversationId}`;
-        const stored = localStorage.getItem(localKey);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return formatRowToChatMessage(parsed[parsed.length - 1], conversationId);
-          }
-        }
-        return undefined;
+      let query = supabase.from('messages').select('*');
+      if (isClassGroup && classIdRaw) {
+        query = query.or(`conversation_id.eq.${conversationId},conversation_id.eq.${classIdRaw},class_name.eq.${conversationId},class_name.eq.${classIdRaw}`);
+      } else {
+        query = query.or(`conversation_id.eq.${conversationId},class_name.eq.${conversationId}`);
       }
 
-      return formatRowToChatMessage(data, conversationId);
+      const { data } = await query
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        return formatRowToChatMessage(data, conversationId);
+      }
+
+      // Check local storage fallback
+      const localKey = `deenora_chat_msg_${conversationId}`;
+      const stored = localStorage.getItem(localKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return formatRowToChatMessage(parsed[parsed.length - 1], conversationId);
+        }
+      }
+      return undefined;
     } catch {
       return undefined;
     }
@@ -722,16 +713,19 @@ export class ChatService {
       const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
 
       // 2. Query Supabase for authoritative latest messages
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-        .limit(limit);
+      let query = supabase.from('messages').select('*');
+
+      if (isClassGroup && classIdRaw) {
+        query = query.or(`conversation_id.eq.${conversationId},conversation_id.eq.${classIdRaw},class_name.eq.${conversationId},class_name.eq.${classIdRaw}`);
+      } else {
+        query = query.or(`conversation_id.eq.${conversationId},class_name.eq.${conversationId}`);
+      }
 
       if (institutionId) {
         query = query.eq('institution_id', institutionId);
       }
+
+      query = query.order('created_at', { ascending: true }).limit(limit);
 
       const { data: convData, error: convErr } = await query;
 
@@ -739,24 +733,6 @@ export class ChatService {
 
       if (!convErr && convData && convData.length > 0) {
         cloudMessages = convData.map(row => formatRowToChatMessage(row, conversationId));
-      } else {
-        // Fallback query by class_name if conversation_id query returned 0 rows
-        const queryClass = classIdRaw || conversationId;
-        let classQuery = supabase
-          .from('messages')
-          .select('*')
-          .eq('class_name', queryClass)
-          .order('created_at', { ascending: true })
-          .limit(limit);
-
-        if (institutionId) {
-          classQuery = classQuery.eq('institution_id', institutionId);
-        }
-
-        const { data: classData } = await classQuery;
-        if (classData && classData.length > 0) {
-          cloudMessages = classData.map(row => formatRowToChatMessage(row, conversationId));
-        }
       }
 
       // If we got cloud messages, save them into IndexedDB and merge
