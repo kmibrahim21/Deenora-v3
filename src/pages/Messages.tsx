@@ -37,6 +37,7 @@ import {
   PenTool,
   PlusCircle,
   Save,
+  Send,
   Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -153,6 +154,7 @@ export default function Messages({
   const [lessonTitle, setLessonTitle] = useState('');
   const [lecturePeriod, setLecturePeriod] = useState('');
   const [homeworkDesc, setHomeworkDesc] = useState('');
+  const [isPublishingDiary, setIsPublishingDiary] = useState(false);
   
   // Custom Modal States
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
@@ -784,7 +786,7 @@ export default function Messages({
         });
         if (error) throw error;
         
-        if (!isDraft) {
+        if (!isDraft && !isNewDiary) {
           pushToParents({
             institution_id: madrasah?.id,
             class_name: effectiveClass,
@@ -799,11 +801,73 @@ export default function Messages({
       setEditingItem(null);
       resetDiaryForm();
       await fetchData();
-      alert('সফলভাবে সংরক্ষিত হয়েছে!');
+      if (isNewDiary) {
+        alert('বিষয়টির ডায়েরি সংরক্ষিত হয়েছে! সকল বিষয়ের ডায়েরি লেখা শেষে তালিকার উপরের "ডায়েরি প্রকাশ করুন" বাটনে চাপুন।');
+      } else {
+        alert('সফলভাবে সংরক্ষিত হয়েছে!');
+      }
     } catch (err: any) {
       console.error('Submit error:', err);
       alert('তথ্য সংরক্ষণ করতে সমস্যা হয়েছে: ' + (err.message || 'Unknown error'));
     } finally { setIsSubmitting(false); }
+  };
+
+  const publishClassDiary = async (targetClass: string, targetDate: string) => {
+    if (!targetClass || !targetDate) return alert('শ্রেণি এবং তারিখ নির্বাচন করুন।');
+    
+    // Find all diary messages for this class and date
+    const dayDiaries = messages.filter(m => {
+      try {
+        const p = typeof m.message === 'string' ? JSON.parse(m.message) : m.message;
+        const classMatches = m.class_name === targetClass || 
+          getDisplayClassName(m.class_name) === getDisplayClassName(targetClass) ||
+          classes.find(c => c.class_name === targetClass)?.id === m.class_name;
+        const dateMatches = (p.date === targetDate) || (m.created_at && m.created_at.split('T')[0] === targetDate);
+        return classMatches && dateMatches;
+      } catch (e) { return false; }
+    });
+
+    if (dayDiaries.length === 0) {
+      return alert('এই শ্রেণির জন্য এখনও কোনো বিষয়ের ডায়েরি লেখা হয়নি। আগে কমপক্ষে একটি বিষয়ের ডায়েরি লিখুন।');
+    }
+
+    setIsPublishingDiary(true);
+    try {
+      // Ensure all day diaries have status: 'published'
+      for (const diary of dayDiaries) {
+        try {
+          const p = typeof diary.message === 'string' ? JSON.parse(diary.message) : (diary.message || {});
+          if (p.status !== 'published') {
+            p.status = 'published';
+            await supabase.from('messages').update({
+              message: JSON.stringify(p)
+            }).eq('id', diary.id);
+          }
+        } catch (e) {}
+      }
+
+      // Send single consolidated push notification to parents of this class
+      await pushToParents({
+        institution_id: madrasah?.id,
+        class_name: targetClass,
+        title: `${getDisplayClassName(targetClass)} - আজকের ডায়েরি`,
+        body: `আজকের (${new Date(targetDate).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' })}) মোট ${dayDiaries.length}টি বিষয়ের ডায়েরি প্রকাশিত হয়েছে — সকল বিষয়ের পড়া ও বাড়ির কাজ দেখে নিন`,
+      });
+
+      // Save published timestamp in localStorage for visual persistence
+      try {
+        localStorage.setItem(`diary_published_${madrasah?.id}_${targetClass}_${targetDate}`, new Date().toISOString());
+      } catch {}
+
+      sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
+      await fetchData();
+      alert(`সফলভাবে ${getDisplayClassName(targetClass)} শ্রেণির মোট ${dayDiaries.length}টি বিষয়ের ডায়েরি সকল অভিভাবকের কাছে প্রকাশ করা হয়েছে!`);
+    } catch (err: any) {
+      console.error('Publish diary error:', err);
+      alert('ডায়েরি প্রকাশ করতে সমস্যা হয়েছে: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsPublishingDiary(false);
+    }
   };
 
   const resetDiaryForm = () => {
@@ -1946,13 +2010,84 @@ export default function Messages({
 
                           {/* 5. Subject List */}
                           {selectedClass ? (
-                            <div className="space-y-3">
-                               {/* Add Subject Action Header */}
-                               <div className="flex justify-between items-center px-1 mb-2">
-                                  <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                    <BookOpen size={13} className="text-blue-500" />
-                                    বিষয় তালিকা ({classSubjects.length}টি)
-                                  </h4>
+                            <div className="space-y-4">
+                              {/* Class Diary Consolidated Publish Action Bar */}
+                              {classSubjects.length > 0 && (() => {
+                                const writtenDiaries = classSubjects.map(sub => {
+                                  return messages.find(m => {
+                                    try {
+                                      const p = typeof m.message === 'string' ? JSON.parse(m.message) : m.message;
+                                      const classMatches = m.class_name === selectedClass || 
+                                        getDisplayClassName(m.class_name) === getDisplayClassName(selectedClass) ||
+                                        classes.find(c => c.class_name === selectedClass)?.id === m.class_name;
+                                      const dateMatches = (p.date === msgDate) || (m.created_at && m.created_at.split('T')[0] === msgDate);
+                                      const subClean = sub.trim().toLowerCase();
+                                      return classMatches && dateMatches && (
+                                        (p.subject && p.subject.trim().toLowerCase() === subClean) ||
+                                        (p.subjects && Array.isArray(p.subjects) && p.subjects.some((s: any) => s.subject && s.subject.trim().toLowerCase() === subClean))
+                                      );
+                                    } catch (e) { return false; }
+                                  });
+                                }).filter(Boolean);
+
+                                const writtenCount = writtenDiaries.length;
+                                const isPublishedKey = `diary_published_${madrasah?.id}_${selectedClass}_${msgDate}`;
+                                const lastPublishedTime = localStorage.getItem(isPublishedKey);
+
+                                return (
+                                  <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-5 rounded-3xl shadow-xl shadow-blue-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-blue-500/40">
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider backdrop-blur-xs">
+                                          {getDisplayClassName(selectedClass)}
+                                        </span>
+                                        {lastPublishedTime ? (
+                                          <span className="flex items-center gap-1 text-[10px] font-black bg-emerald-500 text-white px-2.5 py-0.5 rounded-full shadow-xs">
+                                            <CheckCircle2 size={12} /> প্রকাশিত ডায়েরি
+                                          </span>
+                                        ) : (
+                                          <span className="flex items-center gap-1 text-[10px] font-black bg-amber-400 text-amber-950 px-2.5 py-0.5 rounded-full shadow-xs">
+                                            অপ্রকাশিত (ড্রাফট)
+                                          </span>
+                                        )}
+                                      </div>
+                                      <h3 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
+                                        <span>{writtenCount}টি বিষয়ের ডায়েরি প্রস্তুত</span>
+                                        <span className="text-blue-200 text-xs font-bold">(মোট {classSubjects.length}টি)</span>
+                                      </h3>
+                                      <p className="text-xs text-blue-100 font-medium leading-relaxed">
+                                        প্রতিটি বিষয় লিখে শেষ হলে এই বাটনে ক্লিক করলেই একসাথেই শ্রেণির সকল অভিভাবকের ফোনে ডায়েরি পৌঁছে যাবে।
+                                      </p>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      disabled={isPublishingDiary || writtenCount === 0}
+                                      onClick={() => publishClassDiary(selectedClass, msgDate)}
+                                      className="w-full sm:w-auto px-6 py-3.5 bg-white hover:bg-blue-50 active:scale-95 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-black text-xs sm:text-sm shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+                                    >
+                                      {isPublishingDiary ? (
+                                        <>
+                                          <RefreshCw size={16} className="animate-spin text-blue-600" />
+                                          <span>প্রকাশ হচ্ছে...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Send size={16} className="text-blue-600" />
+                                          <span>{lastPublishedTime ? 'পুনরায় ডায়েরি প্রকাশ করুন' : 'ডায়েরি প্রকাশ করুন'}</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Add Subject Action Header */}
+                              <div className="flex justify-between items-center px-1 mb-1">
+                                <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                  <BookOpen size={13} className="text-blue-500" />
+                                  বিষয় তালিকা ({classSubjects.length}টি)
+                                </h4>
                                   <button 
                                     type="button"
                                     onClick={() => setShowAddSubjectModal(true)}

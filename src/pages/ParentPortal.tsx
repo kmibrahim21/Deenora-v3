@@ -236,6 +236,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [galleryImages, setGalleryImages] = useState<Array<{ url: string; name?: string }>>([]);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number>(0);
+  const [selectedDiarySubject, setSelectedDiarySubject] = useState<{
+    item: any;
+    allSubjectsInDate: any[];
+    activeIndex: number;
+    dateKey: string;
+    formattedDate: string;
+    className: string;
+  } | null>(null);
   const [student, setStudent] = useState<any>(() => initialCache?.student || null);
   const [children, setChildren] = useState<any[]>(() => initialCache?.children || []);
   const [switchingChildId, setSwitchingChildId] = useState<string | null>(null);
@@ -3440,6 +3448,275 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   );
                 }
 
+                // Dedicated Date-Grouped Class Diary View for Guardians
+                if (activeNoticeTab === 'diary') {
+                  const diariesByDate: Record<string, {
+                    dateKey: string;
+                    formattedDate: string;
+                    isToday: boolean;
+                    isYesterday: boolean;
+                    className: string;
+                    subjects: Array<{
+                      id: string;
+                      noticeId: string;
+                      subject: string;
+                      period?: string;
+                      lesson?: string;
+                      details?: string;
+                      homework?: string;
+                      note?: string;
+                      attachments?: any[];
+                      sender_name?: string;
+                      created_at: string;
+                      dateKey: string;
+                      className: string;
+                    }>;
+                  }> = {};
+
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const yesterdayObj = new Date();
+                  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+                  const yesterdayStr = yesterdayObj.toISOString().split('T')[0];
+
+                  filtered.forEach(notice => {
+                    let parsed: any = {};
+                    try {
+                      parsed = typeof notice.message === 'string' ? JSON.parse(notice.message) : (notice.message || {});
+                    } catch {
+                      parsed = { details: notice.message };
+                    }
+
+                    const rawDate = parsed.date || (notice.created_at ? notice.created_at.split('T')[0] : todayStr);
+                    const dateKey = String(rawDate).trim();
+                    const rawClass = notice.class_name?.startsWith('APP_')
+                      ? (student?.classes?.class_name || student?.class_name || 'শ্রেণি ডায়েরি')
+                      : (notice.class_name || student?.classes?.class_name || student?.class_name || 'শ্রেণি ডায়েরি');
+
+                    if (!diariesByDate[dateKey]) {
+                      let formattedDate = dateKey;
+                      try {
+                        const dObj = new Date(dateKey + 'T00:00:00');
+                        formattedDate = dObj.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+                      } catch {}
+
+                      diariesByDate[dateKey] = {
+                        dateKey,
+                        formattedDate,
+                        isToday: dateKey === todayStr,
+                        isYesterday: dateKey === yesterdayStr,
+                        className: rawClass,
+                        subjects: []
+                      };
+                    }
+
+                    if (Array.isArray(parsed.subjects) && parsed.subjects.length > 0) {
+                      parsed.subjects.forEach((sub: any, subIdx: number) => {
+                        diariesByDate[dateKey].subjects.push({
+                          id: `${notice.id}-${subIdx}`,
+                          noticeId: notice.id,
+                          subject: sub.subject || `বিষয় ${subIdx + 1}`,
+                          period: sub.period,
+                          lesson: sub.lesson,
+                          details: sub.details || sub.desc || sub.content,
+                          homework: sub.homework,
+                          note: sub.note,
+                          attachments: sub.attachments || [],
+                          sender_name: notice.sender_name,
+                          created_at: notice.created_at,
+                          dateKey,
+                          className: rawClass
+                        });
+                      });
+                    } else {
+                      const subjectName = parsed.subject || notice.title?.replace(/^[^-]+-\s*/, '').replace(/\s*\([^)]*\)$/, '').trim() || 'সাধারণ ডায়েরি';
+                      diariesByDate[dateKey].subjects.push({
+                        id: notice.id,
+                        noticeId: notice.id,
+                        subject: subjectName,
+                        period: parsed.period,
+                        lesson: parsed.lesson,
+                        details: parsed.details || parsed.desc || parsed.content || (typeof notice.message === 'string' && !notice.message.startsWith('{') ? notice.message : ''),
+                        homework: parsed.homework,
+                        note: parsed.note,
+                        attachments: parsed.attachments || [],
+                        sender_name: notice.sender_name,
+                        created_at: notice.created_at,
+                        dateKey,
+                        className: rawClass
+                      });
+                    }
+                  });
+
+                  const sortedDateGroups = Object.values(diariesByDate).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+
+                  return (
+                    <div className="space-y-6">
+                      {sortedDateGroups.map((dateGroup, groupIdx) => {
+                        const totalSubs = dateGroup.subjects.length;
+                        const readCount = dateGroup.subjects.filter(s => readDiaryIds.includes(s.noticeId)).length;
+                        const allRead = totalSubs > 0 && readCount === totalSubs;
+
+                        return (
+                          <motion.div
+                            key={dateGroup.dateKey}
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: groupIdx * 0.05 }}
+                            className="bg-white border border-slate-100 rounded-3xl p-5 md:p-7 shadow-premium relative overflow-hidden group hover:border-blue-200 transition-all duration-300"
+                          >
+                            {/* Date Group Card Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-11 h-11 md:w-12 md:h-12 rounded-2xl flex items-center justify-center border shadow-xs ${
+                                  dateGroup.isToday 
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-blue-200' 
+                                    : 'bg-blue-50 border-blue-100 text-blue-600'
+                                }`}>
+                                  <Calendar size={22} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 border border-blue-100 text-blue-700 font-noto">
+                                      {dateGroup.className}
+                                    </span>
+                                    {dateGroup.isToday && (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs font-noto">
+                                        আজকের ডায়েরি
+                                      </span>
+                                    )}
+                                    {dateGroup.isYesterday && (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 font-noto">
+                                        গতকালের ডায়েরি
+                                      </span>
+                                    )}
+                                  </div>
+                                  <h3 className="text-base md:text-lg font-black text-slate-900 font-noto tracking-tight mt-0.5">
+                                    {dateGroup.formattedDate}
+                                  </h3>
+                                </div>
+                              </div>
+
+                              {/* Badges / Subject Count & Read Status */}
+                              <div className="flex items-center gap-2">
+                                <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold font-noto border border-slate-200/60">
+                                  {totalSubs}টি বিষয়
+                                </span>
+                                {allRead ? (
+                                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold font-noto flex items-center gap-1.5 shadow-2xs">
+                                    <CheckCircle2 size={13} className="text-emerald-600" />
+                                    <span>সব দেখা হয়েছে</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold font-noto flex items-center gap-1.5">
+                                    <Clock size={13} className="text-amber-500" />
+                                    <span>{totalSubs - readCount}টি পড়া বাকি</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Subject Pills / Cards Grid */}
+                            <div className="pt-4">
+                              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest font-noto mb-3">
+                                আজকের পাঠ্য বিষয়সমূহ (বিস্তারিত দেখতে বিষয়ে ট্যাপ করুন):
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {dateGroup.subjects.map((sub, sIdx) => {
+                                  const isSubRead = readDiaryIds.includes(sub.noticeId);
+                                  const hasHomework = Boolean(sub.homework && sub.homework.trim());
+                                  const hasAttachments = Array.isArray(sub.attachments) && sub.attachments.length > 0;
+
+                                  return (
+                                    <div
+                                      key={sub.id}
+                                      onClick={() => {
+                                        setSelectedDiarySubject({
+                                          item: sub,
+                                          allSubjectsInDate: dateGroup.subjects,
+                                          activeIndex: sIdx,
+                                          dateKey: dateGroup.dateKey,
+                                          formattedDate: dateGroup.formattedDate,
+                                          className: dateGroup.className
+                                        });
+                                      }}
+                                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group/sub ${
+                                        isSubRead 
+                                          ? 'bg-slate-50/60 hover:bg-blue-50/40 border-slate-200/80 hover:border-blue-300' 
+                                          : 'bg-white hover:bg-blue-50/50 border-blue-100 hover:border-blue-300 shadow-xs hover:shadow-md'
+                                      } active:scale-[0.98]`}
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover/sub:scale-110 ${
+                                            isSubRead 
+                                              ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
+                                              : 'bg-blue-50 border-blue-100 text-blue-600'
+                                          }`}>
+                                            <BookOpen size={17} />
+                                          </div>
+                                          <div className="min-w-0">
+                                            <h4 className="text-sm font-black text-slate-900 font-noto truncate group-hover/sub:text-blue-600 transition-colors">
+                                              {sub.subject}
+                                            </h4>
+                                            {sub.period ? (
+                                              <p className="text-[10px] font-bold text-slate-400 font-noto flex items-center gap-1">
+                                                <Clock size={10} /> {sub.period}
+                                              </p>
+                                            ) : sub.lesson ? (
+                                              <p className="text-[10px] font-bold text-slate-400 font-noto truncate">
+                                                {sub.lesson}
+                                              </p>
+                                            ) : (
+                                              <p className="text-[10px] font-bold text-slate-400 font-noto">
+                                                ক্লাসের পড়া ও কাজ
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {isSubRead ? (
+                                            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center" title="পড়া দেখা হয়েছে">
+                                              <CheckCircle2 size={13} />
+                                            </span>
+                                          ) : (
+                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" title="নতুন ডায়েরি" />
+                                          )}
+                                          <ChevronRight size={16} className="text-slate-300 group-hover/sub:text-blue-500 group-hover/sub:translate-x-0.5 transition-all" />
+                                        </div>
+                                      </div>
+
+                                      {/* Tags under subject */}
+                                      <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                                        {hasHomework && (
+                                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-blue-50 text-blue-700 border border-blue-100 font-noto">
+                                            হোমওয়ার্ক
+                                          </span>
+                                        )}
+                                        {hasAttachments && (
+                                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-purple-50 text-purple-700 border border-purple-100 font-noto flex items-center gap-1">
+                                            <Paperclip size={9} />
+                                            <span>{sub.attachments!.length}টি ফাইল</span>
+                                          </span>
+                                        )}
+                                        {sub.note && (
+                                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-100 font-noto">
+                                            নোট
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="grid gap-5">
                     {filtered.map((notice, i) => (
@@ -3782,6 +4059,280 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           })}
         </nav>
       </div>
+      )}
+      {/* Selected Class Diary Subject Detail Modal */}
+      {selectedDiarySubject && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9990] flex items-center justify-center p-3 sm:p-5 select-none overflow-y-auto"
+          onClick={() => setSelectedDiarySubject(null)}
+        >
+          <div 
+            className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-auto max-h-[92vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white flex items-center justify-between gap-3 shrink-0 shadow-sm">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDiarySubject(null)}
+                  className="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 border border-white/20"
+                  title="ফিরে যান"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-2 py-0.5 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-wider backdrop-blur-xs font-noto">
+                      {selectedDiarySubject.className}
+                    </span>
+                    <span className="text-[10px] text-blue-100 font-noto">
+                      • {selectedDiarySubject.formattedDate}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-xl font-black font-noto truncate text-white mt-0.5">
+                    {selectedDiarySubject.item.subject}
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDiarySubject(null)}
+                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 border border-white/20 active:scale-95"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 font-noto">
+              {/* Meta Badges */}
+              <div className="flex flex-wrap items-center gap-2 pb-1">
+                <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-2xs">
+                  <BookOpen size={14} className="text-blue-500" />
+                  <span>বিষয়: {selectedDiarySubject.item.subject}</span>
+                </span>
+                {selectedDiarySubject.item.period && (
+                  <span className="px-3 py-1 bg-purple-50 text-purple-700 border border-purple-100 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-2xs">
+                    <Clock size={14} className="text-purple-500" />
+                    <span>{selectedDiarySubject.item.period}</span>
+                  </span>
+                )}
+                {selectedDiarySubject.item.lesson && (
+                  <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-extrabold shadow-2xs">
+                    <span>পাঠ/অধ্যায়: {selectedDiarySubject.item.lesson}</span>
+                  </span>
+                )}
+                {selectedDiarySubject.item.sender_name && (
+                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold ml-auto">
+                    শিক্ষক: {selectedDiarySubject.item.sender_name}
+                  </span>
+                )}
+              </div>
+
+              {/* 1. আজকের ক্লাসের পড়া ও বিবরণ */}
+              <div className="bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-2xs space-y-2">
+                <div className="flex items-center gap-2 text-slate-800">
+                  <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <BookOpen size={16} />
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
+                    আজকের ক্লাসের পড়া ও বিবরণ:
+                  </h4>
+                </div>
+                <div className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap pl-1">
+                  {selectedDiarySubject.item.details || 'আজকে ক্লাসের কোনো বিশেষ বিবরণ দেওয়া হয়নি।'}
+                </div>
+              </div>
+
+              {/* 2. বাড়ির কাজ / হোমওয়ার্ক */}
+              {selectedDiarySubject.item.homework && (
+                <div className="bg-blue-50/40 p-4 sm:p-5 rounded-2xl border border-blue-100 shadow-2xs space-y-2">
+                  <div className="flex items-center gap-2 text-blue-900">
+                    <div className="w-7 h-7 rounded-lg bg-blue-500 text-white flex items-center justify-center">
+                      <Smartphone size={16} />
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                      বাড়ির কাজ / হোমওয়ার্ক:
+                    </h4>
+                  </div>
+                  <div className="text-xs sm:text-sm text-blue-950 font-medium leading-relaxed whitespace-pre-wrap pl-1">
+                    {selectedDiarySubject.item.homework}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. বিশেষ দ্রষ্টব্য / নোট */}
+              {selectedDiarySubject.item.note && (
+                <div className="bg-amber-50/60 p-4 sm:p-5 rounded-2xl border border-amber-200/80 shadow-2xs space-y-2">
+                  <div className="flex items-center gap-2 text-amber-900">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                      <AlertCircle size={16} />
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                      বিশেষ দ্রষ্টব্য / শিক্ষকের নোট:
+                    </h4>
+                  </div>
+                  <div className="text-xs sm:text-sm text-amber-950 leading-relaxed whitespace-pre-wrap pl-1">
+                    {selectedDiarySubject.item.note}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. সংযুক্ত ফাইল ও ছবি */}
+              {Array.isArray(selectedDiarySubject.item.attachments) && selectedDiarySubject.item.attachments.length > 0 && (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                      <Paperclip size={16} />
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
+                      সংযুক্ত ফাইল / ছবি ({selectedDiarySubject.item.attachments.length}টি):
+                    </h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {selectedDiarySubject.item.attachments.map((att: any, attIdx: number) => {
+                      const imageAttachments = selectedDiarySubject.item.attachments.filter((a: any) => a.type !== 'pdf');
+
+                      return att.type === 'pdf' ? (
+                        <button
+                          key={attIdx}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadFromUrl(att.url, att.name || 'document.pdf', 'application/pdf');
+                          }}
+                          className="flex items-center gap-3 p-3 bg-red-50 hover:bg-red-100/80 border border-red-200 rounded-2xl transition-all text-xs font-bold text-red-700 text-left w-full cursor-pointer active:scale-95 shadow-2xs"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                            <FileText size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate font-noto text-xs font-black text-red-900">{att.name || 'ডকুমেন্ট.pdf'}</p>
+                            <p className="text-[10px] text-red-500 font-normal">PDF ডাউনলোড করতে ট্যাপ করুন</p>
+                          </div>
+                          <Download size={16} className="shrink-0 text-red-600" />
+                        </button>
+                      ) : (
+                        <div
+                          key={attIdx}
+                          onClick={() => {
+                            const imgIndex = imageAttachments.findIndex((img: any) => img.url === att.url);
+                            setGalleryImages(imageAttachments);
+                            setActiveGalleryIndex(imgIndex >= 0 ? imgIndex : 0);
+                            setZoomedImage(att.url);
+                          }}
+                          className="relative group rounded-2xl overflow-hidden border border-slate-200 cursor-pointer aspect-video bg-slate-100 shadow-2xs"
+                        >
+                          <img src={att.url} alt={att.name || 'সংযুক্ত ছবি'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity text-white text-xs font-bold font-noto">
+                            <span className="flex items-center gap-1 bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-xs hover:bg-white/30 transition-colors">
+                              <Eye size={14} /> স্লাইডে দেখুন
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadFromUrl(att.url, att.name || 'Attachment.jpg', 'image/jpeg');
+                              }}
+                              className="p-2 bg-white/20 hover:bg-white/40 text-white rounded-full backdrop-blur-xs transition-transform active:scale-90"
+                              title="ডাউনলোড করুন"
+                            >
+                              <Download size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 5. পড়া দেখেছি (অভিভাবকের স্বাক্ষর) Card */}
+              <div className="p-4 rounded-2xl border bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-xs">
+                  <p className="font-black text-slate-800">পড়া দেখার প্রাপ্তিস্বীকার</p>
+                  <p className="text-[11px] text-slate-500">শিক্ষক ও মাদরাসা দেখতে পারবে আপনি ডায়েরি দেখেছেন কিনা।</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nid = selectedDiarySubject.item.noticeId;
+                    setReadDiaryIds(prev =>
+                      prev.includes(nid) ? prev.filter(id => id !== nid) : [...prev, nid]
+                    );
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer font-noto ${
+                    readDiaryIds.includes(selectedDiarySubject.item.noticeId)
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200'
+                      : 'bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 border border-slate-200'
+                  }`}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>
+                    {readDiaryIds.includes(selectedDiarySubject.item.noticeId)
+                      ? 'পড়া দেখেছি (স্বাক্ষরিত)'
+                      : 'পড়া দেখেছি মার্ক করুন'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Navigation Footer */}
+            <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                disabled={selectedDiarySubject.activeIndex === 0}
+                onClick={() => {
+                  const prevIdx = selectedDiarySubject.activeIndex - 1;
+                  if (prevIdx >= 0) {
+                    setSelectedDiarySubject({
+                      ...selectedDiarySubject,
+                      item: selectedDiarySubject.allSubjectsInDate[prevIdx],
+                      activeIndex: prevIdx
+                    });
+                  }
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-noto flex items-center gap-1.5 transition-all ${
+                  selectedDiarySubject.activeIndex === 0
+                    ? 'opacity-40 cursor-not-allowed text-slate-400 bg-slate-100'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer active:scale-95'
+                }`}
+              >
+                <ChevronLeft size={16} />
+                <span>পূর্ববর্তী বিষয়</span>
+              </button>
+
+              <span className="text-xs font-bold text-slate-500 font-noto">
+                {selectedDiarySubject.activeIndex + 1} / {selectedDiarySubject.allSubjectsInDate.length}
+              </span>
+
+              <button
+                type="button"
+                disabled={selectedDiarySubject.activeIndex === selectedDiarySubject.allSubjectsInDate.length - 1}
+                onClick={() => {
+                  const nextIdx = selectedDiarySubject.activeIndex + 1;
+                  if (nextIdx < selectedDiarySubject.allSubjectsInDate.length) {
+                    setSelectedDiarySubject({
+                      ...selectedDiarySubject,
+                      item: selectedDiarySubject.allSubjectsInDate[nextIdx],
+                      activeIndex: nextIdx
+                    });
+                  }
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-noto flex items-center gap-1.5 transition-all ${
+                  selectedDiarySubject.activeIndex === selectedDiarySubject.allSubjectsInDate.length - 1
+                    ? 'opacity-40 cursor-not-allowed text-slate-400 bg-slate-100'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer active:scale-95'
+                }`}
+              >
+                <span>পরবর্তী বিষয়</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {zoomedImage && (
         <div 
