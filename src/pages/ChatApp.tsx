@@ -198,6 +198,41 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     const handleGlobalIncoming = (msg: ChatMessage) => {
       if (!msg) return;
 
+      // 1. Strict filtering for Parents:
+      // - Disallow any staff rooms
+      // - Disallow class groups not matching parent's class
+      // - Disallow direct chats not involving the parent
+      if (userRole === 'parent') {
+        if (msg.conversation_id?.startsWith('staff-')) return;
+
+        if (msg.conversation_id?.startsWith('class-group-') || msg.class_name) {
+          const isMyClass = 
+            (userClassId && msg.conversation_id === `class-group-${userClassId}`) ||
+            (userClassId && msg.class_name === userClassId);
+          if (!isMyClass) return;
+        }
+
+        if (msg.conversation_id?.startsWith('direct-')) {
+          const isMyDirect = 
+            (currentUserId && msg.conversation_id.includes(currentUserId)) ||
+            msg.sender_id === currentUserId;
+          if (!isMyDirect) return;
+        }
+      }
+
+      // 2. Strict filtering for Teachers:
+      // - Disallow direct chats not involving the teacher
+      if (userRole === 'teacher') {
+        if (msg.conversation_id?.startsWith('direct-')) {
+          const isMyDirect = 
+            (currentUserId && msg.conversation_id.includes(currentUserId)) ||
+            msg.sender_id === currentUserId;
+          if (!isMyDirect) return;
+        }
+      }
+
+      // Note: Admins (super_admin / madrasah_admin) bypass filters to inspect & supervise everything
+
       setConversations(prev => {
         let matched = false;
         const updated = prev.map(conv => {
@@ -222,6 +257,16 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 
         // If conversation is brand new and not yet in list, prepend it
         if (!matched && msg.conversation_id) {
+          // Extra guard for parents: DO NOT create a new conversation card if the message belongs to another class or someone else's direct chat
+          if (userRole === 'parent') {
+            const isAnnouncement = msg.conversation_id.startsWith('announcement-');
+            const isMyClassGroup = Boolean(userClassId && (msg.conversation_id === `class-group-${userClassId}` || msg.class_name === userClassId));
+            const isMyDirect = Boolean(currentUserId && (msg.conversation_id.includes(currentUserId) || msg.sender_id === currentUserId));
+            if (!isAnnouncement && !isMyClassGroup && !isMyDirect) {
+              return updated;
+            }
+          }
+
           const isNotMe = msg.sender_id !== currentUserId;
           const newConv = {
             id: msg.conversation_id,
@@ -275,7 +320,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       supabase.removeChannel(channel);
       if (bc) bc.close();
     };
-  }, [institutionId, activeConversationId, currentUserId]);
+  }, [institutionId, activeConversationId, currentUserId, userRole, userClassId]);
 
   const handleSendMessage = (
     text: string, 

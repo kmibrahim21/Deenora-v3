@@ -46,6 +46,7 @@ import {
   Info
 } from 'lucide-react';
 import { ChatArchiveService } from '../../services/chatArchiveService';
+import { downloadFromUrl } from '../../utils/fileDownloader';
 
 interface ChatWindowProps {
   conversation: Conversation | null;
@@ -645,70 +646,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const url = msg.attachment_url;
       const cleanFileName = fileName || msg.attachment_name || 'document.pdf';
 
-      if (url && url.startsWith('data:')) {
-        const parts = url.split(',');
-        const mimeMatch = parts[0].match(/:(.*?);/);
-        const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-        const byteCharacters = atob(parts[1]);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = cleanFileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      if (!url) {
+        setToastMessage(lang === 'bn' ? 'ফাইল পাওয়া যায়নি' : 'File not found');
         return;
       }
 
-      if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:'))) {
-        try {
-          const res = await fetch(url);
-          if (res.ok) {
-            const blob = await res.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = cleanFileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-            return;
-          }
-        } catch (fetchErr) {
-          console.warn('Direct fetch failed, falling back to window.open:', fetchErr);
-        }
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.download = cleanFileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        return;
+      // Detect MIME type based on file extension
+      const ext = cleanFileName.split('.').pop()?.toLowerCase() || '';
+      let mimeType = 'application/octet-stream';
+      if (ext === 'pdf') {
+        mimeType = 'application/pdf';
+      } else if (ext === 'png') {
+        mimeType = 'image/png';
+      } else if (ext === 'jpg' || ext === 'jpeg') {
+        mimeType = 'image/jpeg';
+      } else if (ext === 'doc' || ext === 'docx') {
+        mimeType = 'application/msword';
+      } else if (ext === 'xls' || ext === 'xlsx') {
+        mimeType = 'application/vnd.ms-excel';
+      } else if (ext === 'txt') {
+        mimeType = 'text/plain';
       }
 
-      const fallbackContent = `Deenora Educational Document\n============================\nTitle: ${cleanFileName}\nDate: ${new Date().toLocaleDateString('bn-BD')}\nMessage: ${msg.message}\nSender: ${msg.sender_name || 'Admin'}`;
-      const blob = new Blob([fallbackContent], { type: 'text/plain;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = cleanFileName.endsWith('.txt') || cleanFileName.endsWith('.pdf') ? cleanFileName : `${cleanFileName}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      // Invoke universal downloader (handles AndroidInterface for Android WebView and Blob download for Browsers)
+      const success = await downloadFromUrl(url, cleanFileName, mimeType);
+      if (success) {
+        setToastMessage(lang === 'bn' ? 'ডাউনলোড সফল হয়েছে' : 'Download successful');
+      } else {
+        setToastMessage(lang === 'bn' ? 'ডাউনলোড সম্পন্ন করা যায়নি' : 'Could not complete download');
+      }
     } catch (e) {
-      console.error('Download document error:', e);
+      console.error('[ChatWindow] Download document error:', e);
       setToastMessage(lang === 'bn' ? 'ডাউনলোড সম্পন্ন করা যায়নি।' : 'Could not complete download.');
     }
   };

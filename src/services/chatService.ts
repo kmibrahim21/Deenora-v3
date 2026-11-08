@@ -163,6 +163,26 @@ export class ChatService {
         }
       }
 
+      // For Admins (super_admin / madrasah_admin): fetch ALL conversations in the institution for complete super-vision
+      if (userRole === 'super_admin' || userRole === 'madrasah_admin') {
+        try {
+          const { data: allInstConvs } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('institution_id', institutionId);
+
+          if (allInstConvs && allInstConvs.length > 0) {
+            allInstConvs.forEach((c: any) => {
+              if (!dbConversations.some(dc => dc.id === c.id)) {
+                dbConversations.push(c as Conversation);
+              }
+            });
+          }
+        } catch (adminErr) {
+          console.warn('[ChatService] Error fetching all institution conversations for admin:', adminErr);
+        }
+      }
+
       // Filter classes for parent if userRole is parent and userClassId is specified
       let filteredClasses = classesList;
       const normBengali = (str: string) => (str || '').replace(/শ্রেণী/g, 'শ্রেণি').replace(/[\s_-]+/g, '').toLowerCase();
@@ -232,16 +252,58 @@ export class ChatService {
         });
       }
 
-      // Filter conversations for parent role to hide irrelevant staff/class groups
+      // Filter conversations by role to prevent data leaking
       let finalConversations = mappedConversations;
       if (userRole === 'parent') {
         finalConversations = mappedConversations.filter(c => {
           if (c.type === 'teacher_staff') return false;
-          if (c.type === 'class_group' && userClassId) {
+          if (c.type === 'announcement') return true;
+          if (c.type === 'class_group') {
+            if (!userClassId) return false;
             if (c.class_id === userClassId || c.id === `class-group-${userClassId}` || c.id.includes(userClassId)) return true;
             const normC = normBengali(c.name);
             const normU = normBengali(userClassId);
-            return normC && normU && (normC === normU || normC.includes(normU) || normU.includes(normC));
+            return Boolean(normC && normU && (normC === normU || normC.includes(normU) || normU.includes(normC)));
+          }
+          if (c.type === 'direct') {
+            return c.id.includes(userId);
+          }
+          return false;
+        });
+
+        // Auto-generate direct 1-on-1 chat boxes with all active teachers for the parent
+        try {
+          const { data: teachersData } = await supabase
+            .from('teachers')
+            .select('id, name, designation, phone, photo_url')
+            .eq('institution_id', institutionId)
+            .eq('is_active', true);
+
+          if (teachersData && teachersData.length > 0) {
+            for (const t of teachersData) {
+              const directId = 'direct-' + [userId, 'teacher-' + t.id].sort().join('-');
+              const alreadyExists = finalConversations.some(c => c.id === directId);
+              if (!alreadyExists) {
+                finalConversations.push({
+                  id: directId,
+                  institution_id: institutionId,
+                  type: 'direct',
+                  name: t.name + (t.designation ? ' (' + t.designation + ')' : ' (শিক্ষক)'),
+                  avatar_url: t.photo_url || undefined,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  unread_count: 0
+                });
+              }
+            }
+          }
+        } catch (tErr) {
+          console.warn('[ChatService] Error auto-generating teacher direct chats for parent:', tErr);
+        }
+      } else if (userRole === 'teacher') {
+        finalConversations = mappedConversations.filter(c => {
+          if (c.type === 'direct') {
+            return c.id.includes(userId);
           }
           return true;
         });
