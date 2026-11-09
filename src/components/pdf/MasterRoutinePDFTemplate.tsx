@@ -98,12 +98,22 @@ export const MasterRoutinePDFTemplate: React.FC<MasterRoutinePDFTemplateProps> =
                       
                       return (
                         <React.Fragment key={slot}>
-                          <td className="border-[1px] border-slate-500 p-1 text-center align-middle">
+                          <td className="border-[1px] border-slate-500 p-0.5 text-center align-middle overflow-hidden">
                             {r ? (
-                              <div className="leading-tight">
-                                <p className="font-bold text-slate-800 text-[10px]">{r.subject_name}</p>
+                              <div className="leading-tight px-0.5">
+                                <p 
+                                  className="font-bold text-slate-800 break-words font-solaiman" 
+                                  style={{ 
+                                    fontSize: (r.subject_name?.length || 0) > 22 ? '7.5px' : (r.subject_name?.length || 0) > 15 ? '8.5px' : '10px',
+                                    lineHeight: '1.15'
+                                  }}
+                                >
+                                  {r.subject_name}
+                                </p>
                                 {r.teacher_id && (r.teachers as any)?.teacher_name && (
-                                  <p className="text-[8px] font-medium text-slate-500 mt-0.5">মো: {(r.teachers as any).teacher_name}</p>
+                                  <p className="text-[7.5px] font-medium text-slate-500 mt-0.5 truncate max-w-full">
+                                    {(r.teachers as any).teacher_name}
+                                  </p>
                                 )}
                               </div>
                             ) : '-'}

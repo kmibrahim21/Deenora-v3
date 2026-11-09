@@ -33,7 +33,7 @@ const ALL_DAYS_OF_WEEK = [
   { id: 'Friday', bn: 'শুক্রবার', en: 'Friday', index: 5 },
 ];
 
-const RoutineCell = ({ value, onChange, theme, placeholder = '-', fontScale = 1 }: { value: string, onChange: (val: string) => void, theme: any, placeholder?: string, fontScale?: number }) => {
+const RoutineCell = ({ value, onChange, theme, placeholder = '-', fontScale = 1, minHeight = 'min-h-[42px]' }: { value: string, onChange: (val: string) => void, theme: any, placeholder?: string, fontScale?: number, minHeight?: string }) => {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -43,8 +43,17 @@ const RoutineCell = ({ value, onChange, theme, placeholder = '-', fontScale = 1 
     }
   }, [editing]);
 
-  const mainFontSize = Math.round(14 * fontScale);
-  const subFontSize = Math.max(9.5, Math.round(10.5 * fontScale));
+  const lines = (value || '').split('\n').filter(l => l.trim().length > 0);
+  const mainLine = lines[0] || '';
+  
+  // Calculate dynamic scaling for long subject names so they don't break table row height
+  let lenFactor = 1;
+  if (mainLine.length > 25) lenFactor = 0.72;
+  else if (mainLine.length > 18) lenFactor = 0.80;
+  else if (mainLine.length > 13) lenFactor = 0.88;
+
+  const mainFontSize = Math.max(9, Math.round(14 * fontScale * lenFactor));
+  const subFontSize = Math.max(8, Math.round(10.5 * fontScale * lenFactor));
 
   if (editing) {
     return (
@@ -53,30 +62,36 @@ const RoutineCell = ({ value, onChange, theme, placeholder = '-', fontScale = 1 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => setEditing(false)}
-        className="w-full h-full min-h-[52px] bg-white text-center font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal absolute inset-0 z-50 shadow-lg"
+        className={`w-full h-full ${minHeight} bg-white text-center font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal absolute inset-0 z-50 shadow-lg`}
         style={{ color: theme.primary, fontSize: `${mainFontSize}px` }}
       />
     );
   }
 
-  const lines = (value || '').split('\n').filter(l => l.trim().length > 0);
-  
   return (
     <div 
       onClick={() => setEditing(true)}
-      className="w-full min-h-[52px] flex flex-col justify-center items-center cursor-pointer p-1 hover:bg-black/5 transition-colors rounded-sm"
+      className={`w-full ${minHeight} flex flex-col justify-center items-center cursor-pointer p-0.5 hover:bg-black/5 transition-colors rounded-sm overflow-hidden`}
     >
       {lines.length > 0 ? (
         <>
-          <span className="font-black leading-tight tracking-tight text-center" style={{ color: theme.primary, fontSize: `${mainFontSize}px` }}>{lines[0]}</span>
+          <span 
+            className="font-black leading-tight tracking-tight text-center break-words max-w-full font-noto" 
+            style={{ color: theme.primary, fontSize: `${mainFontSize}px` }}
+          >
+            {lines[0]}
+          </span>
           {lines.length > 1 && (
-            <span className="font-extrabold opacity-85 leading-tight mt-0.5 italic text-center" style={{ color: theme.primary, fontSize: `${subFontSize}px` }}>
+            <span 
+              className="font-extrabold opacity-85 leading-tight mt-0.5 italic text-center break-words max-w-full font-noto" 
+              style={{ color: theme.primary, fontSize: `${subFontSize}px` }}
+            >
               {lines.slice(1).join(' / ')}
             </span>
           )}
         </>
       ) : (
-        <span className="text-slate-300 font-bold" style={{ fontSize: `${mainFontSize - 2}px` }}>{placeholder}</span>
+        <span className="text-slate-300 font-bold" style={{ fontSize: `${Math.max(8, mainFontSize - 2)}px` }}>{placeholder}</span>
       )}
     </div>
   );
@@ -691,24 +706,30 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                       <Type size={14}/> {lang === 'bn' ? 'লেখা/ফন্টের সাইজ' : 'Text Size'}
                     </label>
-                    <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+                    <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
                       <button 
                         onClick={() => setFontScale(1.0)}
-                        className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.0 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 h-9 rounded-lg text-[9px] sm:text-[10px] font-black tracking-wider transition-all flex items-center justify-center px-1 ${fontScale === 1.0 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                       >
-                        {lang === 'bn' ? 'স্বাভাবিক' : 'Normal'}
+                        {lang === 'bn' ? 'অটো' : 'Auto'}
                       </button>
                       <button 
                         onClick={() => setFontScale(1.2)}
-                        className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.2 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 h-9 rounded-lg text-[9px] sm:text-[10px] font-black tracking-wider transition-all flex items-center justify-center px-1 ${fontScale === 1.2 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         {lang === 'bn' ? 'বড়' : 'Large'}
                       </button>
                       <button 
                         onClick={() => setFontScale(1.4)}
-                        className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.4 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 h-9 rounded-lg text-[9px] sm:text-[10px] font-black tracking-wider transition-all flex items-center justify-center px-1 ${fontScale === 1.4 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                       >
-                        {lang === 'bn' ? 'অনেক বড়' : 'XL'}
+                        {lang === 'bn' ? 'XL' : 'XL'}
+                      </button>
+                      <button 
+                        onClick={() => setFontScale(0.85)}
+                        className={`flex-1 h-9 rounded-lg text-[9px] sm:text-[10px] font-black tracking-wider transition-all flex items-center justify-center px-1 ${fontScale === 0.85 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'কমপ্যাক্ট' : 'Compact'}
                       </button>
                     </div>
                   </div>
@@ -955,29 +976,57 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                    </tr>
                                 </thead>
                                 <tbody>
-                                   {activeDays.map((day, dIdx) => (
-                                     <tr key={day.id} className="border-b h-[2.85rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
-                                       <td className="border-r p-2 font-black text-center tracking-tight" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}>
-                                         {lang === 'bn' ? day.bn : day.en}
-                                       </td>
-                                       {periods.map((p, idx) => (
-                                         <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
-                                            {!p.isBreak ? (
-                                              <RoutineCell 
-                                                 value={routineMatrix[`${day.id}_${p.id}`] || ''}
-                                                 onChange={(val) => handleCellChange(day.id, p.id, val)}
-                                                 theme={rtTheme}
-                                                 fontScale={fontScale}
-                                              />
-                                            ) : (
-                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-15 gap-1">
-                                                 <Coffee size={20} style={{ color: rtTheme.primary }} />
-                                              </div>
-                                            )}
-                                         </td>
-                                       ))}
-                                     </tr>
-                                   ))}
+                                   {(() => {
+                                      const activeRowCount = layoutType === 'day_left' ? activeDays.length : (classes.length > 0 ? classes.length : 1);
+                                      let dynamicRowHeight = 'h-[2.85rem]';
+                                      let dynamicCellMinHeight = 'min-h-[42px]';
+                                      if (activeRowCount <= 2) {
+                                        dynamicRowHeight = 'h-[5.5rem]';
+                                        dynamicCellMinHeight = 'min-h-[72px]';
+                                      } else if (activeRowCount <= 4) {
+                                        dynamicRowHeight = 'h-[4.2rem]';
+                                        dynamicCellMinHeight = 'min-h-[56px]';
+                                      } else if (activeRowCount <= 6) {
+                                        dynamicRowHeight = 'h-[3.2rem]';
+                                        dynamicCellMinHeight = 'min-h-[46px]';
+                                      } else if (activeRowCount >= 9) {
+                                        dynamicRowHeight = 'h-[2.3rem]';
+                                        dynamicCellMinHeight = 'min-h-[34px]';
+                                      }
+
+                                      let effectiveFontScale = fontScale;
+                                      if (fontScale === 1.0) {
+                                        if (activeRowCount <= 2) effectiveFontScale = 1.38;
+                                        else if (activeRowCount <= 4) effectiveFontScale = 1.22;
+                                        else if (activeRowCount <= 6) effectiveFontScale = 1.10;
+                                        else if (activeRowCount >= 9) effectiveFontScale = 0.88;
+                                      }
+
+                                      return activeDays.map((day, dIdx) => (
+                                        <tr key={day.id} className={`border-b ${dynamicRowHeight}`} style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                          <td className="border-r p-2 font-black text-center tracking-tight" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * effectiveFontScale)}px` }}>
+                                            {lang === 'bn' ? day.bn : day.en}
+                                          </td>
+                                          {periods.map((p, idx) => (
+                                            <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
+                                               {!p.isBreak ? (
+                                                 <RoutineCell 
+                                                    value={routineMatrix[`${day.id}_${p.id}`] || ''}
+                                                    onChange={(val) => handleCellChange(day.id, p.id, val)}
+                                                    theme={rtTheme}
+                                                    fontScale={effectiveFontScale}
+                                                    minHeight={dynamicCellMinHeight}
+                                                 />
+                                               ) : (
+                                                 <div className="w-full h-full flex flex-col items-center justify-center opacity-15 gap-1">
+                                                    <Coffee size={20} style={{ color: rtTheme.primary }} />
+                                                 </div>
+                                               )}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ));
+                                   })()}
                                 </tbody>
                               </table>
                             ) : (
@@ -1019,35 +1068,63 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                    </tr>
                                 </thead>
                                 <tbody>
-                                   {classes.length > 0 ? classes.map((cls, cIdx) => (
-                                     <tr key={cls.id} className="border-b h-[2.85rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: cIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
-                                       <td className="border-r p-2 font-black text-center tracking-tight" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}>
-                                         {cls.class_name}
-                                       </td>
-                                       {periods.map((p, idx) => (
-                                         <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
-                                            {!p.isBreak ? (
-                                              <RoutineCell 
-                                                 value={routineMatrix[`${cls.id}_${p.id}_${selectedDay}`] || routineMatrix[`${cls.id}_${p.id}`] || (selectedClassId === cls.id ? routineMatrix[`${selectedDay}_${p.id}`] : '')}
-                                                 onChange={(val) => handleCellChange(`${cls.id}_${p.id}`, selectedDay, val)}
-                                                 theme={rtTheme}
-                                                 fontScale={fontScale}
-                                              />
-                                            ) : (
-                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-15 gap-1">
-                                                 <Coffee size={20} style={{ color: rtTheme.primary }} />
-                                              </div>
-                                            )}
-                                         </td>
-                                       ))}
-                                     </tr>
-                                   )) : (
-                                      <tr>
-                                        <td colSpan={periods.length + 1} className="py-10 text-center font-bold text-slate-400 bg-slate-50">
-                                          {lang === 'bn' ? 'কোনো শ্রেণী পাওয়া যায়নি' : 'No classes found'}
-                                        </td>
-                                      </tr>
-                                   )}
+                                   {(() => {
+                                      const activeRowCount = classes.length > 0 ? classes.length : 1;
+                                      let dynamicRowHeight = 'h-[2.85rem]';
+                                      let dynamicCellMinHeight = 'min-h-[42px]';
+                                      if (activeRowCount <= 2) {
+                                        dynamicRowHeight = 'h-[5.5rem]';
+                                        dynamicCellMinHeight = 'min-h-[72px]';
+                                      } else if (activeRowCount <= 4) {
+                                        dynamicRowHeight = 'h-[4.2rem]';
+                                        dynamicCellMinHeight = 'min-h-[56px]';
+                                      } else if (activeRowCount <= 6) {
+                                        dynamicRowHeight = 'h-[3.2rem]';
+                                        dynamicCellMinHeight = 'min-h-[46px]';
+                                      } else if (activeRowCount >= 9) {
+                                        dynamicRowHeight = 'h-[2.3rem]';
+                                        dynamicCellMinHeight = 'min-h-[34px]';
+                                      }
+
+                                      let effectiveFontScale = fontScale;
+                                      if (fontScale === 1.0) {
+                                        if (activeRowCount <= 2) effectiveFontScale = 1.38;
+                                        else if (activeRowCount <= 4) effectiveFontScale = 1.22;
+                                        else if (activeRowCount <= 6) effectiveFontScale = 1.10;
+                                        else if (activeRowCount >= 9) effectiveFontScale = 0.88;
+                                      }
+
+                                      return classes.length > 0 ? classes.map((cls, cIdx) => (
+                                        <tr key={cls.id} className={`border-b ${dynamicRowHeight}`} style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: cIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                          <td className="border-r p-2 font-black text-center tracking-tight" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * effectiveFontScale)}px` }}>
+                                            {cls.class_name}
+                                          </td>
+                                          {periods.map((p, idx) => (
+                                            <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
+                                               {!p.isBreak ? (
+                                                 <RoutineCell 
+                                                    value={routineMatrix[`${cls.id}_${p.id}_${selectedDay}`] || routineMatrix[`${cls.id}_${p.id}`] || (selectedClassId === cls.id ? routineMatrix[`${selectedDay}_${p.id}`] : '')}
+                                                    onChange={(val) => handleCellChange(`${cls.id}_${p.id}`, selectedDay, val)}
+                                                    theme={rtTheme}
+                                                    fontScale={effectiveFontScale}
+                                                    minHeight={dynamicCellMinHeight}
+                                                 />
+                                               ) : (
+                                                 <div className="w-full h-full flex flex-col items-center justify-center opacity-15 gap-1">
+                                                    <Coffee size={20} style={{ color: rtTheme.primary }} />
+                                                 </div>
+                                               )}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      )) : (
+                                        <tr>
+                                          <td colSpan={periods.length + 1} className="py-10 text-center font-bold text-slate-400 bg-slate-50">
+                                            {lang === 'bn' ? 'কোনো শ্রেণী পাওয়া যায়নি' : 'No classes found'}
+                                          </td>
+                                        </tr>
+                                      );
+                                   })()}
                                 </tbody>
                               </table>
                             )}

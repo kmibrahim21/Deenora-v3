@@ -60,15 +60,17 @@ export const RoutinePDFTemplate: React.FC<RoutinePDFTemplateProps> = ({ madrasah
                         {lang === 'bn' ? getBanglaNumber(slot) : slot}
                       </td>
                       {days.map((d: any) => d.id !== 'Friday' && (
-                        <td key={d.id} className="border-r-2 border-slate-900 p-1 text-center relative">
+                        <td key={d.id} className="border-r-2 border-slate-900 p-0.5 text-center relative overflow-hidden">
                           {(() => {
                             const r = classRoutines.find((item: any) => item.day === d.id && `${item.start_time.slice(0, 5)} - ${item.end_time.slice(0, 5)}` === slot);
                             if (!r) return null;
+                            const subLen = r.subject_name?.length || 0;
+                            const fontSize = subLen > 24 ? '9px' : subLen > 16 ? '10.5px' : '12px';
                             return (
                               <div className="space-y-0.5">
-                                <p className={`text-xs font-black ${r.is_break ? 'text-amber-600' : 'text-slate-900'}`}>{r.subject_name}</p>
+                                <p className={`font-black break-words leading-tight ${r.is_break ? 'text-amber-600' : 'text-slate-900'}`} style={{ fontSize }}>{r.subject_name}</p>
                                 {!r.is_break && (r.teachers as any)?.teacher_name && (
-                                  <p className="text-[9px] font-bold text-slate-400 capitalize">{(r.teachers as any).teacher_name}</p>
+                                  <p className="text-[8.5px] font-bold text-slate-400 capitalize truncate">{(r.teachers as any).teacher_name}</p>
                                 )}
                               </div>
                             );

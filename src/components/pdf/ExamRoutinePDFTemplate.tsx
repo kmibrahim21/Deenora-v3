@@ -193,39 +193,59 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     let shiftTimeFontPx: number;
     let rowPaddingClass: string;
     
+    // Dynamic font size adjustment for subject text based on character length and column count (numDays)
+    const getSubjectStyle = (subText: string, baseFontSize: number) => {
+      if (!subText || subText === '*****') return { fontSize: `${baseFontSize}px` };
+      const len = subText.length;
+      let factor = 1;
+
+      if (numDays > 8) factor *= 0.82;
+      else if (numDays > 6) factor *= 0.88;
+
+      if (len > 25) factor *= 0.72;
+      else if (len > 18) factor *= 0.80;
+      else if (len > 13) factor *= 0.88;
+
+      const calcSize = Math.max(7.5, Math.round(baseFontSize * factor));
+      return {
+        fontSize: `${calcSize}px`,
+        lineHeight: calcSize < 11 ? '1.12' : '1.2'
+      };
+    };
+
     if (isClassMode) {
-      cellFontSizePx = Math.round(14 * effectiveScale);
-      classNameFontSizePx = Math.round(13.5 * effectiveScale);
-      headerDayFontPx = Math.round(12.5 * effectiveScale);
-      headerDateFontPx = Math.round(11 * effectiveScale);
-      shiftTitleFontPx = Math.round(12 * effectiveScale);
-      shiftTimeFontPx = Math.round(11 * effectiveScale);
-      rowPaddingClass = numDays <= 5 ? 'py-2.5 px-2' : 'py-1.5 px-1.5';
+      cellFontSizePx = Math.round(15 * effectiveScale);
+      classNameFontSizePx = Math.round(14.5 * effectiveScale);
+      headerDayFontPx = Math.round(13 * effectiveScale);
+      headerDateFontPx = Math.round(11.5 * effectiveScale);
+      shiftTitleFontPx = Math.round(12.5 * effectiveScale);
+      shiftTimeFontPx = Math.round(11.5 * effectiveScale);
+      rowPaddingClass = numDays <= 5 ? 'py-3 px-2' : 'py-1.5 px-1';
     } else {
       if (numClasses <= 3) {
-        cellFontSizePx = Math.round(16 * effectiveScale);
-        classNameFontSizePx = Math.round(15.5 * effectiveScale);
+        cellFontSizePx = Math.round(18 * effectiveScale);
+        classNameFontSizePx = Math.round(17.5 * effectiveScale);
+        headerDayFontPx = Math.round(15 * effectiveScale);
+        headerDateFontPx = Math.round(13 * effectiveScale);
+        shiftTitleFontPx = Math.round(14.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(13 * effectiveScale);
+        rowPaddingClass = numDays > 7 ? 'py-2 px-1' : 'py-4 px-2.5';
+      } else if (numClasses <= 5) {
+        cellFontSizePx = Math.round(15.5 * effectiveScale);
+        classNameFontSizePx = Math.round(15 * effectiveScale);
         headerDayFontPx = Math.round(13.5 * effectiveScale);
         headerDateFontPx = Math.round(12 * effectiveScale);
         shiftTitleFontPx = Math.round(13.5 * effectiveScale);
-        shiftTimeFontPx = Math.round(12.5 * effectiveScale);
-        rowPaddingClass = 'py-3 px-2';
-      } else if (numClasses <= 5) {
-        cellFontSizePx = Math.round(14.5 * effectiveScale);
-        classNameFontSizePx = Math.round(14 * effectiveScale);
-        headerDayFontPx = Math.round(13 * effectiveScale);
-        headerDateFontPx = Math.round(11.5 * effectiveScale);
-        shiftTitleFontPx = Math.round(13 * effectiveScale);
         shiftTimeFontPx = Math.round(12 * effectiveScale);
-        rowPaddingClass = 'py-2.5 px-1.5';
+        rowPaddingClass = numDays > 7 ? 'py-1.5 px-1' : 'py-3 px-2';
       } else if (numClasses <= 7) {
-        cellFontSizePx = Math.round(13 * effectiveScale);
-        classNameFontSizePx = Math.round(13 * effectiveScale);
-        headerDayFontPx = Math.round(12 * effectiveScale);
-        headerDateFontPx = Math.round(10.5 * effectiveScale);
-        shiftTitleFontPx = Math.round(12 * effectiveScale);
-        shiftTimeFontPx = Math.round(11 * effectiveScale);
-        rowPaddingClass = 'py-2 px-1.5';
+        cellFontSizePx = Math.round(13.5 * effectiveScale);
+        classNameFontSizePx = Math.round(13.5 * effectiveScale);
+        headerDayFontPx = Math.round(12.5 * effectiveScale);
+        headerDateFontPx = Math.round(11 * effectiveScale);
+        shiftTitleFontPx = Math.round(12.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(11.5 * effectiveScale);
+        rowPaddingClass = 'py-1.5 px-1';
       } else if (numClasses <= 9) {
         cellFontSizePx = Math.round(11.5 * effectiveScale);
         classNameFontSizePx = Math.round(11.5 * effectiveScale);
@@ -233,7 +253,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
         headerDateFontPx = Math.round(9.5 * effectiveScale);
         shiftTitleFontPx = Math.round(11 * effectiveScale);
         shiftTimeFontPx = Math.round(10 * effectiveScale);
-        rowPaddingClass = 'py-1.5 px-1';
+        rowPaddingClass = 'py-1 px-1';
       } else {
         cellFontSizePx = Math.round(10.5 * effectiveScale);
         classNameFontSizePx = Math.round(10.5 * effectiveScale);
@@ -241,7 +261,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
         headerDateFontPx = Math.round(9 * effectiveScale);
         shiftTitleFontPx = Math.round(10 * effectiveScale);
         shiftTimeFontPx = Math.round(9 * effectiveScale);
-        rowPaddingClass = 'py-1 px-1';
+        rowPaddingClass = 'py-0.5 px-0.5';
       }
     }
 
@@ -438,7 +458,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                               {isMrnEmpty ? (
                                 <span className="text-slate-300 font-bold block text-sm select-none">—</span>
                               ) : (
-                                <span className="font-black tracking-tight leading-snug block whitespace-normal break-words font-solaiman" style={{ color: primary, fontSize: `${cellFontSizePx}px` }}>
+                                <span className="font-black tracking-tight block whitespace-normal break-words font-solaiman" style={{ color: primary, ...getSubjectStyle(mrnSub, cellFontSizePx) }}>
                                   {mrnSub}
                                 </span>
                               )}
@@ -448,7 +468,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                                 {isAftEmpty ? (
                                   <span className="text-slate-300 font-bold block text-sm select-none">—</span>
                                 ) : (
-                                  <span className="font-black tracking-tight leading-snug block whitespace-normal break-words font-solaiman text-slate-800" style={{ fontSize: `${cellFontSizePx}px` }}>
+                                  <span className="font-black tracking-tight block whitespace-normal break-words font-solaiman text-slate-800" style={getSubjectStyle(aftSub, cellFontSizePx)}>
                                     {aftSub}
                                   </span>
                                 )}
@@ -500,7 +520,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                           {isMrnEmpty ? (
                             <span className="text-slate-300 font-bold block text-sm select-none">—</span>
                           ) : (
-                            <div className="text-center font-black whitespace-normal break-words leading-snug font-solaiman" style={{ color: primary, fontSize: `${cellFontSizePx}px` }}>
+                            <div className="text-center font-black whitespace-normal break-words font-solaiman" style={{ color: primary, ...getSubjectStyle(mrnSub, cellFontSizePx) }}>
                               {mrnSub}
                             </div>
                           )}
@@ -512,7 +532,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                             {isAftEmpty ? (
                               <span className="text-slate-300 font-bold block text-sm select-none">—</span>
                             ) : (
-                              <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-snug font-solaiman" style={{ fontSize: `${cellFontSizePx}px` }}>
+                              <div className="text-center font-black text-slate-800 whitespace-normal break-words font-solaiman" style={getSubjectStyle(aftSub, cellFontSizePx)}>
                                 {aftSub}
                               </div>
                             )}
