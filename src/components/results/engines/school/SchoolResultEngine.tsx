@@ -90,8 +90,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
   const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('classic');
+  const [marksheetLayoutMode, setMarksheetLayoutMode] = useState<'a4_one' | 'a4_two'>('a4_one');
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
-  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium') => Promise<void>) | null>(null);
+  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium', layoutMode?: 'a4_two' | 'a4_one') => Promise<void>) | null>(null);
   const [downloadActionType, setDownloadActionType] = useState<'marksheet' | 'result-sheet' | 'seat-plan' | 'admit-card' | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successTitle, setSuccessTitle] = useState('');
@@ -2377,93 +2378,99 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
     }
   };
 
-  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, templateId: 'classic' | 'premium' = selectedResultTemplate) => {
+  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, templateId: 'classic' | 'premium' = selectedResultTemplate, layoutMode: 'a4_one' | 'a4_two' = marksheetLayoutMode) => {
     if (!selectedExam || !madrasah) return;
     
     setIsDownloading(true);
-    if (Object.keys(marksData).length === 0) {
-        await fetchMarkEntryData(selectedExam.id, selectedExam.class_id);
-    }
-    
-    const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
-    const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id] || {};
-    
-    // Always fetch fresh ranking to guarantee active merit mode is applied to PDF marksheets
-    const currentRanking = await fetchRanking(selectedExam.id, selectedExam.class_id);
-    
-    const validStudents = currentRanking.filter((item: any) => students.find(st => st.id === item.student_id));
-    
-    const preppedStudents = validStudents.map((item: any) => {
-        const studentObj = students.find(st => st.id === item.student_id);
-        const resultInfo = calculateStudentResult(item.student_id, subjects);
-        
-        const studentMarks = marksData[item.student_id] || {};
-        const studentAtt = (marksData[item.student_id]?.['attendance'] !== undefined && String(marksData[item.student_id]?.['attendance']).trim() !== '')
-          ? String(marksData[item.student_id]?.['attendance']).trim()
-          : ((manualAttMap[item.student_id] !== undefined && String(manualAttMap[item.student_id]).trim() !== '')
-              ? String(manualAttMap[item.student_id]).trim()
-              : (attStats[item.student_id] || 'N/A'));
-        const preparedMarks = subjects.map(s => {
-            const obtained = parseFloat(studentMarks[s.id] || '0');
-            const full = s.full_marks || 100;
-            const pass = s.pass_marks || 33;
-            const pct = (obtained / full) * 100;
-            const hasFailedSub = obtained < pass;
-            
-            const classHighest = Object.keys(marksData || {}).reduce((max, stdId) => {
-                const markVal = parseFloat(marksData[stdId]?.[s.id] || '0');
-                return markVal > max ? markVal : max;
-            }, 0);
-            
-            const subGradeInfo = (p: number, f: boolean) => {
-                if (f) return { gpa: '0.00', grade: 'F' };
-                if (p >= 80) return { gpa: '5.00', grade: 'A+' };
-                if (p >= 70) return { gpa: '4.00', grade: 'A' };
-                if (p >= 60) return { gpa: '3.50', grade: 'A-' };
-                if (p >= 50) return { gpa: '3.00', grade: 'B' };
-                if (p >= 40) return { gpa: '2.00', grade: 'C' };
-                return { gpa: '1.00', grade: 'D' };
-            };
-
-            return {
-                id: s.id,
-                subject_name: s.subject_name,
-                marks_obtained: obtained,
-                grade: subGradeInfo(pct, hasFailedSub).grade,
-                grade_point: subGradeInfo(pct, hasFailedSub).gpa,
-                full_marks: s.full_marks || 100,
-                pass_marks: s.pass_marks || 33,
-                class_highest: classHighest,
-                is_optional: getIsSubjectOptionalForStudent(item.student_id, s.id, selectedExam.id, selectedExam.class_id, s.is_optional),
-                cq_marks: studentMarks[`${s.id}_cq`] || null,
-                mcq_marks: studentMarks[`${s.id}_mcq`] || null,
-                practical_marks: studentMarks[`${s.id}_practical`] || null,
-                cq_full_marks: s.cq_full_marks,
-                mcq_full_marks: s.mcq_full_marks,
-                practical_full_marks: s.practical_full_marks,
-                pair_with_id: s.pair_with_id
-            };
-        });
-        
-        return {
-           info: {
-               ...studentObj,
-               student_name: item.student_name, 
-               roll: item.roll, 
-               classes: { class_name: selectedExam.classes?.class_name }, 
-               photo_url: studentObj?.photo_url, 
-               attendance: studentAtt, 
-               merit_position: item.rank || '-', 
-               gpa: resultInfo.gpa,
-               grade: resultInfo.grade,
-               smart_remarks: examRemarksMap[item.student_id]?.full_remark_bn || examRemarksMap[item.student_id]?.full_remark_en || (studentObj as any)?.smart_remarks,
-               teacher_remarks: examRemarksMap[item.student_id]?.full_remark_bn || examRemarksMap[item.student_id]?.full_remark_en || (studentObj as any)?.teacher_remarks
-           },
-           marks: preparedMarks
-        };
-    });
-
+    setDownloadProgress(2);
     try {
+      if (Object.keys(marksData).length === 0) {
+          await fetchMarkEntryData(selectedExam.id, selectedExam.class_id);
+      }
+      
+      const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
+      const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id] || {};
+      
+      // Always fetch fresh ranking to guarantee active merit mode is applied to PDF marksheets
+      const currentRanking = await fetchRanking(selectedExam.id, selectedExam.class_id);
+      
+      const validStudents = currentRanking.filter((item: any) => students.find(st => st.id === item.student_id));
+      
+      if (validStudents.length === 0) {
+        alert(downloadLang === 'bn' ? 'মার্কশীট তৈরির জন্য কোনো শিক্ষার্থী পাওয়া যায়নি।' : 'No students found for marksheets.');
+        return;
+      }
+
+      const preppedStudents = validStudents.map((item: any) => {
+          const studentObj = students.find(st => st.id === item.student_id);
+          const resultInfo = calculateStudentResult(item.student_id, subjects);
+          
+          const studentMarks = marksData[item.student_id] || {};
+          const studentAtt = (marksData[item.student_id]?.['attendance'] !== undefined && String(marksData[item.student_id]?.['attendance']).trim() !== '')
+            ? String(marksData[item.student_id]?.['attendance']).trim()
+            : ((manualAttMap[item.student_id] !== undefined && String(manualAttMap[item.student_id]).trim() !== '')
+                ? String(manualAttMap[item.student_id]).trim()
+                : (attStats[item.student_id] || 'N/A'));
+          const preparedMarks = subjects.map(s => {
+              const obtained = parseFloat(studentMarks[s.id] || '0');
+              const full = s.full_marks || 100;
+              const pass = s.pass_marks || 33;
+              const pct = (obtained / full) * 100;
+              const hasFailedSub = obtained < pass;
+              
+              const classHighest = Object.keys(marksData || {}).reduce((max, stdId) => {
+                  const markVal = parseFloat(marksData[stdId]?.[s.id] || '0');
+                  return markVal > max ? markVal : max;
+              }, 0);
+              
+              const subGradeInfo = (p: number, f: boolean) => {
+                  if (f) return { gpa: '0.00', grade: 'F' };
+                  if (p >= 80) return { gpa: '5.00', grade: 'A+' };
+                  if (p >= 70) return { gpa: '4.00', grade: 'A' };
+                  if (p >= 60) return { gpa: '3.50', grade: 'A-' };
+                  if (p >= 50) return { gpa: '3.00', grade: 'B' };
+                  if (p >= 40) return { gpa: '2.00', grade: 'C' };
+                  return { gpa: '1.00', grade: 'D' };
+              };
+
+              return {
+                  id: s.id,
+                  subject_name: s.subject_name,
+                  marks_obtained: obtained,
+                  grade: subGradeInfo(pct, hasFailedSub).grade,
+                  grade_point: subGradeInfo(pct, hasFailedSub).gpa,
+                  full_marks: s.full_marks || 100,
+                  pass_marks: s.pass_marks || 33,
+                  class_highest: classHighest,
+                  is_optional: getIsSubjectOptionalForStudent(item.student_id, s.id, selectedExam.id, selectedExam.class_id, s.is_optional),
+                  cq_marks: studentMarks[`${s.id}_cq`] || null,
+                  mcq_marks: studentMarks[`${s.id}_mcq`] || null,
+                  practical_marks: studentMarks[`${s.id}_practical`] || null,
+                  cq_full_marks: s.cq_full_marks,
+                  mcq_full_marks: s.mcq_full_marks,
+                  practical_full_marks: s.practical_full_marks,
+                  pair_with_id: s.pair_with_id
+              };
+          });
+          
+          return {
+             info: {
+                 ...studentObj,
+                 student_name: item.student_name, 
+                 roll: item.roll, 
+                 classes: { class_name: selectedExam.classes?.class_name }, 
+                 photo_url: studentObj?.photo_url, 
+                 attendance: studentAtt, 
+                 merit_position: item.rank || '-', 
+                 gpa: resultInfo.gpa,
+                 grade: resultInfo.grade,
+                 smart_remarks: examRemarksMap[item.student_id]?.full_remark_bn || examRemarksMap[item.student_id]?.full_remark_en || (studentObj as any)?.smart_remarks,
+                 teacher_remarks: examRemarksMap[item.student_id]?.full_remark_bn || examRemarksMap[item.student_id]?.full_remark_en || (studentObj as any)?.teacher_remarks
+             },
+             marks: preparedMarks
+          };
+      });
+
       const classEngine = (madrasah?.config_json as any)?.class_result_engines?.[selectedClassId || selectedExam.class_id] || (madrasah?.config_json as any)?.result_engine || 'school';
       const examForPdf = {
         ...selectedExam,
@@ -2478,13 +2485,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
           madrasah,
           downloadLang,
           (p) => setDownloadProgress(p),
-          templateId
+          templateId,
+          layoutMode
       );
     } catch (error) {
       console.error('Download error:', error);
-      alert('Error downloading PDF');
+      alert(downloadLang === 'bn' ? 'মার্কশীট ডাউনলোডে সমস্যা হয়েছে।' : 'Error downloading PDF');
     } finally {
       setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
@@ -2569,7 +2578,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                     {lang === 'bn' ? 'ফলাফল' : 'Result'}
                 </button>
                 <button onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadMassMarksheets(l, 'classic'));
+                    setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium', lMode?: 'a4_two' | 'a4_one') => handleDownloadMassMarksheets(l, tId || 'classic', lMode));
                     setDownloadActionType('marksheet');
                     setShowDownloadLangModal(true);
                 }} className="px-2.5 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center border border-purple-100 hover:bg-purple-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
@@ -4766,9 +4775,54 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                           </div>
                       )}
 
+                      {downloadActionType === 'marksheet' && (
+                          <div className="mb-5 space-y-2 text-left">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
+                                  {lang === 'bn' ? '১. পেইজ ফরমেট নির্বাচন (Page Format)' : '1. Select Page Format'}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                  <button
+                                      type="button"
+                                      onClick={() => setMarksheetLayoutMode('a4_one')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          marksheetLayoutMode === 'a4_one'
+                                              ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20 shadow-sm'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0"></span>
+                                          {lang === 'bn' ? 'A4 ১টি (১ পেজে ১টি)' : 'A4 - 1 per page'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1 font-bold">
+                                          {lang === 'bn' ? '১ পেজে ১জন শিক্ষার্থী' : '1 marksheet on 1 page'}
+                                      </div>
+                                  </button>
+
+                                  <button
+                                      type="button"
+                                      onClick={() => setMarksheetLayoutMode('a4_two')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          marksheetLayoutMode === 'a4_two'
+                                              ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20 shadow-sm'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0"></span>
+                                          {lang === 'bn' ? 'A4 ২টি (১ পেজে ২টি)' : 'A4 - 2 per page'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1 font-bold">
+                                          {lang === 'bn' ? '১ পেজে ২জন শিক্ষার্থী' : '2 marksheets on 1 page'}
+                                      </div>
+                                  </button>
+                              </div>
+                          </div>
+                      )}
+
                       <div className="space-y-2.5">
                           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left font-noto">
-                              {downloadActionType === 'result-sheet'
+                              {(downloadActionType === 'result-sheet' || downloadActionType === 'marksheet')
                                   ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language')
                                   : (lang === 'bn' ? 'ভাষা নির্বাচন করুন (Select Language)' : 'Select Language')
                               }
@@ -4777,7 +4831,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                               onClick={async () => {
                                   if (downloadAction) {
                                       setShowDownloadLangModal(false);
-                                      await downloadAction('bn', selectedResultTemplate);
+                                      await downloadAction('bn', selectedResultTemplate, marksheetLayoutMode);
                                   }
                               }}
                               className="w-full group relative overflow-hidden py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
@@ -4790,7 +4844,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                               onClick={async () => {
                                   if (downloadAction) {
                                       setShowDownloadLangModal(false);
-                                      await downloadAction('en', selectedResultTemplate);
+                                      await downloadAction('en', selectedResultTemplate, marksheetLayoutMode);
                                   }
                               }}
                               className="w-full group relative overflow-hidden py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"

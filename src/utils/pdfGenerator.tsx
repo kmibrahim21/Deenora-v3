@@ -492,7 +492,8 @@ export const generateMassMarksheetPDF = async (
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
-    templateId: 'classic' | 'premium' = 'classic'
+    templateId: 'classic' | 'premium' = 'classic',
+    layoutMode: 'a4_one' | 'a4_two' = 'a4_one'
 ) => {
     onProgress?.(2);
     const container = document.createElement('div');
@@ -501,83 +502,116 @@ export const generateMassMarksheetPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    await new Promise<void>((resolve) => {
-        root.render(
-            <div id="pdf-wrapper">
-                {preppedStudents.map((std, idx) => (
-                    <div key={idx} className="pdf-page-container">
-                        {templateId === 'premium' ? (
-                            <PremiumResultSheetTemplate 
-                                exam={exam} 
-                                subjects={std.marks.map((m: any) => ({
-                                    id: m.subject_id || m.id,
-                                    subject_name: m.subject_name || m.name,
-                                    full_marks: m.full_marks || 100,
-                                    pass_marks: m.pass_marks || 33
-                                }))} 
-                                students={[]} 
-                                madrasah={madrasah} 
-                                lang={lang} 
-                                singleStudent={std.info} 
-                                singleStudentMarks={std.marks} 
-                            />
-                        ) : (
-                            <ResultSheetTemplate 
-                                student={std.info} 
-                                exam={exam} 
-                                marks={std.marks} 
-                                madrasah={madrasah} 
-                                lang={lang} 
-                            />
-                        )}
-                    </div>
-                ))}
-            </div>
-        );
-        setTimeout(resolve, 1500);
-    });
-    onProgress?.(15);
+    try {
+        await new Promise<void>((resolve) => {
+            root.render(
+                <div id="pdf-wrapper">
+                    {preppedStudents.map((std, idx) => (
+                        <div key={idx} className="pdf-page-container">
+                            {templateId === 'premium' ? (
+                                <PremiumResultSheetTemplate 
+                                    exam={exam} 
+                                    subjects={std.marks.map((m: any) => ({
+                                        id: m.subject_id || m.id,
+                                        subject_name: m.subject_name || m.name,
+                                        full_marks: m.full_marks || 100,
+                                        pass_marks: m.pass_marks || 33
+                                    }))} 
+                                    students={[]} 
+                                    madrasah={madrasah} 
+                                    lang={lang} 
+                                    singleStudent={std.info} 
+                                    singleStudentMarks={std.marks} 
+                                />
+                            ) : (
+                                <ResultSheetTemplate 
+                                    student={std.info} 
+                                    exam={exam} 
+                                    marks={std.marks} 
+                                    madrasah={madrasah} 
+                                    lang={lang} 
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+            setTimeout(resolve, 1200);
+        });
+        onProgress?.(15);
 
-    // We want 2 A4 portraits on 1 A4 landscape page.
-    const doc = new jsPDF('l', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth(); // 297
-    const pageHeight = doc.internal.pageSize.getHeight(); // 210
-    
-    const wrapper = container.querySelector('#pdf-wrapper');
-    if (wrapper && wrapper.children.length > 0) {
-        const pages = Array.from(wrapper.children);
-        
-        for (let i = 0; i < pages.length; i++) {
-            const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+        // Option 1: A4 Portrait (1 student per full A4 page)
+        if (layoutMode === 'a4_one') {
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
             
-            const imgData = await toPng(pageElement, {
-                pixelRatio: 3,
-                backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
-                fontEmbedCSS: solaimanLipiFontEmbedCSS,
-            });
-            
-            const isLeft = (i % 2 === 0);
-            
-            // Add a new page for every two students (except the first one)
-            if (i > 0 && isLeft) {
-                doc.addPage();
+            const wrapper = container.querySelector('#pdf-wrapper');
+            if (wrapper && wrapper.children.length > 0) {
+                const pages = Array.from(wrapper.children);
+                for (let i = 0; i < pages.length; i++) {
+                    const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+                    const imgData = await toPng(pageElement, {
+                        pixelRatio: 2.2,
+                        backgroundColor: '#ffffff',
+                        width: 794,
+                        height: 1123,
+                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
+                    });
+                    if (i > 0) doc.addPage('a4', 'p');
+                    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                    onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
+                }
             }
+            onProgress?.(98);
+            await saveJsPdf(doc, `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+            onProgress?.(100);
+            return;
+        }
+
+        // Option 2: A4 Landscape (2 A4 portraits on 1 A4 landscape page)
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth(); // 297
+        const pageHeight = doc.internal.pageSize.getHeight(); // 210
+        
+        const wrapper = container.querySelector('#pdf-wrapper');
+        if (wrapper && wrapper.children.length > 0) {
+            const pages = Array.from(wrapper.children);
             
-            // A4 landscape width is 297. Half of that is 148.5
-            const hw = pageWidth / 2;
-            doc.addImage(imgData, 'PNG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'SLOW');
-            onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
+            for (let i = 0; i < pages.length; i++) {
+                const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+                
+                const imgData = await toPng(pageElement, {
+                    pixelRatio: 2.2,
+                    backgroundColor: '#ffffff',
+                    width: 794,
+                    height: 1123,
+                    fontEmbedCSS: solaimanLipiFontEmbedCSS,
+                });
+                
+                const isLeft = (i % 2 === 0);
+                if (i > 0 && isLeft) {
+                    doc.addPage();
+                }
+                
+                const hw = pageWidth / 2;
+                doc.addImage(imgData, 'PNG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
+                onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
+            }
+        }
+        
+        onProgress?.(98);
+        await saveJsPdf(doc, `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+        onProgress?.(100);
+    } catch (err) {
+        console.error("Error in generateMassMarksheetPDF:", err);
+        throw err;
+    } finally {
+        try { root.unmount(); } catch (e) {}
+        if (document.body.contains(container)) {
+            document.body.removeChild(container);
         }
     }
-    
-    onProgress?.(98);
-    root.unmount();
-    document.body.removeChild(container);
-    
-    await saveJsPdf(doc, `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
-    onProgress?.(100);
 };
 
 export const resolveResultEngine = (
@@ -1628,7 +1662,8 @@ export const generateFinalMassMarksheetsPDF = async (
     subjects: string[],
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    layoutMode: 'a4_one' | 'a4_two' = 'a4_one'
 ) => {
     onProgress?.(5);
     const container = document.createElement('div');
@@ -1639,115 +1674,133 @@ export const generateFinalMassMarksheetsPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const exam = { exam_name: title };
+    try {
+        const exam = { exam_name: title };
 
-    const preppedStudents = students.map(student => {
-        const marks = subjects.map(sub => {
-            const obtained = student.marks[sub];
-            const val = parseFloat(obtained) || 0;
-            let gp = '0.00';
-            let grade = 'F';
-            if (val >= 80) { gp = '5.00'; grade = 'A+'; }
-            else if (val >= 70) { gp = '4.00'; grade = 'A'; }
-            else if (val >= 60) { gp = '3.50'; grade = 'A-'; }
-            else if (val >= 50) { gp = '3.00'; grade = 'B'; }
-            else if (val >= 40) { gp = '2.00'; grade = 'C'; }
-            else if (val >= 33) { gp = '1.00'; grade = 'D'; }
+        const preppedStudents = students.map(student => {
+            const marks = subjects.map(sub => {
+                const obtained = student.marks[sub];
+                const val = parseFloat(obtained) || 0;
+                let gp = '0.00';
+                let grade = 'F';
+                if (val >= 80) { gp = '5.00'; grade = 'A+'; }
+                else if (val >= 70) { gp = '4.00'; grade = 'A'; }
+                else if (val >= 60) { gp = '3.50'; grade = 'A-'; }
+                else if (val >= 50) { gp = '3.00'; grade = 'B'; }
+                else if (val >= 40) { gp = '2.00'; grade = 'C'; }
+                else if (val >= 33) { gp = '1.00'; grade = 'D'; }
 
-            return {
-                subject_name: sub,
-                full_marks: 100,
-                pass_marks: 33,
-                marks_obtained: obtained,
-                grade: grade,
-                grade_point: gp
+                return {
+                    subject_name: sub,
+                    full_marks: 100,
+                    pass_marks: 33,
+                    marks_obtained: obtained,
+                    grade: grade,
+                    grade_point: gp
+                };
+            });
+
+            const studentWithFinalData = {
+                ...student,
+                gpa: student.gpa,
+                grade: student.grade,
+                merit_position: student.rank
             };
+
+            return { studentWithFinalData, marks };
         });
 
-        const studentWithFinalData = {
-            ...student,
-            gpa: student.gpa,
-            grade: student.grade,
-            merit_position: student.rank
-        };
+        await new Promise<void>((resolve) => {
+            root.render(
+                <div id="pdf-wrapper">
+                    {preppedStudents.map((item, idx) => (
+                        <div key={idx} className="pdf-page-container">
+                            <ResultSheetTemplate 
+                                student={item.studentWithFinalData} 
+                                exam={exam} 
+                                marks={item.marks} 
+                                madrasah={madrasah} 
+                                lang={lang} 
+                            />
+                        </div>
+                    ))}
+                </div>
+            );
+            setTimeout(resolve, 1200);
+        });
+        onProgress?.(25);
 
-        return { studentWithFinalData, marks };
-    });
+        const wrapper = container.querySelector('#pdf-wrapper');
+        const massFileName = `All_Final_Marksheets_${title.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
 
-    await new Promise<void>((resolve) => {
-        root.render(
-            <div id="pdf-wrapper">
-                {preppedStudents.map((item, idx) => (
-                    <div key={idx} className="pdf-page-container">
-                        <ResultSheetTemplate 
-                            student={item.studentWithFinalData} 
-                            exam={exam} 
-                            marks={item.marks} 
-                            madrasah={madrasah} 
-                            lang={lang} 
-                        />
-                    </div>
-                ))}
-            </div>
-        );
-        setTimeout(resolve, 1500);
-    });
-    onProgress?.(25);
+        // Option: 2 marksheets side-by-side on 1 A4 landscape page
+        if (layoutMode === 'a4_two') {
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth(); // 297
+            const pageHeight = doc.internal.pageSize.getHeight(); // 210
 
-    const wrapper = container.querySelector('#pdf-wrapper');
-    const massFileName = `All_Final_Marksheets_${title.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+            if (wrapper && wrapper.children.length > 0) {
+                const pages = Array.from(wrapper.children);
+                for (let i = 0; i < pages.length; i++) {
+                    const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+                    const imgData = await toJpeg(pageElement, {
+                        pixelRatio: 2.2,
+                        quality: 0.95,
+                        backgroundColor: '#ffffff',
+                        width: 794,
+                        height: 1123,
+                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
+                    });
 
-    if (wrapper) {
-        try {
-            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, massFileName, 'portrait');
-            const serverSuccess = await downloadServerPdf({
-                html: fullHtml,
-                format: 'a4',
-                orientation: 'portrait',
-                entity_type: 'final_mass_marksheets',
-                entity_id: `${title}_all_marksheets`.replace(/[^a-zA-Z0-9_-]/g, '_'),
-                filename: massFileName
-            });
-            if (serverSuccess) {
-                onProgress?.(100);
-                root.unmount();
-                document.body.removeChild(container);
-                return;
+                    const isLeft = (i % 2 === 0);
+                    if (i > 0 && isLeft) doc.addPage('a4', 'l');
+                    const hw = pageWidth / 2;
+                    doc.addImage(imgData, 'JPEG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
+                    onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
+                }
             }
-        } catch (serverErr) {
-            console.warn('Server PDF generation failed for mass final marksheets, falling back to client:', serverErr);
+            onProgress?.(98);
+            await saveJsPdf(doc, massFileName);
+            onProgress?.(100);
+            return;
+        }
+
+        // Option: 1 marksheet per A4 portrait page (a4_one)
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        if (wrapper && wrapper.children.length > 0) {
+            const pages = Array.from(wrapper.children);
+            for (let i = 0; i < pages.length; i++) {
+                const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+                const imgData = await toJpeg(pageElement, {
+                    pixelRatio: 2.2,
+                    quality: 0.95,
+                    backgroundColor: '#ffffff',
+                    width: 794,
+                    height: 1123,
+                    fontEmbedCSS: solaimanLipiFontEmbedCSS,
+                });
+
+                if (i > 0) doc.addPage('a4', 'p');
+                doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
+            }
+        }
+
+        onProgress?.(98);
+        await saveJsPdf(doc, massFileName);
+        onProgress?.(100);
+    } catch (err) {
+        console.error("Error in generateFinalMassMarksheetsPDF:", err);
+        throw err;
+    } finally {
+        try { root.unmount(); } catch (e) {}
+        if (document.body.contains(container)) {
+            document.body.removeChild(container);
         }
     }
-
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    if (wrapper && wrapper.children.length > 0) {
-        const pages = Array.from(wrapper.children);
-        for (let i = 0; i < pages.length; i++) {
-            const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
-            const imgData = await toJpeg(pageElement, {
-                pixelRatio: 2,
-                quality: 0.95,
-                backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
-                fontEmbedCSS: solaimanLipiFontEmbedCSS,
-            });
-
-            if (i > 0) doc.addPage('a4', 'p');
-            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-            onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
-        }
-    }
-
-    onProgress?.(98);
-    root.unmount();
-    document.body.removeChild(container);
-
-    await saveJsPdf(doc, massFileName);
-    onProgress?.(100);
 };
 
 // --- ACCOUNTING REPORT GENERATOR ---

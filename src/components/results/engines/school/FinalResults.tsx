@@ -39,6 +39,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadModalType, setDownloadModalType] = useState<'resultlist' | 'marksheet' | 'single_marksheet'>('resultlist');
+  const [marksheetLayoutMode, setMarksheetLayoutMode] = useState<'a4_one' | 'a4_two'>('a4_one');
   const [pdfFormatSelection, setPdfFormatSelection] = useState<'compact' | 'breakdown'>('compact');
   const [selectedStudentForDownload, setSelectedStudentForDownload] = useState<any>(null);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
@@ -692,7 +693,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     }
   };
 
-  const handleMassDownloadMarksheets = async (downloadLang: 'en' | 'bn' = lang) => {
+  const handleMassDownloadMarksheets = async (downloadLang: 'en' | 'bn' = lang, layoutMode: 'a4_two' | 'a4_one' = marksheetLayoutMode) => {
     if (!viewResult || !madrasah || calculatedData.length === 0) return;
 
     setIsDownloading(true);
@@ -704,7 +705,8 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         subjects,
         madrasah,
         downloadLang,
-        (p) => setDownloadProgress(p)
+        (p) => setDownloadProgress(p),
+        layoutMode
       );
     } catch (error) {
       console.error('Mass Download error:', error);
@@ -988,9 +990,55 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
               </div>
             )}
 
+            {/* Page Layout selection if downloading mass marksheets */}
+            {downloadModalType === 'marksheet' && (
+              <div className="mb-5 space-y-2 text-left">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">
+                  {lang === 'bn' ? '১. পেইজ ফরমেট নির্বাচন (Page Format)' : '1. Select Page Format'}
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setMarksheetLayoutMode('a4_one')}
+                    className={`p-3 rounded-2xl border text-left transition-all relative ${
+                      marksheetLayoutMode === 'a4_one'
+                        ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0"></span>
+                      {lang === 'bn' ? 'A4 ১টি (১ পেজে ১টি)' : 'A4 - 1 per page'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1 font-bold">
+                      {lang === 'bn' ? '১ পেজে ১জন শিক্ষার্থী' : '1 marksheet on 1 page'}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMarksheetLayoutMode('a4_two')}
+                    className={`p-3 rounded-2xl border text-left transition-all relative ${
+                      marksheetLayoutMode === 'a4_two'
+                        ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0"></span>
+                      {lang === 'bn' ? 'A4 ২টি (১ পেজে ২টি)' : 'A4 - 2 per page'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1 font-bold">
+                      {lang === 'bn' ? '১ পেজে ২জন শিক্ষার্থী' : '2 marksheets on 1 page'}
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">
-                {downloadModalType === 'resultlist' ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন:' : '2. Select Language:') : (lang === 'bn' ? 'ভাষা নির্বাচন করুন:' : 'Select Language:')}
+                {(downloadModalType === 'resultlist' || downloadModalType === 'marksheet') ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন:' : '2. Select Language:') : (lang === 'bn' ? 'ভাষা নির্বাচন করুন:' : 'Select Language:')}
               </label>
               
               <button 
@@ -1000,7 +1048,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                     if (downloadModalType === 'resultlist') {
                       await handleDownloadPDF('en', pdfFormatSelection === 'breakdown');
                     } else if (downloadModalType === 'marksheet') {
-                      await handleMassDownloadMarksheets('en');
+                      await handleMassDownloadMarksheets('en', marksheetLayoutMode);
                     } else if (downloadModalType === 'single_marksheet' && selectedStudentForDownload) {
                       await handleDownloadIndividualPDF(selectedStudentForDownload, 'en');
                     }
@@ -1018,7 +1066,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                     if (downloadModalType === 'resultlist') {
                       await handleDownloadPDF('bn', pdfFormatSelection === 'breakdown');
                     } else if (downloadModalType === 'marksheet') {
-                      await handleMassDownloadMarksheets('bn');
+                      await handleMassDownloadMarksheets('bn', marksheetLayoutMode);
                     } else if (downloadModalType === 'single_marksheet' && selectedStudentForDownload) {
                       await handleDownloadIndividualPDF(selectedStudentForDownload, 'bn');
                     }

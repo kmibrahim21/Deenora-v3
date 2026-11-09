@@ -66,9 +66,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
-  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium') => Promise<void> | void) | null>(null);
+  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium', layoutMode?: 'a4_two' | 'a4_one') => Promise<void> | void) | null>(null);
   const [downloadActionType, setDownloadActionType] = useState<'marksheet' | 'result-sheet' | 'single-marksheet' | 'admit-card' | null>(null);
   const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('premium');
+  const [marksheetLayoutMode, setMarksheetLayoutMode] = useState<'a4_one' | 'a4_two'>('a4_one');
   const [selectedStudentForMarksheet, setSelectedStudentForMarksheet] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   
@@ -1645,8 +1646,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
     }
   };
 
-  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, targetExam?: BefaqExam | null) => {
-    const examToUse = targetExam || selectedExam;
+  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, targetExam?: BefaqExam | null | string, layoutMode: 'a4_two' | 'a4_one' = marksheetLayoutMode) => {
+    const examToUse = (targetExam && typeof targetExam === 'object') ? targetExam : selectedExam;
     if (!examToUse || !madrasah) return;
 
     setIsDownloading(true);
@@ -1815,7 +1816,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
         examPayload,
         madrasah,
         downloadLang,
-        (p) => setDownloadProgress(p)
+        (p) => setDownloadProgress(p),
+        'classic',
+        layoutMode
       );
     } catch (err) {
       console.error('Error generating Befaq mass marksheets:', err);
@@ -1982,7 +1985,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                 </button>
                 <button 
                   onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadMassMarksheets(l));
+                    setDownloadAction(() => (l: 'en' | 'bn', _tId?: any, lMode?: 'a4_two' | 'a4_one') => handleDownloadMassMarksheets(l, selectedExam, lMode));
                     setDownloadActionType('marksheet');
                     setShowDownloadLangModal(true);
                   }} 
@@ -4021,9 +4024,54 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                           </div>
                       )}
 
+                      {downloadActionType === 'marksheet' && (
+                          <div className="mb-5 space-y-2 text-left">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
+                                  {lang === 'bn' ? '১. পেইজ ফরমেট নির্বাচন (Page Format)' : '1. Select Page Format'}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                  <button
+                                      type="button"
+                                      onClick={() => setMarksheetLayoutMode('a4_one')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          marksheetLayoutMode === 'a4_one'
+                                              ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/20 shadow-sm'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0"></span>
+                                          {lang === 'bn' ? 'A4 ১টি (১ পেজে ১টি)' : 'A4 - 1 per page'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1 font-bold">
+                                          {lang === 'bn' ? '১ পেজে ১জন শিক্ষার্থী' : '1 marksheet on 1 page'}
+                                      </div>
+                                  </button>
+
+                                  <button
+                                      type="button"
+                                      onClick={() => setMarksheetLayoutMode('a4_two')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          marksheetLayoutMode === 'a4_two'
+                                              ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/20 shadow-sm'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0"></span>
+                                          {lang === 'bn' ? 'A4 ২টি (১ পেজে ২টি)' : 'A4 - 2 per page'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1 font-bold">
+                                          {lang === 'bn' ? '১ পেজে ২জন শিক্ষার্থী' : '2 marksheets on 1 page'}
+                                      </div>
+                                  </button>
+                              </div>
+                          </div>
+                      )}
+
                       <div className="space-y-2.5">
                           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left font-noto">
-                              {downloadActionType === 'result-sheet'
+                              {(downloadActionType === 'result-sheet' || downloadActionType === 'marksheet')
                                   ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language')
                                   : (lang === 'bn' ? 'ভাষা নির্বাচন করুন (Select Language)' : 'Select Language')
                               }
@@ -4032,7 +4080,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                               onClick={async () => {
                                   if (downloadAction) {
                                       setShowDownloadLangModal(false);
-                                      await downloadAction('bn', selectedResultTemplate);
+                                      await downloadAction('bn', selectedResultTemplate, marksheetLayoutMode);
                                   }
                               }}
                               className="w-full group relative overflow-hidden py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
@@ -4045,7 +4093,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                               onClick={async () => {
                                   if (downloadAction) {
                                       setShowDownloadLangModal(false);
-                                      await downloadAction('en', selectedResultTemplate);
+                                      await downloadAction('en', selectedResultTemplate, marksheetLayoutMode);
                                   }
                               }}
                               className="w-full group relative overflow-hidden py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
