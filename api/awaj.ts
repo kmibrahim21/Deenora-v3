@@ -11,6 +11,25 @@ import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
 const supabase = getSupabaseAdmin();
 
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs: number = 7500): Promise<Response> => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+      throw new Error(`Awaj Gateway Timeout: Server did not respond within ${timeoutMs / 1000}s`);
+    }
+    throw error;
+  }
+};
+
 async function fetchWavDuration(url: string): Promise<number> {
   return new Promise((resolve) => {
     try {
@@ -231,7 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const audioFetchRes = await fetch(targetUrl);
+      const audioFetchRes = await fetchWithTimeout(targetUrl);
       if (!audioFetchRes.ok) {
         return res.status(audioFetchRes.status).json({ error: 'Failed to fetch audio stream' });
       }
@@ -292,7 +311,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       // 3. From downloadable file_url
       else if (body.file_url) {
-        const fileRes = await fetch(body.file_url);
+        const fileRes = await fetchWithTimeout(body.file_url);
         if (!fileRes.ok) throw new Error(`Failed to download file from url: ${fileRes.statusText}`);
         const arrayBuf = await fileRes.arrayBuffer();
         fileBuffer = Buffer.from(new Uint8Array(arrayBuf));
@@ -413,7 +432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log(`Uploading voice to Awaj Digital: name="${voiceName}", filename="${filename}", size=${fileBuffer.length} bytes, formLength=${formBuffer.length}`);
 
-      const response = await fetch(`${AWAJ_BASE_URL}/voices/upload`, {
+      const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -439,7 +458,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fallback: If previewUrl was missing from upload response, query Awaj voice list to find it immediately
       if (!rawFileUrl && (providerVoiceId || voiceName)) {
         try {
-          const awajListRes = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
+          const awajListRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
           if (awajListRes.ok) {
             const listData = await awajListRes.json();
             const voiceList = Array.isArray(listData) ? listData : (listData.voices || listData.data || []);
@@ -522,7 +541,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (missingFileUrl) {
         try {
-          const awajListRes = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
+          const awajListRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
           if (awajListRes.ok) {
             const listData = await awajListRes.json();
             const voiceList = Array.isArray(listData) ? listData : (listData.voices || listData.data || []);
@@ -558,7 +577,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // VOICES LIST & DELETE
     if (action === 'voices') {
       if (req.method === 'GET') {
-        const response = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
+        const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
@@ -572,7 +591,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(400).json({ error: 'Voice ID is required for deletion' });
         }
         try {
-          const response = await fetch(`${AWAJ_BASE_URL}/voices/${voiceIdToDelete}`, { 
+          const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices/${voiceIdToDelete}`, { 
             method: 'DELETE', 
             headers: headers as any 
           });
@@ -672,7 +691,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           const token = (process.env.AWAJ_API_TOKEN || '').trim();
           if (token) {
-            const awajRes = await fetch(`${AWAJ_BASE_URL}/voices`, {
+            const awajRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices`, {
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json'
@@ -783,7 +802,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           console.log(`Attempting Awaj Standard Broadcast: request_id="${requestId}", sender="${senderNum}", voice="${effectiveVoiceKey}", phones=${phoneNumbers.length}`);
 
-          const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+          const stdResponse = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts`, {
             method: 'POST',
             headers: headers as any,
             body: JSON.stringify(stdPayload)
@@ -810,7 +829,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 voices: [audioUrl],
                 metadata: { voice_key: effectiveVoiceKey, timestamp: Date.now() }
               };
-              const directRes = await fetch(`${AWAJ_BASE_URL}/broadcasts/direct`, {
+              const directRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/direct`, {
                 method: 'POST',
                 headers: headers as any,
                 body: JSON.stringify(directPayload)
@@ -822,12 +841,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
             } catch (dErr: any) {
               console.warn('Direct broadcast fallback notice:', dErr.message);
+              if (dErr.message?.includes('Awaj Gateway Timeout')) throw dErr;
             }
 
             // B) Auto-upload and sync voice audio directly to Awaj Digital
             try {
               console.log(`Auto-uploading audio to Awaj server with name "${effectiveVoiceKey}"...`);
-              const downloadRes = await fetch(audioUrl);
+              const downloadRes = await fetchWithTimeout(audioUrl);
               if (downloadRes.ok) {
                 const audioBuffer = Buffer.from(await downloadRes.arrayBuffer());
                 const formData = new FormData();
@@ -839,7 +859,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
                 const formHeaders = formData.getHeaders();
                 const formBuffer = formData.getBuffer();
-                const upRes = await fetch(`${AWAJ_BASE_URL}/voices/upload`, {
+                const upRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/voices/upload`, {
                   method: 'POST',
                   headers: {
                     'Authorization': `Bearer ${(process.env.AWAJ_API_TOKEN || '').trim()}`,
@@ -853,7 +873,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 console.log(`Auto-upload to Awaj response (${upRes.status}):`, upData);
                 
                 // Retry standard broadcast now that voice is uploaded
-                const retryStdRes = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+                const retryStdRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts`, {
                   method: 'POST',
                   headers: headers as any,
                   body: JSON.stringify({
@@ -870,6 +890,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
             } catch (autoUpErr: any) {
               console.warn('Auto-upload fallback notice:', autoUpErr.message);
+              if (autoUpErr.message?.includes('Awaj Gateway Timeout')) throw autoUpErr;
             }
           }
 
@@ -878,7 +899,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (cand && cand !== effectiveVoiceKey && !/^\d+$/.test(cand) && !cand.startsWith('http')) {
               try {
                 console.log(`Trying alternative candidate voice key "${cand}"...`);
-                const altRes = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+                const altRes = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts`, {
                   method: 'POST',
                   headers: headers as any,
                   body: JSON.stringify({
@@ -892,7 +913,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (altRes.ok) {
                   return res.status(200).json(altData);
                 }
-              } catch {}
+              } catch (altErr: any) {
+                if (altErr.message?.includes('Awaj Gateway Timeout')) throw altErr;
+              }
             }
           }
 
@@ -918,7 +941,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           console.log(`Sending Awaj Direct Broadcast API: request_id="${requestId}", sender="${senderNum}", phones=${phoneNumbers.length}, voices=${JSON.stringify(directPayload.voices)}`);
 
-          const directResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts/direct`, {
+          const directResponse = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/direct`, {
             method: 'POST',
             headers: headers as any,
             body: JSON.stringify(directPayload)
@@ -941,7 +964,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               voice: effectiveVoiceKey
             };
 
-            const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+            const stdResponse = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts`, {
               method: 'POST',
               headers: headers as any,
               body: JSON.stringify(stdPayload)
@@ -962,7 +985,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           voice: effectiveVoiceKey
         };
 
-        const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { 
+        const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts`, { 
           method: 'POST', 
           headers: headers as any, 
           body: JSON.stringify(stdPayload) 
@@ -973,8 +996,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (req.method === 'GET') {
         if (subAction) {
-          let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${subAction}/result`, { headers: headers });
-          if (response.status === 404) response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${subAction}`, { headers: headers });
+          let response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/${subAction}/result`, { headers: headers });
+          if (response.status === 404) response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/${subAction}`, { headers: headers });
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
@@ -982,7 +1005,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const data = await response.json();
           return res.status(200).json(data);
         } else {
-          const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { headers: headers });
+          const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts`, { headers: headers });
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
@@ -997,8 +1020,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'broadcast-result') {
       const id = req.query.id || subAction;
       if (!id) return res.status(400).json({ error: 'ID is required' });
-      let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${id}/result`, { headers: headers });
-      if (response.status === 404) response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${id}`, { headers: headers });
+      let response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/${id}/result`, { headers: headers });
+      if (response.status === 404) response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/${id}`, { headers: headers });
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
@@ -1010,7 +1033,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // BALANCE
     if (action === 'balance') {
       try {
-        const response = await fetch(`${AWAJ_BASE_URL}/balance`, { headers: headers as any });
+        const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/balance`, { headers: headers as any });
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
           console.warn(`Awaj Balance API returned status ${response.status}: ${errorText}`);
@@ -1026,7 +1049,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // SENDERS
     if (action === 'senders') {
-      const response = await fetch(`${AWAJ_BASE_URL}/senders`, { headers: headers });
+      const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/senders`, { headers: headers });
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
@@ -1051,7 +1074,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // SURVEYS
     if (action === 'surveys') {
       if (req.method === 'POST') {
-        const response = await fetch(`${AWAJ_BASE_URL}/surveys`, { 
+        const response = await fetchWithTimeout(`${AWAJ_BASE_URL}/surveys`, { 
           method: 'POST', 
           headers: headers, 
           body: JSON.stringify(req.body) 
@@ -1244,9 +1267,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         for (const campId of allCampaignIds) {
           try {
-            let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${campId}/result`, { headers: headers as any });
+            let response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/${campId}/result`, { headers: headers as any });
             if (response.status === 404) {
-              response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${campId}`, { headers: headers as any });
+              response = await fetchWithTimeout(`${AWAJ_BASE_URL}/broadcasts/${campId}`, { headers: headers as any });
             }
 
             if (!response.ok) {
@@ -1319,7 +1342,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.log(`Campaign ${campId}: Total sent: ${campaignTotalSent}, Logs: ${campaignLogs.length}, Refund pulses: ${campaignRefundPulses}`);
             totalOverallRefundPulses += campaignRefundPulses;
 
-          } catch (campErr) {
+          } catch (campErr: any) {
+            if (campErr.message?.includes('Awaj Gateway Timeout')) {
+              throw campErr;
+            }
             console.error(`Error calculating refund for campaign ${campId}:`, campErr);
           }
         }
@@ -1523,6 +1549,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: `Successfully refunded ${refundAmount} ৳` 
         });
       } catch (error: any) {
+        if (error.message?.includes('Awaj Gateway Timeout')) {
+          return res.status(504).json({
+            success: false,
+            error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিচ্ছে না (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।'
+          });
+        }
         console.error('Voice Refund Error:', error);
         return res.status(500).json({ error: error.message });
       }
@@ -1539,6 +1571,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`Awaj API: Action not found or not matched: "${action}" (Path: ${req.url})`);
     return res.status(404).json({ error: `Action not found: ${action}` });
   } catch (error: any) {
+    if (error.message?.includes('Awaj Gateway Timeout')) {
+      return res.status(504).json({
+        success: false,
+        error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিচ্ছে না (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।'
+      });
+    }
     console.error(`Awaj API error (${action}):`, error);
     res.status(500).json({ error: error.message });
   }

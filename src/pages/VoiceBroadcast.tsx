@@ -118,6 +118,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   // Wallet state
   const [walletBalance, setWalletBalance] = useState(0);
   const processingRefundsRef = useRef<Set<string>>(new Set());
+  const isFetchingHistoryRef = useRef<boolean>(false);
   const hasFetchedSendersRef = useRef(false);
   const isFetchingSendersRef = useRef(false);
   
@@ -1010,115 +1011,130 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   const fetchHistory = async (isBackground = false) => {
     if (!madrasah && !isSuperAdmin) return;
+    if (isFetchingHistoryRef.current) return;
+    isFetchingHistoryRef.current = true;
     if (!isBackground) setLoading(true);
     
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    try {
+      const fifteenDaysAgo = new Date();
+      fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-    let query = supabase
-      .from('voice_broadcasts')
-      .select('*, voice_templates(title)')
-      .gte('created_at', fifteenDaysAgo.toISOString());
-    
-    // For super admins, show all history if they are in the super admin panel (madrasah.id is 'super_admin')
-    // Otherwise filter by institution
-    if (!isSuperAdmin || (madrasah && isValidUUID(madrasah.id))) {
-      if (madrasah?.id && isValidUUID(madrasah.id)) {
-        query = query.eq('institution_id', madrasah.id);
+      let query = supabase
+        .from('voice_broadcasts')
+        .select('*, voice_templates(title)')
+        .gte('created_at', fifteenDaysAgo.toISOString());
+      
+      // For super admins, show all history if they are in the super admin panel (madrasah.id is 'super_admin')
+      // Otherwise filter by institution
+      if (!isSuperAdmin || (madrasah && isValidUUID(madrasah.id))) {
+        if (madrasah?.id && isValidUUID(madrasah.id)) {
+          query = query.eq('institution_id', madrasah.id);
+        }
       }
-    }
-    
-    const { data } = await query.order('created_at', { ascending: false }).limit(200);
-    if (data) {
-      let instIdToFilter = madrasah?.id;
-      let txQuery = supabase.from('transactions').select('transaction_id, amount').eq('module', 'voice').eq('type', 'credit');
-      if (instIdToFilter && isValidUUID(instIdToFilter)) {
-        txQuery = txQuery.eq('institution_id', instIdToFilter);
+      
+      const { data } = await query.order('created_at', { ascending: false }).limit(200);
+      if (data) {
+        let instIdToFilter = madrasah?.id;
+        let txQuery = supabase.from('transactions').select('transaction_id, amount').eq('module', 'voice').eq('type', 'credit');
+        if (instIdToFilter && isValidUUID(instIdToFilter)) {
+          txQuery = txQuery.eq('institution_id', instIdToFilter);
+        }
+        const { data: refundTxs } = await txQuery;
+        const refundMap: { [campId: string]: number } = {};
+        if (refundTxs) {
+          refundTxs.forEach(tx => {
+            if (tx.transaction_id && tx.transaction_id.startsWith('REFUND_CAMP_')) {
+              const campId = tx.transaction_id.replace('REFUND_CAMP_', '');
+              refundMap[campId] = (refundMap[campId] || 0) + Number(tx.amount || 0);
+            }
+          });
+        }
+
+        const mappedData = data.map(item => {
+          let totalTxRefund = refundMap[item.provider_campaign_id] || 0;
+          if (item.retries && Array.isArray(item.retries)) {
+            item.retries.forEach((rId: string) => {
+              if (refundMap[rId]) totalTxRefund += refundMap[rId];
+            });
+          }
+          const estCost = Number(item.estimated_cost || 0);
+          const rawRefund = Number(item.refunded_amount || 0);
+          const effectiveRefund = Math.min(estCost, Math.max(0, rawRefund));
+          return {
+            ...item,
+            refunded_amount: effectiveRefund
+          };
+        });
+
+        setBroadcastHistory(mappedData);
       }
-      const { data: refundTxs } = await txQuery;
-      const refundMap: { [campId: string]: number } = {};
-      if (refundTxs) {
-        refundTxs.forEach(tx => {
-          if (tx.transaction_id && tx.transaction_id.startsWith('REFUND_CAMP_')) {
-            const campId = tx.transaction_id.replace('REFUND_CAMP_', '');
-            refundMap[campId] = (refundMap[campId] || 0) + Number(tx.amount || 0);
+      
+      // Track results for pending/sending broadcasts and auto-check completed refunds
+      if (data) {
+        // Throttled refund checks: past 24 hours only, max 3 items, sequential execution
+        const oneDayAgo = new Date();
+        oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+
+        const eligibleForRefund = data
+          .filter(b => (b.status === 'completed' || b.status === 'failed') && !b.is_refunded && (!b.created_at || new Date(b.created_at) >= oneDayAgo))
+          .slice(0, 3);
+
+        for (const broadcast of eligibleForRefund) {
+          const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
+            ? broadcast.retries[broadcast.retries.length - 1] 
+            : broadcast.provider_campaign_id;
+          if (activeCampaignId) {
+            await handleClaimRefundAuto(broadcast.id, activeCampaignId);
+          }
+        }
+
+        data.filter(b => b.status === 'sending' || b.status === 'pending').forEach(async (broadcast) => {
+          // Track the latest campaign (either the original or the latest retry)
+          const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
+            ? broadcast.retries[broadcast.retries.length - 1] 
+            : broadcast.provider_campaign_id;
+            
+          if (!activeCampaignId) return;
+          try {
+            const response = await fetch(`/api/awaj/broadcast/${activeCampaignId}`);
+            if (response.ok) {
+              const result = await response.json();
+              // Map Awaj status to our internal status
+              let newStatus = broadcast.status; // Default to current status if unknown
+              const providerStatus = (result.broadcast?.status || result.status || result.state || '').toLowerCase();
+              
+              if (['pending', 'queued', 'scheduled'].includes(providerStatus)) {
+                newStatus = 'pending';
+              } else if (['sending', 'processing', 'running', 'broadcasting'].includes(providerStatus)) {
+                newStatus = 'sending';
+              } else if (['failed', 'error', 'cancelled'].includes(providerStatus)) {
+                newStatus = 'failed';
+              } else if (['completed', 'done', 'success', 'complete', 'finished', 'finished_success'].includes(providerStatus)) {
+                newStatus = 'completed';
+              }
+
+              if (newStatus !== broadcast.status) {
+                await supabase.from('voice_broadcasts').update({ status: newStatus }).eq('id', broadcast.id);
+                
+                if (newStatus === 'completed' || newStatus === 'failed') {
+                   handleClaimRefundAuto(broadcast.id, activeCampaignId);
+                }
+                
+                // Refresh history if status changed
+                fetchHistory(true);
+              }
+            }
+          } catch (error) {
+            console.error('Error tracking broadcast result:', error);
           }
         });
       }
-
-      const mappedData = data.map(item => {
-        let totalTxRefund = refundMap[item.provider_campaign_id] || 0;
-        if (item.retries && Array.isArray(item.retries)) {
-          item.retries.forEach((rId: string) => {
-            if (refundMap[rId]) totalTxRefund += refundMap[rId];
-          });
-        }
-        const estCost = Number(item.estimated_cost || 0);
-        const rawRefund = Number(item.refunded_amount || 0);
-        const effectiveRefund = Math.min(estCost, Math.max(0, rawRefund));
-        return {
-          ...item,
-          refunded_amount: effectiveRefund
-        };
-      });
-
-      setBroadcastHistory(mappedData);
+    } catch (error) {
+      console.error('Error in fetchHistory:', error);
+    } finally {
+      isFetchingHistoryRef.current = false;
+      setLoading(false);
     }
-    
-    // Track results for pending/sending broadcasts and auto-check completed refunds
-    if (data) {
-      // Check completed broadcasts for refund accuracy (only if completed/failed and not already fully refunded)
-      data.filter(b => (b.status === 'completed' || b.status === 'failed') && !b.is_refunded).forEach(async (broadcast) => {
-        const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
-          ? broadcast.retries[broadcast.retries.length - 1] 
-          : broadcast.provider_campaign_id;
-        if (activeCampaignId) {
-          handleClaimRefundAuto(broadcast.id, activeCampaignId);
-        }
-      });
-
-      data.filter(b => b.status === 'sending' || b.status === 'pending').forEach(async (broadcast) => {
-        // Track the latest campaign (either the original or the latest retry)
-        const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
-          ? broadcast.retries[broadcast.retries.length - 1] 
-          : broadcast.provider_campaign_id;
-          
-        if (!activeCampaignId) return;
-        try {
-          const response = await fetch(`/api/awaj/broadcast/${activeCampaignId}`);
-          if (response.ok) {
-            const result = await response.json();
-            // Map Awaj status to our internal status
-            let newStatus = broadcast.status; // Default to current status if unknown
-            const providerStatus = (result.broadcast?.status || result.status || result.state || '').toLowerCase();
-            
-            if (['pending', 'queued', 'scheduled'].includes(providerStatus)) {
-              newStatus = 'pending';
-            } else if (['sending', 'processing', 'running', 'broadcasting'].includes(providerStatus)) {
-              newStatus = 'sending';
-            } else if (['failed', 'error', 'cancelled'].includes(providerStatus)) {
-              newStatus = 'failed';
-            } else if (['completed', 'done', 'success', 'complete', 'finished', 'finished_success'].includes(providerStatus)) {
-              newStatus = 'completed';
-            }
-
-            if (newStatus !== broadcast.status) {
-              await supabase.from('voice_broadcasts').update({ status: newStatus }).eq('id', broadcast.id);
-              
-              if (newStatus === 'completed' || newStatus === 'failed') {
-                 handleClaimRefundAuto(broadcast.id, activeCampaignId);
-              }
-              
-              // Refresh history if status changed
-              fetchHistory(true);
-            }
-          }
-        } catch (error) {
-          console.error('Error tracking broadcast result:', error);
-        }
-      });
-    }
-    setLoading(false);
   };
 
   // Background polling for pending/sending broadcasts
@@ -1128,9 +1144,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     const pollInterval = setInterval(() => {
       const hasPending = broadcastHistory.some(b => b.status === 'sending' || b.status === 'pending');
       if (hasPending || activeTab === 'history') {
-        fetchHistory(true);
+        if (!isFetchingHistoryRef.current) {
+          fetchHistory(true);
+        }
       }
-    }, 7000); // Every 7 seconds instead of 15s
+    }, 25000); // Every 25 seconds instead of 7s
 
     return () => clearInterval(pollInterval);
   }, [madrasah?.id, broadcastHistory, activeTab]);
