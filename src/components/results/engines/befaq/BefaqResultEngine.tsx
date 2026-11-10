@@ -650,14 +650,43 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
     }, 500);
   };
 
+  const formatExamRoutineTitle = (customTitle?: string, fallbackExamName?: string) => {
+    const isBn = lang === 'bn';
+    const yearBn = '২০২৬';
+    const yearEn = '2026';
+    const userVal = (customTitle || '').trim();
+
+    if (userVal) {
+      if (userVal.includes('সময়সূচী') || userVal.includes('সময়সূচি') || userVal.toLowerCase().includes('schedule')) {
+        if (!userVal.includes(yearBn) && !userVal.includes(yearEn)) {
+          return `${userVal} ${isBn ? yearBn : yearEn}`;
+        }
+        return userVal;
+      }
+      const cleanVal = userVal.replace(/\s*(২০২৬|2026)\s*/g, '').trim();
+      return isBn ? `${cleanVal} সময়সূচী ${yearBn}` : `${cleanVal} Schedule ${yearEn}`;
+    }
+
+    const base = (fallbackExamName || '').trim();
+    if (base && base !== 'বেফাক পরীক্ষা' && base !== 'বার্ষিক পরীক্ষা' && base !== 'Annual Exam' && base !== 'Befaq Exam' && base !== 'পরীক্ষার রুটিন' && base !== 'বেফাক পরীক্ষার রুটিন') {
+      if (base.includes('সময়সূচী') || base.includes('সময়সূচি') || base.toLowerCase().includes('schedule')) {
+        if (!base.includes(yearBn) && !base.includes(yearEn)) {
+          return `${base} ${isBn ? yearBn : yearEn}`;
+        }
+        return base;
+      }
+      const cleanBase = base.replace(/\s*(২০২৬|2026)\s*/g, '').trim();
+      return isBn ? `${cleanBase} সময়সূচী ${yearBn}` : `${cleanBase} Schedule ${yearEn}`;
+    }
+
+    // Default requested by user: "পরীক্ষা সময়সূচী ২০২৬"
+    return isBn ? `পরীক্ষা সময়সূচী ${yearBn}` : `Exam Schedule ${yearEn}`;
+  };
+
   const handleDownloadCustomExamRoutine = async () => {
     setIsDownloading(true);
     try {
-      const isExamPostfixBn = activeExamName.endsWith('পরীক্ষা');
-      const isExamPostfixEn = activeExamName.toLowerCase().endsWith('exam');
-      const examTitle = lang === 'bn' 
-        ? (isExamPostfixBn ? `${activeExamName} সময়সূচি` : `${activeExamName} পরীক্ষা সময়সূচি`)
-        : (isExamPostfixEn ? `${activeExamName} Schedule` : `${activeExamName} Exam Schedule`);
+      const examTitle = formatExamRoutineTitle(customRoutineTitle, activeExamName);
 
       await generateExamRoutinePDF(
         {
@@ -2555,7 +2584,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                       onClick={async () => {
                                         setIsDownloading(true);
                                         try {
-                                          const tempName = r.customRoutineTitle || r.activeExamName || (lang === 'bn' ? 'বেফাক পরীক্ষার রুটিন' : 'Befaq Exam Routine');
+                                          const tempName = formatExamRoutineTitle(r.customRoutineTitle, r.activeExamName);
                                           setDownloadProgress(0);
                                           await generateExamRoutinePDF(
                                             { ...madrasah, name: madrasah?.name || 'Madrasah' } as any,
@@ -2730,9 +2759,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                 {/* Center pill badge matching bottom-center of image */}
                                 <div className="mt-1.5 inline-block">
                                   <div className={`text-white ${previewPillBadgeClass} rounded-full shadow-sm font-black tracking-wide border font-solaiman`} style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
-                                    {lang === 'bn' 
-                                      ? (activeExamName.includes('সময়সূচি') ? activeExamName : `${activeExamName} সময়সূচি - ${currentYearBn}`)
-                                      : (activeExamName.includes('Schedule') ? activeExamName : `${activeExamName} Schedule - ${currentYear}`)}
+                                    {formatExamRoutineTitle(customRoutineTitle, activeExamName)}
                                   </div>
                                 </div>
                               </div>
@@ -2740,12 +2767,25 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                               {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
                               <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-center border shadow mr-2`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
                                 <div className="text-center leading-normal">
-                                  <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
-                                    {activeExamName ? activeExamName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|Schedule/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
-                                  </p>
-                                  <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
-                                    পরীক্ষা সময়সূচি
-                                  </p>
+                                  {(() => {
+                                    const cleanSubTitle = (customRoutineTitle || activeExamName || '')
+                                      .replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|সময়সূচী|Schedule|[০-৯0-9]|ইং|-/gi, '')
+                                      .trim();
+                                    return cleanSubTitle ? (
+                                      <>
+                                        <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
+                                          {cleanSubTitle}
+                                        </p>
+                                        <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
+                                          সময়সূচী
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
+                                        পরীক্ষা সময়সূচী
+                                      </p>
+                                    );
+                                  })()}
                                   <p className={`${previewCalendarTextClass3} font-semibold text-white/70 block`}>
                                     {currentYearBn}ইং
                                   </p>

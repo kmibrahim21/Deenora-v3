@@ -157,7 +157,30 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
       ? 'w-[124px] h-[82px] p-1.5' 
       : 'w-[160px] h-[98px] p-2';
     
-    const processedExamName = examName ? examName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|Schedule/g, '').trim() : (isBn ? 'সাময়িক' : 'Term');
+    const yearBn = getBanglaNumber(examYear || '২০২৬');
+    const yearEn = examYear ? examYear.replace(/[^0-9]/g, '') || '2026' : '2026';
+
+    const cleanSubTitle = examName 
+      ? examName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|সময়সূচী|Schedule|[০-৯0-9]|ইং|-/gi, '').trim()
+      : '';
+    const processedExamName = cleanSubTitle;
+
+    // Fully formatted title for the pill badge
+    const formattedRoutineBadgeTitle = (() => {
+      const trimmed = (examName || '').trim();
+      if (!trimmed || trimmed === 'বেফাক পরীক্ষা' || trimmed === 'বার্ষিক পরীক্ষা' || trimmed === 'পরীক্ষার রুটিন' || trimmed === 'বেফাক পরীক্ষার রুটিন') {
+        return isBn ? `পরীক্ষা সময়সূচী ${yearBn}` : `Exam Schedule ${yearEn}`;
+      }
+      if (trimmed.includes('সময়সূচী') || trimmed.includes('সময়সূচি') || trimmed.toLowerCase().includes('schedule')) {
+        if (!trimmed.includes(yearBn) && !trimmed.includes(yearEn)) {
+          return `${trimmed} ${isBn ? yearBn : yearEn}`;
+        }
+        return trimmed;
+      }
+      const cleanVal = trimmed.replace(/\s*(২০২৬|2026)\s*/g, '').trim();
+      return isBn ? `${cleanVal} সময়সূচী ${yearBn}` : `${cleanVal} Schedule ${yearEn}`;
+    })();
+
     const getDynamicExamNameFontSize = () => {
       const len = processedExamName.length;
       if (isClassMode) {
@@ -365,9 +388,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
               {/* Central pill badge */}
               <div className="mt-1 inline-block">
                 <div className={`text-white ${pillBadgeClass} rounded-full shadow-xs font-black tracking-wide border font-solaiman`} style={{ backgroundColor: secondary, borderColor: primary }}>
-                  {isBn 
-                    ? (examName.includes('সময়সূচি') || examName.includes('Schedule') ? examName : `${examName} সময়সূচি - ${isBn ? getBanglaNumber(examYear) : examYear}`)
-                    : (examName.includes('সময়সূচি') || examName.includes('Schedule') ? examName : `${examName} Schedule - ${examYear}`)}
+                  {formattedRoutineBadgeTitle}
                 </div>
               </div>
             </div>
@@ -375,12 +396,20 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             {/* Right Column: Calendar Box */}
             <div className={`flex-shrink-0 ${calendarBoxClass} text-white rounded-xl flex flex-col justify-center border shadow-xs mr-1`} style={{ backgroundColor: primary, borderColor: primary }}>
               <div className="text-center leading-tight">
-                <p className={`${calendarTextClass1} font-black leading-tight mb-0.5 whitespace-normal break-words px-1 font-solaiman`} style={{ color: '#fef08a' }}>
-                  {processedExamName}
-                </p>
-                <p className={`${calendarTextClass2} font-extrabold block mb-0.5 font-solaiman text-white/95`}>
-                  {isBn ? 'পরীক্ষা সময়সূচি' : 'Exam Routine'}
-                </p>
+                {processedExamName ? (
+                  <>
+                    <p className={`${calendarTextClass1} font-black leading-tight mb-0.5 whitespace-normal break-words px-1 font-solaiman`} style={{ color: '#fef08a' }}>
+                      {processedExamName}
+                    </p>
+                    <p className={`${calendarTextClass2} font-extrabold block mb-0.5 font-solaiman text-white/95`}>
+                      {isBn ? 'সময়সূচী' : 'Routine'}
+                    </p>
+                  </>
+                ) : (
+                  <p className={`${calendarTextClass2} font-extrabold block mb-0.5 font-solaiman text-white/95`}>
+                    {isBn ? 'পরীক্ষা সময়সূচী' : 'Exam Routine'}
+                  </p>
+                )}
                 <p className={`${calendarTextClass3} font-bold text-white/80 block font-solaiman`}>
                   {isBn ? getBanglaNumber(examYear) : examYear} {isBn ? 'ইং' : ''}
                 </p>

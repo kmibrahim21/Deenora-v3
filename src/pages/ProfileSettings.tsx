@@ -34,7 +34,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
 import { Institution, Language } from '../types';
 import { requestManager } from '../services/RequestManager';
-import { downloadBlob } from '../utils/fileDownloader';
 import { NotificationService, DEFAULT_NOTIFICATION_SETTINGS } from '../services/NotificationService';
 
 interface Props {
@@ -59,20 +58,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [signatureUrl, setSignatureUrl] = useState(madrasah?.config_json?.signature_url || '');
   const [signatureHeight, setSignatureHeight] = useState(madrasah?.config_json?.signature_height || 30);
   const [nameEnglish, setNameEnglish] = useState((madrasah?.config_json as any)?.name_english || '');
-  const [biometricDevicesStr, setBiometricDevicesStr] = useState(
-    ((madrasah?.config_json as any)?.biometric_devices || [])
-      .map((d: any) => d.sn)
-      .filter((s: string) => s && s !== 'PAS4254900230')
-      .join(', ') || ''
-  );
-  const [biometricIp, setBiometricIp] = useState(
-    (madrasah?.config_json as any)?.biometric_ip ||
-    ((madrasah?.config_json as any)?.biometric_devices?.[0]?.ip) || ''
-  );
-  const [biometricPort, setBiometricPort] = useState(
-    (madrasah?.config_json as any)?.biometric_port ||
-    ((madrasah?.config_json as any)?.biometric_devices?.[0]?.port) || '4370'
-  );
 
   const [featureStudentAttSms, setFeatureStudentAttSms] = useState((madrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
@@ -105,212 +90,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [isDeletingRegNo, setIsDeletingRegNo] = useState(false);
   const [showDeleteRegConfirm, setShowDeleteRegConfirm] = useState(false);
   const [classesList, setClassesList] = useState<any[]>([]);
-  const [showSyncAgentModal, setShowSyncAgentModal] = useState(false);
-  const [testingDevice, setTestingDevice] = useState(false);
-  const [isDownloadingAgent, setIsDownloadingAgent] = useState<string | null>(null);
-
-  const handleDownloadSyncAgent = async (format: 'bat' | 'ps1' | 'py') => {
-    setIsDownloadingAgent(format);
-    try {
-      const sn = biometricDevicesStr.split(',')[0]?.trim();
-      if (!sn) {
-        alert(lang === 'bn' 
-          ? 'অনুগ্রহ করে প্রথমে আপনার মেশিনের আসল সিরিয়াল নম্বর (SN) বক্সে লিখে নিচে "সংরক্ষণ করুন" চাপুন।' 
-          : 'Please enter your machine Serial Number (SN) and save first.');
-        setIsDownloadingAgent(null);
-        return;
-      }
-      const name = madrasah?.name || 'Deenora';
-      const ip = biometricIp.trim() || '192.168.0.201';
-      const port = biometricPort.trim() || '4370';
-      const isPreviewHost = typeof window !== 'undefined' && (
-        window.location.hostname.includes('run.app') || 
-        window.location.hostname.includes('localhost') || 
-        window.location.hostname.includes('aistudio')
-      );
-      const targetApiUrl = isPreviewHost ? 'https://deenora.app/api/iclock' : `${window.location.origin}/api/iclock`;
-      const instId = madrasah?.id || '';
-      const url = `/api/biometric-download?sn=${encodeURIComponent(sn)}&ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&name=${encodeURIComponent(name)}&institution_id=${encodeURIComponent(instId)}&api_url=${encodeURIComponent(targetApiUrl)}&format=${format}`;
-      
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to generate agent file');
-      const blob = await res.blob();
-      
-      const ext = format === 'bat' ? 'bat' : (format === 'ps1' ? 'ps1' : 'py');
-      const fileName = format === 'bat' 
-        ? `Deenora-K40-Sync-${ip.replace(/\./g, '_')}.${ext}`
-        : (format === 'ps1' ? `Deenora-K40-Sync-${ip.replace(/\./g, '_')}.${ext}` : `deenora_sync_${ip.replace(/\./g, '_')}.${ext}`);
-      
-      const mimeType = format === 'bat' 
-        ? 'application/x-bat' 
-        : (format === 'ps1' ? 'application/x-powershell' : 'text/x-python');
-
-      await downloadBlob(blob, fileName, mimeType);
-    } catch (err: any) {
-      console.error('Download agent error:', err);
-      alert('ফাইলটি পেতে সমস্যা হচ্ছে: ' + err.message);
-    } finally {
-      setIsDownloadingAgent(null);
-    }
-  };
-  const [deviceStatusResult, setDeviceStatusResult] = useState<{
-    status: 'success' | 'warning' | 'error';
-    message: string;
-    lastPunch?: string;
-  } | null>(null);
-
-  const [testBioId, setTestBioId] = useState('101');
-  const [isTestingPunch, setIsTestingPunch] = useState(false);
-  const [testPunchResult, setTestPunchResult] = useState<{
-    status: 'success' | 'warning' | 'error';
-    message: string;
-  } | null>(null);
-
-  const handleSendTestPunch = async () => {
-    if (!testBioId.trim()) return;
-    setIsTestingPunch(true);
-    setTestPunchResult(null);
-    try {
-      const sn = biometricDevicesStr.split(',')[0]?.trim();
-      if (!sn) {
-        setTestPunchResult({
-          status: 'warning',
-          message: lang === 'bn' 
-            ? 'অনুগ্রহ করে প্রথমে আপনার মেশিনের আসল সিরিয়াল নম্বর (SN) লিখে নিচে সংরক্ষণ করুন।' 
-            : 'Please enter your machine Serial Number (SN) and save first.'
-        });
-        return;
-      }
-      const now = new Date();
-      const checkTime = now.toISOString().replace('T', ' ').substring(0, 19);
-      const res = await fetch('/api/iclock', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          sn: sn,
-          institution_id: madrasah?.id || '',
-          institution_name: madrasah?.name || '',
-          logs: [
-            {
-              userId: testBioId.trim(),
-              checkTime: checkTime
-            }
-          ]
-        })
-      });
-
-      const data = await res.json().catch(() => null);
-      if (data && data.success) {
-        setTestPunchResult({
-          status: data.processed > 0 ? 'success' : 'warning',
-          message: data.message || `আইডি ${testBioId} এর জন্য সিঙ্ক সম্পন্ন হয়েছে!`
-        });
-      } else {
-        setTestPunchResult({
-          status: 'error',
-          message: 'টেস্ট রিকোয়েস্ট ব্যর্থ হয়েছে। ইন্টারনেট সংযোগ বা সেটিংস চেক করুন।'
-        });
-      }
-    } catch (err: any) {
-      setTestPunchResult({
-        status: 'error',
-        message: err.message || 'টেস্ট রিকোয়েস্ট পাঠাতে ত্রুটি হয়েছে।'
-      });
-    } finally {
-      setIsTestingPunch(false);
-      fetchTodayPunches();
-    }
-  };
-
-  const [todayPunches, setTodayPunches] = useState<any[]>([]);
-  const [loadingPunches, setLoadingPunches] = useState(false);
-
-  const fetchTodayPunches = async () => {
-    if (!madrasah?.id) return;
-    setLoadingPunches(true);
-    try {
-      const now = new Date();
-      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const utcDate = now.toISOString().substring(0, 10);
-      const queryDates = Array.from(new Set([localDate, utcDate]));
-      const { data: logs } = await supabase
-        .from('attendance')
-        .select('id, student_id, date, arrival_time, status, created_at, session, students(student_name, roll, biometric_id, classes(class_name))')
-        .eq('institution_id', madrasah.id)
-        .in('date', queryDates)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      setTodayPunches(logs || []);
-    } catch (err) {
-      console.error('fetchTodayPunches error:', err);
-    } finally {
-      setLoadingPunches(false);
-    }
-  };
-
-  const handleTestDeviceConnection = async () => {
-    if (!madrasah?.id) return;
-    setTestingDevice(true);
-    setDeviceStatusResult(null);
-
-    try {
-      const snList = biometricDevicesStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-      if (snList.length === 0) {
-        setDeviceStatusResult({
-          status: 'warning',
-          message: lang === 'bn' 
-            ? 'অনুগ্রহ করে প্রথমে মেশিনের সিরিয়াল নাম্বার (SN) ঘরটিতে লিখুন এবং সেভ করুন।' 
-            : 'Please enter machine Serial Number (SN) first and save.'
-        });
-        return;
-      }
-
-      await fetchTodayPunches();
-
-      const now = new Date();
-      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const utcDate = now.toISOString().substring(0, 10);
-      const queryDates = Array.from(new Set([localDate, utcDate]));
-      const { data: recentLogs } = await supabase
-        .from('attendance')
-        .select('id, created_at, arrival_time, date, students(student_name, biometric_id)')
-        .eq('institution_id', madrasah.id)
-        .in('date', queryDates)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      const latestLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
-
-      if (latestLog) {
-        const punchTime = latestLog.arrival_time || new Date(latestLog.created_at).toLocaleTimeString(lang === 'bn' ? 'bn-BD' : 'en-US');
-        const studentInfo = (latestLog as any).students?.student_name ? ` (শিক্ষার্থী: ${(latestLog as any).students?.student_name})` : '';
-        setDeviceStatusResult({
-          status: 'success',
-          message: lang === 'bn'
-            ? `সফল! আজ আপনার মেশিন থেকে লাইভ পাঞ্চের ডাটা Deenora সার্ভারে যুক্ত হয়েছে${studentInfo}।`
-            : `Success! Today's punch data is active on Deenora server${studentInfo}.`,
-          lastPunch: punchTime
-        });
-      } else {
-        setDeviceStatusResult({
-          status: 'success',
-          message: lang === 'bn'
-            ? `মেশিনের সিরিয়াল নাম্বার (${snList.join(', ')}) সার্ভারে রেজিস্টার্ড রয়েছে। মেশিনে কার্ড পাঞ্চ বা আঙ্গুল ছুঁইয়ে (Punch) টেস্ট করুন, উপস্থিতিতে সাথে সাথে যুক্ত হবে।`
-            : `Serial Number (${snList.join(', ')}) is registered on server. Perform a test punch on the machine now.`
-        });
-      }
-    } catch (err: any) {
-      setDeviceStatusResult({
-        status: 'error',
-        message: err.message || 'Connection test failed.'
-      });
-    } finally {
-      setTestingDevice(false);
-    }
-  };
 
   useEffect(() => {
     if (madrasah) {
@@ -327,10 +106,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       setArabicCalligraphyWidth(config.arabic_calligraphy_width || 100);
       setNewPin(config.user_pin || '');
       setSignatureUrl(config.signature_url || '');
-      const snStr = ((config.biometric_devices || []).map((d: any) => d.sn).filter((s: string) => s && s !== 'PAS4254900230').join(', ')) || '';
-      setBiometricDevicesStr(snStr);
-      setBiometricIp(config.biometric_ip || config.biometric_devices?.[0]?.ip || '');
-      setBiometricPort(config.biometric_port || config.biometric_devices?.[0]?.port || '4370');
       setFeatureStudentAttSms(config.features?.student_attendance_sms ?? false);
       setFeatureFeeSms(config.features?.fee_collection_sms ?? false);
       setFeatureTeacherSalarySms(config.features?.teacher_salary_sms ?? false);
@@ -339,7 +114,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       setPrinterPaperSize(config.features?.printer_paper_size ?? 'A4');
       setFeatureDeleteClass(config.features?.delete_class ?? false);
       setFeatureDeleteAccounting(config.features?.delete_accounting ?? false);
-      fetchTodayPunches();
     }
   }, [madrasah]);
 
@@ -702,7 +476,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   }, [madrasah?.config_json]);
 
   const modules = parsedConfig?.modules || (madrasah?.config_json as any)?.modules || {};
-  const isBiometricEnabled = true; // Always enabled so institutions can setup and connect ZKTeco K40 / biometric devices
   const packageRaw = madrasah?.config_json?.package_name || madrasah?.config_json?.subscription?.package_name || '1';
   const packageNumber = String(packageRaw);
 
@@ -781,10 +554,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     setSignatureUrl(parsedConfig.signature_url || '');
     setSignatureHeight(parsedConfig.signature_height || 30);
     setNameEnglish(parsedConfig.name_english || '');
-    const snList = ((parsedConfig.biometric_devices || []).map((d: any) => d.sn).filter((s: string) => s && s !== 'PAS4254900230').join(', ')) || '';
-    setBiometricDevicesStr(snList);
-    setBiometricIp(parsedConfig.biometric_ip || parsedConfig.biometric_devices?.[0]?.ip || '');
-    setBiometricPort(parsedConfig.biometric_port || parsedConfig.biometric_devices?.[0]?.port || '4370');
 
     const feats = parsedConfig.features || {};
     setFeatureStudentAttSms(feats.student_attendance_sms ?? false);
@@ -814,19 +583,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         arabic_calligraphy_url: arabicCalligraphyUrl,
         arabic_calligraphy_width: arabicCalligraphyWidth,
         name_english: nameEnglish.trim(),
-        biometric_ip: biometricIp.trim() || '192.168.0.201',
-        biometric_port: biometricPort.trim() || '4370',
-        ...(isBiometricEnabled
-          ? { 
-              biometric_devices: biometricDevicesStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(sn => ({ 
-                sn, 
-                ip: biometricIp.trim() || '192.168.0.201',
-                port: biometricPort.trim() || '4370',
-                name: "Device " + sn 
-              })) 
-            }
-          : (currentConfigObj.biometric_devices ? { biometric_devices: currentConfigObj.biometric_devices } : {})
-        ),
         features: {
           ...(currentConfigObj.features || {}),
           student_attendance_sms: featureStudentAttSms,

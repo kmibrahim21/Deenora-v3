@@ -39,6 +39,7 @@ import {
   QBSavedPaper,
   SUPPORTED_BOARDS,
   SUPPORTED_CLASSES,
+  getClassesForBoard,
   QUESTION_CATEGORIES,
   QuestionBankService,
   toBnNum,
@@ -136,6 +137,20 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [sections, setSections] = useState<PaperSection[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
+
+  // Responsive Zoom & Viewport tracking
+  const [paperZoom, setPaperZoom] = useState<'fit' | 'compact' | '100'>('fit');
+  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 800);
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Available classes for selected board
+  const availableClasses = useMemo(() => getClassesForBoard(selectedBoardId), [selectedBoardId]);
 
   // Drag and drop tracking
   const dragItem = useRef<{ type: 'section' | 'question'; secIdx: number; qIdx?: number; data?: any } | null>(null);
@@ -144,10 +159,10 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [showAutoModal, setShowAutoModal] = useState<boolean>(false);
   const [autoTargetMarks, setAutoTargetMarks] = useState<number>(100);
   const [autoMcqCount, setAutoMcqCount] = useState<number>(10);
-  const [autoFillBlankCount, setAutoFillBlankCount] = useState<number>(5);
-  const [autoShortCount, setAutoShortCount] = useState<number>(5);
-  const [autoBroadCount, setAutoBroadCount] = useState<number>(3);
-  const [autoArabicCount, setAutoArabicCount] = useState<number>(2);
+  const [autoFillBlankCount, setAutoFillBlankCount] = useState<number>(10);
+  const [autoShortCount, setAutoShortCount] = useState<number>(10);
+  const [autoBroadCount, setAutoBroadCount] = useState<number>(6);
+  const [autoArabicCount, setAutoArabicCount] = useState<number>(6);
 
   // Load initial books, chapters & saved drafts
   useEffect(() => {
@@ -321,12 +336,19 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     }, 0);
   }, [sections]);
 
-  // Toast feedback helper
-  const triggerToast = (msg: string) => {
+  // Real-time total questions count
+  const totalQuestionsCount = useMemo(() => {
+    return sections.reduce((sum, sec) => sum + sec.questions.length, 0);
+  }, [sections]);
+
+  // Toast feedback helper with optional action button
+  const triggerToast = (msg: string, action?: { label: string; onClick: () => void }) => {
     setToastMessage(msg);
+    setToastAction(action || null);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2800);
+      setToastAction(null);
+    }, 3200);
   };
 
   // Add question to paper
@@ -378,7 +400,10 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       });
     });
 
-    triggerToast('প্রশ্নপত্রটিতে যোগ হয়েছে');
+    triggerToast('✓ প্রশ্নপত্রটিতে যোগ হয়েছে', {
+      label: 'প্রশ্নপত্রে দেখুন ➔',
+      onClick: () => setMobilePane('paper')
+    });
   };
 
   // Bulk add from category
@@ -719,11 +744,13 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
     const generated = await QuestionBankService.autoGenerateExam({
       bookId: selectedBookId,
+      chapterIds: selectedChapterId === 'all' ? undefined : [selectedChapterId],
       mcqCount: autoMcqCount,
       fillBlankCount: autoFillBlankCount,
       shortCount: autoShortCount,
       broadCount: autoBroadCount,
-      arabicCount: autoArabicCount
+      arabicCount: autoArabicCount,
+      targetMarks: autoTargetMarks
     });
 
     setSections(generated);
@@ -857,36 +884,8 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         </div>
       </header>
 
-      {/* Mobile Switcher (Small Screens) */}
-      <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 py-1 px-2 z-20">
-        <button
-          onClick={() => setMobilePane('library')}
-          className={`flex-1 text-center py-1.5 text-xs font-bold rounded-md ${
-            mobilePane === 'library' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'
-          }`}
-        >
-          প্রশ্ন সম্ভার
-        </button>
-        <button
-          onClick={() => setMobilePane('paper')}
-          className={`flex-1 text-center py-1.5 text-xs font-bold rounded-md ${
-            mobilePane === 'paper' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'
-          }`}
-        >
-          প্রশ্নপত্র ({toBnNum(totalCalculatedMarks)})
-        </button>
-        <button
-          onClick={() => setMobilePane('settings')}
-          className={`flex-1 text-center py-1.5 text-xs font-bold rounded-md ${
-            mobilePane === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'
-          }`}
-        >
-          সেটিংস
-        </button>
-      </div>
-
       {/* ================= 3-PANE WORKSPACE ================= */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative pb-14 md:pb-0">
 
         {/* ================= 2. LEFT PANE (left-pane - 380px) ================= */}
         <aside
@@ -958,7 +957,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
               >
                 <option value="all">সকল শ্রেণি (All Classes)</option>
-                {SUPPORTED_CLASSES.map(c => (
+                {availableClasses.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
@@ -1183,31 +1182,103 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
         {/* ================= 3. CENTER PANE (center-pane - Live A4 Paper Sheet) ================= */}
         <main
-          className={`flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-[#cbd5e1]/40 dark:bg-[#070b12] custom-scrollbar ${
+          className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-8 flex flex-col items-center bg-[#cbd5e1]/40 dark:bg-[#070b12] custom-scrollbar ${
             mobilePane === 'paper' ? 'flex' : 'hidden md:flex'
           }`}
           onDragOver={e => e.preventDefault()}
         >
-          {/* A4 Paper Sheet Container */}
+          {/* Mobile Viewport Toolbar (Hidden on Desktop) */}
+          <div className="md:hidden w-full max-w-md mb-2.5 flex items-center justify-between gap-1.5 px-0.5 no-print">
+            <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setPaperZoom('fit')}
+                className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
+                  paperZoom === 'fit'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+                title="স্ক্রিনে সম্পূর্ণ ফিট করুন"
+              >
+                ফিট স্ক্রিন
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperZoom('compact')}
+                className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
+                  paperZoom === 'compact'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+                title="কমপ্যাক্ট মোবাইল রিফ্লো"
+              >
+                কমপ্যাক্ট
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperZoom('100')}
+                className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
+                  paperZoom === '100'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+                title="১:১ আসল সাইজ স্ক্রোল"
+              >
+                ১০০%
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                মোট: {toBnNum(totalCalculatedMarks)}
+              </span>
+              <button
+                type="button"
+                onClick={printPaper}
+                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-xs flex items-center gap-1 active:scale-95"
+              >
+                <span>🖨️</span>
+                <span>প্রিন্ট</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Responsive Paper Viewport Container */}
           <div
-            id="paperSheet"
-            style={{
-              width: paperSize === 'Legal' ? '216mm' : '210mm',
-              minHeight: paperSize === 'Legal' ? '356mm' : '297mm',
-              padding: '16mm 16mm',
-              fontFamily: `'${banglaFont}', '${englishFont}', serif`,
-              fontSize: `${fontSize}px`,
-              lineHeight: lineHeight,
-              ['--paper-q-gap' as any]: `${questionGap}px`
-            }}
-            className={`w-full bg-white text-black shadow-2xl relative transition-all ${
-              borderStyle === 'double'
-                ? 'border-4 border-double border-black'
-                : borderStyle === 'single'
-                ? 'border border-black'
-                : 'border-0'
+            className={`paper-viewport-wrapper w-full flex justify-center ${
+              viewportWidth < 768 && paperZoom === '100' ? 'overflow-x-auto pb-6' : ''
             }`}
           >
+            <div
+              className="paper-scale-container origin-top transition-all duration-200"
+              style={
+                viewportWidth < 768 && paperZoom === 'fit'
+                  ? {
+                      zoom: Math.min(1, Math.max(0.35, (viewportWidth - 20) / (paperSize === 'Legal' ? 816 : 794)))
+                    }
+                  : undefined
+              }
+            >
+              {/* A4 Paper Sheet Container */}
+              <div
+                id="paperSheet"
+                style={{
+                  width: viewportWidth < 768 && paperZoom === 'compact' ? '100%' : (paperSize === 'Legal' ? '216mm' : '210mm'),
+                  minHeight: paperSize === 'Legal' ? '356mm' : '297mm',
+                  padding: viewportWidth < 768 && paperZoom === 'compact' ? '12px 14px' : '16mm 16mm',
+                  fontFamily: `'${banglaFont}', '${englishFont}', serif`,
+                  fontSize: viewportWidth < 768 && paperZoom === 'compact' ? `${Math.max(12, fontSize - 2)}px` : `${fontSize}px`,
+                  lineHeight: lineHeight,
+                  ['--paper-q-gap' as any]: `${questionGap}px`
+                }}
+                className={`w-full bg-white text-black shadow-2xl relative transition-all ${
+                  borderStyle === 'double'
+                    ? 'border-4 border-double border-black'
+                    : borderStyle === 'single'
+                    ? 'border border-black'
+                    : 'border-0'
+                }`}
+              >
             {/* ================= EDITABLE EXAM HEADER ================= */}
             <header className="text-center pb-3 mb-3 border-b-2 border-black">
               {/* #bismillahBox */}
@@ -1361,7 +1432,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                     className="q-section relative group/sec pb-2 border-b border-slate-200 last:border-b-0"
                   >
                     {/* FLOATING PER-SECTION TOOLBAR (sec-toolbar) */}
-                    <div className="sec-toolbar no-print absolute -top-4 right-0 hidden group-hover/sec:flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-md shadow-lg z-20 text-[11px]">
+                    <div className="sec-toolbar no-print flex md:hidden group-hover/sec:flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-md shadow-lg z-20 text-[11px] mb-1.5 md:mb-0 md:absolute md:-top-4 md:right-0 flex-wrap">
                       {/* Column Layout Dropdown */}
                       <select
                         value={section.layout}
@@ -1624,27 +1695,30 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                             </div>
                           )}
 
-                          {/* Floating Question Actions (Hidden on Print) */}
-                          <div className="no-print absolute top-0.5 right-0.5 hidden group-hover/q:flex items-center gap-0.5 bg-white border border-slate-300 rounded shadow-xs text-[10px] z-10">
+                          {/* Floating Question Actions (Hidden on Print) - Always accessible on touch screens, hover on desktop */}
+                          <div className="no-print absolute top-0.5 right-0.5 flex md:hidden group-hover/q:flex items-center gap-0.5 bg-white/95 border border-slate-300 rounded shadow-xs text-[11px] p-0.5 z-10">
                             <button
+                              type="button"
                               disabled={qIdx === 0}
-                              onClick={() => moveQuestion(sIdx, qIdx, 'up')}
-                              className="p-0.5 hover:bg-slate-100 rounded disabled:opacity-30"
+                              onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'up'); }}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
                               title="উপরে নিন"
                             >
-                              ▲
+                              ↑
                             </button>
                             <button
+                              type="button"
                               disabled={qIdx === section.questions.length - 1}
-                              onClick={() => moveQuestion(sIdx, qIdx, 'down')}
-                              className="p-0.5 hover:bg-slate-100 rounded disabled:opacity-30"
+                              onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'down'); }}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
                               title="নিচে নিন"
                             >
-                              ▼
+                              ↓
                             </button>
                             <button
-                              onClick={() => deleteQuestion(section.id, question.id)}
-                              className="p-0.5 text-red-600 hover:bg-red-50 rounded"
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); deleteQuestion(section.id, question.id); }}
+                              className="w-5 h-5 flex items-center justify-center text-red-600 hover:bg-red-50 rounded font-bold active:scale-90"
                               title="প্রশ্ন মুছুন"
                             >
                               ✕
@@ -1658,7 +1732,9 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               )}
             </div>
           </div>
-        </main>
+        </div>
+      </div>
+    </main>
 
         {/* ================= 4. RIGHT PANE (right-pane - 300px Settings & Controls) ================= */}
         <aside
@@ -2009,7 +2085,22 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   {[50, 100].map(m => (
                     <button
                       key={m}
-                      onClick={() => setAutoTargetMarks(m)}
+                      onClick={() => {
+                        setAutoTargetMarks(m);
+                        if (m === 50) {
+                          setAutoMcqCount(5);
+                          setAutoFillBlankCount(5);
+                          setAutoShortCount(5);
+                          setAutoBroadCount(3);
+                          setAutoArabicCount(3);
+                        } else {
+                          setAutoMcqCount(10);
+                          setAutoFillBlankCount(10);
+                          setAutoShortCount(10);
+                          setAutoBroadCount(6);
+                          setAutoArabicCount(6);
+                        }
+                      }}
                       className={`flex-1 py-1.5 rounded-lg border font-black text-xs transition ${
                         autoTargetMarks === m
                           ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
@@ -2155,11 +2246,77 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         </div>
       )}
 
+      {/* ================= FIXED BOTTOM MOBILE TAB SWITCHER ================= */}
+      <nav
+        aria-label="মোবাইল নেভিগেশন"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] px-3 py-1.5 flex items-center justify-around no-print"
+      >
+        <button
+          type="button"
+          onClick={() => setMobilePane('library')}
+          className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+            mobilePane === 'library'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-black'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          <span className="text-base leading-none mb-1">📚</span>
+          <span className="text-[11px] leading-tight font-bold">লাইব্রেরি</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobilePane('paper')}
+          className={`flex-1 relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+            mobilePane === 'paper'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-black'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          <span className="text-base leading-none mb-1">📄</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] leading-tight font-bold">প্রশ্নপত্র</span>
+            {totalQuestionsCount > 0 && (
+              <span className="px-1.5 py-0.2 bg-blue-600 text-white rounded-full text-[9.5px] font-black shadow-xs">
+                {toBnNum(totalQuestionsCount)}
+              </span>
+            )}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobilePane('settings')}
+          className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+            mobilePane === 'settings'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-black'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          <span className="text-base leading-none mb-1">⚙️</span>
+          <span className="text-[11px] leading-tight font-bold">সেটিংস</span>
+        </button>
+      </nav>
+
       {/* ================= TOAST NOTIFICATION ================= */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-full shadow-2xl text-xs font-bold flex items-center gap-2 z-50 border border-slate-700 animate-fade-in">
-          <CheckCircle2 size={15} className="text-emerald-400" />
-          <span>{toastMessage}</span>
+        <div className="fixed bottom-16 md:bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-2xl text-xs font-bold flex items-center gap-2.5 z-50 border border-slate-700/80 animate-fade-in max-w-[92vw]">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <CheckCircle2 size={15} className="text-emerald-400" />
+            <span className="truncate">{toastMessage}</span>
+          </div>
+          {toastAction && (
+            <button
+              onClick={() => {
+                toastAction.onClick();
+                setToastMessage(null);
+                setToastAction(null);
+              }}
+              className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[11px] font-black shrink-0 transition active:scale-95 shadow-xs"
+            >
+              {toastAction.label}
+            </button>
+          )}
         </div>
       )}
 
@@ -2180,6 +2337,15 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             background: #fff !important;
             display: block !important;
           }
+          .paper-viewport-wrapper, .paper-scale-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            transform: none !important;
+            zoom: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
           #paperSheet {
             box-shadow: none !important;
             width: 100% !important;
@@ -2188,6 +2354,8 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             padding: 0 !important;
             margin: 0 !important;
             border-color: #000 !important;
+            transform: none !important;
+            zoom: 1 !important;
           }
           .q-section {
             page-break-inside: avoid;

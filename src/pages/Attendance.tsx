@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy, Copy, Laptop, Cpu } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy, Copy, Laptop, Cpu, Upload } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate, getTodayDateString, getTodayMonthString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -3094,24 +3094,54 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-2.5">
+                    {/* Action Buttons: 1-Click Silent Punch Sync & 1-Click Student Uploader */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                      {/* Button 1: Live Punch Silent Sync (.vbs) */}
                       <a
                         href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=vbs`}
                         download
-                        className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25 active:scale-95 transition-all uppercase tracking-wider"
+                        className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-700 hover:via-indigo-700 hover:to-indigo-800 text-white shadow-xl shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-purple-400/20"
                       >
-                        <Download size={18} />
-                        <span>১-ক্লিক সাইলেন্ট ব্যাকগ্রাউন্ড (.vbs)</span>
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                            <Download size={20} className="text-white" />
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
+                            লাইভ পাঞ্চ সিঙ্ক
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black font-noto leading-snug">
+                            ১-ক্লিক সাইলেন্ট ব্যাকগ্রাউন্ড (.vbs)
+                          </h4>
+                          <p className="text-[11px] text-purple-100/80 font-bold font-noto mt-1 leading-relaxed">
+                            কোনো কালো স্ক্রিন ছাড়াই উইন্ডোজের ব্যাকগ্রাউন্ডে স্বয়ংক্রিয়ভাবে লাইভ হাজিরা সফটওয়্যারে পাঠাবে
+                          </p>
+                        </div>
                       </a>
+
+                      {/* Button 2: Student Data Uploader (.bat) */}
                       <a
-                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=bat`}
+                        href={`/api/biometric-upload?institution_id=${madrasah?.id || ''}&ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.1.201')}&port=4370&format=bat`}
                         download
-                        className={`flex-1 py-3.5 px-4 rounded-2xl border text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all uppercase tracking-wider ${
-                          isDark ? 'bg-slate-800 border-purple-800 text-purple-300 hover:bg-slate-700' : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-50'
-                        }`}
+                        className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-teal-700 hover:from-emerald-700 hover:via-teal-700 hover:to-teal-800 text-white shadow-xl shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-emerald-400/20"
                       >
-                        <Download size={18} />
-                        <span>১-ক্লিক পিসি অ্যাপ (.bat)</span>
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                            <Upload size={20} className="text-white" />
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
+                            মেশিন সেটআপ
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black font-noto leading-snug">
+                            ১-ক্লিকে K40-এ শিক্ষার্থী আপলোড (.bat)
+                          </h4>
+                          <p className="text-[11px] text-emerald-100/80 font-bold font-noto mt-1 leading-relaxed">
+                            সফটওয়্যার থেকে সব শিক্ষার্থীর নাম ও রোল স্বয়ংক্রিয়ভাবে সরাসরি K40 মেশিনের মেমোরিতে পুশ করবে
+                          </p>
+                        </div>
                       </a>
                     </div>
                   </div>
