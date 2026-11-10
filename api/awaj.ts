@@ -268,6 +268,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const arrayBuffer = await audioFetchRes.arrayBuffer();
       return res.send(Buffer.from(arrayBuffer));
     } catch (streamErr: any) {
+      if (streamErr.message?.includes('Awaj Gateway Timeout') || streamErr.message?.includes('aborted') || streamErr.name === 'AbortError') {
+        return res.status(504).json({
+          success: false,
+          error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিতে দেরি করছে (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।',
+          details: streamErr.message
+        });
+      }
       console.error('Audio stream proxy error:', streamErr);
       return res.status(500).json({ error: streamErr.message });
     }
@@ -1549,10 +1556,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: `Successfully refunded ${refundAmount} ৳` 
         });
       } catch (error: any) {
-        if (error.message?.includes('Awaj Gateway Timeout')) {
+        if (error.message?.includes('Awaj Gateway Timeout') || error.message?.includes('aborted') || error.name === 'AbortError') {
           return res.status(504).json({
             success: false,
-            error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিচ্ছে না (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।'
+            error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিতে দেরি করছে (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।',
+            details: error.message
           });
         }
         console.error('Voice Refund Error:', error);
@@ -1571,10 +1579,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`Awaj API: Action not found or not matched: "${action}" (Path: ${req.url})`);
     return res.status(404).json({ error: `Action not found: ${action}` });
   } catch (error: any) {
-    if (error.message?.includes('Awaj Gateway Timeout')) {
+    if (error.message?.includes('Awaj Gateway Timeout') || error.message?.includes('aborted') || error.name === 'AbortError') {
       return res.status(504).json({
         success: false,
-        error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিচ্ছে না (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।'
+        error: 'ভয়েস গেটওয়ে সার্ভার সাড়া দিতে দেরি করছে (Timeout)। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন। কোনো ব্যালেন্স কাটা হয়নি।',
+        details: error.message
       });
     }
     console.error(`Awaj API error (${action}):`, error);
