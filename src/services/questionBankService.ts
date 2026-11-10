@@ -1,4 +1,7 @@
 import { supabase } from '../supabase';
+import { ALL_385_BOOKS } from './all385Books';
+import { generateChaptersForBook, generateQuestionsForBook } from './questionTemplateGenerator';
+export * from './questionBankTypes';
 
 export interface QBBook {
   id: string;
@@ -103,13 +106,14 @@ export interface QBSavedPaper {
 // BOARDS & PRESETS
 // ----------------------------------------------------
 export const SUPPORTED_BOARDS = [
-  { id: 'all', name: 'সকল বোর্ড (All Boards)' },
+  { id: 'all', name: 'সকল বোর্ড (সকল ৩৮৫টি বই)' },
+  { id: 'nctb', name: 'NCTB প্রাথমিক ও মাধ্যমিক স্কুল (সরকারি)' },
   { id: 'noorani_ctg', name: 'নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ (চট্টগ্রাম)' },
   { id: 'noorani_jatrabari', name: "নূরানী তা'লিমুল কুরআন বোর্ড বাংলাদেশ (যাত্রাবাড়ী)" },
-  { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (Befaq)' },
+  { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (কওমি)' },
   { id: 'alia', name: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড (ইবতেদায়ী ও দাখিল)' },
-  { id: 'nctb', name: 'NCTB স্কুল ও কিন্ডারগার্টেন বোর্ড' },
-  { id: 'salsabil_jamjam', name: 'সালসাবিল, ইতমিনান, আন-নূর ও জমজম বোর্ড' },
+  { id: 'jamjam', name: 'জমজম নুরানী তালিমুল কুরআন বোর্ড বাংলাদেশ' },
+  { id: 'salsabil_jamjam', name: 'সালসাবিল, ইতমিনান ও অন্যান্য নূরানী বোর্ড' },
 ];
 
 export const SUPPORTED_CLASSES = [
@@ -1377,10 +1381,12 @@ export const normalizeBoardId = (boardInput?: string): string => {
   ) {
     return 'nctb';
   }
+  if (str.includes('jamjam') || str.includes('জমজম')) {
+    return 'jamjam';
+  }
   if (
     str.includes('salsabil') ||
     str.includes('সালসাবিল') ||
-    str.includes('জমজম') ||
     str.includes('ইতমিনান') ||
     str.includes('আন-নূর') ||
     str.includes('আন নূর')
@@ -1476,10 +1482,15 @@ export const questionBankService = {
       console.warn('qb_books table lookup fallback:', e);
     }
 
-    // Combine Supabase books with Seed Books (avoid duplicate IDs)
+    // Combine Supabase books with Seed Books and All 385 Books (avoid duplicate IDs)
     const combinedMap = new Map<string, QBBook>();
     supabaseBooks.forEach((b) => combinedMap.set(b.id, b));
     SEED_BOOKS.forEach((b) => {
+      if (!combinedMap.has(b.id)) {
+        combinedMap.set(b.id, b);
+      }
+    });
+    ALL_385_BOOKS.forEach((b) => {
       if (!combinedMap.has(b.id)) {
         combinedMap.set(b.id, b);
       }
@@ -1557,6 +1568,16 @@ export const questionBankService = {
       }
     });
 
+    // For any 385 books without custom database chapters, auto-generate standard chapters
+    targetIds.forEach((bId) => {
+      const hasChapters = Array.from(chapterMap.values()).some((c) => c.book_id === bId);
+      if (!hasChapters) {
+        const bookObj = ALL_385_BOOKS.find((b) => b.id === bId) || SEED_BOOKS.find((b) => b.id === bId);
+        const dynamicChapters = generateChaptersForBook(bId, bookObj?.title || '');
+        dynamicChapters.forEach((c) => chapterMap.set(c.id, c));
+      }
+    });
+
     return Array.from(chapterMap.values());
   },
 
@@ -1623,6 +1644,34 @@ export const questionBankService = {
         qMap.set(q.id, q);
       }
     });
+
+    // Auto-generate rich question templates for any book in 385 books library if not already loaded
+    if (targetBookIds && targetBookIds.length > 0) {
+      targetBookIds.forEach((bId) => {
+        const hasQuestions = Array.from(qMap.values()).some((q) => q.book_id === bId);
+        if (!hasQuestions) {
+          const bookObj = ALL_385_BOOKS.find((b) => b.id === bId) || SEED_BOOKS.find((b) => b.id === bId) || {
+            id: bId,
+            board: '',
+            class_name: '',
+            title: 'পাঠ্যবই',
+            source_type: 'easyqbd',
+            total_chapters: 4,
+            total_questions: 24
+          };
+          const generated = generateQuestionsForBook(bookObj as QBBook);
+          generated.forEach((q) => {
+            if (filter.chapterId && filter.chapterId !== 'all' && q.chapter_id !== filter.chapterId) {
+              return;
+            }
+            if (filter.categoryType && filter.categoryType !== 'all' && q.category_type !== filter.categoryType) {
+              return;
+            }
+            qMap.set(q.id, q);
+          });
+        }
+      });
+    }
 
     let results = Array.from(qMap.values());
 

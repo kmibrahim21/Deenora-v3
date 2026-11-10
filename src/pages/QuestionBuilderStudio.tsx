@@ -26,7 +26,18 @@ import {
   GripVertical,
   Check,
   X,
-  Type
+  Type,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Bold,
+  Italic,
+  Underline,
+  Download,
+  Grid,
+  Table,
+  FileDown
 } from 'lucide-react';
 import { Institution, Language, Profile } from '../types';
 import {
@@ -85,7 +96,10 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [proModalReason, setProModalReason] = useState<string>('');
 
   // Mobile navigation pane
-  const [mobilePane, setMobilePane] = useState<'library' | 'paper' | 'settings'>('paper');
+  const [mobilePane, setMobilePane] = useState<'paper' | 'library' | 'settings' | 'actions'>('paper');
+
+  // Microsoft Word Ribbon Active Tab
+  const [wordRibbonTab, setWordRibbonTab] = useState<'home' | 'insert' | 'layout' | 'file'>('home');
 
   // --- FILTERS STATE (Left Pane) ---
   const [selectedBoardId, setSelectedBoardId] = useState<string>('all');
@@ -103,7 +117,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [isLoadingLibrary, setIsLoadingLibrary] = useState<boolean>(true);
   const [openAccordionCats, setOpenAccordionCats] = useState<Record<string, boolean>>({});
 
-  // --- PAPER SHEET STATE (Center Pane) ---
+  // --- PAPER SHEET STATE (Center Canvas) ---
   const [bismillahText, setBismillahText] = useState<string>('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ');
   const [instNameText, setInstNameText] = useState<string>(
     madrasah?.name || 'আল-জামিয়া আল-ইসলামিয়া দারুল উলুম'
@@ -118,20 +132,28 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [examTimeText, setExamTimeText] = useState<string>('২ ঘণ্টা ৩০ মিনিট');
   const [examMarksText, setExamMarksText] = useState<string>('১০০');
 
-  // Config toggles & sliders
+  // Config toggles & formatting states
   const [showBismillah, setShowBismillah] = useState<boolean>(true);
   const [showStudentInfo, setShowStudentInfo] = useState<boolean>(false);
   const [showAnswerSheet, setShowAnswerSheet] = useState<boolean>(false);
   const [paperSize, setPaperSize] = useState<'A4' | 'Legal'>('A4');
   const [borderStyle, setBorderStyle] = useState<'none' | 'single' | 'double'>('double');
+  const [paperMargin, setPaperMargin] = useState<'normal' | 'narrow' | 'wide'>('normal');
+  const [paperColumns, setPaperColumns] = useState<'1_col' | '2_col'>('1_col');
 
-  // Typography sliders
+  // Typography formatting
   const [fontSize, setFontSize] = useState<number>(14.5);
   const [lineHeight, setLineHeight] = useState<number>(1.5);
   const [questionGap, setQuestionGap] = useState<number>(6);
   const [banglaFont, setBanglaFont] = useState<string>('SolaimanLipi');
   const [arabicFont, setArabicFont] = useState<string>('Scheherazade New');
   const [englishFont, setEnglishFont] = useState<string>('Times New Roman');
+
+  // Word Editor Formatting toggles
+  const [isBold, setIsBold] = useState<boolean>(false);
+  const [isItalic, setIsItalic] = useState<boolean>(false);
+  const [isUnderline, setIsUnderline] = useState<boolean>(false);
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
 
   // Sections
   const [sections, setSections] = useState<PaperSection[]>([]);
@@ -222,11 +244,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       if (sections.length === 0 && qs.length > 0 && selectedBookId !== 'all') {
         QuestionBankService.autoGenerateExam({
           bookId: selectedBookId,
-          mcqCount: 5,
-          fillBlankCount: 5,
-          shortCount: 4,
-          broadCount: 2,
-          arabicCount: 1
+          targetMarks: 100
         }).then(defaultSecs => {
           if (!isCancelled) setSections(defaultSecs);
         });
@@ -242,7 +260,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     return () => { isCancelled = true; };
   }, [selectedBookId, filteredBooks, books]);
 
-  // Filter chapters - strictly isolated to books in filteredBooks!
+  // Filter chapters - strictly isolated to books in filteredBooks
   const filteredChapters = useMemo(() => {
     const validBookIds = new Set(filteredBooks.map(b => b.id));
     let chs = chapters.filter(c => validBookIds.has(c.book_id));
@@ -266,7 +284,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     setOpenAccordionCats(acc);
   };
 
-  // Filter questions for Left Pane - strictly isolated to books in filteredBooks!
+  // Filter questions for Left Pane
   const filteredQuestions = useMemo(() => {
     const validBookIds = new Set(filteredBooks.map(b => b.id));
     let list = allQuestions.filter(q => validBookIds.has(q.book_id));
@@ -341,7 +359,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     return sections.reduce((sum, sec) => sum + sec.questions.length, 0);
   }, [sections]);
 
-  // Toast feedback helper with optional action button
+  // Toast feedback helper
   const triggerToast = (msg: string, action?: { label: string; onClick: () => void }) => {
     setToastMessage(msg);
     setToastAction(action || null);
@@ -366,7 +384,9 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         category_type: q.category_type,
         options: q.options ? [...q.options] : undefined,
         answer_text: q.answer_text,
-        marks: q.default_marks || 1
+        marks: q.default_marks || 1,
+        left_items: q.left_items,
+        right_items: q.right_items
       };
 
       if (!targetSec) {
@@ -417,7 +437,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   };
 
   // Fast preset quick-section adding
-  const addQuickSection = (type: 'short' | 'fill' | 'mcq' | 'words' | 'alphabet' | 'arabic') => {
+  const addQuickSection = (type: 'short' | 'fill' | 'mcq' | 'words' | 'alphabet' | 'arabic' | 'matching') => {
     let title = '';
     let category = '';
     let layout: PaperSection['layout'] = '1_col';
@@ -457,7 +477,21 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         direction = 'rtl';
         numbering = 'arabic_number';
         break;
+      case 'matching':
+        title = `${toBnNum(sections.length + 1)}। ডান পাশের সাথে বাম পাশ মিল করো:`;
+        category = 'ডান-বাম মিলকরণ';
+        layout = '1_col';
+        break;
     }
+
+    const defaultQs: PaperQuestion[] = type === 'matching' ? [{
+      id: `match-${Date.now()}`,
+      category_type: 'ডান-বাম মিলকরণ',
+      question_text: 'বাম পাশের সাথে ডান পাশ মিলকরণ টেবিল:',
+      left_items: ['১. সূর্য পূর্ব দিকে', '২. শিক্ষাই জাতির', '৩. আমাদের মাতৃভাষা', '৪. সততা সর্বোৎকৃষ্ট'],
+      right_items: ['মেরুদণ্ড।', 'উঠে থাকে।', 'পন্থা।', 'বাংলা।'],
+      marks: 4
+    }] : [];
 
     const newSec: PaperSection = {
       id: `sec-${Date.now()}`,
@@ -467,9 +501,9 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       numbering_style: numbering,
       direction,
       dotted_lines: 0,
-      marks_formula: '১ × ৫ = ৫',
-      total_marks: 5,
-      questions: []
+      marks_formula: type === 'matching' ? '১ × ৪ = ৪' : '১ × ৫ = ৫',
+      total_marks: type === 'matching' ? 4 : 5,
+      questions: defaultQs
     };
 
     setSections(prev => [...prev, newSec]);
@@ -561,6 +595,8 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         setBanglaFont('SolaimanLipi');
         setArabicFont('Scheherazade New');
         setEnglishFont('Times New Roman');
+        setPaperMargin('normal');
+        setPaperColumns('1_col');
         break;
       case 'befaq':
         setBorderStyle('single');
@@ -572,6 +608,8 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         setBanglaFont('Noto Serif Bengali');
         setArabicFont('Amiri');
         setEnglishFont('Times New Roman');
+        setPaperMargin('normal');
+        setPaperColumns('1_col');
         break;
       case 'worksheet':
         setBorderStyle('single');
@@ -583,6 +621,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         setBanglaFont('Hind Siliguri');
         setArabicFont('Lateef');
         setEnglishFont('Inter');
+        setPaperMargin('wide');
         setSections(prev => prev.map(s => ({ ...s, dotted_lines: 1 })));
         break;
       case 'compact':
@@ -595,23 +634,24 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         setBanglaFont('SolaimanLipi');
         setArabicFont('Noto Naskh Arabic');
         setEnglishFont('Times New Roman');
+        setPaperMargin('narrow');
+        setPaperColumns('2_col');
         setSections(prev => prev.map(s => ({ ...s, layout: '2_col', dotted_lines: 0 })));
         break;
     }
-    triggerToast(`"${presetName}" টেমপ্লেট প্রয়োগ করা হয়েছে`);
+    triggerToast(`"${presetName}" লেআউট স্টাইল প্রয়োগ হয়েছে`);
   };
 
-  // Save draft
+  // Save current paper draft
   const saveCurrentDraft = async () => {
     setIsSaving(true);
-    const paperPayload: QBSavedPaper = {
+    const paperObj: QBSavedPaper = {
       id: `paper-${Date.now()}`,
-      madrasa_id: madrasah?.id || 'demo-inst',
-      user_id: profile?.id,
-      title: `${classSubLineText.split('|')[1]?.trim() || 'প্রশ্নপত্র'} - ${examTitleText}`,
+      madrasa_id: madrasah?.id,
+      title: `${examTitleText} - ${classSubLineText}`,
       exam_name: examTitleText,
-      class_name: classSubLineText.split('|')[0]?.trim() || '',
-      subject_name: classSubLineText.split('|')[1]?.trim() || '',
+      class_name: classSubLineText,
+      subject_name: classSubLineText,
       total_marks: totalCalculatedMarks,
       time_duration: examTimeText,
       paper_config: {
@@ -620,12 +660,12 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         madrasah_address: instAddressText,
         exam_title: examTitleText,
         class_name: classSubLineText,
-        subject_name: '',
+        subject_name: classSubLineText,
         subject_code: '',
         time_duration: examTimeText,
         target_marks: totalCalculatedMarks,
         show_student_info_box: showStudentInfo,
-        show_instructions: true,
+        show_instructions: false,
         instructions_text: '',
         font_size: fontSize,
         line_height: lineHeight,
@@ -641,30 +681,12 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       created_at: new Date().toISOString()
     };
 
-    const res = await QuestionBankService.savePaper(paperPayload);
+    const res = await QuestionBankService.savePaper(paperObj, madrasah?.id);
     setIsSaving(false);
     if (res.success) {
-      triggerToast('ড্রাফট সফলভাবে ক্লাউডে সংরক্ষিত হয়েছে!');
-      QuestionBankService.getSavedPapers(madrasah?.id).then(setSavedPapers);
-    } else {
-      triggerToast('লোকাল স্টোরেজে সংরক্ষিত হয়েছে');
+      setSavedPapers(prev => [paperObj, ...prev.filter(p => p.id !== paperObj.id)]);
+      triggerToast('✓ প্রশ্নপত্র ক্লাউডে সংরক্ষিত হয়েছে!');
     }
-  };
-
-  // Clear all drafts
-  const clearAllDrafts = () => {
-    if (!window.confirm('আপনি কি নিশ্চিত যে সংরক্ষিত সব ড্রাফট মুছে ফেলতে চান?')) return;
-    localStorage.removeItem('deenora_saved_question_papers');
-    setSavedPapers([]);
-    triggerToast('সকল ড্রাফট মুছে ফেলা হয়েছে');
-  };
-
-  // Delete single draft
-  const deleteDraft = async (paperId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await QuestionBankService.deleteSavedPaper(paperId);
-    setSavedPapers(prev => prev.filter(p => p.id !== paperId));
-    triggerToast('ড্রাফট মুছে ফেলা হয়েছে');
   };
 
   // Print / PDF Export
@@ -677,62 +699,68 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     window.print();
   };
 
-  // Export to Word (.doc)
-  const exportToWord = () => {
+  // Export to Microsoft Word (.doc) Logic with Full Styling & UTF-8 Encoding
+  const exportToWordDoc = () => {
     if (!hasActiveSubscription) {
       setProModalReason('MS Word (.doc) ফরম্যাটে ডাউনলোডের জন্য প্রিমিয়াম প্ল্যানে আপগ্রেড করুন');
       setShowProModal(true);
       return;
     }
 
-    const printElement = document.getElementById('paperSheet');
-    if (!printElement) {
-      alert('প্রশ্নপত্রের কনটেন্ট পাওয়া যায়নি');
+    const paperElement = document.getElementById('paperSheet');
+    if (!paperElement) {
+      alert('প্রশ্নপত্রের কনটেন্ট পাওয়া যায়নি');
       return;
     }
 
-    const pageDim = paperSize === 'Legal' ? '21.6cm 35.6cm' : '21cm 29.7cm';
-    const htmlContent = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    const contentHtml = paperElement.innerHTML;
+    const wordDocumentHtml = `
+      <!DOCTYPE html>
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' 
+            xmlns:w='urn:schemas-microsoft-com:office:word' 
+            xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
         <meta charset='utf-8'>
-        <title>${examTitleText}</title>
+        <title>${examTitleText || 'Question Paper'}</title>
         <style>
-          @page { size: ${pageDim}; margin: 1.2cm 1.5cm; }
+          @page {
+            size: ${paperSize === 'Legal' ? '8.5in 14in' : '8.27in 11.69in'};
+            margin: ${paperMargin === 'narrow' ? '0.35in 0.35in 0.35in 0.35in' : paperMargin === 'wide' ? '0.85in 0.85in 0.85in 0.85in' : '0.6in 0.6in 0.6in 0.6in'};
+          }
           body {
-            font-family: '${banglaFont}', '${englishFont}', Arial, sans-serif;
-            font-size: ${fontSize}pt;
+            font-family: '${banglaFont}', 'SolaimanLipi', 'Kalpurush', 'Times New Roman', serif;
+            font-size: ${fontSize}px;
             line-height: ${lineHeight};
             color: #000;
           }
-          .font-arabic, [dir="rtl"] { font-family: '${arabicFont}', serif !important; }
-          .center { text-align: center; }
-          .bismillah { font-family: '${arabicFont}', serif !important; font-size: 16pt; font-weight: bold; margin-bottom: 8px; text-align: center; }
-          .title { font-size: 20pt; font-weight: bold; margin: 0; text-align: center; }
-          .subtitle { font-size: 11pt; margin-bottom: 8px; text-align: center; }
-          .meta-table { width: 100%; border-top: 1px solid #000; border-bottom: 1px solid #000; margin-bottom: 12px; font-weight: bold; font-size: 11pt; }
-          .section-title { font-size: 12pt; font-weight: bold; margin-top: 12px; margin-bottom: 6px; }
+          .header-center { text-align: center; }
+          .border-box { border: ${borderStyle === 'double' ? '3px double #000' : borderStyle === 'single' ? '1px solid #000' : 'none'}; padding: 15px; }
+          table { width: 100%; border-collapse: collapse; }
+          td, th { padding: 4px; }
           .write-line { border-bottom: 1px dotted #888; height: 16px; margin: 4px 0; }
+          .no-print { display: none !important; }
         </style>
       </head>
       <body>
-        ${printElement.innerHTML}
+        <div class="border-box">
+          ${contentHtml}
+        </div>
       </body>
       </html>
     `;
 
-    const blob = new Blob(['\ufeff', htmlContent], {
+    const blob = new Blob(['\ufeff' + wordDocumentHtml], {
       type: 'application/msword;charset=utf-8'
     });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Exam_Paper_${Date.now()}.doc`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = `${(examTitleText || 'Question_Paper').replace(/\s+/g, '_')}.doc`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
-    triggerToast('MS Word (.doc) ফাইল সফলভাবে প্রস্তুত হয়েছে!');
+    triggerToast('Microsoft Word (.doc) ফাইল সফলভাবে প্রস্তুত হয়েছে!');
   };
 
   // Run Auto Generator
@@ -779,126 +807,557 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] w-full bg-[#f1f5f9] dark:bg-[#090d16] font-noto overflow-hidden select-none">
-      {/* ================= 1. TOP BAR (topbar) ================= */}
-      <header className="h-14 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 px-4 flex items-center justify-between z-30 shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="ফিরে যান"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-sm">
-              <Sparkles size={16} />
+      
+      {/* ================= MICROSOFT WORD STYLE TOP HEADER & RIBBON ================= */}
+      <header className="bg-white dark:bg-[#111827] border-b border-slate-300 dark:border-slate-800 z-30 shrink-0 shadow-xs">
+        
+        {/* Row 1: Word Quick Access & Document Title Bar */}
+        <div className="h-11 px-3 sm:px-4 bg-[#2b579a] text-white flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <button
+              onClick={onBack}
+              className="p-1 rounded hover:bg-white/20 transition text-white"
+              title="ফিরে যান"
+            >
+              <ArrowLeft size={16} />
+            </button>
+
+            {/* Word Badge */}
+            <div className="flex items-center gap-1.5 shrink-0 bg-white/10 px-2 py-0.5 rounded">
+              <span className="w-5 h-5 rounded bg-white text-[#2b579a] font-black text-xs flex items-center justify-center shadow-xs">
+                W
+              </span>
+              <span className="text-xs font-bold hidden sm:inline tracking-tight">Word Studio</span>
             </div>
-            <div>
-              <h1 className="text-sm font-black text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-2">
-                <span>প্রশ্নপত্র মেকার স্টুডিও</span>
-                <span className="text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                  EasyQ Studio
-                </span>
-              </h1>
+
+            {/* Editable Title */}
+            <input
+              type="text"
+              value={examTitleText}
+              onChange={e => setExamTitleText(e.target.value)}
+              className="bg-transparent text-white font-bold text-xs sm:text-sm px-2 py-0.5 rounded hover:bg-white/10 focus:bg-white/20 focus:outline-none transition max-w-[200px] sm:max-w-xs md:max-w-md truncate"
+              title="প্রশ্নপত্রের শিরোনাম সম্পাদনা করুন"
+            />
+          </div>
+
+          {/* Quick Right Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Live Marks Pill */}
+            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-white/15 text-xs font-bold border border-white/20">
+              <span className="hidden md:inline">মোট নম্বর:</span>
+              <span className="text-amber-300 font-black">{toBnNum(totalCalculatedMarks)}</span>
             </div>
+
+            {/* 1-Click Magic Generator */}
+            <button
+              onClick={() => setShowAutoModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded text-xs font-black shadow-xs transition active:scale-95"
+              title="১-ক্লিকে অটো প্রশ্ন জেনারেটর"
+            >
+              <Sparkles size={13} className="shrink-0" />
+              <span className="hidden sm:inline">১-ক্লিক অটো</span>
+            </button>
+
+            {/* Word (.doc) Download */}
+            <button
+              onClick={exportToWordDoc}
+              className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-100 text-[#2b579a] rounded text-xs font-black shadow-xs transition active:scale-95"
+              title="Microsoft Word (.doc) ফাইল ডাউনলোড"
+            >
+              <FileDown size={13} className="shrink-0" />
+              <span className="hidden md:inline">Word (.doc)</span>
+            </button>
+
+            {/* Print / PDF */}
+            <button
+              onClick={printPaper}
+              className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-black shadow-xs transition active:scale-95"
+              title="প্রিন্ট অথবা PDF সংরক্ষণ"
+            >
+              <Printer size={13} className="shrink-0" />
+              <span className="hidden sm:inline">প্রিন্ট</span>
+            </button>
           </div>
         </div>
 
-        {/* Live Stats Pills */}
-        <div className="hidden lg:flex items-center gap-2">
-          <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">
-            📚 মোট বই: {toBnNum(books.length)} টি
-          </span>
-          <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">
-            📝 প্রশ্নপত্রের বিভাগ: {toBnNum(sections.length)} টি
-          </span>
-          <span className={`text-xs font-black px-3 py-1 rounded-full border ${
-            totalCalculatedMarks === 100
-              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
-              : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-          }`}>
-            🎯 মোট নম্বর: {toBnNum(totalCalculatedMarks)}
-          </span>
+        {/* Row 2: Microsoft Word Ribbon Tabs (হোম, ইনসার্ট, লেআউট, ফাইল) */}
+        <div className="flex items-center px-2 bg-slate-100 dark:bg-slate-850 border-b border-slate-300 dark:border-slate-800 text-xs overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setWordRibbonTab('home')}
+            className={`px-3 py-1.5 font-bold transition border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              wordRibbonTab === 'home'
+                ? 'border-[#2b579a] text-[#2b579a] bg-white dark:bg-slate-800'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <span>হোম (Home)</span>
+          </button>
+
+          <button
+            onClick={() => setWordRibbonTab('insert')}
+            className={`px-3 py-1.5 font-bold transition border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              wordRibbonTab === 'insert'
+                ? 'border-[#2b579a] text-[#2b579a] bg-white dark:bg-slate-800'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <span>ইনসার্ট (Insert)</span>
+          </button>
+
+          <button
+            onClick={() => setWordRibbonTab('layout')}
+            className={`px-3 py-1.5 font-bold transition border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              wordRibbonTab === 'layout'
+                ? 'border-[#2b579a] text-[#2b579a] bg-white dark:bg-slate-800'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <span>লেআউট (Layout)</span>
+          </button>
+
+          <button
+            onClick={() => setWordRibbonTab('file')}
+            className={`px-3 py-1.5 font-bold transition border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              wordRibbonTab === 'file'
+                ? 'border-[#2b579a] text-[#2b579a] bg-white dark:bg-slate-800'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <span>ফাইল ও অ্যাকশন (File)</span>
+          </button>
         </div>
 
-        {/* Topbar Action Buttons */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* 🎲 অটো প্রশ্ন জেনারেটর */}
-          <button
-            onClick={() => setShowAutoModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-xs font-bold hover:shadow-md transition active:scale-95"
-            title="১-ক্লিকে অটো প্রশ্ন জেনারেটর"
-          >
-            <span>🎲</span>
-            <span className="hidden sm:inline">অটো প্রশ্ন জেনারেটর</span>
-            <span className="sm:hidden">অটো</span>
-          </button>
+        {/* Row 3: Word Ribbon Control Strip */}
+        <div className="px-3 py-1.5 bg-white dark:bg-[#111827] flex items-center gap-3 overflow-x-auto scrollbar-none text-xs">
+          
+          {/* TAB 1: HOME CONTROLS */}
+          {wordRibbonTab === 'home' && (
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Font Family Dropdown */}
+              <div className="flex items-center gap-1">
+                <select
+                  value={banglaFont}
+                  onChange={e => setBanglaFont(e.target.value)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-medium text-slate-800 dark:text-slate-200"
+                  title="ফন্ট সিলেক্ট করুন"
+                >
+                  <option value="SolaimanLipi">SolaimanLipi (ডিফল্ট বাংলা)</option>
+                  <option value="Kalpurush">Kalpurush</option>
+                  <option value="Noto Serif Bengali">Noto Serif Bengali</option>
+                  <option value="Hind Siliguri">Hind Siliguri</option>
+                  <option value="Amiri">Amiri (আরবি/উর্দু ফন্ট)</option>
+                  <option value="Scheherazade New">Scheherazade New (আরবি)</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                </select>
+              </div>
 
-          {/* 👁️ উত্তরমালা (Answer Sheet) Toggle */}
-          <button
-            onClick={() => {
-              setShowAnswerSheet(!showAnswerSheet);
-              triggerToast(showAnswerSheet ? 'উত্তরমালা বন্ধ করা হয়েছে' : 'উত্তরমালা (Answer Sheet) চালু করা হয়েছে');
-            }}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
-              showAnswerSheet
-                ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
-            }`}
-            title="উত্তরমালা মোড টগল"
-          >
-            <span>👁️</span>
-            <span className="hidden md:inline">উত্তরমালা (Answer Sheet)</span>
-          </button>
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
 
-          {/* 💾 সেভ ড্রাফট */}
-          <button
-            onClick={saveCurrentDraft}
-            disabled={isSaving}
-            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 transition"
-            title="ড্রাফট সংরক্ষণ"
-          >
-            <span>💾</span>
-            <span className="hidden sm:inline">সেভ ড্রাফট</span>
-          </button>
+              {/* Font Size A+ / A- & Dropdown */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setFontSize(prev => Math.max(11, prev - 1))}
+                  className="w-7 h-7 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold"
+                  title="ফন্ট ছোট করুন"
+                >
+                  A-
+                </button>
+                <select
+                  value={Math.round(fontSize)}
+                  onChange={e => setFontSize(parseInt(e.target.value) || 14)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200"
+                  title="ফন্ট সাইজ"
+                >
+                  {[12, 13, 14, 15, 16, 17, 18, 20, 22].map(sz => (
+                    <option key={sz} value={sz}>{sz}px</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setFontSize(prev => Math.min(24, prev + 1))}
+                  className="w-7 h-7 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold"
+                  title="ফন্ট বড় করুন"
+                >
+                  A+
+                </button>
+              </div>
 
-          {/* 📄 Word (.doc) */}
-          <button
-            onClick={exportToWord}
-            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-800 transition"
-            title="Microsoft Word (.doc) ডাউনলোড"
-          >
-            <span>📄</span>
-            <span className="hidden sm:inline">Word (.doc)</span>
-          </button>
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
 
-          {/* 🖨️ প্রিন্ট / PDF */}
-          <button
-            onClick={printPaper}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition active:scale-95"
-            title="প্রিন্ট অথবা PDF সংরক্ষণ"
-          >
-            <span>🖨️</span>
-            <span>প্রিন্ট / PDF</span>
-          </button>
+              {/* Bold, Italic, Underline Toggles */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 border border-slate-300 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setIsBold(!isBold)}
+                  className={`w-7 h-7 flex items-center justify-center rounded font-black transition ${
+                    isBold ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="বোল্ড (Bold)"
+                >
+                  <Bold size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsItalic(!isItalic)}
+                  className={`w-7 h-7 flex items-center justify-center rounded italic font-serif transition ${
+                    isItalic ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="ইটালিক (Italic)"
+                >
+                  <Italic size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsUnderline(!isUnderline)}
+                  className={`w-7 h-7 flex items-center justify-center rounded underline transition ${
+                    isUnderline ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="আন্ডারলাইন (Underline)"
+                >
+                  <Underline size={13} />
+                </button>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Text Alignment */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 border border-slate-300 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('left')}
+                  className={`w-7 h-7 flex items-center justify-center rounded transition ${
+                    textAlign === 'left' ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="বাম অ্যালাইন (Left)"
+                >
+                  <AlignLeft size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('center')}
+                  className={`w-7 h-7 flex items-center justify-center rounded transition ${
+                    textAlign === 'center' ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="মাঝখান (Center)"
+                >
+                  <AlignCenter size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('right')}
+                  className={`w-7 h-7 flex items-center justify-center rounded transition ${
+                    textAlign === 'right' ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="ডান অ্যালাইন (Right)"
+                >
+                  <AlignRight size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTextAlign('justify')}
+                  className={`w-7 h-7 flex items-center justify-center rounded transition ${
+                    textAlign === 'justify' ? 'bg-[#2b579a] text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="উভয়পাশে সমান (Justify)"
+                >
+                  <AlignJustify size={13} />
+                </button>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Line Spacing & Question Gap */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">লাইন স্পেস:</span>
+                <select
+                  value={lineHeight}
+                  onChange={e => setLineHeight(parseFloat(e.target.value) || 1.5)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200"
+                >
+                  <option value="1.15">1.15 (টাইট)</option>
+                  <option value="1.25">1.25</option>
+                  <option value="1.5">1.5 (স্ট্যান্ডার্ড)</option>
+                  <option value="1.8">1.8</option>
+                  <option value="2.0">2.0 (ডাবল)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">গ্যাপ:</span>
+                <select
+                  value={questionGap}
+                  onChange={e => setQuestionGap(parseInt(e.target.value) || 6)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200"
+                >
+                  <option value="3">৩px (কাগজ সাশ্রয়ী)</option>
+                  <option value="6">৬px (স্ট্যান্ডার্ড)</option>
+                  <option value="8">৮px</option>
+                  <option value="12">১২px (ওয়ার্কশিট)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: INSERT CONTROLS */}
+          {wordRibbonTab === 'insert' && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobilePane('library')}
+                className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded-md font-bold hover:bg-blue-100"
+              >
+                <BookOpen size={14} />
+                <span>প্রশ্ন ব্যাংক থেকে যোগ করুন ({books.length}টি বই)</span>
+              </button>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Quick Section Adders */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => addQuickSection('mcq')}
+                  className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 rounded border border-slate-300 dark:border-slate-700 font-bold"
+                >
+                  + সঠিক উত্তর (MCQ)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addQuickSection('fill')}
+                  className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 rounded border border-slate-300 dark:border-slate-700 font-bold"
+                >
+                  + শূন্যস্থান
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addQuickSection('short')}
+                  className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 rounded border border-slate-300 dark:border-slate-700 font-bold"
+                >
+                  + সংক্ষিপ্ত প্রশ্ন
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addQuickSection('matching')}
+                  className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded border border-indigo-300 dark:border-indigo-700 font-bold flex items-center gap-1"
+                >
+                  <Table size={13} />
+                  <span>+ মিলকরণ টেবিল</span>
+                </button>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Header & Student Box Toggles */}
+              <button
+                type="button"
+                onClick={() => setShowBismillah(!showBismillah)}
+                className={`px-2.5 py-1 rounded border font-bold ${
+                  showBismillah ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-100 text-slate-600 border-slate-300'
+                }`}
+              >
+                {showBismillah ? '✓ বিসমিল্লাহ চালু' : '+ বিসমিল্লাহ'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowStudentInfo(!showStudentInfo)}
+                className={`px-2.5 py-1 rounded border font-bold ${
+                  showStudentInfo ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-100 text-slate-600 border-slate-300'
+                }`}
+              >
+                {showStudentInfo ? '✓ শিক্ষার্থী বক্স চালু' : '+ শিক্ষার্থী বক্স'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAnswerSheet(!showAnswerSheet)}
+                className={`px-2.5 py-1 rounded border font-bold ${
+                  showAnswerSheet ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700 border-slate-300'
+                }`}
+              >
+                👁️ উত্তরমালা মোড
+              </button>
+            </div>
+          )}
+
+          {/* TAB 3: LAYOUT CONTROLS */}
+          {wordRibbonTab === 'layout' && (
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Paper Size */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">সাইজ:</span>
+                <select
+                  value={paperSize}
+                  onChange={e => setPaperSize(e.target.value as 'A4' | 'Legal')}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-bold"
+                >
+                  <option value="A4">A4 Portrait (210 × 297 mm)</option>
+                  <option value="Legal">Legal Portrait (216 × 356 mm)</option>
+                </select>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Columns */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPaperColumns('1_col')}
+                  className={`px-2.5 py-1 rounded border font-bold ${
+                    paperColumns === '1_col' ? 'bg-[#2b579a] text-white border-[#2b579a]' : 'bg-slate-100 text-slate-700 border-slate-300'
+                  }`}
+                >
+                  ১-কলাম
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaperColumns('2_col')}
+                  className={`px-2.5 py-1 rounded border font-bold ${
+                    paperColumns === '2_col' ? 'bg-[#2b579a] text-white border-[#2b579a]' : 'bg-slate-100 text-slate-700 border-slate-300'
+                  }`}
+                >
+                  ২-কলাম (সংবাদপত্র লেআউট)
+                </button>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Borders */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">বর্ডার:</span>
+                <select
+                  value={borderStyle}
+                  onChange={e => setBorderStyle(e.target.value as any)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-bold"
+                >
+                  <option value="double">ডাবল বর্ডার (Double Frame)</option>
+                  <option value="single">সিঙ্গেল বর্ডার (Single Solid)</option>
+                  <option value="none">বর্ডার নেই (None)</option>
+                </select>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Margins */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">মার্জিন:</span>
+                <select
+                  value={paperMargin}
+                  onChange={e => setPaperMargin(e.target.value as any)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-bold"
+                >
+                  <option value="normal">স্বাভাবিক (Normal 16mm)</option>
+                  <option value="narrow">ন্যারো (Narrow 10mm)</option>
+                  <option value="wide">প্রশস্ত (Wide 22mm)</option>
+                </select>
+              </div>
+
+              <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0" />
+
+              {/* Presets */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => applyPreset('noorani')}
+                  className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-slate-800"
+                >
+                  🕌 নূরানী
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('befaq')}
+                  className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-slate-800"
+                >
+                  📖 বেফাক
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('worksheet')}
+                  className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-slate-800"
+                >
+                  ✏️ ওয়ার্কশিট
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('compact')}
+                  className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-slate-800"
+                >
+                  📄 কমপ্যাক্ট
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: FILE & ACTIONS */}
+          {wordRibbonTab === 'file' && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={saveCurrentDraft}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-md font-bold border border-slate-300 dark:border-slate-700"
+              >
+                <Save size={14} />
+                <span>সেভ ড্রাফট (Save)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={exportToWordDoc}
+                className="flex items-center gap-1.5 px-3.5 py-1 bg-[#2b579a] hover:bg-[#20447c] text-white rounded-md font-bold shadow-xs active:scale-95"
+              >
+                <FileDown size={14} />
+                <span>Microsoft Word (.doc) ডাউনলোড</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={printPaper}
+                className="flex items-center gap-1.5 px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold shadow-xs active:scale-95"
+              >
+                <Printer size={14} />
+                <span>প্রিন্ট / PDF হিসেবে সংরক্ষণ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAutoModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-md font-black shadow-xs active:scale-95"
+              >
+                <Sparkles size={14} />
+                <span>১-ক্লিক অটো তৈরি</span>
+              </button>
+
+              {savedPapers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMobilePane('settings')}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-bold border border-slate-300"
+                >
+                  <FolderOpen size={14} />
+                  <span>ড্রাফট তালিকা ({savedPapers.length})</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
       {/* ================= 3-PANE WORKSPACE ================= */}
       <div className="flex-1 flex overflow-hidden relative pb-14 md:pb-0">
 
-        {/* ================= 2. LEFT PANE (left-pane - 380px) ================= */}
+        {/* ================= LEFT PANE: 385 BOOKS QUESTION BANK (w-[380px]) ================= */}
         <aside
-          className={`w-full md:w-[380px] bg-white dark:bg-[#111827] border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
+          className={`w-full md:w-[380px] bg-white dark:bg-[#111827] border-r border-slate-300 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
             mobilePane === 'library' ? 'flex' : 'hidden md:flex'
           }`}
         >
           {/* Header */}
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center justify-between">
+          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-base">📖</span>
+              <span className="text-base">📚</span>
               <h3 className="text-xs font-black text-slate-800 dark:text-slate-100">
-                প্রশ্ন সম্ভার (Question Bank)
+                ৩৮৫টি বইয়ের প্রশ্ন সম্ভার (Question Bank)
               </h3>
             </div>
             <span className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
@@ -966,7 +1425,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             {/* 3. Book Selector */}
             <div>
               <label className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
-                ৩. বিষয় / বই (Book):
+                ৩. বিষয় / বই (Book - মোট {filteredBooks.length}টি):
               </label>
               <select
                 value={selectedBookId}
@@ -1035,7 +1494,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             {isLoadingLibrary ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                 <RefreshCw size={24} className="animate-spin text-blue-500 mb-2" />
-                <span className="text-xs">প্রশ্ন সম্ভার লোড হচ্ছে...</span>
+                <span className="text-xs">৩৮৫টি বইয়ের প্রশ্ন সম্ভার লোড হচ্ছে...</span>
               </div>
             ) : Object.keys(questionsByCategory).length === 0 ? (
               <div className="text-center py-16 text-slate-400">
@@ -1140,6 +1599,19 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                                 </div>
                               )}
 
+                              {/* Matching table preview */}
+                              {q.left_items && q.right_items && (
+                                <div className="mt-1.5 p-1.5 bg-slate-50 dark:bg-slate-800/60 rounded text-[10.5px] space-y-0.5">
+                                  <div className="font-bold text-slate-700 dark:text-slate-300 border-b pb-0.5">মিলকরণ টেবিল:</div>
+                                  {q.left_items.slice(0, 3).map((item, idx) => (
+                                    <div key={idx} className="flex justify-between text-slate-600 dark:text-slate-400">
+                                      <span>{item}</span>
+                                      <span>➔ {q.right_items?.[idx]}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
                               {/* Answer preview */}
                               {q.answer_text && (
                                 <p className="text-[10px] text-emerald-700 dark:text-emerald-400 italic mt-1 font-medium truncate">
@@ -1180,34 +1652,34 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
           </div>
         </aside>
 
-        {/* ================= 3. CENTER PANE (center-pane - Live A4 Paper Sheet) ================= */}
+        {/* ================= CENTER CANVAS: WORD A4 / LEGAL DOCUMENT CANVAS ================= */}
         <main
-          className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-8 flex flex-col items-center bg-[#cbd5e1]/40 dark:bg-[#070b12] custom-scrollbar ${
+          className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-8 flex flex-col items-center bg-slate-200 dark:bg-slate-900 custom-scrollbar ${
             mobilePane === 'paper' ? 'flex' : 'hidden md:flex'
           }`}
           onDragOver={e => e.preventDefault()}
         >
-          {/* Mobile Viewport Toolbar (Hidden on Desktop) */}
-          <div className="md:hidden w-full max-w-md mb-2.5 flex items-center justify-between gap-1.5 px-0.5 no-print">
-            <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700 shadow-xs">
+          {/* Mobile Viewport Scale & Action Bar */}
+          <div className="md:hidden w-full max-w-md mb-2 flex items-center justify-between gap-1.5 no-print">
+            <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg p-0.5 border border-slate-300 dark:border-slate-700 shadow-xs">
               <button
                 type="button"
                 onClick={() => setPaperZoom('fit')}
                 className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
                   paperZoom === 'fit'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#2b579a] text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300'
                 }`}
                 title="স্ক্রিনে সম্পূর্ণ ফিট করুন"
               >
-                ফিট স্ক্রিন
+                ফিট
               </button>
               <button
                 type="button"
                 onClick={() => setPaperZoom('compact')}
                 className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
                   paperZoom === 'compact'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#2b579a] text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300'
                 }`}
                 title="কমপ্যাক্ট মোবাইল রিফ্লো"
@@ -1219,25 +1691,33 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                 onClick={() => setPaperZoom('100')}
                 className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
                   paperZoom === '100'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#2b579a] text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300'
                 }`}
-                title="১:১ আসল সাইজ স্ক্রোল"
+                title="১০০% আসল সাইজ"
               >
                 ১০০%
               </button>
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700">
                 মোট: {toBnNum(totalCalculatedMarks)}
               </span>
+              <button
+                type="button"
+                onClick={exportToWordDoc}
+                className="px-2.5 py-1 bg-[#2b579a] hover:bg-[#20447c] text-white text-[11px] font-black rounded-lg shadow-xs flex items-center gap-1 active:scale-95"
+              >
+                <FileDown size={12} />
+                <span>Word</span>
+              </button>
               <button
                 type="button"
                 onClick={printPaper}
                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-xs flex items-center gap-1 active:scale-95"
               >
-                <span>🖨️</span>
+                <Printer size={12} />
                 <span>প্রিন্ট</span>
               </button>
             </div>
@@ -1254,21 +1734,31 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               style={
                 viewportWidth < 768 && paperZoom === 'fit'
                   ? {
-                      zoom: Math.min(1, Math.max(0.35, (viewportWidth - 20) / (paperSize === 'Legal' ? 816 : 794)))
+                      zoom: Math.min(1, Math.max(0.35, (viewportWidth - 18) / (paperSize === 'Legal' ? 816 : 794)))
                     }
                   : undefined
               }
             >
-              {/* A4 Paper Sheet Container */}
+              {/* White A4 / Legal Canvas Sheet (#paperSheet) */}
               <div
                 id="paperSheet"
                 style={{
                   width: viewportWidth < 768 && paperZoom === 'compact' ? '100%' : (paperSize === 'Legal' ? '216mm' : '210mm'),
                   minHeight: paperSize === 'Legal' ? '356mm' : '297mm',
-                  padding: viewportWidth < 768 && paperZoom === 'compact' ? '12px 14px' : '16mm 16mm',
+                  padding: viewportWidth < 768 && paperZoom === 'compact'
+                    ? '14px 16px'
+                    : paperMargin === 'narrow'
+                    ? '10mm 12mm'
+                    : paperMargin === 'wide'
+                    ? '22mm 22mm'
+                    : '16mm 16mm',
                   fontFamily: `'${banglaFont}', '${englishFont}', serif`,
                   fontSize: viewportWidth < 768 && paperZoom === 'compact' ? `${Math.max(12, fontSize - 2)}px` : `${fontSize}px`,
                   lineHeight: lineHeight,
+                  textAlign: textAlign,
+                  fontWeight: isBold ? 'bold' : 'normal',
+                  fontStyle: isItalic ? 'italic' : 'normal',
+                  textDecoration: isUnderline ? 'underline' : 'none',
                   ['--paper-q-gap' as any]: `${questionGap}px`
                 }}
                 className={`w-full bg-white text-black shadow-2xl relative transition-all ${
@@ -1279,527 +1769,563 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                     : 'border-0'
                 }`}
               >
-            {/* ================= EDITABLE EXAM HEADER ================= */}
-            <header className="text-center pb-3 mb-3 border-b-2 border-black">
-              {/* #bismillahBox */}
-              {showBismillah && (
-                <div
-                  id="bismillahBox"
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={e => setBismillahText(e.currentTarget.textContent || '')}
-                  style={{ fontFamily: `'${arabicFont}', serif` }}
-                  className="text-lg md:text-xl font-bold mb-1 tracking-wide outline-none focus:bg-blue-50/60 rounded px-2"
-                >
-                  {bismillahText}
-                </div>
-              )}
-
-              {/* #instName & Address */}
-              <h1
-                id="instName"
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={e => setInstNameText(e.currentTarget.textContent || '')}
-                className="text-xl md:text-2xl font-black tracking-tight leading-tight outline-none focus:bg-blue-50/60 rounded px-1"
-              >
-                {instNameText}
-              </h1>
-              <p
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={e => setInstAddressText(e.currentTarget.textContent || '')}
-                className="text-xs text-slate-700 outline-none focus:bg-blue-50/60 rounded px-1 mt-0.5"
-              >
-                {instAddressText}
-              </p>
-
-              {/* #examTitle Pill */}
-              <div className="inline-block mt-1">
-                <span
-                  id="examTitle"
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={e => setExamTitleText(e.currentTarget.textContent || '')}
-                  className="inline-block text-sm md:text-base font-bold px-4 py-0.5 border border-black rounded-full outline-none focus:bg-blue-50/60"
-                >
-                  {examTitleText}
-                </span>
-              </div>
-
-              {/* #classSubLine */}
-              <div
-                id="classSubLine"
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={e => setClassSubLineText(e.currentTarget.textContent || '')}
-                className="mt-2 text-xs md:text-sm font-bold text-slate-900 border-t border-black/40 pt-1 outline-none focus:bg-blue-50/60"
-              >
-                {classSubLineText}
-              </div>
-
-              {/* Time & Marks Row */}
-              <div className="mt-1 flex items-center justify-between text-xs md:text-sm font-bold border-t border-dotted border-black/40 pt-1">
-                <div>
-                  <span>সময়: </span>
-                  <span
-                    id="examTime"
-                    contentEditable
-                    suppressContentEditableWarning
-                    onBlur={e => setExamTimeText(e.currentTarget.textContent || '')}
-                    className="outline-none focus:bg-blue-50/60 px-1 border-b border-dashed border-slate-400"
-                  >
-                    {examTimeText}
-                  </span>
-                </div>
-
-                <div>
-                  <span>পূর্ণমান: </span>
-                  <span
-                    id="examMarks"
-                    contentEditable
-                    suppressContentEditableWarning
-                    onBlur={e => setExamMarksText(e.currentTarget.textContent || '')}
-                    className="outline-none focus:bg-blue-50/60 px-1 border-b border-dashed border-slate-400"
-                  >
-                    {toBnNum(totalCalculatedMarks)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Toggleable Student Info Box (#studentInfoBar) */}
-              {showStudentInfo && (
-                <div
-                  id="studentInfoBar"
-                  className="mt-2 p-1.5 border border-black text-xs flex justify-between font-bold"
-                >
-                  <span>শিক্ষার্থীর নাম: _____________________________</span>
-                  <span>রোল: ________</span>
-                  <span>শাখা: _____</span>
-                  <span>তারিখ: _________</span>
-                </div>
-              )}
-            </header>
-
-            {/* ================= SECTIONS & QUESTIONS ================= */}
-            <div className="space-y-4">
-              {sections.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed border-slate-300 rounded-xl my-6">
-                  <FileText size={36} className="mx-auto text-slate-400 mb-2" />
-                  <p className="text-sm font-bold text-slate-700">
-                    প্রশ্নপত্রটি বর্তমানে খালি রয়েছে
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                    বামের প্রশ্ন সম্ভার থেকে প্রশ্ন যোগ করুন অথবা "অটো প্রশ্ন জেনারেটর" বাটনে ক্লিক করে স্বয়ংক্রিয় প্রশ্নপত্র সাজান।
-                  </p>
-                  <button
-                    onClick={() => setShowAutoModal(true)}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-blue-700"
-                  >
-                    🎲 অটো প্রশ্ন সাজান
-                  </button>
-                </div>
-              ) : (
-                sections.map((section, sIdx) => (
-                  <div
-                    key={section.id}
-                    draggable="true"
-                    onDragStart={() => {
-                      dragItem.current = { type: 'section', secIdx: sIdx };
-                    }}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={() => {
-                      if (!dragItem.current) return;
-                      if (dragItem.current.type === 'section') {
-                        const fromIdx = dragItem.current.secIdx;
-                        if (fromIdx !== sIdx) {
-                          setSections(prev => {
-                            const copy = [...prev];
-                            const [moved] = copy.splice(fromIdx, 1);
-                            copy.splice(sIdx, 0, moved);
-                            return copy;
-                          });
-                        }
-                      } else if (dragItem.current.type === 'question') {
-                        // Transfer question to this section
-                        const qData = dragItem.current.data;
-                        if (qData) {
-                          addQuestionToPaper(qData, section.id);
-                        }
-                      }
-                      dragItem.current = null;
-                    }}
-                    className="q-section relative group/sec pb-2 border-b border-slate-200 last:border-b-0"
-                  >
-                    {/* FLOATING PER-SECTION TOOLBAR (sec-toolbar) */}
-                    <div className="sec-toolbar no-print flex md:hidden group-hover/sec:flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-md shadow-lg z-20 text-[11px] mb-1.5 md:mb-0 md:absolute md:-top-4 md:right-0 flex-wrap">
-                      {/* Column Layout Dropdown */}
-                      <select
-                        value={section.layout}
-                        onChange={e => {
-                          const val = e.target.value as PaperSection['layout'];
-                          setSections(prev => prev.map(s => s.id === section.id ? { ...s, layout: val } : s));
-                        }}
-                        className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
-                        title="কলাম বিন্যাস পরিবর্তন"
-                      >
-                        <option value="1_col">1 কলাম (তালিকা)</option>
-                        <option value="2_col">2 কলাম (পাশাপাশি)</option>
-                        <option value="3_col">3 কলাম (শব্দার্থ)</option>
-                        <option value="4_col">4 কলাম (বর্ণ/শব্দ)</option>
-                        <option value="word_box">Word Chips (বক্সে)</option>
-                      </select>
-
-                      {/* Numbering Format Dropdown */}
-                      <select
-                        value={section.numbering_style}
-                        onChange={e => {
-                          const val = e.target.value as PaperSection['numbering_style'];
-                          setSections(prev => prev.map(s => s.id === section.id ? { ...s, numbering_style: val } : s));
-                        }}
-                        className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
-                        title="ক্রমিক নম্বর ফরম্যাট"
-                      >
-                        <option value="bangla_letter">ক, খ, গ...</option>
-                        <option value="bangla_number">১, ২, ৩...</option>
-                        <option value="english_number">1, 2, 3...</option>
-                        <option value="english_letter">a, b, c...</option>
-                        <option value="arabic_number">١, ٢, ٣ (আরবি)</option>
-                        <option value="none">নাম্বার ছাড়া</option>
-                      </select>
-
-                      {/* Direction Toggle Button (dir) */}
-                      <button
-                        onClick={() => {
-                          const nextDir = section.direction === 'rtl' ? 'ltr' : 'rtl';
-                          setSections(prev => prev.map(s => s.id === section.id ? { ...s, direction: nextDir } : s));
-                        }}
-                        className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold ${
-                          section.direction === 'rtl'
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-slate-800 hover:bg-slate-700'
-                        }`}
-                        title="টেক্সট ডিরেকশন ও আরবি মোড"
-                      >
-                        {section.direction === 'rtl' ? '⬅️ আরবি RTL' : '➡️ বাংলা/En'}
-                      </button>
-
-                      {/* Worksheet Dotted Answer Lines Dropdown */}
-                      <select
-                        value={section.dotted_lines || 0}
-                        onChange={e => {
-                          const val = parseInt(e.target.value) || 0;
-                          setSections(prev => prev.map(s => s.id === section.id ? { ...s, dotted_lines: val } : s));
-                        }}
-                        className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
-                        title="উত্তর লেখার ডটেড লাইন"
-                      >
-                        <option value="0">উত্তর লাইন: ০টি</option>
-                        <option value="1">১ লাইন</option>
-                        <option value="2">২ লাইন</option>
-                        <option value="3">৩ লাইন</option>
-                        <option value="4">৪ লাইন</option>
-                      </select>
-
-                      {/* Move Up ▲ */}
-                      <button
-                        disabled={sIdx === 0}
-                        onClick={() => moveSection(sIdx, 'up')}
-                        className="p-1 hover:bg-slate-800 rounded disabled:opacity-30"
-                        title="বিভাগ উপরে নিন"
-                      >
-                        ▲
-                      </button>
-
-                      {/* Move Down ▼ */}
-                      <button
-                        disabled={sIdx === sections.length - 1}
-                        onClick={() => moveSection(sIdx, 'down')}
-                        className="p-1 hover:bg-slate-800 rounded disabled:opacity-30"
-                        title="বিভাগ নিচে নিন"
-                      >
-                        ▼
-                      </button>
-
-                      {/* Add Custom Question + প্রশ্ন */}
-                      <button
-                        onClick={() => addCustomQuestion(section.id)}
-                        className="px-1.5 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-[10.5px] font-bold"
-                        title="কাস্টম প্রশ্ন যোগ করুন"
-                      >
-                        + প্রশ্ন
-                      </button>
-
-                      {/* Delete Section 🗑 */}
-                      <button
-                        onClick={() => deleteSection(section.id)}
-                        className="p-1 hover:bg-red-700 text-red-300 hover:text-white rounded"
-                        title="বিভাগ মুছুন"
-                      >
-                        🗑
-                      </button>
+                {/* ================= EDITABLE EXAM HEADER ================= */}
+                <header className="text-center pb-3 mb-3 border-b-2 border-black">
+                  {/* #bismillahBox */}
+                  {showBismillah && (
+                    <div
+                      id="bismillahBox"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={e => setBismillahText(e.currentTarget.textContent || '')}
+                      style={{ fontFamily: `'${arabicFont}', serif` }}
+                      className="text-lg md:text-xl font-bold mb-1 tracking-wide outline-none focus:bg-blue-50/60 rounded px-2"
+                    >
+                      {bismillahText}
                     </div>
+                  )}
 
-                    {/* Section Header: Serial, Title & Marks Formula */}
-                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                      <div className="flex items-baseline gap-1.5 flex-1">
-                        <span className="font-bold text-sm md:text-base">{toBnNum(sIdx + 1)}।</span>
-                        <h3
-                          contentEditable
-                          suppressContentEditableWarning
-                          onBlur={e => {
-                            const newT = e.currentTarget.textContent || '';
-                            setSections(prev => prev.map(s => s.id === section.id ? { ...s, title: newT } : s));
-                          }}
-                          className="font-bold text-sm md:text-base outline-none focus:bg-blue-50/60 rounded px-1 flex-1"
-                        >
-                          {section.title.replace(/^[০-৯\d]+[।.]\s*/, '')}
-                        </h3>
-                      </div>
+                  {/* #instName & Address */}
+                  <h1
+                    id="instName"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={e => setInstNameText(e.currentTarget.textContent || '')}
+                    className="text-xl md:text-2xl font-black tracking-tight leading-tight outline-none focus:bg-blue-50/60 rounded px-1"
+                  >
+                    {instNameText}
+                  </h1>
+                  <p
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={e => setInstAddressText(e.currentTarget.textContent || '')}
+                    className="text-xs text-slate-700 outline-none focus:bg-blue-50/60 rounded px-1 mt-0.5"
+                  >
+                    {instAddressText}
+                  </p>
 
-                      {/* Marks Formula (১ × ৫ = ৫) */}
-                      <div
+                  {/* #examTitle Pill */}
+                  <div className="inline-block mt-1">
+                    <span
+                      id="examTitle"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={e => setExamTitleText(e.currentTarget.textContent || '')}
+                      className="inline-block text-sm md:text-base font-bold px-4 py-0.5 border border-black rounded-full outline-none focus:bg-blue-50/60"
+                    >
+                      {examTitleText}
+                    </span>
+                  </div>
+
+                  {/* #classSubLine */}
+                  <div
+                    id="classSubLine"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={e => setClassSubLineText(e.currentTarget.textContent || '')}
+                    className="mt-2 text-xs md:text-sm font-bold text-slate-900 border-t border-black/40 pt-1 outline-none focus:bg-blue-50/60"
+                  >
+                    {classSubLineText}
+                  </div>
+
+                  {/* Time & Marks Row */}
+                  <div className="mt-1 flex items-center justify-between text-xs md:text-sm font-bold border-t border-dotted border-black/40 pt-1">
+                    <div>
+                      <span>সময়: </span>
+                      <span
+                        id="examTime"
                         contentEditable
                         suppressContentEditableWarning
-                        onBlur={e => {
-                          const newF = e.currentTarget.textContent || '';
-                          setSections(prev => prev.map(s => s.id === section.id ? { ...s, marks_formula: newF } : s));
-                        }}
-                        className="text-xs md:text-sm font-bold shrink-0 outline-none focus:bg-blue-50/60 rounded px-1"
+                        onBlur={e => setExamTimeText(e.currentTarget.textContent || '')}
+                        className="outline-none focus:bg-blue-50/60 px-1 border-b border-dashed border-slate-400"
                       >
-                        {section.marks_formula}
-                      </div>
+                        {examTimeText}
+                      </span>
                     </div>
 
-                    {/* Section Questions Grid conforming to layout */}
-                    <div
-                      dir={section.direction}
-                      style={{
-                        fontFamily: section.direction === 'rtl' ? `'${arabicFont}', serif` : undefined,
-                        fontSize: section.direction === 'rtl' ? `${fontSize + 1.5}px` : undefined,
-                        gap: `${questionGap}px`
-                      }}
-                      className={`grid ${
-                        section.layout === '2_col'
-                          ? 'grid-cols-1 md:grid-cols-2 gap-x-6'
-                          : section.layout === '3_col'
-                          ? 'grid-cols-1 md:grid-cols-3 gap-x-4'
-                          : section.layout === '4_col'
-                          ? 'grid-cols-2 md:grid-cols-4 gap-x-3'
-                          : section.layout === 'word_box'
-                          ? 'flex flex-wrap gap-2 p-2 border border-black/60 rounded bg-slate-50'
-                          : 'grid-cols-1'
-                      } ${section.direction === 'rtl' ? 'direction-rtl text-right font-arabic' : ''}`}
-                    >
-                      {section.questions.map((question, qIdx) => (
-                        <div
-                          key={question.id}
-                          draggable="true"
-                          onDragStart={() => {
-                            dragItem.current = { type: 'question', secIdx: sIdx, qIdx };
-                          }}
-                          onDragOver={e => e.preventDefault()}
-                          onDrop={() => {
-                            if (!dragItem.current) return;
-                            if (dragItem.current.type === 'question') {
-                              const fromSec = dragItem.current.secIdx;
-                              const fromQ = dragItem.current.qIdx;
-                              if (fromSec === sIdx && fromQ !== undefined && fromQ !== qIdx) {
-                                moveQuestion(sIdx, fromQ, fromQ < qIdx ? 'down' : 'up');
-                              }
-                            }
-                            dragItem.current = null;
-                          }}
-                          className={`relative group/q py-1 px-1.5 rounded hover:bg-slate-50 transition flex flex-col ${
-                            section.layout === 'word_box'
-                              ? 'inline-block px-2.5 py-1 border border-black rounded-md bg-white text-xs font-bold'
-                              : ''
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-1.5">
-                            <div className="flex items-start gap-1.5 flex-1">
-                              {/* Numbering Label */}
-                              {section.numbering_style !== 'none' && (
-                                <span className="font-bold text-xs select-none shrink-0 pt-0.5">
-                                  {getNumberingLabel(qIdx, section.numbering_style)}
-                                </span>
-                              )}
-
-                              {/* Editable Question Text */}
-                              <p
-                                contentEditable
-                                suppressContentEditableWarning
-                                onBlur={e => {
-                                  const newText = e.currentTarget.textContent || '';
-                                  setSections(prev => prev.map(s => s.id === section.id ? {
-                                    ...s,
-                                    questions: s.questions.map(q => q.id === question.id ? { ...q, question_text: newText } : q)
-                                  } : s));
-                                }}
-                                className="text-xs md:text-sm leading-relaxed outline-none focus:bg-blue-50/70 rounded px-0.5 flex-1"
-                              >
-                                {question.question_text}
-                              </p>
-                            </div>
-
-                            {/* Marks Badge (editable) */}
-                            {section.layout !== 'word_box' && (
-                              <span
-                                contentEditable
-                                suppressContentEditableWarning
-                                onBlur={e => {
-                                  const val = parseFloat(e.currentTarget.textContent?.replace(/[^\d.]/g, '') || '1');
-                                  setSections(prev => prev.map(s => {
-                                    if (s.id !== section.id) return s;
-                                    const updated = s.questions.map(q => q.id === question.id ? { ...q, marks: val } : q);
-                                    return {
-                                      ...s,
-                                      questions: updated,
-                                      total_marks: updated.reduce((acc, curr) => acc + (curr.marks || 1), 0)
-                                    };
-                                  }));
-                                }}
-                                className="text-xs font-bold text-slate-900 shrink-0 select-none outline-none"
-                                title="নম্বর এডিট করুন"
-                              >
-                                [{toBnNum(question.marks || 1)}]
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Options if MCQ */}
-                          {question.options && question.options.length > 0 && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mt-1 pl-4 text-xs">
-                              {question.options.map((opt, oIdx) => (
-                                <div key={oIdx} className="flex items-center gap-1 truncate">
-                                  <span className="font-semibold">{getNumberingLabel(oIdx, 'bangla_letter')}</span>
-                                  <span>{opt}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Dotted Lines for Handwriting (.write-line) */}
-                          {section.dotted_lines && section.dotted_lines > 0 ? (
-                            <div className="mt-1.5 space-y-2">
-                              {Array.from({ length: section.dotted_lines }).map((_, lIdx) => (
-                                <div key={lIdx} className="write-line w-full border-b border-dotted border-slate-500 h-3.5" />
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {/* Answer Sheet Mode (.paper-ans) */}
-                          {showAnswerSheet && question.answer_text && (
-                            <div className="paper-ans mt-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded inline-block self-start">
-                              [উত্তর: {question.answer_text}]
-                            </div>
-                          )}
-
-                          {/* Floating Question Actions (Hidden on Print) - Always accessible on touch screens, hover on desktop */}
-                          <div className="no-print absolute top-0.5 right-0.5 flex md:hidden group-hover/q:flex items-center gap-0.5 bg-white/95 border border-slate-300 rounded shadow-xs text-[11px] p-0.5 z-10">
-                            <button
-                              type="button"
-                              disabled={qIdx === 0}
-                              onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'up'); }}
-                              className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
-                              title="উপরে নিন"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              disabled={qIdx === section.questions.length - 1}
-                              onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'down'); }}
-                              className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
-                              title="নিচে নিন"
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); deleteQuestion(section.id, question.id); }}
-                              className="w-5 h-5 flex items-center justify-center text-red-600 hover:bg-red-50 rounded font-bold active:scale-90"
-                              title="প্রশ্ন মুছুন"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                    <div>
+                      <span>পূর্ণমান: </span>
+                      <span
+                        id="examMarks"
+                        contentEditable
+                        suppressContentEditableWarning
+                        onBlur={e => setExamMarksText(e.currentTarget.textContent || '')}
+                        className="outline-none focus:bg-blue-50/60 px-1 border-b border-dashed border-slate-400"
+                      >
+                        {toBnNum(totalCalculatedMarks)}
+                      </span>
                     </div>
                   </div>
-                ))
-              )}
+
+                  {/* Toggleable Student Info Box (#studentInfoBar) */}
+                  {showStudentInfo && (
+                    <div
+                      id="studentInfoBar"
+                      className="mt-2 p-1.5 border border-black text-xs flex justify-between font-bold"
+                    >
+                      <span>শিক্ষার্থীর নাম: _____________________________</span>
+                      <span>রোল: ________</span>
+                      <span>শাখা: _____</span>
+                      <span>তারিখ: _________</span>
+                    </div>
+                  )}
+                </header>
+
+                {/* ================= SECTIONS & QUESTIONS ================= */}
+                <div className={`space-y-4 ${paperColumns === '2_col' ? 'md:columns-2 md:gap-6' : ''}`}>
+                  {sections.length === 0 ? (
+                    <div className="text-center py-20 border-2 border-dashed border-slate-300 rounded-xl my-6">
+                      <FileText size={36} className="mx-auto text-slate-400 mb-2" />
+                      <p className="text-sm font-bold text-slate-700">
+                        প্রশ্নপত্রটি বর্তমানে খালি রয়েছে
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                        বামের প্রশ্ন সম্ভার থেকে প্রশ্ন যোগ করুন অথবা "১-ক্লিক অটো তৈরি" বাটনে ক্লিক করে স্বয়ংক্রিয় প্রশ্নপত্র সাজান।
+                      </p>
+                      <button
+                        onClick={() => setShowAutoModal(true)}
+                        className="mt-4 px-4 py-2 bg-[#2b579a] text-white text-xs font-bold rounded-lg shadow-sm hover:bg-[#20447c]"
+                      >
+                        🪄 ১-ক্লিক অটো প্রশ্ন সাজান
+                      </button>
+                    </div>
+                  ) : (
+                    sections.map((section, sIdx) => (
+                      <div
+                        key={section.id}
+                        draggable="true"
+                        onDragStart={() => {
+                          dragItem.current = { type: 'section', secIdx: sIdx };
+                        }}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={() => {
+                          if (!dragItem.current) return;
+                          if (dragItem.current.type === 'section') {
+                            const fromIdx = dragItem.current.secIdx;
+                            if (fromIdx !== sIdx) {
+                              setSections(prev => {
+                                const copy = [...prev];
+                                const [moved] = copy.splice(fromIdx, 1);
+                                copy.splice(sIdx, 0, moved);
+                                return copy;
+                              });
+                            }
+                          } else if (dragItem.current.type === 'question') {
+                            const qData = dragItem.current.data;
+                            if (qData) {
+                              addQuestionToPaper(qData, section.id);
+                            }
+                          }
+                          dragItem.current = null;
+                        }}
+                        className="q-section relative group/sec pb-2 border-b border-slate-200 last:border-b-0 break-inside-avoid"
+                      >
+                        {/* Per-Section Floating Controls (Hidden on Print) */}
+                        <div className="sec-toolbar no-print flex md:hidden group-hover/sec:flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-md shadow-lg z-20 text-[11px] mb-1.5 md:mb-0 md:absolute md:-top-4 md:right-0 flex-wrap">
+                          {/* Layout */}
+                          <select
+                            value={section.layout}
+                            onChange={e => {
+                              const val = e.target.value as PaperSection['layout'];
+                              setSections(prev => prev.map(s => s.id === section.id ? { ...s, layout: val } : s));
+                            }}
+                            className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
+                          >
+                            <option value="1_col">১ কলাম (তালিকা)</option>
+                            <option value="2_col">২ কলাম (পাশাপাশি)</option>
+                            <option value="3_col">৩ কলাম (শব্দার্থ)</option>
+                            <option value="4_col">৪ কলাম (বর্ণ/শব্দ)</option>
+                          </select>
+
+                          {/* Numbering Format */}
+                          <select
+                            value={section.numbering_style}
+                            onChange={e => {
+                              const val = e.target.value as PaperSection['numbering_style'];
+                              setSections(prev => prev.map(s => s.id === section.id ? { ...s, numbering_style: val } : s));
+                            }}
+                            className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
+                          >
+                            <option value="bangla_letter">ক, খ, গ...</option>
+                            <option value="bangla_number">১, ২, ৩...</option>
+                            <option value="english_number">1, 2, 3...</option>
+                            <option value="english_letter">a, b, c...</option>
+                            <option value="arabic_number">١, ٢, ٣ (আরবি)</option>
+                            <option value="none">নাম্বার ছাড়া</option>
+                          </select>
+
+                          {/* RTL Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextDir = section.direction === 'rtl' ? 'ltr' : 'rtl';
+                              setSections(prev => prev.map(s => s.id === section.id ? { ...s, direction: nextDir } : s));
+                            }}
+                            className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold ${
+                              section.direction === 'rtl' ? 'bg-amber-600 text-white' : 'bg-slate-800 hover:bg-slate-700'
+                            }`}
+                          >
+                            {section.direction === 'rtl' ? '⬅️ আরবি' : '➡️ বাংলা'}
+                          </button>
+
+                          {/* Move Up/Down */}
+                          <button
+                            type="button"
+                            disabled={sIdx === 0}
+                            onClick={() => moveSection(sIdx, 'up')}
+                            className="p-1 hover:bg-slate-800 rounded disabled:opacity-30"
+                            title="বিভাগ উপরে নিন"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            disabled={sIdx === sections.length - 1}
+                            onClick={() => moveSection(sIdx, 'down')}
+                            className="p-1 hover:bg-slate-800 rounded disabled:opacity-30"
+                            title="বিভাগ নিচে নিন"
+                          >
+                            ▼
+                          </button>
+
+                          {/* Add Custom Question */}
+                          <button
+                            type="button"
+                            onClick={() => addCustomQuestion(section.id)}
+                            className="px-1.5 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-[10.5px] font-bold"
+                          >
+                            + প্রশ্ন
+                          </button>
+
+                          {/* Delete Section */}
+                          <button
+                            type="button"
+                            onClick={() => deleteSection(section.id)}
+                            className="p-1 hover:bg-red-700 text-red-300 hover:text-white rounded"
+                            title="বিভাগ মুছুন"
+                          >
+                            🗑
+                          </button>
+                        </div>
+
+                        {/* Section Header */}
+                        <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                          <div className="flex items-baseline gap-1.5 flex-1">
+                            <span className="font-bold text-sm md:text-base">{toBnNum(sIdx + 1)}।</span>
+                            <h3
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={e => {
+                                const newT = e.currentTarget.textContent || '';
+                                setSections(prev => prev.map(s => s.id === section.id ? { ...s, title: newT } : s));
+                              }}
+                              className="font-bold text-sm md:text-base outline-none focus:bg-blue-50/60 rounded px-1 flex-1"
+                            >
+                              {section.title.replace(/^[০-৯\d]+[।.]\s*/, '')}
+                            </h3>
+                          </div>
+
+                          {/* Marks Formula */}
+                          <div
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={e => {
+                              const newF = e.currentTarget.textContent || '';
+                              setSections(prev => prev.map(s => s.id === section.id ? { ...s, marks_formula: newF } : s));
+                            }}
+                            className="text-xs md:text-sm font-bold shrink-0 outline-none focus:bg-blue-50/60 rounded px-1"
+                          >
+                            {section.marks_formula}
+                          </div>
+                        </div>
+
+                        {/* Questions List/Grid */}
+                        <div
+                          dir={section.direction}
+                          style={{
+                            fontFamily: section.direction === 'rtl' ? `'${arabicFont}', serif` : undefined,
+                            fontSize: section.direction === 'rtl' ? `${fontSize + 1.5}px` : undefined,
+                            gap: `${questionGap}px`
+                          }}
+                          className={`grid ${
+                            section.layout === '2_col'
+                              ? 'grid-cols-1 md:grid-cols-2 gap-x-6'
+                              : section.layout === '3_col'
+                              ? 'grid-cols-1 md:grid-cols-3 gap-x-4'
+                              : section.layout === '4_col'
+                              ? 'grid-cols-2 md:grid-cols-4 gap-x-3'
+                              : 'grid-cols-1'
+                          } ${section.direction === 'rtl' ? 'direction-rtl text-right font-arabic' : ''}`}
+                        >
+                          {section.questions.map((question, qIdx) => (
+                            <div
+                              key={question.id}
+                              draggable="true"
+                              onDragStart={() => {
+                                dragItem.current = { type: 'question', secIdx: sIdx, qIdx };
+                              }}
+                              onDragOver={e => e.preventDefault()}
+                              onDrop={() => {
+                                if (!dragItem.current) return;
+                                if (dragItem.current.type === 'question') {
+                                  const fromSec = dragItem.current.secIdx;
+                                  const fromQ = dragItem.current.qIdx;
+                                  if (fromSec === sIdx && fromQ !== undefined && fromQ !== qIdx) {
+                                    moveQuestion(sIdx, fromQ, fromQ < qIdx ? 'down' : 'up');
+                                  }
+                                }
+                                dragItem.current = null;
+                              }}
+                              className="relative group/q py-1 px-1.5 rounded hover:bg-slate-50 transition flex flex-col"
+                            >
+                              <div className="flex items-start justify-between gap-1.5">
+                                <div className="flex items-start gap-1.5 flex-1">
+                                  {/* Numbering */}
+                                  {section.numbering_style !== 'none' && (
+                                    <span className="font-bold text-xs select-none shrink-0 pt-0.5">
+                                      {getNumberingLabel(qIdx, section.numbering_style)}
+                                    </span>
+                                  )}
+
+                                  {/* Editable Question Text */}
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={e => {
+                                      const newText = e.currentTarget.textContent || '';
+                                      setSections(prev => prev.map(s => s.id === section.id ? {
+                                        ...s,
+                                        questions: s.questions.map(q => q.id === question.id ? { ...q, question_text: newText } : q)
+                                      } : s));
+                                    }}
+                                    className="text-xs md:text-sm leading-relaxed outline-none focus:bg-blue-50/70 rounded px-0.5 flex-1"
+                                  >
+                                    {question.question_text}
+                                  </p>
+                                </div>
+
+                                {/* Marks */}
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={e => {
+                                    const val = parseFloat(e.currentTarget.textContent?.replace(/[^\d.]/g, '') || '1');
+                                    setSections(prev => prev.map(s => {
+                                      if (s.id !== section.id) return s;
+                                      const updated = s.questions.map(q => q.id === question.id ? { ...q, marks: val } : q);
+                                      return {
+                                        ...s,
+                                        questions: updated,
+                                        total_marks: updated.reduce((acc, curr) => acc + (curr.marks || 1), 0)
+                                      };
+                                    }));
+                                  }}
+                                  className="text-xs font-bold text-slate-900 shrink-0 select-none outline-none"
+                                  title="নম্বর এডিট করুন"
+                                >
+                                  [{toBnNum(question.marks || 1)}]
+                                </span>
+                              </div>
+
+                              {/* MCQ Options */}
+                              {question.options && question.options.length > 0 && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mt-1 pl-4 text-xs">
+                                  {question.options.map((opt, oIdx) => (
+                                    <div key={oIdx} className="flex items-center gap-1 truncate">
+                                      <span className="font-semibold">{getNumberingLabel(oIdx, 'bangla_letter')}</span>
+                                      <span>{opt}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Matching Table (ডান-বাম মিলকরণ) */}
+                              {question.left_items && question.right_items && (
+                                <div className="mt-2 w-full overflow-x-auto">
+                                  <table className="w-full border-collapse border border-black text-xs md:text-sm">
+                                    <thead>
+                                      <tr className="bg-slate-100 border-b border-black">
+                                        <th className="border-r border-black p-1 text-left font-bold w-1/2">বাম পাশ (কলাম ক)</th>
+                                        <th className="p-1 text-left font-bold w-1/2">ডান পাশ (কলাম খ)</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {question.left_items.map((left, idx) => (
+                                        <tr key={idx} className="border-b border-black/30 last:border-b-0">
+                                          <td className="border-r border-black p-1 font-medium">{left}</td>
+                                          <td className="p-1 font-medium">{question.right_items?.[idx] || ''}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* Dotted Lines for Handwriting */}
+                              {section.dotted_lines && section.dotted_lines > 0 ? (
+                                <div className="mt-1.5 space-y-2">
+                                  {Array.from({ length: section.dotted_lines }).map((_, lIdx) => (
+                                    <div key={lIdx} className="write-line w-full border-b border-dotted border-slate-500 h-3.5" />
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              {/* Answer Sheet Display */}
+                              {showAnswerSheet && question.answer_text && (
+                                <div className="paper-ans mt-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded inline-block self-start">
+                                  [উত্তর: {question.answer_text}]
+                                </div>
+                              )}
+
+                              {/* Touch-Friendly Up, Down, Delete Actions */}
+                              <div className="no-print absolute top-0.5 right-0.5 flex md:hidden group-hover/q:flex items-center gap-0.5 bg-white border border-slate-300 rounded shadow-xs text-[11px] p-0.5 z-10">
+                                <button
+                                  type="button"
+                                  disabled={qIdx === 0}
+                                  onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'up'); }}
+                                  className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
+                                  title="উপরে নিন"
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={qIdx === section.questions.length - 1}
+                                  onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'down'); }}
+                                  className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
+                                  title="নিচে নিন"
+                                >
+                                  ↓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); deleteQuestion(section.id, question.id); }}
+                                  className="w-5 h-5 flex items-center justify-center hover:bg-red-50 rounded text-red-600 font-bold active:scale-90"
+                                  title="প্রশ্ন মুছুন"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </main>
+        </main>
 
-        {/* ================= 4. RIGHT PANE (right-pane - 300px Settings & Controls) ================= */}
+        {/* ================= RIGHT PANE: SETTINGS & TOOLS (Desktop: w-[300px]) ================= */}
         <aside
-          className={`w-full md:w-[300px] bg-white dark:bg-[#111827] border-l border-slate-200 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
-            mobilePane === 'settings' ? 'flex' : 'hidden md:flex'
+          className={`w-full md:w-[300px] bg-white dark:bg-[#111827] border-l border-slate-300 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
+            mobilePane === 'settings' || mobilePane === 'actions' ? 'flex' : 'hidden md:flex'
           }`}
         >
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center justify-between">
+          {/* Header */}
+          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Sliders size={15} className="text-blue-600" />
+              <Sliders size={16} className="text-[#2b579a]" />
               <h3 className="text-xs font-black text-slate-800 dark:text-slate-100">
-                কন্ট্রোল ও সেটিংস (Controls)
+                {mobilePane === 'actions' ? 'ডাউনলোড ও অ্যাকশন' : 'ডকুমেন্ট ফরম্যাটিং ও সেটিংস'}
               </h3>
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3.5 space-y-4 custom-scrollbar text-xs">
-            {/* রেডিমেড লেআউট টেমপ্লেট (4 Preset Buttons) */}
+            
+            {/* Quick Action Buttons on Mobile Actions Tab */}
+            {mobilePane === 'actions' && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={exportToWordDoc}
+                  className="w-full py-2.5 bg-[#2b579a] text-white font-bold rounded-lg flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <FileDown size={16} />
+                  <span>Microsoft Word (.doc) ডাউনলোড</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={printPaper}
+                  className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Printer size={16} />
+                  <span>প্রিন্ট / PDF সংরক্ষণ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAutoModal(true)}
+                  className="w-full py-2.5 bg-amber-500 text-slate-950 font-black rounded-lg flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Sparkles size={16} />
+                  <span>🪄 ১-ক্লিক অটো তৈরি</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={saveCurrentDraft}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg flex items-center justify-center gap-2 border border-slate-300"
+                >
+                  <Save size={16} />
+                  <span>ড্রাফট সেভ করুন</span>
+                </button>
+              </div>
+            )}
+
+            {/* Layout Presets */}
             <div>
               <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
-                রেডিমেড লেআউট টেমপ্লেট:
+                রেডিমেড লেআউট প্রিসেট:
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
+                  type="button"
                   onClick={() => applyPreset('noorani')}
-                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50/60 dark:bg-slate-850 text-left transition"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50 dark:bg-slate-850 text-left transition"
                 >
-                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">🕌 নূরানী বোর্ড স্টাইল</div>
+                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">🕌 নূরানী বোর্ড</div>
                   <div className="text-[9.5px] text-slate-400">ডাবল বর্ডার, মার্জিত</div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => applyPreset('befaq')}
-                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50/60 dark:bg-slate-850 text-left transition"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50 dark:bg-slate-850 text-left transition"
                 >
-                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">📖 বেফাক / কওমি স্টাইল</div>
+                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">📖 বেফাক / কওমি</div>
                   <div className="text-[9.5px] text-slate-400">অলঙ্কৃত নাসখ স্টাইল</div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => applyPreset('worksheet')}
-                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50/60 dark:bg-slate-850 text-left transition"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50 dark:bg-slate-850 text-left transition"
                 >
-                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">✏️ শিশু ওয়ার্কশিট মোড</div>
+                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">✏️ শিশু ওয়ার্কশিট</div>
                   <div className="text-[9.5px] text-slate-400">নাম/রোল + লেখার লাইন</div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => applyPreset('compact')}
-                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50/60 dark:bg-slate-850 text-left transition"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 bg-slate-50 dark:bg-slate-850 text-left transition"
                 >
-                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">📄 কমপ্যাক্ট (১ পেজে বেশি)</div>
-                  <div className="text-[9.5px] text-slate-400">কাগজ সাশ্রয়ী ২ কলাম</div>
+                  <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200">📄 কমপ্যাক্ট ২-কলাম</div>
+                  <div className="text-[9.5px] text-slate-400">কাগজ সাশ্রয়ী</div>
                 </button>
               </div>
             </div>
 
-            {/* পেপার ও ফন্ট কাস্টমাইজেশন (Sliders, Font Selectors, Checkboxes) */}
+            {/* Typography & Slider Controls */}
             <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
               <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Type size={14} className="text-blue-600" />
-                <span>পেপার ও ফন্ট কাস্টমাইজেশন:</span>
+                <Type size={14} className="text-[#2b579a]" />
+                <span>ফন্ট ও স্পেসিং কন্ট্রোল:</span>
               </h4>
 
-              {/* 1. Font Size Slider */}
+              {/* Font Size Slider */}
               <div>
                 <div className="flex justify-between text-[11px] text-slate-500 mb-0.5">
                   <span>ফন্টের আকার (Font Size)</span>
@@ -1812,11 +2338,11 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   step="0.5"
                   value={fontSize}
                   onChange={e => setFontSize(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
                 />
               </div>
 
-              {/* 2. Line Height Slider */}
+              {/* Line Height Slider */}
               <div>
                 <div className="flex justify-between text-[11px] text-slate-500 mb-0.5">
                   <span>লাইনের দূরত্ব (Line Height)</span>
@@ -1829,11 +2355,11 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   step="0.05"
                   value={lineHeight}
                   onChange={e => setLineHeight(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
                 />
               </div>
 
-              {/* 3. Question Gap Slider */}
+              {/* Question Gap Slider */}
               <div>
                 <div className="flex justify-between text-[11px] text-slate-500 mb-0.5">
                   <span>প্রশ্নের গ্যাপ (Gap)</span>
@@ -1846,366 +2372,207 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   step="1"
                   value={questionGap}
                   onChange={e => setQuestionGap(parseInt(e.target.value) || 6)}
-                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
                 />
               </div>
-
-              {/* বাংলা ফন্ট Selector */}
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 block mb-0.5">
-                  বাংলা ফন্ট (Bangla Font):
-                </label>
-                <select
-                  value={banglaFont}
-                  onChange={e => setBanglaFont(e.target.value)}
-                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
-                >
-                  <option value="SolaimanLipi">SolaimanLipi</option>
-                  <option value="Noto Serif Bengali">Noto Serif Bengali</option>
-                  <option value="Kalpurush">Kalpurush</option>
-                  <option value="Hind Siliguri">Hind Siliguri</option>
-                  <option value="Tiro Bangla">Tiro Bangla</option>
-                </select>
-              </div>
-
-              {/* আরবি ফন্ট Selector */}
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 block mb-0.5">
-                  আরবি ফন্ট (Arabic Font):
-                </label>
-                <select
-                  value={arabicFont}
-                  onChange={e => setArabicFont(e.target.value)}
-                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
-                >
-                  <option value="Scheherazade New">Scheherazade New</option>
-                  <option value="Amiri">Amiri</option>
-                  <option value="Lateef">Lateef</option>
-                  <option value="Noto Naskh Arabic">Noto Naskh Arabic</option>
-                  <option value="Noto Nastaliq Urdu">Noto Nastaliq Urdu</option>
-                </select>
-              </div>
-
-              {/* ইংরেজি ফন্ট Selector */}
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 block mb-0.5">
-                  ইংরেজি ফন্ট (English Font):
-                </label>
-                <select
-                  value={englishFont}
-                  onChange={e => setEnglishFont(e.target.value)}
-                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
-                >
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="EB Garamond">EB Garamond</option>
-                  <option value="Merriweather">Merriweather</option>
-                </select>
-              </div>
-
-              {/* পেপার সাইজ Selector */}
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 block mb-0.5">
-                  পেপার সাইজ (Paper Size):
-                </label>
-                <select
-                  value={paperSize}
-                  onChange={e => setPaperSize(e.target.value as 'A4' | 'Legal')}
-                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100 font-bold"
-                >
-                  <option value="A4">A4 পেপার (210 × 297 mm)</option>
-                  <option value="Legal">Legal পেপার (216 × 356 mm)</option>
-                </select>
-              </div>
-
-              {/* পেপার বর্ডার ফ্রেম */}
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 block mb-0.5">
-                  পেপার বর্ডার ফ্রেম:
-                </label>
-                <select
-                  value={borderStyle}
-                  onChange={e => setBorderStyle(e.target.value as any)}
-                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
-                >
-                  <option value="none">সাধারণ (No Border)</option>
-                  <option value="single">সিঙ্গেল বর্ডার</option>
-                  <option value="double">ডাবল বর্ডার ফ্রেম</option>
-                </select>
-              </div>
-
-              {/* Checkboxes: Bismillah & Student Info */}
-              <div className="space-y-1.5 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={showBismillah}
-                    onChange={e => setShowBismillah(e.target.checked)}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="font-medium text-[11px]">বিসমিল্লাহ হেডার</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={showStudentInfo}
-                    onChange={e => setShowStudentInfo(e.target.checked)}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="font-medium text-[11px]">শিক্ষার্থীর নাম/রোল বক্স</span>
-                </label>
-              </div>
             </div>
 
-            {/* দ্রুত নতুন বিভাগ যোগ করুন (6 Quick Section Buttons) */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
-              <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
-                দ্রুত নতুন বিভাগ যোগ করুন:
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  onClick={() => addQuickSection('short')}
-                  className="p-1.5 text-left rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
-                >
-                  + সংক্ষিপ্ত প্রশ্ন
-                </button>
-                <button
-                  onClick={() => addQuickSection('fill')}
-                  className="p-1.5 text-left rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
-                >
-                  + শূন্যস্থান পূরণ
-                </button>
-                <button
-                  onClick={() => addQuickSection('mcq')}
-                  className="p-1.5 text-left rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
-                >
-                  + বহুনির্বাচনী MCQ
-                </button>
-                <button
-                  onClick={() => addQuickSection('words')}
-                  className="p-1.5 text-left rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
-                >
-                  + শব্দার্থ (৩ কলাম)
-                </button>
-                <button
-                  onClick={() => addQuickSection('alphabet')}
-                  className="p-1.5 text-left rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
-                >
-                  + বর্ণমালা (৪ কলাম)
-                </button>
-                <button
-                  onClick={() => addQuickSection('arabic')}
-                  className="p-1.5 text-left rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
-                >
-                  + আরবি প্রশ্ন (RTL)
-                </button>
-              </div>
-            </div>
-
-            {/* 💾 সেভ করা প্রশ্নপত্র (Saved Drafts List) */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="font-bold text-slate-700 dark:text-slate-300">
-                  💾 সেভ করা প্রশ্নপত্র ({savedPapers.length}):
-                </label>
-                {savedPapers.length > 0 && (
-                  <button
-                    onClick={clearAllDrafts}
-                    className="text-[10px] text-red-600 hover:text-red-700 font-bold"
-                  >
-                    সব মুছুন
-                  </button>
-                )}
-              </div>
-
-              {savedPapers.length === 0 ? (
-                <p className="text-[11px] text-slate-400 italic">কোনো ড্রাফট সংরক্ষিত নেই</p>
-              ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {savedPapers.map(paper => (
+            {/* Saved Drafts List */}
+            {savedPapers.length > 0 && (
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 mb-2">
+                  <FolderOpen size={14} className="text-[#2b579a]" />
+                  <span>সংরক্ষিত প্রশ্নপত্রসমূহ ({savedPapers.length}):</span>
+                </h4>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                  {savedPapers.map(p => (
                     <div
-                      key={paper.id}
-                      onClick={() => loadDraft(paper)}
-                      className="p-2 bg-slate-50 dark:bg-slate-800/80 hover:bg-blue-50/70 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md cursor-pointer transition flex items-center justify-between group"
+                      key={p.id}
+                      onClick={() => loadDraft(p)}
+                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 bg-slate-50 dark:bg-slate-850 cursor-pointer transition text-left"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-[11px] text-slate-800 dark:text-slate-200 truncate">
-                          {paper.title}
-                        </div>
-                        <div className="text-[9.5px] text-slate-400">
-                          {toBnNum(paper.total_marks)} নম্বর • {new Date(paper.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0 ml-1">
-                        <span className="text-[10px] text-blue-600 font-bold px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800">
-                          খুলুন
-                        </span>
-                        <button
-                          onClick={e => deleteDraft(paper.id, e)}
-                          className="p-1 text-slate-400 hover:text-red-600 rounded"
-                          title="মুছুন"
-                        >
-                          ✕
-                        </button>
+                      <div className="font-bold text-slate-800 dark:text-slate-200 truncate">{p.title}</div>
+                      <div className="text-[10px] text-slate-500 flex justify-between mt-0.5">
+                        <span>মোট: {toBnNum(p.total_marks)} নম্বর</span>
+                        <span>{new Date(p.created_at).toLocaleDateString('bn-BD')}</span>
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </aside>
       </div>
 
-      {/* ================= AUTO GENERATOR MODAL ================= */}
+      {/* ================= 1-CLICK MAGIC QUESTION GENERATOR MODAL ================= */}
       {showAutoModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 font-noto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white dark:bg-[#111827] rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <span className="text-xl">🎲</span>
-                <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
-                  অটো প্রশ্ন জেনারেটর
-                </h3>
+                <span className="text-xl">🪄</span>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100">
+                    ১-ক্লিক অটো প্রশ্নপত্র জেনারেটর
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    বোর্ড, শ্রেণি ও সিলেবাস অনুযায়ী অটোমেটিক ব্যালান্সড প্রশ্ন সাজান
+                  </p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowAutoModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
-            <div className="py-4 space-y-3.5 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  টার্গেট পূর্ণমান নির্বাচন করুন:
-                </label>
-                <div className="flex gap-2">
-                  {[50, 100].map(m => (
-                    <button
-                      key={m}
-                      onClick={() => {
-                        setAutoTargetMarks(m);
-                        if (m === 50) {
-                          setAutoMcqCount(5);
-                          setAutoFillBlankCount(5);
-                          setAutoShortCount(5);
-                          setAutoBroadCount(3);
-                          setAutoArabicCount(3);
-                        } else {
-                          setAutoMcqCount(10);
-                          setAutoFillBlankCount(10);
-                          setAutoShortCount(10);
-                          setAutoBroadCount(6);
-                          setAutoArabicCount(6);
-                        }
-                      }}
-                      className={`flex-1 py-1.5 rounded-lg border font-black text-xs transition ${
-                        autoTargetMarks === m
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                          : 'border-slate-200 dark:border-slate-800 text-slate-600'
-                      }`}
-                    >
-                      {toBnNum(m)} নম্বর
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="font-bold text-slate-700 dark:text-slate-300 block">
-                  প্রশ্নের সংখ্যা বিন্যাস:
-                </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-[11px] text-slate-600 dark:text-slate-400 block mb-1">MCQ সংখ্যা:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={autoMcqCount}
-                      onChange={e => setAutoMcqCount(parseInt(e.target.value) || 0)}
-                      className="w-full text-xs p-1 border rounded bg-white dark:bg-slate-900"
-                    />
-                  </div>
-
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-[11px] text-slate-600 dark:text-slate-400 block mb-1">শূন্যস্থান পূরণ:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={autoFillBlankCount}
-                      onChange={e => setAutoFillBlankCount(parseInt(e.target.value) || 0)}
-                      className="w-full text-xs p-1 border rounded bg-white dark:bg-slate-900"
-                    />
-                  </div>
-
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-[11px] text-slate-600 dark:text-slate-400 block mb-1">সংক্ষিপ্ত প্রশ্ন:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={autoShortCount}
-                      onChange={e => setAutoShortCount(parseInt(e.target.value) || 0)}
-                      className="w-full text-xs p-1 border rounded bg-white dark:bg-slate-900"
-                    />
-                  </div>
-
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-[11px] text-slate-600 dark:text-slate-400 block mb-1">রচনামূলক প্রশ্ন:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={autoBroadCount}
-                      onChange={e => setAutoBroadCount(parseInt(e.target.value) || 0)}
-                      className="w-full text-xs p-1 border rounded bg-white dark:bg-slate-900"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/40 text-blue-800 dark:text-blue-200 text-[11px] leading-relaxed">
-                💡 নির্বাচিত পাঠ্যবই থেকে স্বয়ংক্রিয়ভাবে প্রশ্নপত্র তৈরি হবে। তৈরির পর আপনি যেকোনো অংশ এডিট করতে পারবেন।
+            {/* Target Marks Selector */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                পূর্ণমান / টার্গেট নম্বর নির্বাচন করুন:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoTargetMarks(50);
+                    setAutoMcqCount(5);
+                    setAutoFillBlankCount(5);
+                    setAutoShortCount(5);
+                    setAutoBroadCount(3);
+                    setAutoArabicCount(3);
+                  }}
+                  className={`py-2 px-3 rounded-xl border text-xs font-black transition ${
+                    autoTargetMarks === 50
+                      ? 'bg-[#2b579a] text-white border-[#2b579a] shadow-xs'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
+                  }`}
+                >
+                  ৫০ নম্বর (অর্ধবার্ষিক / সাময়িক)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoTargetMarks(100);
+                    setAutoMcqCount(10);
+                    setAutoFillBlankCount(10);
+                    setAutoShortCount(10);
+                    setAutoBroadCount(6);
+                    setAutoArabicCount(6);
+                  }}
+                  className={`py-2 px-3 rounded-xl border text-xs font-black transition ${
+                    autoTargetMarks === 100
+                      ? 'bg-[#2b579a] text-white border-[#2b579a] shadow-xs'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
+                  }`}
+                >
+                  ১০০ নম্বর (বার্ষিক / ফাইনাল)
+                </button>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+            {/* Board Selector */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                বোর্ড:
+              </label>
+              <select
+                value={selectedBoardId}
+                onChange={e => {
+                  setSelectedBoardId(e.target.value);
+                  const newFiltered = books.filter(b => doesBoardMatch(b.board, e.target.value) && doesClassMatch(b.class_name, selectedClass));
+                  if (newFiltered.length > 0) setSelectedBookId(newFiltered[0].id);
+                }}
+                className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 rounded-lg p-2 font-medium"
+              >
+                {SUPPORTED_BOARDS.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Book Selector */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                পাঠ্যবই:
+              </label>
+              <select
+                value={selectedBookId}
+                onChange={e => setSelectedBookId(e.target.value)}
+                className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 rounded-lg p-2 font-medium truncate"
+              >
+                {filteredBooks.map(b => (
+                  <option key={b.id} value={b.id}>{b.title} ({b.class_name})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Counts Breakdown Preview */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-1.5">
+              <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">
+                স্বয়ংক্রিয় বিভাগ বিন্যাস (Auto Sections):
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>১. সঠিক উত্তর (MCQ):</span>
+                <span className="font-bold">{toBnNum(autoMcqCount)}টি প্রশ্ন</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>২. শূন্যস্থান পূরণ:</span>
+                <span className="font-bold">{toBnNum(autoFillBlankCount)}টি প্রশ্ন</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>৩. সংক্ষিপ্ত প্রশ্নোত্তর:</span>
+                <span className="font-bold">{toBnNum(autoShortCount)}টি প্রশ্ন</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>৪. রচনামূলক / বড় প্রশ্ন:</span>
+                <span className="font-bold">{toBnNum(autoBroadCount)}টি প্রশ্ন</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setShowAutoModal(false)}
-                className="px-4 py-1.5 text-slate-600 font-bold hover:bg-slate-100 rounded-lg text-xs"
+                className="flex-1 py-2.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs"
               >
                 বাতিল
               </button>
               <button
+                type="button"
                 onClick={executeAutoGenerator}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-sm"
+                className="flex-1 py-2.5 bg-[#2b579a] hover:bg-[#20447c] text-white font-black rounded-xl text-xs shadow-md active:scale-95 flex items-center justify-center gap-1.5"
               >
-                তৈরি করুন
+                <Sparkles size={14} />
+                <span>🪄 প্রশ্নপত্র তৈরি করুন</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= PRO PLAN UPGRADE MODAL ================= */}
+      {/* ================= PRO UPGRADE MODAL ================= */}
       {showProModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-amber-300 dark:border-amber-700/60 font-noto text-center">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center mx-auto mb-3 shadow-lg">
-              <Crown size={28} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white dark:bg-[#111827] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-amber-300 dark:border-amber-700/60 text-center">
+            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-950/60 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Crown size={24} />
             </div>
-
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">
-              Deenora Pro আনলক করুন
+            <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
+              ডিজিটাল প্রশ্ন ব্যাংক প্রো
             </h3>
             <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold mt-1">
-              {proModalReason || '৬২,০০০+ পূর্ণ প্রশ্ন সম্ভার ও প্রিন্ট এক্সপোর্ট'}
+              {proModalReason || '৩৮৫টি বইয়ের পূর্ণ প্রশ্ন সম্ভার ও প্রিন্ট এক্সপোর্ট'}
             </p>
 
             <div className="my-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-900/50 text-left text-xs space-y-2 text-slate-700 dark:text-slate-300">
               <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                <span>৬২,০০০+ নূরানী, বেফাক, আলিয়া ও NCTB প্রশ্ন আনলক</span>
+                <span>৩৮৫টি নূরানী, বেফাক, আলিয়া ও NCTB বইয়ের প্রশ্ন আনলক</span>
               </div>
               <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
@@ -2217,18 +2584,20 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               </div>
               <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                <span>শিক্ষক উত্তরপত্র (Answer Key) তৈরি ও ক্লাউড সেভ</span>
+                <span>শিক্ষক উত্তরমালা (Answer Key) তৈরি ও ক্লাউড সেভ</span>
               </div>
             </div>
 
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setShowProModal(false)}
                 className="flex-1 py-2 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs"
               >
                 পরে করব
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setShowProModal(false);
                   if (onUpgradeClick) {
@@ -2249,35 +2618,22 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       {/* ================= FIXED BOTTOM MOBILE TAB SWITCHER ================= */}
       <nav
         aria-label="মোবাইল নেভিগেশন"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] px-3 py-1.5 flex items-center justify-around no-print"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] px-2 py-1.5 flex items-center justify-around no-print"
       >
         <button
           type="button"
-          onClick={() => setMobilePane('library')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
-            mobilePane === 'library'
-              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-black'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-          }`}
-        >
-          <span className="text-base leading-none mb-1">📚</span>
-          <span className="text-[11px] leading-tight font-bold">লাইব্রেরি</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setMobilePane('paper')}
-          className={`flex-1 relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+          className={`flex-1 min-h-[44px] relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
             mobilePane === 'paper'
-              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-black'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-[#2b579a] dark:text-blue-400 font-black'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
           }`}
         >
-          <span className="text-base leading-none mb-1">📄</span>
+          <span className="text-base leading-none mb-0.5">📝</span>
           <div className="flex items-center gap-1">
-            <span className="text-[11px] leading-tight font-bold">প্রশ্নপত্র</span>
+            <span className="text-[11px] leading-tight font-bold">এডিটর</span>
             {totalQuestionsCount > 0 && (
-              <span className="px-1.5 py-0.2 bg-blue-600 text-white rounded-full text-[9.5px] font-black shadow-xs">
+              <span className="px-1.5 py-0.2 bg-[#2b579a] text-white rounded-full text-[9px] font-black shadow-xs">
                 {toBnNum(totalQuestionsCount)}
               </span>
             )}
@@ -2286,15 +2642,41 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
         <button
           type="button"
-          onClick={() => setMobilePane('settings')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
-            mobilePane === 'settings'
-              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-black'
+          onClick={() => setMobilePane('library')}
+          className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+            mobilePane === 'library'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-[#2b579a] dark:text-blue-400 font-black'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
           }`}
         >
-          <span className="text-base leading-none mb-1">⚙️</span>
-          <span className="text-[11px] leading-tight font-bold">সেটিংস</span>
+          <span className="text-base leading-none mb-0.5">📚</span>
+          <span className="text-[11px] leading-tight font-bold">প্রশ্নব্যাংক</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobilePane('settings')}
+          className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+            mobilePane === 'settings'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-[#2b579a] dark:text-blue-400 font-black'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          <span className="text-base leading-none mb-0.5">⚙️</span>
+          <span className="text-[11px] leading-tight font-bold">লেআউট/ফন্ট</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobilePane('actions')}
+          className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 px-1 rounded-xl transition active:scale-95 ${
+            mobilePane === 'actions'
+              ? 'bg-blue-50 dark:bg-blue-950/50 text-[#2b579a] dark:text-blue-400 font-black'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          <span className="text-base leading-none mb-0.5">📥</span>
+          <span className="text-[11px] leading-tight font-bold">ডাউনলোড/প্রিন্ট</span>
         </button>
       </nav>
 
@@ -2312,7 +2694,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                 setToastMessage(null);
                 setToastAction(null);
               }}
-              className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[11px] font-black shrink-0 transition active:scale-95 shadow-xs"
+              className="px-2.5 py-0.5 bg-[#2b579a] hover:bg-[#20447c] text-white rounded-full text-[11px] font-black shrink-0 transition active:scale-95 shadow-xs"
             >
               {toastAction.label}
             </button>
