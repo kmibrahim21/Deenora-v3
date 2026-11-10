@@ -696,8 +696,16 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
               : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
             
             const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
-            const date = new Date(selectedMonth + '-01');
-            const formattedMonth = lang === 'bn' ? bnMonths[date.getMonth()] : date.toLocaleString('en-US', { month: 'long' });
+            const enMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            let formattedMonth = selectedMonth;
+            if (selectedMonth && selectedMonth.includes('-')) {
+              const mIdx = parseInt(selectedMonth.split('-')[1], 10) - 1;
+              if (mIdx >= 0 && mIdx < 12) {
+                formattedMonth = lang === 'bn' ? bnMonths[mIdx] : enMonths[mIdx];
+              }
+            }
+
             const stName = currentStudent.student_name || '';
             const fatherName = currentStudent.father_name || '';
             const stRoll = currentStudent.roll || '';
@@ -726,8 +734,13 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
           try {
             const { NotificationService } = await import('../../services/NotificationService');
             const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
-            const dateObj = new Date(selectedMonth + '-01');
-            const formattedMonth = bnMonths[dateObj.getMonth()] || selectedMonth;
+            let formattedMonth = selectedMonth;
+            if (selectedMonth && selectedMonth.includes('-')) {
+              const mIdx = parseInt(selectedMonth.split('-')[1], 10) - 1;
+              if (mIdx >= 0 && mIdx < 12) {
+                formattedMonth = bnMonths[mIdx];
+              }
+            }
             const stClass = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
 
             await NotificationService.sendFeeNotification({

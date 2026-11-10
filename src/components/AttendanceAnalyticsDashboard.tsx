@@ -72,9 +72,13 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
       let startDate, endDate;
       if (reportType === 'monthly') {
         startDate = `${selectedMonth}-01`;
-        const date = new Date(selectedMonth + '-01');
-        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-        endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+        if (selectedMonth && selectedMonth.includes('-')) {
+          const [yStr, mStr] = selectedMonth.split('-');
+          const lastDay = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
+          endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+        } else {
+          endDate = `${selectedMonth}-31`;
+        }
       } else {
         startDate = `${selectedYear}-01-01`;
         endDate = `${selectedYear}-12-31`;
