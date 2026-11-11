@@ -999,7 +999,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
       if (data) {
         let filteredClasses = data;
-        if (role === 'teacher' && profile?.permissions?.allowed_classes) {
+        if (role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
           filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
         }
         setClasses(sortMadrasahClasses(filteredClasses));

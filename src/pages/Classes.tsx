@@ -51,7 +51,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<(Class & { student_count?: number }) | null>(null);
   const isDark = madrasah?.theme === 'dark';
-  const canDeleteClass = profile?.role === 'super_admin' || profile?.role === 'madrasah_admin' || (madrasah?.config_json as any)?.features?.delete_class !== false;
+  const canDeleteClass = profile?.role === 'super_admin' || profile?.role === 'madrasah_admin' || profile?.permissions?.can_manage_classes || (madrasah?.config_json as any)?.features?.delete_class !== false;
 
   const targetYear = selectedYear || activeYear;
   const isAdvanceOrHistorical = Boolean(targetYear && targetYear.status !== 'active');
@@ -96,7 +96,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       
       if (classesData) {
         let filteredClasses = classesData;
-        if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+        if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
           filteredClasses = classesData.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
         }
 
@@ -175,7 +175,24 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
             class_name: newClassName.trim(),
             sort_order: order 
           }).eq('id', editingClass.id);
-          if (error) throw error;
+          
+          if (error) {
+            // Fallback to API serverless endpoint if RLS restricts direct update
+            const apiRes = await fetch('/api/classes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'update',
+                id: editingClass.id,
+                class_name: newClassName.trim(),
+                sort_order: order
+              })
+            });
+            if (!apiRes.ok) {
+              const errJson = await apiRes.json().catch(() => ({}));
+              throw new Error(errJson.error || error.message);
+            }
+          }
         } else {
           offlineApi.queueAction('classes', 'UPDATE', { 
             id: editingClass.id, 
@@ -205,9 +222,28 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
             institution_id: payload.institution_id,
             sort_order: payload.sort_order
           }).select('id, class_name, institution_id, sort_order, created_at').single();
-          if (error) throw error;
           
-          if (data) {
+          if (error) {
+            // Fallback to API serverless endpoint if RLS restricts direct insert
+            const apiRes = await fetch('/api/classes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'create',
+                class_name: payload.class_name,
+                institution_id: payload.institution_id,
+                sort_order: payload.sort_order
+              })
+            });
+            if (!apiRes.ok) {
+              const errJson = await apiRes.json().catch(() => ({}));
+              throw new Error(errJson.error || error.message);
+            }
+            const resData = await apiRes.json();
+            if (resData?.class) {
+              setClasses(prev => prev.map(c => c.id === tempId ? { ...resData.class, student_count: 0 } : c));
+            }
+          } else if (data) {
              setClasses(prev => prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c));
           }
         } else {
@@ -251,19 +287,25 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
 
         const { error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
         if (error) {
-          // Check for foreign key constraint violation (PostgreSQL error code 23503)
-          if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
-             // Attempt unlinking students and sections if not done already
-             await supabase.from('students').update({ class_id: null }).eq('class_id', showDeleteConfirm.id);
-             await supabase.from('sections').delete().eq('class_id', showDeleteConfirm.id);
-             const { error: retryError } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
-             if (retryError) {
-               throw new Error(lang === 'bn' 
-                 ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত।' 
-                 : 'This class cannot be deleted because it is linked to other records (e.g. fees, exams, routine).');
-             }
-          } else {
-             throw error;
+          // Fallback to API serverless endpoint
+          const apiRes = await fetch('/api/classes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'delete',
+              id: showDeleteConfirm.id
+            })
+          });
+
+          if (!apiRes.ok) {
+            const errJson = await apiRes.json().catch(() => ({}));
+            if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
+              throw new Error(lang === 'bn' 
+                ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত।' 
+                : 'This class cannot be deleted because it is linked to other records (e.g. fees, exams, routine).');
+            } else {
+              throw new Error(errJson.error || error.message);
+            }
           }
         }
       } else {

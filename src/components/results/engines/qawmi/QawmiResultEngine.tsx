@@ -30,7 +30,7 @@ const QawmiResultEngine: React.FC<QawmiResultEngineProps> = ({ lang, madrasah, o
       .order('sort_order', { ascending: true });
     if (data) {
       let filteredClasses = data;
-      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
         filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
       }
       setClasses(sortMadrasahClasses(filteredClasses));

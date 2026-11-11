@@ -79,7 +79,7 @@ const initialPermissions: TeacherPermissions = {
   can_manage_exams: false,
   can_manage_accounting: false,
   can_send_sms: false,
-  can_manage_classes: false,
+  can_manage_classes: true,
   can_send_free_sms: false,
   can_use_voice_call: false,
   can_manage_settings: false,

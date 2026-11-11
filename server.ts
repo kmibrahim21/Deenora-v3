@@ -122,7 +122,10 @@ async function startServer() {
   const getViteInstance = async () => {
     if (!viteInstance) {
       viteInstance = await createViteServer({
-        server: { middlewareMode: true },
+        server: { 
+          middlewareMode: true,
+          hmr: false
+        },
         appType: 'spa',
       });
     }
@@ -235,8 +238,16 @@ async function startServer() {
     }
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Full-stack server running on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is in use. Process will retry on restart.`);
+    } else {
+      console.error('Server listen error:', err);
+    }
   });
 }
 

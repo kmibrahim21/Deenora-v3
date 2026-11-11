@@ -50,8 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const protocol = req.headers['x-forwarded-proto'] === 'https' || req.headers.referer?.startsWith('https') ? 'https' : 'http';
   const serverUrl = `${protocol}://${serverHost}`;
 
-  // Fetch institution name if available
+  // Fetch institution name & users (students + teachers)
   let institutionName = 'Deenora Madrasah';
+  let userList: Array<{ uid: number; user_id: string; name: string; role: string }> = [];
+
   if (institutionId) {
     try {
       const { data: inst } = await supabase
@@ -65,12 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       // ignore
     }
-  }
 
-  // =========================================================================
-  // 1. ZKTeco USB Pen Drive Export (user.dat 72-Byte Binary Format)
-  // =========================================================================
-  if (format === 'usb' || format === 'dat') {
     try {
       const { data: students } = await supabase
         .from('students')
@@ -78,19 +75,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('institution_id', institutionId)
         .order('roll', { ascending: true });
 
-      const studentList = students || [];
-      const RECORD_SIZE = 72;
-      const buffer = Buffer.alloc(studentList.length * RECORD_SIZE);
+      const allocatedUids = new Set<number>();
+      let autoUid = 1;
+      const allocateUid = (desired?: number): number => {
+        if (desired && desired > 0 && !allocatedUids.has(desired)) {
+          allocatedUids.add(desired);
+          return desired;
+        }
+        while (allocatedUids.has(autoUid)) {
+          autoUid++;
+        }
+        allocatedUids.add(autoUid);
+        return autoUid;
+      };
 
-      studentList.forEach((st: any, idx: number) => {
-        const offset = idx * RECORD_SIZE;
-        const pin = st.roll && !isNaN(Number(st.roll)) ? Number(st.roll) : idx + 1;
-        const bioId = (st.biometric_id || st.roll || String(pin)).toString().trim();
+      (students || []).forEach((st: any, idx: number) => {
+        const bioId = (st.biometric_id || st.roll || String(idx + 1)).toString().trim();
+        const numBioId = parseInt(bioId, 10);
+        const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
         const rawName = st.name_en || st.student_name || 'STUDENT';
         const cleanName = transliterateBnToEn(rawName).substring(0, 23);
 
+        userList.push({
+          uid,
+          user_id: bioId || String(uid),
+          name: cleanName,
+          role: 'student'
+        });
+      });
+
+      // Teachers with biometric id
+      const { data: teachers } = await supabase
+        .from('teachers')
+        .select('id, teacher_name, name, biometric_id, permissions')
+        .eq('institution_id', institutionId);
+
+      (teachers || []).forEach((t: any) => {
+        const perms = t.permissions || {};
+        const bioId = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
+        if (bioId) {
+          const numBioId = parseInt(bioId, 10);
+          const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
+          const rawName = t.name || t.teacher_name || 'TEACHER';
+          const cleanName = transliterateBnToEn(rawName).substring(0, 23);
+          userList.push({
+            uid,
+            user_id: bioId,
+            name: cleanName,
+            role: 'teacher'
+          });
+        }
+      });
+    } catch (err: any) {
+      console.error('[PC Agent] User fetch error:', err.message);
+    }
+  }
+
+  // =========================================================================
+  // 1. ZKTeco USB Pen Drive Export (user.dat 72-Byte Binary Format)
+  // =========================================================================
+  if (format === 'usb' || format === 'dat') {
+    try {
+      const RECORD_SIZE = 72;
+      const buffer = Buffer.alloc(userList.length * RECORD_SIZE);
+
+      userList.forEach((u, idx) => {
+        const offset = idx * RECORD_SIZE;
+        const pin = u.uid & 0xffff;
+        const bioId = u.user_id.substring(0, 23);
+        const cleanName = u.name.substring(0, 23);
+
         // 1. PIN (U16, 2 bytes, little-endian)
-        buffer.writeUInt16LE(pin & 0xffff, offset + 0);
+        buffer.writeUInt16LE(pin, offset + 0);
         // 2. Privilege (U8, 1 byte) = 0 (Normal User)
         buffer.writeUInt8(0, offset + 2);
         // 3. Password (char[8]) = 0 (offset 3 to 10)
@@ -101,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         buffer.writeUInt8(1, offset + 39);
         // 7. TimeZones (U16[4], offset 40 to 47) = 0
         // 8. PIN2 (char[24], offset 48 to 71) = Alphanumeric user_id/biometric_id
-        buffer.write(bioId.substring(0, 23), offset + 48, bioId.substring(0, 23).length, 'ascii');
+        buffer.write(bioId, offset + 48, bioId.length, 'ascii');
       });
 
       res.setHeader('Content-Type', 'application/octet-stream');
@@ -114,16 +170,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // =========================================================================
   // 2. Full Standalone Python Tkinter Desktop GUI Application (.pyw)
+  //    WITH AUTOMATIC UPLOAD ON APPLICATION LAUNCH & DUAL-SUBNET IP SCANNING
   // =========================================================================
+  const embeddedUsersJson = JSON.stringify(userList);
+
   const pythonGuiScript = `# -*- coding: utf-8 -*-
 """
 Deenora SaaS ZKTeco K40/K14 Sync Manager
-Native Desktop GUI Application
+Native Desktop GUI Application - Automated Launch Edition
 """
 
 import sys
 import os
 import time
+import socket
 import subprocess
 import threading
 from datetime import datetime, timedelta
@@ -153,6 +213,7 @@ INSTITUTION_NAME = "${institutionName.replace(/"/g, '\\"')}"
 SERVER_URL = "${serverUrl}"
 DEFAULT_IP = "${deviceIp}"
 DEFAULT_PORT = 4370
+EMBEDDED_USERS = ${embeddedUsersJson}
 
 BN_TO_EN_MAP = {
     'মোঃ': 'MD.', 'মো:': 'MD.', 'মুহাম্মদ': 'MD.', 'মোহাম্মদ': 'MD.',
@@ -180,23 +241,28 @@ class DeenoraBiometricApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Deenora - ZKTeco K40/K14 Sync Manager")
-        self.geometry("760x600")
-        self.minsize(700, 560)
+        self.geometry("780x640")
+        self.minsize(720, 600)
         self.configure(bg="#0F172A")
         
         self.sync_running = False
         self.sync_thread = None
         self.synced_keys = set()
-        self.zk_conn = None
+        self.active_machine_ip = DEFAULT_IP
+        self.active_is_udp = False
+        self.upload_in_progress = False
 
         self.setup_ui()
         self.check_cloud_connection_async()
+
+        # 🚀 IMMEDIATE AUTO-START ON LAUNCH: Zero Manual Clicks Required!
+        self.after(500, self.start_auto_sync_and_upload)
 
     def setup_ui(self):
         style = ttk.Style(self)
         style.theme_use('clam')
         style.configure(".", background="#0F172A", foreground="#F8FAFC", font=("Segoe UI", 9))
-        style.configure("TProgressbar", thickness=16, troughcolor="#1E293B", background="#10B981")
+        style.configure("TProgressbar", thickness=18, troughcolor="#1E293B", background="#10B981")
 
         # 1. Header Frame
         header = tk.Frame(self, bg="#1E1B4B", padx=20, pady=16)
@@ -205,7 +271,7 @@ class DeenoraBiometricApp(tk.Tk):
         title_box = tk.Frame(header, bg="#1E1B4B")
         title_box.pack(side=tk.LEFT, fill=tk.Y)
 
-        lbl_logo = tk.Label(title_box, text="﷽  DEENORA BIOMETRIC SYNC", font=("Segoe UI", 12, "bold"), fg="#A5B4FC", bg="#1E1B4B")
+        lbl_logo = tk.Label(title_box, text="﷽  DEENORA BIOMETRIC SYNC", font=("Segoe UI", 11, "bold"), fg="#A5B4FC", bg="#1E1B4B")
         lbl_logo.pack(anchor="w")
 
         lbl_inst = tk.Label(title_box, text=INSTITUTION_NAME, font=("Segoe UI", 15, "bold"), fg="#FFFFFF", bg="#1E1B4B")
@@ -218,10 +284,10 @@ class DeenoraBiometricApp(tk.Tk):
         status_bar = tk.Frame(self, bg="#1E293B", padx=16, pady=10)
         status_bar.pack(fill=tk.X, padx=16, pady=(12, 0))
 
-        self.pill_cloud = tk.Label(status_bar, text="🟢 ক্লাউড: চেকিং...", font=("Segoe UI", 9, "bold"), fg="#E2E8F0", bg="#334155", padx=10, pady=4)
+        self.pill_cloud = tk.Label(status_bar, text="🟢 ক্লাউড: সংযুক্ত হচ্ছে...", font=("Segoe UI", 9, "bold"), fg="#E2E8F0", bg="#334155", padx=10, pady=4)
         self.pill_cloud.pack(side=tk.LEFT, padx=(0, 10))
 
-        self.pill_machine = tk.Label(status_bar, text="🟡 মেশিন: অপ্রস্তুত", font=("Segoe UI", 9, "bold"), fg="#E2E8F0", bg="#334155", padx=10, pady=4)
+        self.pill_machine = tk.Label(status_bar, text="🟡 মেশিন: স্ক্যানিং...", font=("Segoe UI", 9, "bold"), fg="#FEF08A", bg="#854D0E", padx=10, pady=4)
         self.pill_machine.pack(side=tk.LEFT)
 
         # IP Settings inline on right
@@ -229,54 +295,77 @@ class DeenoraBiometricApp(tk.Tk):
         ip_frame.pack(side=tk.RIGHT)
 
         tk.Label(ip_frame, text="মেশিন IP:", fg="#CBD5E1", bg="#1E293B", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=4)
-        self.ent_ip = tk.Entry(ip_frame, width=14, font=("Consolas", 10, "bold"), bg="#0F172A", fg="#38BDF8", insertbackground="white", bd=1, relief="solid")
+        self.ent_ip = tk.Entry(ip_frame, width=15, font=("Consolas", 10, "bold"), bg="#0F172A", fg="#38BDF8", insertbackground="white", bd=1, relief="solid")
         self.ent_ip.insert(0, DEFAULT_IP)
         self.ent_ip.pack(side=tk.LEFT, padx=4)
 
-        btn_test = tk.Button(ip_frame, text="🔌 টেস্ট", font=("Segoe UI", 9, "bold"), bg="#4F46E5", fg="white", activebackground="#4338CA", activeforeground="white", bd=0, padx=8, pady=2, cursor="hand2", command=self.test_machine_connection_async)
+        btn_test = tk.Button(ip_frame, text="🔌 রি-স্ক্যান", font=("Segoe UI", 9, "bold"), bg="#4F46E5", fg="white", activebackground="#4338CA", activeforeground="white", bd=0, padx=8, pady=2, cursor="hand2", command=self.start_auto_sync_and_upload)
         btn_test.pack(side=tk.LEFT, padx=4)
 
-        # 3. Primary Action Buttons Container
-        actions_container = tk.Frame(self, bg="#0F172A")
-        actions_container.pack(fill=tk.X, padx=16, pady=12)
+        # 3. Dedicated Bengali Error Banner (Initially Hidden)
+        self.banner_error = tk.Frame(self, bg="#7F1D1D", padx=16, pady=10)
+        lbl_err_text = tk.Label(
+            self.banner_error, 
+            text="⚠️ মেশিনের সাথে সংযোগ পাওয়া যায়নি! নিশ্চিত করুন মেশিনটি চালু আছে এবং রাউটারের সাথে নেটওয়ার্ক ক্যাবলে যুক্ত আছে।", 
+            font=("Segoe UI", 9, "bold"), 
+            fg="#FECACA", 
+            bg="#7F1D1D",
+            wraplength=540,
+            justify=tk.LEFT
+        )
+        lbl_err_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Action 1 Card: Upload Students
-        card1 = tk.Frame(actions_container, bg="#1E293B", padx=14, pady=12, highlightbackground="#334155", highlightthickness=1)
-        card1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
+        btn_retry = tk.Button(
+            self.banner_error, 
+            text="🔄 পুনরায় চেষ্টা করুন", 
+            font=("Segoe UI", 9, "bold"), 
+            bg="#DC2626", 
+            fg="white", 
+            activebackground="#B91C1C", 
+            activeforeground="white", 
+            bd=0, 
+            padx=12, 
+            pady=4, 
+            cursor="hand2", 
+            command=self.start_auto_sync_and_upload
+        )
+        btn_retry.pack(side=tk.RIGHT, padx=4)
 
-        tk.Label(card1, text="১. মেশিনে শিক্ষার্থী আপলোড", font=("Segoe UI", 10, "bold"), fg="#34D399", bg="#1E293B").pack(anchor="w")
-        tk.Label(card1, text="সফটওয়্যার থেকে সব শিক্ষার্থীর নাম ও রোল সরাসরি K40 মেশিনে পাঠান", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B").pack(anchor="w", pady=(2, 8))
+        # 4. Automated Upload Progress Card
+        self.card_progress = tk.Frame(self, bg="#1E293B", padx=16, pady=12, highlightbackground="#334155", highlightthickness=1)
+        self.card_progress.pack(fill=tk.X, padx=16, pady=10)
 
-        self.btn_upload = tk.Button(card1, text="📥 মেশিনে শিক্ষার্থী আপলোড করুন", font=("Segoe UI", 10, "bold"), bg="#059669", fg="white", activebackground="#047857", activeforeground="white", bd=0, pady=8, cursor="hand2", command=self.start_upload_students)
-        self.btn_upload.pack(fill=tk.X)
+        top_row = tk.Frame(self.card_progress, bg="#1E293B")
+        top_row.pack(fill=tk.X)
 
-        self.progress = ttk.Progressbar(card1, style="TProgressbar", mode="determinate")
-        self.progress.pack(fill=tk.X, pady=(8, 2))
-        self.lbl_progress = tk.Label(card1, text="প্রস্তুত", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B")
-        self.lbl_progress.pack(anchor="w")
+        self.lbl_task_title = tk.Label(top_row, text="🚀 স্বয়ংক্রিয় শিক্ষার্থী আপলোড ও সিঙ্ক শুরু হচ্ছে...", font=("Segoe UI", 10, "bold"), fg="#38BDF8", bg="#1E293B")
+        self.lbl_task_title.pack(side=tk.LEFT)
 
-        # Action 2 Card: Live Punch Sync
-        card2 = tk.Frame(actions_container, bg="#1E293B", padx=14, pady=12, highlightbackground="#334155", highlightthickness=1)
-        card2.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(6, 0))
+        self.lbl_counter = tk.Label(top_row, text="অটো-স্ক্যান চলছে...", font=("Segoe UI", 9, "bold"), fg="#34D399", bg="#1E293B")
+        self.lbl_counter.pack(side=tk.RIGHT)
 
-        tk.Label(card2, text="২. লাইভ হাজিরা সিঙ্ক সার্ভিস", font=("Segoe UI", 10, "bold"), fg="#818CF8", bg="#1E293B").pack(anchor="w")
-        tk.Label(card2, text="মেশিনে ফিঙ্গারপ্রিন্ট দেওয়া মাত্রই স্বয়ংক্রিয়ভাবে ডিইনোরায় হাজিরা যুক্ত হবে", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B").pack(anchor="w", pady=(2, 8))
+        self.progress = ttk.Progressbar(self.card_progress, style="TProgressbar", mode="determinate")
+        self.progress.pack(fill=tk.X, pady=(8, 4))
 
-        btn_row = tk.Frame(card2, bg="#1E293B")
-        btn_row.pack(fill=tk.X)
+        self.lbl_sub_progress = tk.Label(self.card_progress, text="অপেক্ষা করুন, রাউটারের 192.168.0.x এবং 192.168.1.x সাবনেট পরীক্ষা করা হচ্ছে...", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B")
+        self.lbl_sub_progress.pack(anchor="w")
 
-        self.btn_sync = tk.Button(btn_row, text="▶️ লাইভ সিঙ্ক শুরু করুন", font=("Segoe UI", 10, "bold"), bg="#4F46E5", fg="white", activebackground="#4338CA", activeforeground="white", bd=0, pady=8, cursor="hand2", command=self.toggle_sync)
-        self.btn_sync.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+        # 5. Live Sync Controls Bar
+        sync_bar = tk.Frame(self, bg="#0F172A", padx=16)
+        sync_bar.pack(fill=tk.X, pady=(2, 6))
 
-        btn_min = tk.Button(btn_row, text="🗕 ট্রে-তে রাখুন", font=("Segoe UI", 9, "bold"), bg="#334155", fg="#E2E8F0", activebackground="#475569", activeforeground="white", bd=0, pady=8, padx=8, cursor="hand2", command=self.iconify)
+        self.btn_sync = tk.Button(sync_bar, text="▶️ লাইভ সিঙ্ক রানিং", font=("Segoe UI", 9, "bold"), bg="#059669", fg="white", activebackground="#047857", activeforeground="white", bd=0, padx=14, pady=6, cursor="hand2", command=self.toggle_sync)
+        self.btn_sync.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.btn_manual_upload = tk.Button(sync_bar, text="📥 পুনরায় শিক্ষার্থী আপলোড করুন", font=("Segoe UI", 9, "bold"), bg="#334155", fg="#E2E8F0", activebackground="#475569", activeforeground="white", bd=0, padx=12, pady=6, cursor="hand2", command=self.start_auto_sync_and_upload)
+        self.btn_manual_upload.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_min = tk.Button(sync_bar, text="🗕 উইন্ডো মিনিমাইজ", font=("Segoe UI", 9, "bold"), bg="#1E293B", fg="#94A3B8", activebackground="#334155", activeforeground="white", bd=0, padx=12, pady=6, cursor="hand2", command=self.iconify)
         btn_min.pack(side=tk.RIGHT)
 
-        self.lbl_sync_status = tk.Label(card2, text="সিঙ্ক সার্ভিস বন্ধ রয়েছে", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B")
-        self.lbl_sync_status.pack(anchor="w", pady=(8, 2))
-
-        # 4. Live Activity Log Section
+        # 6. Live Activity Log Section
         log_header = tk.Frame(self, bg="#0F172A", padx=16)
-        log_header.pack(fill=tk.X, pady=(4, 4))
+        log_header.pack(fill=tk.X, pady=(6, 2))
 
         tk.Label(log_header, text="📋 লাইভ পাঞ্চ ও অ্যাক্টিভিটি লগ (Live Activity Log):", font=("Segoe UI", 9, "bold"), fg="#CBD5E1", bg="#0F172A").pack(side=tk.LEFT)
         btn_clear = tk.Button(log_header, text="লগ মুছুন", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B", bd=0, padx=6, cursor="hand2", command=self.clear_log)
@@ -305,69 +394,147 @@ class DeenoraBiometricApp(tk.Tk):
                     self.pill_cloud.config(text="🟢 ক্লাউড: সংযুক্ত", bg="#065F46", fg="#A7F3D0")
                     self.log(f"সার্ভার কানেকশন ভেরিফাইড ({SERVER_URL})")
                 else:
-                    self.pill_cloud.config(text="🟡 ক্লাউড: রেসপন্স কোড " + str(res.status_code), bg="#854D0E", fg="#FEF08A")
+                    self.pill_cloud.config(text=f"🟡 ক্লাউড: কোড {res.status_code}", bg="#854D0E", fg="#FEF08A")
             except Exception as e:
-                self.pill_cloud.config(text="🔴 ক্লাউড: সংযোগ ব্যর্থ", bg="#991B1B", fg="#FECACA")
-                self.log(f"সার্ভার কানেকশন এরর: {e}")
+                self.pill_cloud.config(text="🔴 ক্লাউড: অফলাইন মোড", bg="#991B1B", fg="#FECACA")
+                self.log(f"সার্ভার অফলাইন বা লোকাল নেটওয়ার্কে কাজ করছে: {e}")
         threading.Thread(target=task, daemon=True).start()
 
-    def test_machine_connection_async(self):
-        target_ip = self.ent_ip.get().strip() or DEFAULT_IP
-        def task():
-            self.log(f"মেশিন সংযোগ পরীক্ষা করা হচ্ছে ({target_ip}:{DEFAULT_PORT})...")
+    def start_auto_sync_and_upload(self):
+        if self.upload_in_progress:
+            return
+        self.upload_in_progress = True
+        self.banner_error.pack_forget()
+        self.lbl_task_title.config(text="🚀 স্বয়ংক্রিয় প্রসেস চলছে...", fg="#38BDF8")
+        self.lbl_counter.config(text="ধাপ ১: ডাটা ফেচ...")
+        self.lbl_sub_progress.config(text="সার্ভার থেকে শিক্ষার্থীদের তালিকা আনা হচ্ছে...")
+        self.progress["value"] = 5
+        self.pill_machine.config(text="🟡 মেশিন: স্ক্যানিং...", bg="#854D0E", fg="#FEF08A")
+
+        def worker():
             try:
-                zk = ZK(target_ip, port=DEFAULT_PORT, timeout=4, password=0, force_udp=False, ommit_ping=True)
-                conn = zk.connect()
-                conn.disconnect()
-                self.pill_machine.config(text=f"🟢 মেশিন: সংযুক্ত ({target_ip})", bg="#065F46", fg="#A7F3D0")
-                self.log(f"✅ ZKTeco K40 মেশিনের সাথে সফলভাবে কানেক্ট হয়েছে! ({target_ip})")
-                messagebox.showinfo("সফল সংযোগ", f"ZKTeco মেশিনের সাথে সফলভাবে সংযোগ স্থাপিত হয়েছে!\\nIP: {target_ip}:{DEFAULT_PORT}")
-            except Exception:
+                # -------------------------------------------------------------
+                # ধাপ ১: Cloud Fetch (with offline fallback to embedded users)
+                # -------------------------------------------------------------
+                users = []
+                self.log("সার্ভার থেকে শিক্ষার্থীদের তথ্য ফেচ করা হচ্ছে...")
                 try:
-                    zk = ZK(target_ip, port=DEFAULT_PORT, timeout=4, password=0, force_udp=True, ommit_ping=True)
-                    conn = zk.connect()
-                    conn.disconnect()
-                    self.pill_machine.config(text=f"🟢 মেশিন: সংযুক্ত (UDP {target_ip})", bg="#065F46", fg="#A7F3D0")
-                    self.log(f"✅ ZKTeco K40 মেশিনের সাথে সংযুক্ত হয়েছে (UDP)! ({target_ip})")
-                    messagebox.showinfo("সফল সংযোগ", f"ZKTeco মেশিনের সাথে UDP মোডে সফলভাবে সংযোগ স্থাপিত হয়েছে!\\nIP: {target_ip}:{DEFAULT_PORT}")
-                except Exception as err:
-                    self.pill_machine.config(text="🔴 মেশিন: পাওয়া যায়নি", bg="#991B1B", fg="#FECACA")
-                    self.log(f"❌ মেশিনের সাথে কানেক্ট করা যায়নি ({target_ip}): {err}")
-                    messagebox.showerror("কানেকশন ব্যর্থ", f"মেশিনে কানেক্ট করা যায়নি!\\nঅনুগ্রহ করে নিশ্চিত করুন:\\n১. মেশিন চালু আছে।\\n২. পিসি ও মেশিন একই রাউটারে যুক্ত।\\n৩. আইপি সঠিক আছে ({target_ip})।")
-        threading.Thread(target=task, daemon=True).start()
+                    res = requests.get(f"{SERVER_URL}/api/biometric-upload?institution_id={INSTITUTION_ID}&format=json", timeout=10)
+                    if res.status_code == 200:
+                        data = res.json()
+                        users = data.get("users", [])
+                except Exception as net_err:
+                    self.log(f"অনলাইন ফেচে বিলম্ব: {net_err}। এমবেডেড ডাটা ব্যবহার করা হচ্ছে...")
 
-    def start_upload_students(self):
-        target_ip = self.ent_ip.get().strip() or DEFAULT_IP
-        self.btn_upload.config(state=tk.DISABLED)
-        self.lbl_progress.config(text="শিক্ষার্থীদের তালিকা সার্ভার থেকে আনা হচ্ছে...")
-        self.progress["value"] = 0
+                if not users and EMBEDDED_USERS:
+                    users = EMBEDDED_USERS
 
-        def task():
-            try:
-                self.log(f"সার্ভার থেকে শিক্ষার্থীদের ডাটা ফেচ করা হচ্ছে...")
-                res = requests.get(f"{SERVER_URL}/api/biometric-upload?institution_id={INSTITUTION_ID}&format=json", timeout=15)
-                if res.status_code != 200:
-                    raise Exception(f"সার্ভার স্ট্যাটাস কোড {res.status_code}")
-                data = res.json()
-                users = data.get("users", [])
                 if not users:
-                    self.log("⚠️ কোনো শিক্ষার্থী বা শিক্ষকের ডাটা পাওয়া যায়নি।")
-                    self.lbl_progress.config(text="কোনো শিক্ষার্থী পাওয়া যায়নি")
-                    self.btn_upload.config(state=tk.NORMAL)
+                    self.log("⚠️ প্রতিষ্ঠানে কোনো শিক্ষার্থী পাওয়া যায়নি।")
+                    self.lbl_counter.config(text="০ শিক্ষার্থী")
+                    self.lbl_sub_progress.config(text="কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি")
+                    self.upload_in_progress = False
                     return
 
-                total = len(users)
-                self.log(f"মোট {total} জন ইউজার পাওয়া গেছে। K40 মেশিনে আপলোড শুরু হচ্ছে...")
-                self.lbl_progress.config(text=f"মেশিনে সংযোগ করা হচ্ছে ({target_ip})...")
+                total_users = len(users)
+                self.log(f"মোট {total_users} জন শিক্ষার্থী ও শিক্ষকের তালিকা প্রস্তুত হয়েছে।")
+                self.lbl_counter.config(text=f"মোট: {total_users} জন")
+                self.progress["value"] = 15
 
-                conn = None
+                # -------------------------------------------------------------
+                # ধাপ ২: Smart Dual-Subnet & Candidate IP Scan
+                # -------------------------------------------------------------
+                self.lbl_sub_progress.config(text="লোকাল নেটওয়ার্কে ZKTeco K40 মেশিন খোঁজা হচ্ছে...")
+                candidate_ips = []
+                
+                # Priority 1: User typed or default IP
+                custom_ip = self.ent_ip.get().strip()
+                if custom_ip and custom_ip not in candidate_ips:
+                    candidate_ips.append(custom_ip)
+                if DEFAULT_IP and DEFAULT_IP not in candidate_ips:
+                    candidate_ips.append(DEFAULT_IP)
+
+                # Priority 2: Standard Dual-Subnet candidates (192.168.0.x and 192.168.1.x)
+                defaults = ["192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202", "192.168.0.100", "192.168.1.100"]
+                for tip in defaults:
+                    if tip not in candidate_ips:
+                        candidate_ips.append(tip)
+
+                # Priority 3: Local adapter subnet auto-discovery
                 try:
-                    zk = ZK(target_ip, port=DEFAULT_PORT, timeout=5, password=0, force_udp=False, ommit_ping=True)
-                    conn = zk.connect()
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))
+                    local_ip = s.getsockname()[0]
+                    s.close()
+                    parts = local_ip.split('.')
+                    if len(parts) == 4:
+                        sub = f"{parts[0]}.{parts[1]}.{parts[2]}"
+                        for h in [201, 202, 100, 200, 101]:
+                            dip = f"{sub}.{h}"
+                            if dip not in candidate_ips:
+                                candidate_ips.insert(1, dip)
                 except Exception:
-                    zk = ZK(target_ip, port=DEFAULT_PORT, timeout=5, password=0, force_udp=True, ommit_ping=True)
-                    conn = zk.connect()
+                    pass
 
+                self.log(f"স্ক্যানিং প্রার্থী আইপিসমূহ: {', '.join(candidate_ips[:6])}...")
+                
+                conn = None
+                active_ip = None
+                is_udp = False
+
+                for tip in candidate_ips:
+                    self.lbl_sub_progress.config(text=f"আইপি পরীক্ষা করা হচ্ছে: {tip}:{DEFAULT_PORT}...")
+                    # 1. Quick TCP check
+                    try:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(1.2)
+                        res = sock.connect_ex((tip, DEFAULT_PORT))
+                        sock.close()
+                        if res == 0:
+                            zk = ZK(tip, port=DEFAULT_PORT, timeout=3, password=0, force_udp=False, ommit_ping=True)
+                            conn = zk.connect()
+                            active_ip = tip
+                            is_udp = False
+                            self.log(f"✅ মেশিন পাওয়া গেছে: {tip} (TCP মোড)!")
+                            break
+                    except Exception:
+                        pass
+
+                    # 2. Quick UDP check
+                    try:
+                        zk = ZK(tip, port=DEFAULT_PORT, timeout=3, password=0, force_udp=True, ommit_ping=True)
+                        conn = zk.connect()
+                        active_ip = tip
+                        is_udp = True
+                        self.log(f"✅ মেশিন পাওয়া গেছে: {tip} (UDP মোড)!")
+                        break
+                    except Exception:
+                        pass
+
+                # If connection failed across all candidate IPs:
+                if not conn or not active_ip:
+                    self.log("❌ মেশিনের সাথে সংযোগ করা যায়নি! ক্যাবল ও পাওয়ার নিশ্চিত করুন।")
+                    self.pill_machine.config(text="🔴 মেশিন: পাওয়া যায়নি", bg="#991B1B", fg="#FECACA")
+                    self.lbl_task_title.config(text="⚠️ মেশিনের সংযোগ ব্যর্থ", fg="#F87171")
+                    self.lbl_counter.config(text="কানেকশন এরর")
+                    self.lbl_sub_progress.config(text="মেশিনটি রাউটারের সাথে নেটওয়ার্ক ক্যাবলে যুক্ত আছে কিনা তা নিশ্চিত করুন।")
+                    self.banner_error.pack(fill=tk.X, padx=16, pady=(0, 10))
+                    self.upload_in_progress = False
+                    return
+
+                # Record active IP
+                self.active_machine_ip = active_ip
+                self.active_is_udp = is_udp
+                self.ent_ip.delete(0, tk.END)
+                self.ent_ip.insert(0, active_ip)
+                self.pill_machine.config(text=f"🟢 মেশিন: সংযুক্ত ({active_ip})", bg="#065F46", fg="#A7F3D0")
+
+                # -------------------------------------------------------------
+                # ধাপ ৩: Auto Upload to Machine
+                # -------------------------------------------------------------
+                self.log(f"🚀 ZKTeco মেশিনে {total_users} জন শিক্ষার্থী স্বয়ংক্রিয়ভাবে আপলোড হচ্ছে...")
+                self.lbl_task_title.config(text=f"📥 মেশিনে শিক্ষার্থী আপলোড হচ্ছে ({active_ip})...", fg="#38BDF8")
+                
                 success_count = 0
                 for idx, u in enumerate(users, 1):
                     raw_name = u.get("name", "STUDENT")
@@ -378,52 +545,77 @@ class DeenoraBiometricApp(tk.Tk):
                     try:
                         conn.set_user(uid=uid_val, name=clean_name, privilege=0, password='', group_id='', user_id=user_id_val, card=0)
                         success_count += 1
-                        self.log(f"[{idx}/{total}] [OK] রোল/আইডি: {user_id_val} | নাম: {clean_name}")
+                        self.log(f"[{idx}/{total_users}] [OK] রোল/আইডি: {user_id_val:<5} | নাম: {clean_name}")
                     except Exception as u_err:
-                        self.log(f"[{idx}/{total}] [FAIL] আইডি: {user_id_val} -> {u_err}")
+                        self.log(f"[{idx}/{total_users}] [ত্রুটি] আইডি: {user_id_val} -> {u_err}")
 
-                    pct = int((idx / total) * 100)
+                    pct = int(20 + ((idx / total_users) * 75))
                     self.progress["value"] = pct
-                    self.lbl_progress.config(text=f"আপলোড হচ্ছে: {idx}/{total} ({clean_name}) - {pct}%")
+                    self.lbl_counter.config(text=f"আপলোড হচ্ছে: {idx}/{total_users}")
+                    self.lbl_sub_progress.config(text=f"রোল: {user_id_val} - {clean_name} ({pct}%)")
+
+                # Sync machine time with PC
+                try:
+                    conn.set_time(datetime.now())
+                except Exception:
+                    pass
 
                 conn.disconnect()
-                self.log(f"🎉 সম্পন্ন! মোট {success_count} জন সফলভাবে মেশিনে আপলোড হয়েছে।")
-                self.lbl_progress.config(text=f"✅ সফলভাবে {success_count}/{total} জন আপলোড সম্পন্ন!")
-                messagebox.showinfo("আপলোড সম্পন্ন", f"🎉 অভিনন্দন!\\n\\nমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco K40 মেশিনের মেমোরিতে সফলভাবে আপলোড হয়েছে।\\nএখন শিক্ষার্থীরা মেশিনে ফিঙ্গারপ্রিন্ট রেজিস্টার করতে পারবে।")
-            except Exception as e:
-                self.log(f"❌ আপলোড ব্যর্থ: {e}")
-                self.lbl_progress.config(text="আপলোড ব্যর্থ হয়েছে")
-                messagebox.showerror("এরর", f"আপলোড ব্যর্থ হয়েছে:\\n{e}")
-            finally:
-                self.btn_upload.config(state=tk.NORMAL)
 
-        threading.Thread(target=task, daemon=True).start()
+                # -------------------------------------------------------------
+                # ধাপ ৪: Success Notification
+                # -------------------------------------------------------------
+                self.progress["value"] = 100
+                self.lbl_task_title.config(text="🎉 শিক্ষার্থী আপলোড সফল ও সম্পন্ন!", fg="#34D399")
+                self.lbl_counter.config(text=f"সফল: {success_count}/{total_users}")
+                self.lbl_sub_progress.config(text=f"🎉 সফল! সর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।")
+                self.log(f"🎉 সফল! সর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।")
+
+                # Non-blocking dialog info
+                try:
+                    messagebox.showinfo("সফল আপলোড", f"🎉 সফল!\\n\\nসর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।\\nএখন লাইভ হাজিরা সিঙ্ক স্বয়ংক্রিয়ভাবে চালু হচ্ছে...")
+                except Exception:
+                    pass
+
+                # -------------------------------------------------------------
+                # ধাপ ৫: Auto Live Sync (ব্যাকগ্রাউন্ডে অটো সিঙ্ক শুরু)
+                # -------------------------------------------------------------
+                self.log("🚀 লাইভ হাজিরা সিঙ্ক সার্ভিস ব্যাকগ্রাউন্ডে স্বয়ংক্রিয়ভাবে চালু করা হচ্ছে...")
+                self.start_sync_service()
+
+            except Exception as e:
+                self.log(f"❌ আপলোডে অপ্রত্যাশিত ত্রুটি: {e}")
+                self.lbl_task_title.config(text="⚠️ আপলোড ব্যর্থ", fg="#F87171")
+                self.lbl_sub_progress.config(text=f"ত্রুটি: {e}")
+                self.banner_error.pack(fill=tk.X, padx=16, pady=(0, 10))
+            finally:
+                self.upload_in_progress = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def start_sync_service(self):
+        if self.sync_running:
+            return
+        self.sync_running = True
+        self.btn_sync.config(text="⏹️ সিঙ্ক বন্ধ করুন", bg="#E11D48")
+        self.log(f"🟢 লাইভ সিঙ্ক শুরু হয়েছে। প্রতি ৩ সেকেন্ড পর পর ZKTeco ({self.active_machine_ip}) থেকে পাঞ্চ গ্রহণ করা হচ্ছে...")
+        self.sync_thread = threading.Thread(target=self.run_sync_loop, daemon=True)
+        self.sync_thread.start()
 
     def toggle_sync(self):
         if self.sync_running:
             self.sync_running = False
-            self.btn_sync.config(text="▶️ লাইভ সিঙ্ক শুরু করুন", bg="#4F46E5")
-            self.lbl_sync_status.config(text="সিঙ্ক সার্ভিস বন্ধ রয়েছে", fg="#94A3B8")
+            self.btn_sync.config(text="▶️ লাইভ সিঙ্ক শুরু করুন", bg="#059669")
             self.log("⏹️ লাইভ সিঙ্ক সার্ভিস বন্ধ করা হয়েছে।")
         else:
-            self.sync_running = True
-            self.btn_sync.config(text="⏹️ সিঙ্ক বন্ধ করুন", bg="#E11D48")
-            self.lbl_sync_status.config(text="🟢 লাইভ সিঙ্ক ব্যাকগ্রাউন্ডে চলছে...", fg="#34D399")
-            self.log("🚀 লাইভ সিঙ্ক সার্ভিস চালু হয়েছে। প্রতি ৩ সেকেন্ড পর পর পাঞ্চ চেক করা হচ্ছে...")
-            self.sync_thread = threading.Thread(target=self.run_sync_loop, daemon=True)
-            self.sync_thread.start()
+            self.start_sync_service()
 
     def run_sync_loop(self):
-        target_ip = self.ent_ip.get().strip() or DEFAULT_IP
         while self.sync_running:
+            target_ip = self.active_machine_ip or self.ent_ip.get().strip() or DEFAULT_IP
             try:
-                zk = ZK(target_ip, port=DEFAULT_PORT, timeout=4, password=0, force_udp=False, ommit_ping=True)
+                zk = ZK(target_ip, port=DEFAULT_PORT, timeout=4, password=0, force_udp=self.active_is_udp, ommit_ping=True)
                 conn = zk.connect()
-                try:
-                    conn.set_time(datetime.now())
-                except:
-                    pass
-
                 self.pill_machine.config(text=f"🟢 মেশিন: লাইভ ({target_ip})", bg="#065F46", fg="#A7F3D0")
 
                 while self.sync_running:
@@ -444,20 +636,25 @@ class DeenoraBiometricApp(tk.Tk):
                                 "sn": f"PC_AGENT_{INSTITUTION_ID}",
                                 "logs": new_logs
                             }
-                            res = requests.post(f"{SERVER_URL}/api/iclock", json=payload, headers={"X-Institution-Id": INSTITUTION_ID}, timeout=(8, 20))
+                            res = requests.post(
+                                f"{SERVER_URL}/api/iclock", 
+                                json=payload, 
+                                headers={"X-Institution-Id": INSTITUTION_ID}, 
+                                timeout=(8, 20)
+                            )
                             if res.status_code == 200:
                                 for l in new_logs:
                                     self.synced_keys.add(f"{l['userId']}_{l['checkTime']}")
-                                    self.log(f"🔔 [পাঞ্চ রিসিভড] রোল/আইডি {l['userId']} সময়: {l['checkTime']} -> Deenora-তে উপস্থিত সংরক্ষিত হয়েছে।")
+                                    self.log(f"🔔 [পাঞ্চ রিসিভড] আইডি/রোল: {l['userId']} | সময়: {l['checkTime']} -> Deenora-তে উপস্থিতি নিশ্চিত!")
                             else:
-                                self.log(f"⚠️ সার্ভার রেসপন্স কোড {res.status_code}")
+                                self.log(f"⚠️ সার্ভার রেসপন্স কোড: {res.status_code}")
 
                     time.sleep(3)
 
                 conn.disconnect()
             except Exception as e:
                 if self.sync_running:
-                    self.log(f"⚠️ মেশিন সংযোগ বিচ্ছিন্ন ({e})। ৫ সেকেন্ডে পুনরায় চেষ্টা করা হচ্ছে...")
+                    self.log(f"⚠️ মেশিন সংযোগ সাময়িক বিচ্ছিন্ন ({e})। ৫ সেকেন্ডে পুনরায় চেষ্টা করা হচ্ছে...")
                     self.pill_machine.config(text="🟡 মেশিন: রিকানেক্টিং...", bg="#854D0E", fg="#FEF08A")
                     time.sleep(5)
 
@@ -474,7 +671,86 @@ if __name__ == "__main__":
   }
 
   // =========================================================================
-  // 3. Native Windows Standalone Executable (.exe) Packaging
+  // 3. Dependency-Free 1-Click Native Windows Batch/PowerShell Script (.bat)
+  //    (Works natively on ANY Windows 7/8/10/11 with zero configuration)
+  // =========================================================================
+  if (format === 'bat' || format === 'cmd') {
+    const batScript = `@echo off
+setlocal EnableDelayedExpansion
+title Deenora ZKTeco Biometric Sync Manager
+chcp 65001 >nul
+cls
+
+echo ===================================================================
+echo           DEENORA BIOMETRIC SYNC - ZKTECO K40/K14 MANAGER
+echo ===================================================================
+echo Institution : ${institutionName}
+echo Server URL  : ${serverUrl}
+echo Default IP  : ${deviceIp}
+echo ===================================================================
+echo.
+echo [*] Checking local environment...
+
+set SCRIPT_DIR=%LOCALAPPDATA%\\DeenoraBiometric
+if not exist "%SCRIPT_DIR%" mkdir "%SCRIPT_DIR%"
+set PY_FILE=%SCRIPT_DIR%\\DeenoraBiometricManager.pyw
+
+:: Check if python or py is available
+where pythonw >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set RUN_CMD=pythonw
+    goto EXTRACT_AND_RUN
+)
+
+where python >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set RUN_CMD=python
+    goto EXTRACT_AND_RUN
+)
+
+where py >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set RUN_CMD=py
+    goto EXTRACT_AND_RUN
+)
+
+:: If Python is not installed, download the lightweight official Python embeddable zip in 5s
+echo [!] Python was not found in PATH.
+echo [*] Setting up portable standalone runtime into %SCRIPT_DIR%...
+set PY_ZIP=%SCRIPT_DIR%\\py_embed.zip
+set PY_DIR=%SCRIPT_DIR%\\python
+
+if not exist "%PY_DIR%\\python.exe" (
+    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip', '%PY_ZIP%')"
+    powershell -Command "Expand-Archive -Path '%PY_ZIP%' -DestinationPath '%PY_DIR%' -Force"
+    del /f /q "%PY_ZIP%" >nul 2>&1
+)
+
+if exist "%PY_DIR%\\python.exe" (
+    set RUN_CMD="%PY_DIR%\\python.exe"
+    goto EXTRACT_AND_RUN
+)
+
+echo.
+echo [!] Could not initialize runtime automatically.
+echo Please install Python from https://www.python.org (Check "Add python.exe to PATH")
+pause
+exit /b 1
+
+:EXTRACT_AND_RUN
+echo [*] Launching Deenora Biometric GUI Application...
+powershell -Command "[System.IO.File]::WriteAllBytes('%PY_FILE%', [System.Convert]::FromBase64String('${Buffer.from(pythonGuiScript, 'utf-8').toString('base64')}'))"
+start "" %RUN_CMD% "%PY_FILE%"
+exit /b 0
+`;
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="Deenora1ClickRunner.bat"');
+    return res.status(200).send(batScript);
+  }
+
+  // =========================================================================
+  // 4. Native Windows Standalone Executable (.exe) Packaging
   // =========================================================================
   const stubPath = path.join(process.cwd(), 'public', 'DeenoraBiometricSetup_stub.exe');
   const libStubPath = path.join(process.cwd(), 'lib', 'DeenoraBiometricSetup_stub.exe');
@@ -495,7 +771,7 @@ if __name__ == "__main__":
     }
   }
 
-  // Fallback: If stub is somehow missing, return the standalone GUI script with instructions
+  // Fallback: If stub is missing, return the standalone GUI script
   res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="DeenoraBiometricManager.pyw"');
   return res.status(200).send(pythonGuiScript);

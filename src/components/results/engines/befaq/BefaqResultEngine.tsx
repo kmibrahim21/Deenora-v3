@@ -387,8 +387,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
   // Automated name of the active exam
   const activeExamName = React.useMemo(() => {
-    if (routineSelectionMode === 'all' && customRoutineTitle.trim() !== '') {
-      return customRoutineTitle;
+    if (customRoutineTitle && customRoutineTitle.trim() !== '') {
+      return customRoutineTitle.trim();
     }
     if (routineSelectionMode === 'class' && selectedRoutineClassId) {
       if (selectedRoutineExamId) {
@@ -835,7 +835,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
 
     if (data) {
       let filteredExams = data;
-      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
         filteredExams = data.filter(exam => profile.permissions?.allowed_classes?.includes(exam.marhala_id));
       }
       setExams(filteredExams);
@@ -850,7 +850,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
       .order('sort_order', { ascending: true });
     if (data) {
       let filteredClasses = data;
-      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
         filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
       }
       setClasses(sortMadrasahClasses(filteredClasses));
@@ -2764,29 +2764,31 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                 </div>
                               </div>
 
-                              {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
+                               {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
                               <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-center border shadow mr-2`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
                                 <div className="text-center leading-normal">
                                   {(() => {
                                     const cleanSubTitle = (customRoutineTitle || activeExamName || '')
-                                      .replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|সময়সূচী|Schedule|[০-৯0-9]|ইং|-/gi, '')
+                                      .replace(/\s*(২০২৬|2026)\s*/g, '')
+                                      .replace(/সময়সূচি|সময়সূচী|Schedule|ইং/gi, '')
+                                      .replace(/^[-:\s]+|[-:\s]+$/g, '')
                                       .trim();
                                     return cleanSubTitle ? (
                                       <>
-                                        <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
+                                        <p className={`${previewCalendarTextClass1} font-black leading-tight mb-0.5 whitespace-normal break-words px-1 font-solaiman`} style={{ color: rtTheme.accent }}>
                                           {cleanSubTitle}
                                         </p>
-                                        <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
+                                        <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5 font-solaiman`} style={{ color: `${rtTheme.accent}cc` }}>
                                           সময়সূচী
                                         </p>
                                       </>
                                     ) : (
-                                      <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
+                                      <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5 font-solaiman`} style={{ color: `${rtTheme.accent}cc` }}>
                                         পরীক্ষা সময়সূচী
                                       </p>
                                     );
                                   })()}
-                                  <p className={`${previewCalendarTextClass3} font-semibold text-white/70 block`}>
+                                  <p className={`${previewCalendarTextClass3} font-semibold text-white/70 block font-solaiman`}>
                                     {currentYearBn}ইং
                                   </p>
                                 </div>

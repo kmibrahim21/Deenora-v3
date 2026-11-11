@@ -161,7 +161,11 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     const yearEn = examYear ? examYear.replace(/[^0-9]/g, '') || '2026' : '2026';
 
     const cleanSubTitle = examName 
-      ? examName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|সময়সূচী|Schedule|[০-৯0-9]|ইং|-/gi, '').trim()
+      ? examName
+          .replace(/\s*(২০২৬|2026)\s*/g, '')
+          .replace(/সময়সূচি|সময়সূচী|Schedule|ইং/gi, '')
+          .replace(/^[-:\s]+|[-:\s]+$/g, '')
+          .trim()
       : '';
     const processedExamName = cleanSubTitle;
 

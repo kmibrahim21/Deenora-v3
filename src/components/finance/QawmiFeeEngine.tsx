@@ -278,7 +278,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         }));
 
         let filteredData = data || [];
-        if (role === 'teacher' && profile?.permissions?.allowed_classes && !classId) {
+        if (role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0 && !classId) {
           filteredData = data.filter((student: any) => profile.permissions?.allowed_classes?.includes(student.class_id));
         }
 

@@ -74,7 +74,7 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
     const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah?.id);
     if (data) {
       let filteredClasses = data;
-      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
         filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
       }
       setClasses(sortMadrasahClasses(filteredClasses));
