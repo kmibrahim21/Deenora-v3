@@ -150,18 +150,44 @@ export default async function handler(req: any, res: any) {
     if (method === 'GET') {
       try {
         const registeredDevices = await getRegisteredDevices();
-        const matchedDevice = SN ? registeredDevices.find(d => d.sn === SN) : null;
+        const reqInstId = (
+          query.institution_id || query.institutionId || query.inst ||
+          req.headers['x-institution-id'] || req.headers['institution-id']
+        )?.toString().trim();
 
-        if (SN && matchedDevice) {
-          const instId = matchedDevice.institution_id;
+        let matchedDevice = SN ? registeredDevices.find(d => d.sn === SN) : null;
+        if (!matchedDevice && reqInstId) {
+          matchedDevice = registeredDevices.find(d => d.institution_id === reqInstId);
+        }
+
+        let instId = matchedDevice?.institution_id || '';
+        let instName = matchedDevice?.institution_name || '';
+
+        // Non-ADMS fallback lookup by ID or SN prefix
+        if (!instId) {
+          const fallbackId = reqInstId || (SN && SN.startsWith('PC_AGENT_') ? SN.replace(/^PC_AGENT_/i, '').trim() : null);
+          if (fallbackId) {
+            const { data: instData } = await supabase
+              .from('institutions')
+              .select('id, name')
+              .eq('id', fallbackId)
+              .maybeSingle();
+            if (instData) {
+              instId = instData.id;
+              instName = instData.name;
+            }
+          }
+        }
+
+        if (instId) {
           const { students, teachers } = await getInstitutionDirectory(instId);
 
           const { data: recentLogs } = await supabase
             .from('attendance')
-            .select('id, student_id, created_at, date')
+            .select('id, student_id, arrival_time, date, status, created_at')
             .eq('institution_id', instId)
             .order('created_at', { ascending: false })
-            .limit(5);
+            .limit(10);
 
           const bioStudents = students.filter((s: any) => Boolean(s.biometric_id || s.roll));
           const bioTeachers = teachers.filter((t: any) => Boolean(t.permissions?.biometric_id || t.biometric_id));
@@ -169,15 +195,15 @@ export default async function handler(req: any, res: any) {
           return res.status(200).json({
             success: true,
             status: 'REGISTERED_AND_ACTIVE',
-            device_sn: SN,
-            institution: matchedDevice.institution_name,
+            device_sn: SN || `PC_AGENT_${instId}`,
+            institution: instName,
             institution_id: instId,
             biometric_students_count: bioStudents.length,
             biometric_teachers_count: bioTeachers.length,
             recent_punches_logged: recentLogs || [],
             recommendation: bioStudents.length === 0 
-              ? 'WARNING: No students have Biometric IDs configured in this institution. Please edit student profiles and enter Biometric IDs.'
-              : 'READY: Device is linked and students are ready for punch attendance.'
+              ? 'সতর্কতা: কোনো শিক্ষার্থীর বায়োমেট্রিক আইডি বা রোল যুক্ত করা হয়নি।'
+              : 'প্রস্তুত: বায়োমেট্রিক ডিভাইস সফলভাবে সংযুক্ত এবং হাজিরা গ্রহণের জন্য প্রস্তুত।'
           });
         }
 
@@ -255,8 +281,9 @@ export default async function handler(req: any, res: any) {
       let matchedDevice: DeviceCacheEntry | undefined;
 
       const reqInstId = (
-        query.institution_id || query.institutionId ||
-        (typeof req.body === 'object' && req.body !== null && (req.body.institution_id || req.body.institutionId))
+        query.institution_id || query.institutionId || query.inst ||
+        req.headers['x-institution-id'] || req.headers['institution-id'] ||
+        (typeof req.body === 'object' && req.body !== null && (req.body.institution_id || req.body.institutionId || req.body.inst))
       )?.toString().trim();
 
       if (reqInstId) {
@@ -267,6 +294,49 @@ export default async function handler(req: any, res: any) {
 
       if (!matchedDevice && registeredDevices.length === 1) {
         matchedDevice = registeredDevices[0];
+      }
+
+      // Fallback for Non-ADMS Local PC Sync Agent:
+      // Non-ADMS machines do not register SN in biometric_devices.
+      // Lookup the institution directly by ID or SN prefix:
+      if (!matchedDevice) {
+        const fallbackInstId = reqInstId || (SN && SN.startsWith('PC_AGENT_') ? SN.replace(/^PC_AGENT_/i, '').trim() : null);
+        if (fallbackInstId) {
+          const { data: instData } = await supabase
+            .from('institutions')
+            .select('id, name, config_json')
+            .eq('id', fallbackInstId)
+            .maybeSingle();
+
+          if (instData) {
+            matchedDevice = {
+              sn: SN || `PC_AGENT_${instData.id}`,
+              name: `PC Sync Agent (${instData.name})`,
+              institution_id: instData.id,
+              institution_name: instData.name,
+              config_json: instData.config_json
+            };
+          }
+        }
+      }
+
+      // If still not matched, check if there is only 1 active institution in DB
+      if (!matchedDevice) {
+        const { data: singleInst } = await supabase
+          .from('institutions')
+          .select('id, name, config_json')
+          .eq('is_active', true)
+          .limit(2);
+
+        if (singleInst && singleInst.length === 1) {
+          matchedDevice = {
+            sn: SN || `PC_AGENT_${singleInst[0].id}`,
+            name: `PC Sync Agent (${singleInst[0].name})`,
+            institution_id: singleInst[0].id,
+            institution_name: singleInst[0].name,
+            config_json: singleInst[0].config_json
+          };
+        }
       }
 
       if (!matchedDevice) {
@@ -332,16 +402,11 @@ export default async function handler(req: any, res: any) {
       }
 
       // Fetch directory (from in-memory cache) and existing attendance in parallel
-      const [{ students, teachers }, { data: existingAttendanceList }, { data: existingTeacherAttendanceList }] = await Promise.all([
+      const [{ students, teachers }, { data: existingAttendanceList }] = await Promise.all([
         getInstitutionDirectory(matchedInstitutionId),
         supabase
           .from('attendance')
           .select('id, student_id, status, session, late_minutes, arrival_time, date')
-          .eq('institution_id', matchedInstitutionId)
-          .in('date', Array.from(targetDates)),
-        supabase
-          .from('teacher_attendance')
-          .select('id, teacher_id, status, date')
           .eq('institution_id', matchedInstitutionId)
           .in('date', Array.from(targetDates))
       ]);
@@ -351,19 +416,21 @@ export default async function handler(req: any, res: any) {
         existingAttMap.set(`${att.student_id}_${att.date}`, att);
       });
 
-      const existingTeacherAttMap = new Map<string, any>();
-      (existingTeacherAttendanceList || []).forEach((tAtt: any) => {
-        existingTeacherAttMap.set(`${tAtt.teacher_id}_${tAtt.date}`, tAtt);
-      });
+      // Teacher attendance in Deenora is stored in institutions.config_json.teacher_attendance[date][teacher_id] = status
+      const existingTeacherAttConfig: Record<string, Record<string, string>> = {
+        ...((instConfig.teacher_attendance as any) || {})
+      };
+      let teacherAttendanceModified = false;
 
       // Prepare batch operations
       const newStudentAttendanceBatch: any[] = [];
       const updateStudentAttendanceBatch: { id: string; updates: any }[] = [];
-      const newTeacherAttendanceBatch: any[] = [];
       const smsQueueBatch: any[] = [];
 
       const processedKeys = new Set<string>();
       let processedCount = 0;
+      let alreadyMarkedCount = 0;
+      const unmatchedUserIds = new Set<string>();
 
       const settings = instConfig.attendance_settings || {};
       const graceMinutes = Number(settings.late_grace_minutes ?? 10);
@@ -382,11 +449,14 @@ export default async function handler(req: any, res: any) {
 
           if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
           if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
-          if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
-          if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
           if (rollNo && rollNo === userId) return true;
           if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
-          if (s.notes && (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`))) return true;
+          if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
+          if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
+          if (s.notes) {
+            if (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`)) return true;
+            if (!isNaN(numUserId) && (s.notes.includes(`"biometric_id":${numUserId}`) || s.notes.includes(`"biometric_id":"${numUserId}"`))) return true;
+          }
           if (sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
           return false;
         });
@@ -456,20 +526,24 @@ export default async function handler(req: any, res: any) {
               }
             });
             processedCount++;
+          } else {
+            alreadyMarkedCount++;
           }
         } else {
           // 2. Match Teacher
           const teacher = teachers.find((t: any) => {
             const perms = t.permissions || {};
             const bioId = (perms.biometric_id || t.biometric_id || '').toString().trim();
-            const teachId = (perms.teacher_id_number || '').toString().trim();
+            const teachId = (perms.teacher_id_number || t.teacher_id_number || '').toString().trim();
             const mobile = (t.mobile || '').toString().trim();
+            const tId = (t.id || '').toString().trim();
 
             if (bioId && bioId.toLowerCase() === userId.toLowerCase()) return true;
             if (!isNaN(numUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === numUserId) return true;
             if (teachId && teachId.toLowerCase() === userId.toLowerCase()) return true;
             if (!isNaN(numUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === numUserId) return true;
-            if (mobile && mobile === userId) return true;
+            if (mobile && (mobile === userId || mobile.endsWith(userId))) return true;
+            if (tId.toLowerCase().startsWith(userId.toLowerCase())) return true;
             return false;
           });
 
@@ -478,17 +552,18 @@ export default async function handler(req: any, res: any) {
             if (processedKeys.has(punchKey)) continue;
             processedKeys.add(punchKey);
 
-            const existingT = existingTeacherAttMap.get(`${teacher.id}_${date}`);
-            if (!existingT) {
-              newTeacherAttendanceBatch.push({
-                institution_id: matchedInstitutionId,
-                teacher_id: teacher.id,
-                date: date,
-                status: 'present',
-                arrival_time: time || '08:30'
-              });
-              processedCount++;
+            if (!existingTeacherAttConfig[date]) {
+              existingTeacherAttConfig[date] = {};
             }
+            if (existingTeacherAttConfig[date][teacher.id] !== 'present') {
+              existingTeacherAttConfig[date][teacher.id] = 'present';
+              teacherAttendanceModified = true;
+              processedCount++;
+            } else {
+              alreadyMarkedCount++;
+            }
+          } else {
+            unmatchedUserIds.add(userId);
           }
         }
       }
@@ -510,9 +585,14 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      if (newTeacherAttendanceBatch.length > 0) {
+      if (teacherAttendanceModified) {
         mutationPromises.push(
-          supabase.from('teacher_attendance').insert(newTeacherAttendanceBatch)
+          supabase.from('institutions').update({
+            config_json: {
+              ...instConfig,
+              teacher_attendance: existingTeacherAttConfig
+            }
+          }).eq('id', matchedInstitutionId)
         );
       }
 
@@ -524,21 +604,37 @@ export default async function handler(req: any, res: any) {
       }
 
       if (mutationPromises.length > 0) {
-        await Promise.allSettled(mutationPromises);
+        const results = await Promise.allSettled(mutationPromises);
+        for (const res of results) {
+          if (res.status === 'rejected') {
+            console.error('[ZKteco ADMS DB Mutation Error]:', res.reason);
+          }
+        }
       }
 
-      console.log(`[ZKteco ADMS] Completed punch batch: ${processedCount} present records processed for "${matchedDevice.institution_name}".`);
+      console.log(`[ZKteco ADMS] Completed punch batch: ${processedCount} new/updated present records, ${alreadyMarkedCount} already marked for "${matchedDevice.institution_name}".`);
 
       if (req.headers['content-type']?.includes('application/json') || req.headers?.['accept']?.includes('json')) {
-        const firstUserId = parsedPunches[0]?.userId || '';
+        let responseMsg = '';
+        if (processedCount > 0) {
+          responseMsg = `সফলভাবে ${processedCount}টি হাজিরার রেকর্ড ডাটাবেজে উপস্থিত হিসেবে যুক্ত হয়েছে!`;
+        } else if (alreadyMarkedCount > 0) {
+          responseMsg = `${alreadyMarkedCount}টি পাঞ্চ সফলভাবে গৃহীত হয়েছে (আজকের তারিখে ইতিমধ্যেই উপস্থিত হিসেবে সংরক্ষিত ছিল)।`;
+        } else if (unmatchedUserIds.size > 0) {
+          const idSample = Array.from(unmatchedUserIds).slice(0, 3).join(', ');
+          responseMsg = `পাঞ্চ রিকোয়েস্ট এসেছে, কিন্তু ইউজার আইডি "${idSample}" এর সাথে কোনো শিক্ষার্থী বা শিক্ষকের বায়োমেট্রিক আইডি বা রোল মেলেনি।`;
+        } else {
+          responseMsg = 'পাঞ্চ রিসিভ হয়েছে।';
+        }
+
         return res.status(200).json({
           success: true,
           processed: processedCount,
+          already_present: alreadyMarkedCount,
+          unmatched_ids: Array.from(unmatchedUserIds),
           matched_institution: matchedDevice.institution_name,
           device_sn: SN,
-          message: processedCount > 0
-            ? `সফলভাবে ${processedCount}টি হাজিরার রেকর্ড ডাটাবেজে উপস্থিত হিসেবে যুক্ত হয়েছে!`
-            : `পাঞ্চ রিকোয়েস্ট সার্ভারে পৌঁছেছে, কিন্তু ইউজার আইডি "${firstUserId}" এর সাথে কোনো শিক্ষার্থী বা শিক্ষকের বায়োমেট্রিক আইডি মেলেনি।`
+          message: responseMsg
         });
       }
 

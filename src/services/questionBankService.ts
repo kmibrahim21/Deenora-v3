@@ -149,32 +149,86 @@ export const SUPPORTED_CLASSES = [
   'দাখিল ১০ম শ্রেণি'
 ];
 
-export const getClassesForBoard = (boardId: string): string[] => {
-  const norm = normalizeBoardId(boardId);
-  if (norm === 'noorani_ctg' || norm === 'noorani_jatrabari') {
+export const getSupportedBoards = (lang: string = 'bn') => {
+  if (lang === 'en') {
     return [
-      'প্লে (Play)',
-      'নার্সারী (Nursery)',
-      'প্রথম শ্রেণি (Class 1)',
-      'দ্বিতীয় শ্রেণি (Class 2)',
-      'তৃতীয় শ্রেণি (Class 3)'
+      { id: 'all', name: 'All Boards (All 385 Books)' },
+      { id: 'nctb', name: 'NCTB Primary & Secondary School (Govt)' },
+      { id: 'noorani_ctg', name: 'Noorani Talimul Quran Board (Chittagong)' },
+      { id: 'noorani_jatrabari', name: 'Noorani Talimul Quran Board (Jatrabari)' },
+      { id: 'befaq', name: 'Befaqul Madarisil Arabia Bangladesh (Qawmi)' },
+      { id: 'alia', name: 'Madrasah Education Board (Ibtedayi & Dakhil)' },
+      { id: 'jamjam', name: 'Jamjam Noorani Talimul Quran Board' },
+      { id: 'salsabil_jamjam', name: 'Salsabil, Itminan & Other Noorani Boards' },
+    ];
+  }
+  return [
+    { id: 'all', name: 'সকল বোর্ড (সকল ৩৮৫টি বই)' },
+    { id: 'nctb', name: 'এনসিটিবি প্রাথমিক ও মাধ্যমিক স্কুল (সরকারি)' },
+    { id: 'noorani_ctg', name: 'নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ (চট্টগ্রাম)' },
+    { id: 'noorani_jatrabari', name: "নূরানী তা'লিমুল কুরআন বোর্ড বাংলাদেশ (যাত্রাবাড়ী)" },
+    { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (কওমি)' },
+    { id: 'alia', name: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড (ইবতেদায়ী ও দাখিল)' },
+    { id: 'jamjam', name: 'জমজম নুরানী তালিমুল কুরআন বোর্ড বাংলাদেশ' },
+    { id: 'salsabil_jamjam', name: 'সালসাবিল, ইতমিনান ও অন্যান্য নূরানী বোর্ড' },
+  ];
+};
+
+export const getClassesForBoard = (boardId: string, lang: string = 'bn'): string[] => {
+  const norm = normalizeBoardId(boardId);
+  const isEn = lang === 'en';
+
+  if (norm === 'noorani_ctg' || norm === 'noorani_jatrabari' || norm === 'jamjam' || norm === 'salsabil_jamjam') {
+    return isEn ? [
+      'Play',
+      'Nursery',
+      'Class 1',
+      'Class 2',
+      'Class 3'
+    ] : [
+      'প্লে',
+      'নার্সারি',
+      'প্রথম শ্রেণি',
+      'দ্বিতীয় শ্রেণি',
+      'তৃতীয় শ্রেণি'
     ];
   }
   if (norm === 'befaq') {
-    return [
-      'তাহফিজুল কুরআন (Tahfiz)',
+    return isEn ? [
+      'Tahfizul Quran',
+      'Ibtedaiyyah 1st Year',
+      'Ibtedaiyyah 2nd Year',
+      'Ibtedaiyyah 3rd Year',
+      'Ibtedaiyyah 4th Year',
+      'Ibtedaiyyah 5th Year (Final)',
+      'Marhalatul Mutawassitah',
+      'Marhalatul Sanawiyyah Ammah',
+      'Marhalatul Fazilat & Takmil'
+    ] : [
+      'তাহফিজুল কুরআন',
       'ইবতেদাইয়্যাহ ১ম শ্রেণি',
       'ইবতেদাইয়্যাহ ২য় শ্রেণি',
       'ইবতেদাইয়্যাহ ৩য় শ্রেণি',
       'ইবতেদাইয়্যাহ ৪র্থ শ্রেণি',
       'ইবতেদাইয়্যাহ ৫ম শ্রেণি (সমাপনী)',
-      'মারহালাতুল মুতাওয়াসসিতাহ (Mutawassitah)',
-      'মারহালাতুল সানাবিয়্যাহ আম্মাহ (Sanawiyyah)',
+      'মারহালাতুল মুতাওয়াসসিতাহ',
+      'মারহালাতুল সানাবিয়্যাহ আম্মাহ',
       'মারহালাতুল ফযীলত ও তাকমীল'
     ];
   }
   if (norm === 'alia') {
-    return [
+    return isEn ? [
+      'Ibtedayi Class 1',
+      'Ibtedayi Class 2',
+      'Ibtedayi Class 3',
+      'Ibtedayi Class 4',
+      'Ibtedayi Class 5 (Final)',
+      'Dakhil Class 6',
+      'Dakhil Class 7',
+      'Dakhil Class 8',
+      'Dakhil Class 9',
+      'Dakhil Class 10'
+    ] : [
       'ইবতেদায়ী ১ম শ্রেণি',
       'ইবতেদায়ী ২য় শ্রেণি',
       'ইবতেদায়ী ৩য় শ্রেণি',
@@ -188,21 +242,65 @@ export const getClassesForBoard = (boardId: string): string[] => {
     ];
   }
   if (norm === 'nctb') {
-    return [
-      'প্লে (Play)',
-      'নার্সারী (Nursery)',
-      'প্রথম শ্রেণি (Class 1)',
-      'দ্বিতীয় শ্রেণি (Class 2)',
-      'তৃতীয় শ্রেণি (Class 3)',
-      'চতুর্থ শ্রেণি (Class 4)',
-      'পঞ্চম শ্রেণি (Class 5)',
-      'ষষ্ঠ শ্রেণি (Class 6)',
-      'সপ্তম শ্রেণি (Class 7)',
-      'অষ্টম শ্রেণি (Class 8)',
-      'নবম-দশম শ্রেণি (Class 9-10)'
+    return isEn ? [
+      'Pre-Primary / Play',
+      'Nursery',
+      'Class 1',
+      'Class 2',
+      'Class 3',
+      'Class 4',
+      'Class 5',
+      'Class 6',
+      'Class 7',
+      'Class 8',
+      'Class 9-10'
+    ] : [
+      'প্রাক-প্রাথমিক / প্লে',
+      'নার্সারি',
+      'প্রথম শ্রেণি',
+      'দ্বিতীয় শ্রেণি',
+      'তৃতীয় শ্রেণি',
+      'চতুর্থ শ্রেণি',
+      'পঞ্চম শ্রেণি',
+      'ষষ্ঠ শ্রেণি',
+      'সপ্তম শ্রেণি',
+      'অষ্টম শ্রেণি',
+      'নবম-দশম শ্রেণি'
     ];
   }
-  return SUPPORTED_CLASSES;
+  return isEn ? [
+    'Play', 'Nursery', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+    'Class 6', 'Class 7', 'Class 8', 'Class 9-10', 'Tahfizul Quran', 'Dakhil'
+  ] : SUPPORTED_CLASSES;
+};
+
+export const getQuestionCategories = (lang: string = 'bn') => {
+  if (lang === 'en') {
+    return [
+      { id: 'all', label: 'All Question Types' },
+      { id: 'mcq', label: 'Multiple Choice (MCQ)' },
+      { id: 'fill_in_the_blanks', label: 'Fill in the Blanks' },
+      { id: 'one_word', label: 'One Word Answers' },
+      { id: 'short_question', label: 'Short Questions' },
+      { id: 'broad_question', label: 'Descriptive / Broad Questions' },
+      { id: 'word_meaning', label: 'Word Meanings & Opposites' },
+      { id: 'true_false', label: 'True / False' },
+      { id: 'matching', label: 'Matching Table (Left & Right)' },
+      { id: 'arabic_writing', label: 'Arabic Letters & Verses' },
+    ];
+  }
+  return [
+    { id: 'all', label: 'সকল ধরনের প্রশ্ন' },
+    { id: 'mcq', label: 'সঠিক উত্তরটি বেছে নাও (এমসিকিউ)' },
+    { id: 'fill_in_the_blanks', label: 'উপযুক্ত শব্দ দিয়ে শূন্যস্থান পূরণ করো' },
+    { id: 'one_word', label: 'এক কথায় উত্তর দাও' },
+    { id: 'short_question', label: 'সংক্ষিপ্ত প্রশ্নোত্তর' },
+    { id: 'broad_question', label: 'রচনামূলক ও বর্ণনামূলক প্রশ্ন' },
+    { id: 'word_meaning', label: 'শব্দার্থ ও বিপরীত শব্দ' },
+    { id: 'true_false', label: 'সত্য বা মিথ্যা নির্ণয় করো' },
+    { id: 'matching', label: 'ডান-বাম মিলকরণ টেবিল' },
+    { id: 'arabic_writing', label: 'আরবি হরফ, বাক্য ও হরকত লিখন' },
+  ];
 };
 
 export const QUESTION_CATEGORIES = [

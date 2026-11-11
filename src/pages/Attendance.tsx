@@ -263,6 +263,35 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     }
   };
   const [settingsSessions, setSettingsSessions] = useState<{ id: string; name: string }[]>([]);
+  const [testingNonAdms, setTestingNonAdms] = useState(false);
+  const [nonAdmsResult, setNonAdmsResult] = useState<any>(null);
+
+  const checkNonAdmsStatus = async () => {
+    if (!madrasah?.id) return;
+    setTestingNonAdms(true);
+    setNonAdmsResult(null);
+    try {
+      const res = await fetch(`/api/iclock?institution_id=${encodeURIComponent(madrasah.id)}&sn=PC_AGENT_${encodeURIComponent(madrasah.id)}`);
+      const data = await res.json();
+      setNonAdmsResult(data);
+      // Invalidate attendance query cache so today's attendance table updates
+      requestManager.invalidatePattern(/attendance/);
+      if (selectedClass && madrasah) {
+        if (activeTab === 'daily') {
+          if (selectedClass.id !== 'all') {
+            fetchStudents(selectedClass.id);
+            fetchDayEvents();
+          }
+        } else {
+          fetchReport(selectedClass.id);
+        }
+      }
+    } catch (err: any) {
+      setNonAdmsResult({ success: false, error: err.message || 'স্ট্যাটাস চেক ব্যর্থ হয়েছে' });
+    } finally {
+      setTestingNonAdms(false);
+    }
+  };
   const [newSessionName, setNewSessionName] = useState('');
   const [startTime, setStartTime] = useState(madrasah?.config_json?.attendance_settings?.start_time || '08:00');
   const [endTime, setEndTime] = useState(madrasah?.config_json?.attendance_settings?.end_time || '14:00');
@@ -3094,55 +3123,153 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </p>
                     </div>
 
-                    {/* Action Buttons: 1-Click Silent Punch Sync & 1-Click Student Uploader */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    {/* Action Buttons: 3 Options (Silent Background, Live Console Monitor, Student Uploader) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
                       {/* Button 1: Live Punch Silent Sync (.vbs) */}
                       <a
                         href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=vbs`}
                         download
-                        className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-700 hover:via-indigo-700 hover:to-indigo-800 text-white shadow-xl shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-purple-400/20"
+                        className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gradient-to-br from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-700 hover:via-indigo-700 hover:to-indigo-800 text-white shadow-xl shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-purple-400/20"
                       >
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                            <Download size={20} className="text-white" />
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                            <Download size={18} className="text-white" />
                           </div>
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
-                            লাইভ পাঞ্চ সিঙ্ক
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
+                            সাইলেন্ট ব্যাকগ্রাউন্ড
                           </span>
                         </div>
                         <div>
-                          <h4 className="text-sm font-black font-noto leading-snug">
-                            ১-ক্লিক সাইলেন্ট ব্যাকগ্রাউন্ড (.vbs)
+                          <h4 className="text-xs font-black font-noto leading-snug">
+                            ১-ক্লিক সাইলেন্ট (.vbs)
                           </h4>
-                          <p className="text-[11px] text-purple-100/80 font-bold font-noto mt-1 leading-relaxed">
-                            কোনো কালো স্ক্রিন ছাড়াই উইন্ডোজের ব্যাকগ্রাউন্ডে স্বয়ংক্রিয়ভাবে লাইভ হাজিরা সফটওয়্যারে পাঠাবে
+                          <p className="text-[10px] text-purple-100/80 font-bold font-noto mt-1 leading-relaxed">
+                            কোনো কালো উইন্ডো ছাড়াই ব্যাকগ্রাউন্ডে সবসময় অটো-সিঙ্ক চলবে
                           </p>
                         </div>
                       </a>
 
-                      {/* Button 2: Student Data Uploader (.bat) */}
+                      {/* Button 2: Live Monitor Console (.bat) */}
+                      <a
+                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=bat&mode=live`}
+                        download
+                        className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-700 hover:from-blue-700 hover:via-indigo-700 hover:to-cyan-800 text-white shadow-xl shadow-blue-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-blue-400/20"
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                            <Laptop size={18} className="text-white" />
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
+                            লাইভ মনিটর
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black font-noto leading-snug">
+                            লাইভ কনসোল স্ক্রিন (.bat)
+                          </h4>
+                          <p className="text-[10px] text-blue-100/80 font-bold font-noto mt-1 leading-relaxed">
+                            স্ক্রিনে সবুজ লগ উইন্ডো ওপেন থাকবে, পাঞ্চ করলেই লাইভ দেখতে পাবেন
+                          </p>
+                        </div>
+                      </a>
+
+                      {/* Button 3: Student Data Uploader (.bat) */}
                       <a
                         href={`/api/biometric-upload?institution_id=${madrasah?.id || ''}&ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.1.201')}&port=4370&format=bat`}
                         download
-                        className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-teal-700 hover:from-emerald-700 hover:via-teal-700 hover:to-teal-800 text-white shadow-xl shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-emerald-400/20"
+                        className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-teal-700 hover:from-emerald-700 hover:via-teal-700 hover:to-teal-800 text-white shadow-xl shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer overflow-hidden border border-emerald-400/20"
                       >
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                            <Upload size={20} className="text-white" />
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                            <Upload size={18} className="text-white" />
                           </div>
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/20 text-white backdrop-blur-md uppercase tracking-wider font-noto">
                             মেশিন সেটআপ
                           </span>
                         </div>
                         <div>
-                          <h4 className="text-sm font-black font-noto leading-snug">
-                            ১-ক্লিকে K40-এ শিক্ষার্থী আপলোড (.bat)
+                          <h4 className="text-xs font-black font-noto leading-snug">
+                            K40-এ শিক্ষার্থী পুশ (.bat)
                           </h4>
-                          <p className="text-[11px] text-emerald-100/80 font-bold font-noto mt-1 leading-relaxed">
-                            সফটওয়্যার থেকে সব শিক্ষার্থীর নাম ও রোল স্বয়ংক্রিয়ভাবে সরাসরি K40 মেশিনের মেমোরিতে পুশ করবে
+                          <p className="text-[10px] text-emerald-100/80 font-bold font-noto mt-1 leading-relaxed">
+                            সফটওয়্যার থেকে শিক্ষার্থীদের নাম ও রোল সরাসরি K40 মেমোরিতে পাঠাবে
                           </p>
                         </div>
                       </a>
+                    </div>
+
+                    {/* Live Server Punch Sync Diagnostics & Status Monitor */}
+                    <div className="mt-4 pt-4 border-t border-purple-200/50 dark:border-purple-900/40">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-2.5">
+                        <div>
+                          <h4 className="text-xs font-black text-purple-950 dark:text-purple-300 font-noto flex items-center gap-1.5">
+                            <RefreshCw size={14} className="text-purple-600 dark:text-purple-400" />
+                            সার্ভার সংযোগ ও লাইভ পাঞ্চ মনিটর
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
+                            পিসির সফটওয়্যার থেকে পাঞ্চ সার্ভারে পৌঁছাচ্ছে কিনা তাৎক্ষণিক যাচাই করুন
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={checkNonAdmsStatus}
+                          disabled={testingNonAdms}
+                          className="px-3.5 h-9 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shrink-0"
+                        >
+                          {testingNonAdms ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                          {testingNonAdms ? 'চেক করা হচ্ছে...' : 'পাঞ্চ টেস্ট ও স্ট্যাটাস চেক'}
+                        </button>
+                      </div>
+
+                      {nonAdmsResult && (
+                        <div className={`p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                          nonAdmsResult.success 
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800' 
+                            : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
+                        }`}>
+                          {nonAdmsResult.success ? (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                                  ✓ ক্লাউড সার্ভার সক্রিয় ও সংযুক্ত!
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200">
+                                  {nonAdmsResult.institution || 'রেজিস্টার্ড প্রতিষ্ঠান'}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+                                <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900">
+                                  <span className="text-slate-500 dark:text-slate-400 block text-[10px]">বায়োমেট্রিক শিক্ষার্থী:</span>
+                                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.biometric_students_count ?? 0} জন</span>
+                                </div>
+                                <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900">
+                                  <span className="text-slate-500 dark:text-slate-400 block text-[10px]">বায়োমেট্রিক শিক্ষক:</span>
+                                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.biometric_teachers_count ?? 0} জন</span>
+                                </div>
+                                <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900 col-span-2 sm:col-span-1">
+                                  <span className="text-slate-500 dark:text-slate-400 block text-[10px]">আজকের সাম্প্রতিক পাঞ্চ:</span>
+                                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.recent_punches_logged?.length || 0}টি লগ</span>
+                                </div>
+                              </div>
+                              {nonAdmsResult.recent_punches_logged && nonAdmsResult.recent_punches_logged.length > 0 && (
+                                <div className="mt-2 p-2 rounded-lg bg-white/70 dark:bg-slate-900/70 border border-emerald-100 dark:border-emerald-900">
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-black mb-1">সর্বশেষ সফল পাঞ্চগুলো:</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {nonAdmsResult.recent_punches_logged.slice(0, 5).map((log: any, idx: number) => (
+                                      <span key={idx} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 text-[10px] font-mono">
+                                        {log.date} {log.arrival_time || ''} ({log.status === 'late' ? 'বিলম্ব' : 'উপস্থিত'})
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <p className="text-[10px] opacity-80 pt-0.5">{nonAdmsResult.recommendation}</p>
+                            </div>
+                          ) : (
+                            <p>✕ {nonAdmsResult.error || 'সার্ভার স্ট্যাটাস পাওয়া যায়নি।'}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 

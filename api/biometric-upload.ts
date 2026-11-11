@@ -165,7 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch active teachers
     const teacherRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/teachers?select=id,name,permissions,biometric_id,is_active&institute_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&limit=200`,
+      `${SUPABASE_URL}/rest/v1/teachers?select=id,teacher_name,permissions,mobile,is_active&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&limit=200`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     const teachers = teacherRes.ok ? await teacherRes.json() : [];
@@ -208,7 +208,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const bioId = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
       const numBioId = parseInt(bioId, 10);
       const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
-      const cleanName = banglaToEnglishName(t.name);
+      const cleanName = banglaToEnglishName(t.teacher_name || t.name);
       userList.push({
         uid,
         user_id: bioId || String(uid),

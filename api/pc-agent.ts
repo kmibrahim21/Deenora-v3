@@ -13,6 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const institutionId = (query.institution_id || query.institutionId || query.inst || '').toString().trim();
   const deviceIp = (query.device_ip || query.deviceIp || '192.168.0.201').toString().trim();
   const format = (query.format || 'bat').toString().trim().toLowerCase();
+  const mode = (query.mode || '').toString().trim().toLowerCase();
   
   const serverHost = req.headers.host || 'deenora.app';
   const protocol = req.headers['x-forwarded-proto'] === 'https' || req.headers.referer?.startsWith('https') ? 'https' : 'http';
@@ -23,20 +24,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const pythonScript = `import time
 import sys
 import os
+import subprocess
+from datetime import datetime, timedelta
 
-try:
-    import requests
-except ImportError:
-    print("[INFO] Installing requests library...")
-    os.system("pip install requests --quiet")
-    import requests
+# Auto-install required libraries using the active Python interpreter
+def ensure_library(pkg_name, module_name=None):
+    if not module_name:
+        module_name = pkg_name
+    try:
+        __import__(module_name)
+    except ImportError:
+        print(f"[INFO] Installing required library: {pkg_name}...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", pkg_name, "--quiet"], check=True)
+            __import__(module_name)
+        except Exception as err:
+            print(f"[WARN] Failed to auto-install {pkg_name}: {err}")
 
-try:
-    from zk import ZK
-except ImportError:
-    print("[INFO] Installing pyzk library...")
-    os.system("pip install pyzk --quiet")
-    from zk import ZK
+ensure_library("requests")
+ensure_library("pyzk", "zk")
+
+import requests
+from zk import ZK
 
 PRIMARY_IP = "${deviceIp}"
 DEVICE_PORT = 4370
@@ -56,29 +65,40 @@ for default_ip in ["192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1
     if default_ip not in CANDIDATE_IPS:
         CANDIDATE_IPS.append(default_ip)
 
-print("================================================================")
+print("=" * 64)
 print("   Deenora SaaS ZKTeco Biometric Machine Local Sync Engine")
-print("================================================================")
+print("=" * 64)
 print(f" Institution ID : {INSTITUTION_ID if INSTITUTION_ID else 'GLOBAL'}")
 print(f" Target IP      : {PRIMARY_IP}:{DEVICE_PORT}")
 print(f" Auto-Scan IPs  : {', '.join(CANDIDATE_IPS)}")
 print(f" Server URL     : {SERVER_URL}")
-print("================================================================")
+print("=" * 64)
+
+synced_punch_keys = set()
 
 while True:
     connected_ip = None
     conn = None
 
     for target_ip in CANDIDATE_IPS:
+        # Try TCP connection first with ommit_ping=True
         try:
-            print(f"[SCAN] Checking ZKTeco device at {target_ip}:{DEVICE_PORT}...")
-            zk = ZK(target_ip, port=DEVICE_PORT, timeout=3)
+            print(f"[SCAN] Checking ZKTeco device at {target_ip}:{DEVICE_PORT} (TCP)...")
+            zk = ZK(target_ip, port=DEVICE_PORT, timeout=4, password=0, force_udp=False, ommit_ping=True)
             conn = zk.connect()
             connected_ip = target_ip
-            print(f"\\n[SUCCESS] Connected to ZKTeco machine on local network at {target_ip}:{DEVICE_PORT}!")
+            print(f"\\n[SUCCESS] Connected to ZKTeco machine on local network at {target_ip}:{DEVICE_PORT} (TCP)!")
             break
-        except Exception as e:
-            continue
+        except Exception:
+            # Try UDP fallback
+            try:
+                zk = ZK(target_ip, port=DEVICE_PORT, timeout=4, password=0, force_udp=True, ommit_ping=True)
+                conn = zk.connect()
+                connected_ip = target_ip
+                print(f"\\n[SUCCESS] Connected to ZKTeco machine on local network at {target_ip}:{DEVICE_PORT} (UDP)!")
+                break
+            except Exception:
+                continue
 
     if not connected_ip or not conn:
         print(f"[NOTICE] Could not connect to ZKTeco device on candidate IPs: {CANDIDATE_IPS}.")
@@ -86,40 +106,69 @@ while True:
         time.sleep(5)
         continue
 
+    # Synchronize machine clock with PC clock
+    try:
+        conn.set_time(datetime.now())
+        print("[CLOCK] Machine clock synchronized with local PC time.")
+    except Exception as clk_err:
+        pass
+
     # Active sync loop once connected
     try:
         while True:
             attendances = conn.get_attendance()
             if attendances:
-                logs = []
+                # Look back up to 3 days to avoid sending years of historical memory logs
+                cutoff_str = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+                
+                unsynced_logs = []
                 for att in attendances:
-                    logs.append({
-                        "userId": str(att.user_id),
-                        "checkTime": str(att.timestamp)
-                    })
-                
-                payload = {
-                    "institution_id": INSTITUTION_ID,
-                    "sn": f"PC_AGENT_{INSTITUTION_ID}",
-                    "logs": logs
-                }
-                
-                try:
-                    res = requests.post(f"{SERVER_URL}/api/iclock", json=payload, timeout=(10, 30))
-                    if res.status_code == 200:
-                        data = res.json()
-                        msg = data.get('message', 'Punches synced') if isinstance(data, dict) else 'OK'
-                        print(f"[DEENORA SYNC OK] Uploaded {len(logs)} punch records to server -> {msg}")
-                    else:
-                        print(f"[SERVER WARN] Status Code {res.status_code}")
-                except requests.exceptions.Timeout:
-                    print(f"[SERVER TIMEOUT] Server response timed out (>30s). Will retry on next cycle...")
-                except Exception as http_err:
-                    print(f"[SERVER SYNC ERROR] Failed to send to Deenora: {http_err}")
-            else:
-                print(f"[POLL] Checked {connected_ip} -> No new un-synced punches yet.")
+                    punch_time_str = str(att.timestamp)
+                    punch_date = punch_time_str[:10]
+                    
+                    if punch_date >= cutoff_str:
+                        key = f"{att.user_id}_{punch_time_str}"
+                        if key not in synced_punch_keys:
+                            unsynced_logs.append({
+                                "userId": str(att.user_id),
+                                "checkTime": punch_time_str
+                            })
+
+                if unsynced_logs:
+                    print(f"\\n[PUNCH DETECTED] Found {len(unsynced_logs)} new punch(es)! Uploading to Deenora...")
+                    payload = {
+                        "institution_id": INSTITUTION_ID,
+                        "sn": f"PC_AGENT_{INSTITUTION_ID}",
+                        "logs": unsynced_logs
+                    }
+                    
+                    try:
+                        res = requests.post(
+                            f"{SERVER_URL}/api/iclock?sn=PC_AGENT_{INSTITUTION_ID}&institution_id={INSTITUTION_ID}",
+                            json=payload,
+                            headers={
+                                "Content-Type": "application/json",
+                                "X-Institution-Id": INSTITUTION_ID
+                            },
+                            timeout=(10, 30)
+                        )
+                        if res.status_code == 200:
+                            data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+                            msg = data.get('message', 'Punches synced') if isinstance(data, dict) else 'OK'
+                            print(f"[DEENORA SYNC OK] Uploaded {len(unsynced_logs)} punches -> {msg}")
+                            for l in unsynced_logs:
+                                synced_punch_keys.add(f"{l['userId']}_{l['checkTime']}")
+                        else:
+                            print(f"[SERVER WARN] Status Code {res.status_code}: {res.text[:100]}")
+                    except requests.exceptions.Timeout:
+                        print("[SERVER TIMEOUT] Server response timed out (>30s). Will retry next cycle...")
+                    except Exception as http_err:
+                        print(f"[SERVER SYNC ERROR] Failed to send to Deenora: {http_err}")
+                else:
+                    # Heartbeat / quiet polling
+                    pass
             
-            time.sleep(5)
+            time.sleep(3)
 
     except Exception as run_err:
         print(f"[NOTICE] Device connection interrupted at {connected_ip} ({run_err}). Auto-reconnecting in 5s...")
@@ -179,11 +228,14 @@ try {
 `;
   const encodedPs = Buffer.from(psScript, 'utf16le').toString('base64');
 
-  // Generate self-contained Windows One-Click Installer (.bat) script with AUTOMATIC BACKGROUND SILENT LAUNCH
-  const batchScript = `@echo off
-title Deenora Biometric Sync Agent (Background Service)
+  const isLiveConsole = mode === 'live';
 
-if "%~1"=="-silent" goto SILENT_SYNC_EXEC
+  // Generate self-contained Windows One-Click Installer (.bat) script
+  const batchScript = `@echo off
+title Deenora Biometric Sync Agent ${isLiveConsole ? '(Live Console Monitor)' : '(Background Service)'}
+color 0A
+
+${isLiveConsole ? 'goto STARTED_ALIVE' : `if "%~1"=="-silent" goto SILENT_SYNC_EXEC
 if "%~1"=="-visible" goto STARTED_ALIVE
 
 :: Default Double Click Behavior: Register Startup, Launch in Background, and Exit CMD immediately
@@ -211,7 +263,7 @@ if not exist "%STARTUP_DIR%" mkdir "%STARTUP_DIR%" >nul 2>&1
 ) > "%LAUNCH_VBS%"
 
 start wscript "%LAUNCH_VBS%"
-exit /b
+exit /b`}
 
 :STARTED_ALIVE
 cls
@@ -220,7 +272,7 @@ cls
 cd /d "%~dp0"
 
 echo ================================================================
-echo    Deenora SaaS Biometric Attendance Sync Agent for Windows
+echo    Deenora SaaS Biometric Attendance Sync Agent (Live Monitor)
 echo ================================================================
 echo Institution ID : ${institutionId || 'GLOBAL'}
 echo Server Target  : ${serverUrl}
@@ -233,7 +285,6 @@ set SERVER_URL=${serverUrl}
 set DEVICE_IP=${deviceIp}
 set TARGET_PY_FILE=%TEMP%\\deenora_zk_sync_%INSTITUTION_ID%.py
 
-echo.
 echo [1/3] Checking Deenora Cloud Server Readiness...
 powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedPs}
 
@@ -241,9 +292,9 @@ echo.
 echo [2/3] Checking Network Connection to Biometric Device...
 ping -n 2 %DEVICE_IP% >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [SUCCESS] Connected to Biometric Device on Local Network at %DEVICE_IP%!
+    echo [SUCCESS] Biometric device responds at %DEVICE_IP%!
 ) else (
-    echo [NOTICE] Primary IP %DEVICE_IP% not responding directly. Auto-scanning candidate IPs on local subnets...
+    echo [NOTICE] Primary IP %DEVICE_IP% not responding directly. Auto-scanning candidate IPs on local network...
 )
 
 echo.
@@ -295,7 +346,7 @@ echo [AUTO-INSTALL] Downloading Official Python Silent Installer...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait"
 
 :RUN_INSTALL_CHECK
-set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
+set "PATH=%LOCALAPPDATA%\\Programs\\Python\\Python311;%LOCALAPPDATA%\\Programs\\Python\\Python311\\Scripts;C:\\Program Files\\Python311;C:\\Program Files\\Python311\\Scripts;%PATH%"
 
 where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
@@ -346,12 +397,12 @@ if %ERRORLEVEL% EQU 0 (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "$web = New-Object System.Net.WebClient; $web.DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '$env:TEMP\\py_setup.exe'); Start-Process '$env:TEMP\\py_setup.exe' -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1' -Wait" >nul 2>&1
 )
 
-set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
+set "PATH=%LOCALAPPDATA%\\Programs\\Python\\Python311;%LOCALAPPDATA%\\Programs\\Python\\Python311\\Scripts;C:\\Program Files\\Python311;C:\\Program Files\\Python311\\Scripts;%PATH%"
 timeout /t 5 /nobreak >nul
 goto SILENT_LOOP
 `;
 
   res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="DeenoraSyncAgent_${institutionId || 'Setup'}.bat"`);
+  res.setHeader('Content-Disposition', `attachment; filename="DeenoraSyncAgent_${isLiveConsole ? 'LiveMonitor_' : ''}${institutionId || 'Setup'}.bat"`);
   return res.status(200).send(batchScript);
 }
