@@ -3123,148 +3123,65 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </p>
                     </div>
 
-                    {/* Dual Action Section: Option 1 (PC Auto Sync App) & Option 2 (Offline USB Pen Drive) */}
-                    <div className="space-y-4 pt-1">
-                      {/* Method 1: Native Windows PC Sync App (Zero Clicks / Auto Upload on Launch) */}
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-purple-950 dark:text-purple-300 font-noto flex items-center gap-1.5">
-                            <Laptop size={15} className="text-purple-600 dark:text-purple-400" />
-                            পদ্ধতি ১: উইন্ডোজ পিসি সফটওয়্যার (স্বয়ংক্রিয় ১-ক্লিক সিঙ্ক ও আপলোড)
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                            জিরো ম্যানুয়াল ক্লিক
-                          </span>
+                    {/* ONLY TWO CLEAR BUTTONS: Button 1 (Attendance Sync) & Button 2 (Student Upload) */}
+                    <div className="grid grid-cols-1 gap-3.5 pt-1">
+                      {/* বাটন ১: হাজিরা ডাউনলোডার (Attendance Sync Downloader) */}
+                      <a
+                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=exe`}
+                        download="DeenoraBiometricSetup.exe"
+                        className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-700 via-blue-700 to-indigo-900 hover:from-indigo-800 hover:via-blue-800 hover:to-indigo-950 text-white shadow-xl shadow-indigo-600/20 active:scale-[0.99] transition-all cursor-pointer border border-indigo-400/30 overflow-hidden"
+                      >
+                        <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
+                          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+                            <Download size={24} className="text-white animate-bounce-subtle" />
+                          </div>
+                          <div>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950 uppercase tracking-wide inline-block mb-1">
+                              🟢 স্বয়ংক্রিয় লাইভ পাঞ্চ
+                            </span>
+                            <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
+                              📥 ১. হাজিরা সিঙ্ক অ্যাপ ডাউনলোড (পাঞ্চ নেওয়ার জন্য)
+                            </h4>
+                            <p className="text-[11px] text-blue-100/90 font-bold font-noto mt-1 leading-relaxed">
+                              মেশিনের হাজিরা ক্লাউডে স্বয়ংক্রিয়ভাবে জমা করার জন্য।
+                            </p>
+                          </div>
                         </div>
 
-                        <a
-                          href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=exe`}
-                          download="DeenoraBiometricSetup.exe"
-                          className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-600 to-indigo-800 hover:from-purple-800 hover:via-indigo-700 hover:to-indigo-900 text-white shadow-xl shadow-purple-600/25 active:scale-[0.99] transition-all cursor-pointer border border-purple-400/30 overflow-hidden"
-                        >
-                          <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
-                            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-                              <Download size={24} className="text-white animate-bounce-subtle" />
-                            </div>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950 uppercase tracking-wide">
-                                  🟢 প্রস্তাবিত (১-ক্লিক উইন্ডোজ অ্যাপ)
-                                </span>
-                                <span className="text-[10px] text-purple-200 font-mono">
-                                  DeenoraBiometricSetup.exe (~79 KB)
-                                </span>
-                              </div>
-                              <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
-                                ডাউনলোড করুন: Deenora PC Sync সফটওয়্যার (.exe)
-                              </h4>
-                              <p className="text-[11px] text-purple-100/90 font-bold font-noto mt-1 leading-relaxed">
-                                ✨ ওপেন করলেই স্বয়ংক্রিয়ভাবে 192.168.0.x ও 192.168.1.x সাবনেট স্ক্যান করবে এবং সব শিক্ষার্থী লোড করে লাইভ সিঙ্ক শুরু করবে
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-xs font-black shrink-0 self-start sm:self-auto shadow-md">
-                            <span>সফটওয়্যার ডাউনলোড</span>
-                            <Download size={15} />
-                          </div>
-                        </a>
-
-                        {/* Additional Runners: Dependency-Free Batch Runner & Python GUI */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          <a
-                            href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=bat`}
-                            download="Deenora1ClickRunner.bat"
-                            className="p-3 rounded-xl border flex items-center gap-2.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-300 transition-all text-xs font-bold"
-                          >
-                            <Cpu size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <span className="text-slate-800 dark:text-slate-200 block truncate font-black">
-                                ডিপেনডেন্সি-ফ্রি ১-ক্লিক রানার (.bat)
-                              </span>
-                              <span className="text-[10px] text-slate-400 block truncate">
-                                পাইথন না থাকলেও চলবে (সব উইন্ডোজে সাপোর্টেড)
-                              </span>
-                            </div>
-                            <Download size={14} className="text-slate-400 shrink-0" />
-                          </a>
-
-                          <a
-                            href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=pyw`}
-                            download="DeenoraBiometricManager.pyw"
-                            className="p-3 rounded-xl border flex items-center gap-2.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-300 transition-all text-xs font-bold"
-                          >
-                            <Laptop size={16} className="text-cyan-600 dark:text-cyan-400 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <span className="text-slate-800 dark:text-slate-200 block truncate font-black">
-                                পাইথন GUI সোর্স কোড (.pyw)
-                              </span>
-                              <span className="text-[10px] text-slate-400 block truncate">
-                                যদি সরাসরি পাইথনে রান করতে চান
-                              </span>
-                            </div>
-                            <Download size={14} className="text-slate-400 shrink-0" />
-                          </a>
+                        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-xs font-black shrink-0 self-start sm:self-auto shadow-md">
+                          <span>সিঙ্ক অ্যাপ ডাউনলোড</span>
+                          <Download size={15} />
                         </div>
-                      </div>
+                      </a>
 
-                      {/* Method 2: 100% Fail-Safe USB Pen Drive Fallback Card */}
-                      <div className={`p-4 sm:p-5 rounded-2xl border-2 space-y-3.5 ${
-                        isDark ? 'bg-amber-950/20 border-amber-800/60' : 'bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-amber-100/60 border-amber-300'
-                      }`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                              <HardDrive size={18} />
-                            </div>
-                            <div>
-                              <h4 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-200 font-noto">
-                                পদ্ধতি ২: ১০০% অফলাইন পেনড্রাইভ মোড (ক্যাবলের ঝামেলা ছাড়া)
-                              </h4>
-                              <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 font-bold font-noto">
-                                কোনো নেটওয়ার্ক ক্যাবল বা ওয়াইফাই ছাড়া সরাসরি পেনড্রাইভে নিয়ে মেশিনে আপলোড করুন
-                              </p>
-                            </div>
+                      {/* বাটন ২: শিক্ষার্থী আপলোড ডাউনলোডার (Student Upload Downloader) */}
+                      <a
+                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&action=upload_students`}
+                        download="Deenora_Upload_Students.bat"
+                        className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-700 via-fuchsia-700 to-purple-900 hover:from-purple-800 hover:via-fuchsia-800 hover:to-purple-950 text-white shadow-xl shadow-purple-600/20 active:scale-[0.99] transition-all cursor-pointer border border-purple-400/30 overflow-hidden"
+                      >
+                        <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
+                          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+                            <Upload size={24} className="text-white" />
                           </div>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 self-start sm:self-auto shrink-0">
-                            ৫ সেকেন্ডে আপলোড
-                          </span>
+                          <div>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 uppercase tracking-wide inline-block mb-1">
+                              ⚡ পাইথন বা কোডিং ছাড়া ১-ক্লিকে
+                            </span>
+                            <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
+                              📤 ২. শিক্ষার্থী আপলোড ডাউনলোডার (মেশিনে ডাটা পাঠাতে)
+                            </h4>
+                            <p className="text-[11px] text-purple-100/90 font-bold font-noto mt-1 leading-relaxed">
+                              Deenora-র সকল শিক্ষার্থীর নাম ও রোল সরাসরি হাজিরা মেশিনে ১-ক্লিকে আপলোড করুন।
+                            </p>
+                          </div>
                         </div>
 
-                        {/* Prominent USB Download Button */}
-                        <a
-                          href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&format=usb`}
-                          download="user.dat"
-                          className="flex items-center justify-center gap-2.5 w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:via-orange-600 hover:to-amber-700 text-white font-black text-xs sm:text-sm shadow-lg shadow-amber-500/25 active:scale-[0.99] transition-all cursor-pointer"
-                        >
-                          <HardDrive size={18} />
-                          <span>📥 ১-ক্লিকে পেনড্রাইভে ডাউনলোড করুন (user.dat)</span>
-                        </a>
-
-                        {/* 3-Step Fail-Safe Offline Method Guide */}
-                        <div className="p-3.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-amber-200/80 dark:border-amber-900/50 space-y-2">
-                          <p className="text-[11px] font-black text-amber-950 dark:text-amber-300 font-noto">
-                            পেনড্রাইভ দিয়ে ব্যবহারের ৩টি সহজ ধাপ:
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-700 dark:text-slate-300 font-bold">
-                            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50/60 dark:bg-slate-800/60 border border-amber-100 dark:border-slate-700">
-                              <span className="w-5 h-5 rounded-full bg-amber-500 text-white font-black text-[10px] flex items-center justify-center shrink-0">১</span>
-                              <p className="leading-tight">উপরের বাটনে ক্লিক করে <code className="font-mono text-amber-700 dark:text-amber-300">user.dat</code> ফাইলটি পেনড্রাইভে নিন।</p>
-                            </div>
-                            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50/60 dark:bg-slate-800/60 border border-amber-100 dark:border-slate-700">
-                              <span className="w-5 h-5 rounded-full bg-amber-500 text-white font-black text-[10px] flex items-center justify-center shrink-0">২</span>
-                              <p className="leading-tight">পেনড্রাইভটি ZKTeco K40 মেশিনের ইউএসবি পোর্টে প্রবেশ করান।</p>
-                            </div>
-                            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50/60 dark:bg-slate-800/60 border border-amber-100 dark:border-slate-700">
-                              <span className="w-5 h-5 rounded-full bg-amber-500 text-white font-black text-[10px] flex items-center justify-center shrink-0">৩</span>
-                              <p className="leading-tight">মেশিনের বাটনে যান: <strong>Menu ➔ USB Manager ➔ Upload User Data</strong>।</p>
-                            </div>
-                          </div>
-                          <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black pt-0.5">
-                            💡 মাত্র ৫ সেকেন্ডে ক্যাবল বা পিসি সফটওয়্যার ছাড়াই সকল শিক্ষার্থী মেশিনে লোড হয়ে যাবে!
-                          </p>
+                        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-xs font-black shrink-0 self-start sm:self-auto shadow-md">
+                          <span>আপলোডার ডাউনলোড</span>
+                          <Download size={15} />
                         </div>
-                      </div>
+                      </a>
                     </div>
 
                     {/* Live Server Punch Sync Diagnostics & Status Monitor */}

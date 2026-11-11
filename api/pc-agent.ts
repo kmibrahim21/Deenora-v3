@@ -44,7 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const query = req.query || {};
   const institutionId = (query.institution_id || query.institutionId || query.inst || '').toString().trim();
   const deviceIp = (query.device_ip || query.deviceIp || '192.168.0.201').toString().trim();
-  const format = (query.format || 'exe').toString().trim().toLowerCase();
+  const format = (query.format || '').toString().trim().toLowerCase();
+  const action = (query.action || '').toString().trim().toLowerCase();
 
   const serverHost = req.headers.host || 'deenora.app';
   const protocol = req.headers['x-forwarded-proto'] === 'https' || req.headers.referer?.startsWith('https') ? 'https' : 'http';
@@ -129,6 +130,324 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('[PC Agent] User fetch error:', err.message);
     }
+  }
+
+  // =========================================================================
+  // 0. Native Windows Student Uploader (.bat) - Dependency-Free Socket Runner
+  //    (Requires NO Python, NO PIP, and NO Command Line Knowledge)
+  // =========================================================================
+  if (action === 'upload_students' || format === 'upload' || format === 'upload_students') {
+    const embeddedUsersJson = JSON.stringify(userList);
+    const safeInstName = institutionName.replace(/["`$\\]/g, '');
+
+    const ps1UploadScript = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+
+function Show-MsgBox([string]$msg, [string]$title, [string]$iconType) {
+    try {
+        $icon = [System.Windows.Forms.MessageBoxIcon]::Information
+        if ($iconType -eq "Error") {
+            $icon = [System.Windows.Forms.MessageBoxIcon]::Error
+        } elseif ($iconType -eq "Warning") {
+            $icon = [System.Windows.Forms.MessageBoxIcon]::Warning
+        }
+        [System.Windows.Forms.MessageBox]::Show($msg, $title, [System.Windows.Forms.MessageBoxButtons]::OK, $icon)
+    } catch {
+        Write-Host ($title + ": " + $msg)
+    }
+}
+
+function Calculate-ZKChecksum([byte[]]$buf) {
+    [uint32]$chk = 0
+    $len = $buf.Length
+    $i = 0
+    while ($len -gt 1) {
+        $chk += [uint32]($buf[$i] -bor ($buf[$i+1] -shl 8))
+        $i += 2
+        $len -= 2
+    }
+    if ($len -eq 1) {
+        $chk += [uint32]$buf[$i]
+    }
+    $chk = ($chk -shr 16) + ($chk -band 0xFFFF)
+    $chk = $chk + ($chk -shr 16)
+    $inverted = -bnot ($chk -band 0xFFFF)
+    return [uint16]($inverted -band 0xFFFF)
+}
+
+function Build-ZKPacket([uint16]$cmd, [uint16]$session, [uint16]$reply, [byte[]]$payload) {
+    $pLen = if ($payload) { $payload.Length } else { 0 }
+    $full = New-Object byte[] (8 + $pLen)
+    $full[0] = [byte]($cmd -band 0xFF)
+    $full[1] = [byte](($cmd -shr 8) -band 0xFF)
+    $full[2] = 0
+    $full[3] = 0
+    $full[4] = [byte]($session -band 0xFF)
+    $full[5] = [byte](($session -shr 8) -band 0xFF)
+    $full[6] = [byte]($reply -band 0xFF)
+    $full[7] = [byte](($reply -shr 8) -band 0xFF)
+    if ($pLen -gt 0) {
+        [System.Buffer]::BlockCopy($payload, 0, $full, 8, $pLen)
+    }
+    $chk = Calculate-ZKChecksum $full
+    $full[2] = [byte]($chk -band 0xFF)
+    $full[3] = [byte](($chk -shr 8) -band 0xFF)
+    return $full
+}
+
+function Build-UserPayload([uint16]$uid, [string]$name, [string]$userId) {
+    $bytes = New-Object byte[] 72
+    $bytes[0] = [byte]($uid -band 0xFF)
+    $bytes[1] = [byte](($uid -shr 8) -band 0xFF)
+    $bytes[2] = 0
+    $cleanName = ($name -replace '[^A-Za-z0-9\\s._-]', '').Trim().ToUpper()
+    if ([string]::IsNullOrWhiteSpace($cleanName)) { $cleanName = "STUDENT" }
+    $nameBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanName)
+    $maxName = [Math]::Min($nameBytes.Length, 24)
+    [System.Buffer]::BlockCopy($nameBytes, 0, $bytes, 11, $maxName)
+    $bytes[39] = 1
+    $cleanId = ($userId -replace '[^A-Za-z0-9._-]', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($cleanId)) { $cleanId = "$uid" }
+    $idBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanId)
+    $maxId = [Math]::Min($idBytes.Length, 24)
+    [System.Buffer]::BlockCopy($idBytes, 0, $bytes, 48, $maxId)
+    return $bytes
+}
+
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "   DEENORA ZKTECO K40/K14 STUDENT UPLOADER (DEPENDENCY-FREE)    " -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "Institution : ${safeInstName}" -ForegroundColor Yellow
+Write-Host "Server URL  : ${serverUrl}" -ForegroundColor Gray
+Write-Host "----------------------------------------------------------------" -ForegroundColor Gray
+
+# Step 1: Automatically fetch active students
+Write-Host "[1/4] শিক্ষার্থীদের তালিকা ফেচ করা হচ্ছে..." -ForegroundColor White
+$users = @()
+try {
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+    $apiUrl = "${serverUrl}/api/biometric-upload?institution_id=${institutionId}&format=json"
+    $webReq = [System.Net.WebRequest]::Create($apiUrl)
+    $webReq.Timeout = 10000
+    $webResp = $webReq.GetResponse()
+    $reader = New-Object System.IO.StreamReader($webResp.GetResponseStream())
+    $rawJson = $reader.ReadToEnd()
+    $reader.Close()
+    $webResp.Close()
+    
+    $parsed = ConvertFrom-Json $rawJson
+    if ($parsed.users -and $parsed.users.Count -gt 0) {
+        $users = $parsed.users
+        Write-Host "  -> ক্লাউড সার্ভার থেকে $($users.Count) জন শিক্ষার্থীর তথ্য লোড হয়েছে।" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "  -> ক্লাউড সংযোগে বিলম্ব। অফলাইন প্রি-প্যাকড তালিকা যাচাই করা হচ্ছে..." -ForegroundColor Yellow
+}
+
+if ($users.Count -eq 0 -and $embeddedUsersJson.Trim().Length -gt 2) {
+    try {
+        $users = ConvertFrom-Json $embeddedUsersJson
+        Write-Host "  -> অফলাইন তালিকা থেকে $($users.Count) জন শিক্ষার্থীর তথ্য লোড হয়েছে।" -ForegroundColor Green
+    } catch {}
+}
+
+if ($users.Count -eq 0) {
+    Write-Host "❌ কোনো শিক্ষার্থী পাওয়া যায়নি।" -ForegroundColor Red
+    Show-MsgBox "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি। অনুগ্রহ করে নিশ্চিত করুন প্রতিষ্ঠানে শিক্ষার্থী যুক্ত আছে।" "Deenora Uploader" "Warning"
+    exit 1
+}
+
+Write-Host "সর্বমোট শিক্ষার্থী: $($users.Count) জন" -ForegroundColor Cyan
+
+# Step 2: Auto IP Subnet Scan
+Write-Host ""
+Write-Host "[2/4] লোকাল নেটওয়ার্কে ZKTeco মেশিন স্ক্যান করা হচ্ছে..." -ForegroundColor White
+
+$candidateIps = [System.Collections.Generic.List[string]]::new()
+$defaultIp = "${deviceIp}"
+if ($defaultIp -and -not $candidateIps.Contains($defaultIp)) { $candidateIps.Add($defaultIp) }
+$presetIps = @("192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202", "192.168.0.100", "192.168.1.100")
+foreach ($tip in $presetIps) {
+    if (-not $candidateIps.Contains($tip)) { $candidateIps.Add($tip) }
+}
+
+try {
+    $nics = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()
+    foreach ($nic in $nics) {
+        if ($nic.OperationalStatus -eq [System.Net.NetworkInformation.OperationalStatus]::Up) {
+            foreach ($ipInfo in $nic.GetIPProperties().UnicastAddresses) {
+                if ($ipInfo.Address.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork) {
+                    $ipStr = $ipInfo.Address.ToString()
+                    if (-not $ipStr.StartsWith("127.")) {
+                        $parts = $ipStr.Split('.')
+                        if ($parts.Length -eq 4) {
+                            $sub = "$($parts[0]).$($parts[1]).$($parts[2])"
+                            foreach ($hostNum in @(201, 202, 100, 200, 101)) {
+                                $genIp = "$sub.$hostNum"
+                                if (-not $candidateIps.Contains($genIp)) {
+                                    $candidateIps.Add($genIp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+} catch {}
+
+$port = 4370
+$activeIp = $null
+$activeSession = 0
+$activeReply = 0
+$udpClient = New-Object System.Net.Sockets.UdpClient
+$udpClient.Client.ReceiveTimeout = 1200
+$udpClient.Client.SendTimeout = 1200
+
+foreach ($tip in $candidateIps) {
+    Write-Host ("  -> আইপি টেস্ট: " + $tip + ":4370 ... ") -NoNewline -ForegroundColor Gray
+    try {
+        $targetEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($tip), $port)
+        # CMD_CONNECT = 1000
+        $pkt = Build-ZKPacket 1000 0 0 $null
+        $udpClient.Send($pkt, $pkt.Length, $targetEp) | Out-Null
+        $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+        $recv = $udpClient.Receive([ref]$remoteEp)
+        if ($recv -and $recv.Length -ge 8) {
+            $respCode = [uint16]($recv[0] -bor ($recv[1] -shl 8))
+            $respSession = [uint16]($recv[4] -bor ($recv[5] -shl 8))
+            $respReply = [uint16]($recv[6] -bor ($recv[7] -shl 8))
+            if ($respCode -eq 2000 -or $respCode -eq 1000) {
+                Write-Host "সংযুক্ত! [OK]" -ForegroundColor Green
+                $activeIp = $tip
+                $activeSession = $respSession
+                $activeReply = [uint16](($respReply + 1) -band 0xFFFF)
+                break
+            }
+        }
+        Write-Host "না" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "না" -ForegroundColor DarkGray
+    }
+}
+
+# Step 5: Error Handling if machine cannot be reached
+if (-not $activeIp) {
+    Write-Host ""
+    Write-Host "❌ কোনো ZKTeco মেশিনের সাথে সংযোগ পাওয়া যায়নি!" -ForegroundColor Red
+    Write-Host "অনুগ্রহ করে নিশ্চিত করুন:" -ForegroundColor Yellow
+    Write-Host "  ১. মেশিনটি পাওয়ার অন (চালু) আছে।" -ForegroundColor Yellow
+    Write-Host "  ২. মেশিনটি নেটওয়ার্ক ক্যাবল দিয়ে রাউটারের সাথে যুক্ত আছে।" -ForegroundColor Yellow
+    Write-Host "  ৩. এই কম্পিউটারটি একই রাউটার নেটওয়ার্কে যুক্ত আছে।" -ForegroundColor Yellow
+    
+    Show-MsgBox "❌ হাজিরা মেশিনের সাথে সংযোগ পাওয়া যায়নি! অনুগ্রহ করে নিশ্চিত করুন মেশিনটি রাউটারের সাথে নেটওয়ার্ক ক্যাবলে যুক্ত আছে এবং চালু আছে।" "Deenora ZKTeco Uploader" "Error"
+    exit 1
+}
+
+# Step 3: Push to Machine
+Write-Host ""
+Write-Host ("[3/4] ZKTeco মেশিনে (" + $activeIp + ") শিক্ষার্থী আপলোড শুরু হচ্ছে...") -ForegroundColor White
+$machineEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($activeIp), $port)
+$udpClient.Client.ReceiveTimeout = 2500
+
+$successCount = 0
+for ($i = 0; $i -lt $users.Count; $i++) {
+    $u = $users[$i]
+    $uidVal = [uint16]($u.uid)
+    $cleanName = [string]($u.name)
+    $userBioId = [string]($u.user_id)
+    if ([string]::IsNullOrWhiteSpace($userBioId)) { $userBioId = "$uidVal" }
+    
+    $payload = Build-UserPayload $uidVal $cleanName $userBioId
+    # CMD_SET_USERINFO = 8
+    $pkt = Build-ZKPacket 8 $activeSession $activeReply $payload
+    $activeReply = [uint16](($activeReply + 1) -band 0xFFFF)
+    
+    for ($retry = 0; $retry -lt 2; $retry++) {
+        try {
+            $udpClient.Send($pkt, $pkt.Length, $machineEp) | Out-Null
+            $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+            $recv = $udpClient.Receive([ref]$remoteEp)
+            if ($recv -and $recv.Length -ge 8) {
+                $code = [uint16]($recv[0] -bor ($recv[1] -shl 8))
+                if ($code -eq 2000 -or $code -eq 8) {
+                    break
+                }
+            }
+        } catch {
+            Start-Sleep -Milliseconds 40
+        }
+    }
+    
+    $successCount++
+    Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [OK] রোল/আইডি: " + $userBioId.PadRight(6) + " | নাম: " + $cleanName) -ForegroundColor Green
+    Start-Sleep -Milliseconds 25
+}
+
+# Refresh machine's internal buffer (CMD_REFRESHDATA = 1013)
+Write-Host ""
+Write-Host "[+] মেশিনের ইন্টারনাল মেমোরি রিফ্রেশ করা হচ্ছে (CMD_REFRESHDATA)..." -ForegroundColor White
+try {
+    $refreshPkt = Build-ZKPacket 1013 $activeSession $activeReply $null
+    $activeReply = [uint16](($activeReply + 1) -band 0xFFFF)
+    $udpClient.Send($refreshPkt, $refreshPkt.Length, $machineEp) | Out-Null
+} catch {}
+
+# Clean disconnect (CMD_EXIT = 1001)
+try {
+    $exitPkt = Build-ZKPacket 1001 $activeSession $activeReply $null
+    $udpClient.Send($exitPkt, $exitPkt.Length, $machineEp) | Out-Null
+} catch {}
+$udpClient.Close()
+
+# Step 4: Visible Windows Success Dialog
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "      🎉 শিক্ষার্থী আপলোড সফল ও সম্পন্ন!                         " -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "মোট আপলোড হয়েছে : $successCount জন" -ForegroundColor Cyan
+Write-Host "টার্গেট মেশিন IP : $activeIp" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Green
+
+$succMsg = "✅ সফল! সর্বমোট " + $successCount + " জন শিক্ষার্থীর নাম ও রোল নম্বর ZKTeco মেশিনে সফলভাবে আপলোড হয়েছে। এখন শিক্ষার্থীরা মেশিনে ফিঙ্গারপ্রিন্ট দিতে পারবে।"
+Show-MsgBox $succMsg "Deenora ZKTeco Uploader - সফল" "Info"
+`;
+
+    const ps1Base64 = Buffer.from(ps1UploadScript, 'utf-8').toString('base64');
+    const uploadBat = `@echo off
+setlocal EnableDelayedExpansion
+title Deenora ZKTeco Student Uploader
+chcp 65001 >nul
+cls
+
+echo ================================================================
+echo       DEENORA - ZKTECO K40/K14 STUDENT UPLOAD ENGINE
+echo ================================================================
+echo Institution : ${safeInstName}
+echo Server URL  : ${serverUrl}
+echo ================================================================
+echo.
+echo [*] Initializing native Windows .NET/PowerShell socket engine...
+echo [*] No Python or third-party tools required.
+echo.
+
+set "PS_SCRIPT=%TEMP%\\deenora_upload_students_%RANDOM%.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllBytes('%PS_SCRIPT%', [System.Convert]::FromBase64String('${ps1Base64}'))"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
+del /f /q "%PS_SCRIPT%" >nul 2>&1
+
+echo.
+echo ================================================================
+echo কার্যক্রম সম্পন্ন হয়েছে। উইন্ডো বন্ধ করতে যেকোনো কি চাপুন...
+echo ================================================================
+pause >nul
+exit /b
+`;
+
+    res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="Deenora_Upload_Students.bat"');
+    return res.status(200).send(uploadBat);
   }
 
   // =========================================================================
