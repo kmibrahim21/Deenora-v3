@@ -133,10 +133,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // =========================================================================
-  // 0. Native Windows Student Uploader (.bat) - Dependency-Free Socket Runner
-  //    (Requires NO Python, NO PIP, and NO Command Line Knowledge)
+  // 0a. Dynamic PowerShell Script for Student Uploader (Pure UTF-8 text)
   // =========================================================================
-  if (action === 'upload_students' || format === 'upload' || format === 'upload_students') {
+  if (action === 'get_upload_script') {
     const embeddedUsersJson = JSON.stringify(userList);
     const safeInstName = institutionName.replace(/["`$\\]/g, '');
 
@@ -208,7 +207,7 @@ function Build-UserPayload([uint16]$uid, [string]$name, [string]$userId) {
     [System.Buffer]::BlockCopy($nameBytes, 0, $bytes, 11, $maxName)
     $bytes[39] = 1
     $cleanId = ($userId -replace '[^A-Za-z0-9._-]', '').Trim()
-    if ([string]::IsNullOrWhiteSpace($cleanId)) { $cleanId = "$uid" }
+    if ([string]::IsNullOrWhiteSpace($cleanId)) { $cleanId = "" + $uid }
     $idBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanId)
     $maxId = [Math]::Min($idBytes.Length, 24)
     [System.Buffer]::BlockCopy($idBytes, 0, $bytes, 48, $maxId)
@@ -239,7 +238,7 @@ try {
     $parsed = ConvertFrom-Json $rawJson
     if ($parsed.users -and $parsed.users.Count -gt 0) {
         $users = $parsed.users
-        Write-Host "  -> ক্লাউড সার্ভার থেকে $($users.Count) জন শিক্ষার্থীর তথ্য লোড হয়েছে।" -ForegroundColor Green
+        Write-Host ("  -> ক্লাউড সার্ভার থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
     }
 } catch {
     Write-Host "  -> ক্লাউড সংযোগে বিলম্ব। অফলাইন প্রি-প্যাকড তালিকা যাচাই করা হচ্ছে..." -ForegroundColor Yellow
@@ -248,17 +247,18 @@ try {
 if ($users.Count -eq 0 -and $embeddedUsersJson.Trim().Length -gt 2) {
     try {
         $users = ConvertFrom-Json $embeddedUsersJson
-        Write-Host "  -> অফলাইন তালিকা থেকে $($users.Count) জন শিক্ষার্থীর তথ্য লোড হয়েছে।" -ForegroundColor Green
+        Write-Host ("  -> অফলাইন তালিকা থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
     } catch {}
 }
 
 if ($users.Count -eq 0) {
     Write-Host "❌ কোনো শিক্ষার্থী পাওয়া যায়নি।" -ForegroundColor Red
     Show-MsgBox "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি। অনুগ্রহ করে নিশ্চিত করুন প্রতিষ্ঠানে শিক্ষার্থী যুক্ত আছে।" "Deenora Uploader" "Warning"
+    Read-Host "উইন্ডো বন্ধ করতে Enter চাপুন..."
     exit 1
 }
 
-Write-Host "সর্বমোট শিক্ষার্থী: $($users.Count) জন" -ForegroundColor Cyan
+Write-Host ("সর্বমোট শিক্ষার্থী: " + $users.Count + " জন") -ForegroundColor Cyan
 
 # Step 2: Auto IP Subnet Scan
 Write-Host ""
@@ -282,9 +282,9 @@ try {
                     if (-not $ipStr.StartsWith("127.")) {
                         $parts = $ipStr.Split('.')
                         if ($parts.Length -eq 4) {
-                            $sub = "$($parts[0]).$($parts[1]).$($parts[2])"
+                            $sub = "" + $parts[0] + "." + $parts[1] + "." + $parts[2]
                             foreach ($hostNum in @(201, 202, 100, 200, 101)) {
-                                $genIp = "$sub.$hostNum"
+                                $genIp = "" + $sub + "." + $hostNum
                                 if (-not $candidateIps.Contains($genIp)) {
                                     $candidateIps.Add($genIp)
                                 }
@@ -336,12 +336,18 @@ foreach ($tip in $candidateIps) {
 if (-not $activeIp) {
     Write-Host ""
     Write-Host "❌ কোনো ZKTeco মেশিনের সাথে সংযোগ পাওয়া যায়নি!" -ForegroundColor Red
+    Write-Host "পরীক্ষা করা আইপিসমূহ:" -ForegroundColor DarkGray
+    foreach ($cand in $candidateIps) {
+        Write-Host ("  - " + $cand + ":4370") -ForegroundColor DarkGray
+    }
+    Write-Host ""
     Write-Host "অনুগ্রহ করে নিশ্চিত করুন:" -ForegroundColor Yellow
-    Write-Host "  ১. মেশিনটি পাওয়ার অন (চালু) আছে।" -ForegroundColor Yellow
+    Write-Host "  ১. ZKTeco মেশিনটি পাওয়ার অন (চালু) আছে।" -ForegroundColor Yellow
     Write-Host "  ২. মেশিনটি নেটওয়ার্ক ক্যাবল দিয়ে রাউটারের সাথে যুক্ত আছে।" -ForegroundColor Yellow
     Write-Host "  ৩. এই কম্পিউটারটি একই রাউটার নেটওয়ার্কে যুক্ত আছে।" -ForegroundColor Yellow
     
     Show-MsgBox "❌ হাজিরা মেশিনের সাথে সংযোগ পাওয়া যায়নি! অনুগ্রহ করে নিশ্চিত করুন মেশিনটি রাউটারের সাথে নেটওয়ার্ক ক্যাবলে যুক্ত আছে এবং চালু আছে।" "Deenora ZKTeco Uploader" "Error"
+    Read-Host "উইন্ডো বন্ধ করতে Enter চাপুন..."
     exit 1
 }
 
@@ -357,7 +363,7 @@ for ($i = 0; $i -lt $users.Count; $i++) {
     $uidVal = [uint16]($u.uid)
     $cleanName = [string]($u.name)
     $userBioId = [string]($u.user_id)
-    if ([string]::IsNullOrWhiteSpace($userBioId)) { $userBioId = "$uidVal" }
+    if ([string]::IsNullOrWhiteSpace($userBioId)) { $userBioId = "" + $uidVal }
     
     $payload = Build-UserPayload $uidVal $cleanName $userBioId
     # CMD_SET_USERINFO = 8
@@ -406,17 +412,27 @@ Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host "      🎉 শিক্ষার্থী আপলোড সফল ও সম্পন্ন!                         " -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host "মোট আপলোড হয়েছে : $successCount জন" -ForegroundColor Cyan
-Write-Host "টার্গেট মেশিন IP : $activeIp" -ForegroundColor Cyan
+Write-Host ("মোট আপলোড হয়েছে : " + $successCount + " জন") -ForegroundColor Cyan
+Write-Host ("টার্গেট মেশিন IP : " + $activeIp) -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Green
 
 $succMsg = "✅ সফল! সর্বমোট " + $successCount + " জন শিক্ষার্থীর নাম ও রোল নম্বর ZKTeco মেশিনে সফলভাবে আপলোড হয়েছে। এখন শিক্ষার্থীরা মেশিনে ফিঙ্গারপ্রিন্ট দিতে পারবে।"
 Show-MsgBox $succMsg "Deenora ZKTeco Uploader - সফল" "Info"
+
+Read-Host "কার্যক্রম শেষ হয়েছে। উইন্ডো বন্ধ করতে Enter চাপুন..."
 `;
 
-    const ps1Base64 = Buffer.from(ps1UploadScript, 'utf-8').toString('base64');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline');
+    return res.status(200).send(ps1UploadScript);
+  }
+
+  // =========================================================================
+  // 0b. Lightweight Windows Batch Runner (.bat) - Under 600 characters
+  //     (ZERO CMD character limit issues, ZERO base64 overflow)
+  // =========================================================================
+  if (action === 'upload_students' || format === 'upload' || format === 'upload_students') {
     const uploadBat = `@echo off
-setlocal EnableDelayedExpansion
 title Deenora ZKTeco Student Uploader
 chcp 65001 >nul
 cls
@@ -424,25 +440,13 @@ cls
 echo ================================================================
 echo       DEENORA - ZKTECO K40/K14 STUDENT UPLOAD ENGINE
 echo ================================================================
-echo Institution : ${safeInstName}
-echo Server URL  : ${serverUrl}
-echo ================================================================
-echo.
-echo [*] Initializing native Windows .NET/PowerShell socket engine...
-echo [*] No Python or third-party tools required.
+echo [*] Connecting to Deenora Cloud Server...
+echo [*] Scanning local network for ZKTeco Biometric Machine...
 echo.
 
-set "PS_SCRIPT=%TEMP%\\deenora_upload_students_%RANDOM%.ps1"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllBytes('%PS_SCRIPT%', [System.Convert]::FromBase64String('${ps1Base64}'))"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
-del /f /q "%PS_SCRIPT%" >nul 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls; $u = '${serverUrl}/api/pc-agent?institution_id=${institutionId}&action=get_upload_script'; try { $wc = New-Object System.Net.WebClient; $wc.Encoding = [System.Text.Encoding]::UTF8; $code = $wc.DownloadString($u); Invoke-Expression $code; } catch { Write-Host '❌ ক্লাউড সার্ভারের সাথে সংযোগে ত্রুটি: ' $_.Exception.Message -ForegroundColor Red; [void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [void][System.Windows.Forms.MessageBox]::Show('সার্ভারের সাথে সংযোগ পাওয়া যায়নি। ইন্টারনেট কানেকশন চেক করুন।', 'Deenora Error', 0, 16); }; Write-Host ''; Write-Host 'উইন্ডো বন্ধ করতে যেকোনো কি চাপুন...' -ForegroundColor Gray; [void][Console]::ReadKey();"
 
-echo.
-echo ================================================================
-echo কার্যক্রম সম্পন্ন হয়েছে। উইন্ডো বন্ধ করতে যেকোনো কি চাপুন...
-echo ================================================================
-pause >nul
-exit /b
+exit /b 0
 `;
 
     res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
