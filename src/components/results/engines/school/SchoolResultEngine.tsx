@@ -3444,7 +3444,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                         ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[22px]' : 'text-[26px]') 
                         : (madrasah?.name && madrasah.name.length > 25 ? 'text-[28px]' : 'text-[34px]');
                       
-                      const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
+                      const numSingleDays = routineData.length;
+const singleCellPy = numSingleDays >= 10 ? 'p-1' : numSingleDays >= 7 ? 'py-1.5 px-2' : 'p-2';
+const singleHeaderH = numSingleDays >= 10 ? 'h-8' : numSingleDays >= 7 ? 'h-9' : 'h-11';
+const singleFontSize = numSingleDays >= 10 ? 10.5 : numSingleDays >= 7 ? 11.5 : 12.5;
+const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                       const previewCalendarBoxClass = isClassMode ? 'w-[130px] h-[88px] p-2' : 'w-[170px] h-[105px] p-2.5';
                       const previewCalendarIconSize = isClassMode ? 'w-5 h-5 text-xs' : 'w-7 h-7 text-sm';
                       const previewCalendarTextClass1 = isClassMode ? 'text-[11px]' : 'text-[13px]';
@@ -3743,81 +3747,81 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                             </table>
                           ) : (
                             /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
-                            <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: rtTheme.primary }}>
-                              <thead>
-                                <tr className="text-white h-11" style={{ backgroundColor: rtTheme.primary }}>
-                                  <th className="border-r p-2 font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, fontSize: `${Math.round(12.5 * fontScale)}px` }}>
-                                    {lang === 'bn' ? 'বার / তারিখ' : 'Day / Date'}
-                                  </th>
-                                  <th className="border-r p-2 font-black" style={{ borderColor: `${rtTheme.primary}b3`, fontSize: `${Math.round(12.5 * fontScale)}px` }}>
-                                    {lang === 'bn' ? `সকাল (${formatRoutineTime(routineMorningTime)})` : `Morning (${formatRoutineTime(routineMorningTime)})`}
-                                  </th>
-                                  {showRoutineAfternoon && (
-                                    <th className="p-2 font-black w-48" style={{ fontSize: `${Math.round(12.5 * fontScale)}px` }}>
-                                      {lang === 'bn' ? `বিকাল (${formatRoutineTime(routineAfternoonTime)})` : `Afternoon (${formatRoutineTime(routineAfternoonTime)})`}
-                                    </th>
-                                  )}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(() => {
-                                  const activeClassObj = classes.find(c => c.id === selectedRoutineClassId) || classes[0];
-                                  const getSubjectForClassAndDayAndShift = (cls: any, dayIdx: number, shift: 'morning' | 'afternoon') => {
-                                    const dayObj = routineData[dayIdx];
-                                    if (!dayObj) return '*****';
-                                    const slots = dayObj[shift]?.subjects || [];
-                                    const found = slots.find((s: any) => 
-                                      s.classId === cls?.id || 
-                                      s.className === cls?.class_name || 
-                                      (s.className && cls?.class_name && (s.className.includes(cls.class_name) || cls.class_name.includes(s.className)))
-                                    );
-                                    return found ? found.subject : '*****';
-                                  };
+                                <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: rtTheme.primary }}>
+                                  <thead>
+                                    <tr className={`text-white ${singleHeaderH}`} style={{ backgroundColor: rtTheme.primary }}>
+                                      <th className="border-r p-1.5 font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, fontSize: `${Math.round(singleFontSize * fontScale)}px` }}>
+                                        {lang === 'bn' ? 'বার / তারিখ' : 'Day / Date'}
+                                      </th>
+                                      <th className="border-r p-1.5 font-black" style={{ borderColor: `${rtTheme.primary}b3`, fontSize: `${Math.round(singleFontSize * fontScale)}px` }}>
+                                        {lang === 'bn' ? `সকাল (${formatRoutineTime(routineMorningTime)})` : `Morning (${formatRoutineTime(routineMorningTime)})`}
+                                      </th>
+                                      {showRoutineAfternoon && (
+                                        <th className="p-1.5 font-black w-48" style={{ fontSize: `${Math.round(singleFontSize * fontScale)}px` }}>
+                                          {lang === 'bn' ? `বিকাল (${formatRoutineTime(routineAfternoonTime)})` : `Afternoon (${formatRoutineTime(routineAfternoonTime)})`}
+                                        </th>
+                                      )}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(() => {
+                                      const activeClassObj = classes.find(c => c.id === selectedRoutineClassId) || classes[0];
+                                      const getSubjectForClassAndDayAndShift = (cls: any, dayIdx: number, shift: 'morning' | 'afternoon') => {
+                                        const dayObj = routineData[dayIdx];
+                                        if (!dayObj) return '*****';
+                                        const slots = dayObj[shift]?.subjects || [];
+                                        const found = slots.find((s: any) => 
+                                          s.classId === cls?.id || 
+                                          s.className === cls?.class_name || 
+                                          (s.className && cls?.class_name && (s.className.includes(cls.class_name) || cls.class_name.includes(s.className)))
+                                        );
+                                        return found ? found.subject : '*****';
+                                      };
 
-                                  return routineData.map((row, idx) => (
-                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
-                                      <td className="border-r p-2 text-center align-middle relative group" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
-                                        <button 
-                                          onClick={() => handleRemoveRoutineDay(row.id)}
-                                          className="absolute -left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
-                                          title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete Row'}
-                                        >
-                                          <Trash2 size={12} />
-                                        </button>
-                                        <div className="relative group/date border rounded-lg p-1 transition-colors" style={{ borderColor: `${rtTheme.primary}26` }}>
-                                          <input 
-                                            type="date" 
-                                            value={row.isoDate || ''}
-                                            onChange={(e) => {
-                                              const selectedDate = e.target.value;
-                                              if (!selectedDate) return;
-                                              
-                                              const d = new Date(selectedDate);
-                                              const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                              const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
-                                              
-                                              const updated = [...routineData];
-                                              updated[idx].isoDate = selectedDate;
-                                              updated[idx].date = formattedDate;
-                                              updated[idx].day = formattedDay;
-                                              setRoutineData(updated);
-                                            }}
-                                            className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
-                                          />
-                                          <div className="flex flex-col items-center">
-                                            <p className="font-black leading-none mb-0.5" style={{ color: rtTheme.primary, fontSize: `${Math.round(12 * fontScale)}px` }}>
-                                              {row.day}
-                                            </p>
-                                            <p className="font-bold text-slate-500 flex items-center gap-1" style={{ fontSize: `${Math.round(10.5 * fontScale)}px` }}>
-                                              <Calendar size={9} />
-                                              {row.date}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </td>
-                                      
-                                      {/* Morning subject for selected class */}
-                                      <td className="border-r p-2 align-middle" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                      return routineData.map((row, idx) => (
+                                        <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
+                                          <td className={`border-r ${singleCellPy} text-center align-middle relative group`} style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
+                                            <button 
+                                              onClick={() => handleRemoveRoutineDay(row.id)}
+                                              className="absolute -left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
+                                              title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete Row'}
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                            <div className="relative group/date border rounded-lg p-0.5 transition-colors" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                              <input 
+                                                type="date" 
+                                                value={row.isoDate || ''}
+                                                onChange={(e) => {
+                                                  const selectedDate = e.target.value;
+                                                  if (!selectedDate) return;
+                                                  
+                                                  const d = new Date(selectedDate);
+                                                  const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                                  const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+                                                  
+                                                  const updated = [...routineData];
+                                                  updated[idx].isoDate = selectedDate;
+                                                  updated[idx].date = formattedDate;
+                                                  updated[idx].day = formattedDay;
+                                                  setRoutineData(updated);
+                                                }}
+                                                className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
+                                              />
+                                              <div className="flex flex-col items-center">
+                                                <p className="font-black leading-none mb-0.5 font-solaiman" style={{ color: rtTheme.primary, fontSize: `${Math.round((numSingleDays >= 10 ? 10.5 : 12) * fontScale)}px` }}>
+                                                  {row.day}
+                                                </p>
+                                                <p className="font-bold text-slate-500 flex items-center gap-1 font-solaiman" style={{ fontSize: `${Math.round((numSingleDays >= 10 ? 9 : 10.5) * fontScale)}px` }}>
+                                                  <Calendar size={9} />
+                                                  {row.date}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </td>
+                                          
+                                          {/* Morning subject for selected class */}
+                                          <td className={`border-r ${singleCellPy} align-middle`} style={{ borderColor: `${rtTheme.primary}26` }}>
                                         <input 
                                           type="text"
                                           value={getSubjectForClassAndDayAndShift(activeClassObj, idx, 'morning')}

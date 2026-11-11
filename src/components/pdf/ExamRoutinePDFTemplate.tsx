@@ -241,13 +241,47 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     };
 
     if (isClassMode) {
-      cellFontSizePx = Math.round(15 * effectiveScale);
-      classNameFontSizePx = Math.round(14.5 * effectiveScale);
-      headerDayFontPx = Math.round(13 * effectiveScale);
-      headerDateFontPx = Math.round(11.5 * effectiveScale);
-      shiftTitleFontPx = Math.round(12.5 * effectiveScale);
-      shiftTimeFontPx = Math.round(11.5 * effectiveScale);
-      rowPaddingClass = numDays <= 5 ? 'py-3 px-2' : 'py-1.5 px-1';
+      if (numDays <= 5) {
+        cellFontSizePx = Math.round(15 * effectiveScale);
+        classNameFontSizePx = Math.round(14.5 * effectiveScale);
+        headerDayFontPx = Math.round(13 * effectiveScale);
+        headerDateFontPx = Math.round(11.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(12.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(11.5 * effectiveScale);
+        rowPaddingClass = 'py-2.5 px-2';
+      } else if (numDays <= 7) {
+        cellFontSizePx = Math.round(13.5 * effectiveScale);
+        classNameFontSizePx = Math.round(13 * effectiveScale);
+        headerDayFontPx = Math.round(12 * effectiveScale);
+        headerDateFontPx = Math.round(10.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(11.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(10.5 * effectiveScale);
+        rowPaddingClass = 'py-1.5 px-1.5';
+      } else if (numDays <= 9) {
+        cellFontSizePx = Math.round(12 * effectiveScale);
+        classNameFontSizePx = Math.round(11.5 * effectiveScale);
+        headerDayFontPx = Math.round(11 * effectiveScale);
+        headerDateFontPx = Math.round(9.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(10.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(9.5 * effectiveScale);
+        rowPaddingClass = 'py-1 px-1';
+      } else if (numDays <= 12) {
+        cellFontSizePx = Math.round(10.5 * effectiveScale);
+        classNameFontSizePx = Math.round(10 * effectiveScale);
+        headerDayFontPx = Math.round(10 * effectiveScale);
+        headerDateFontPx = Math.round(8.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(9.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(8.5 * effectiveScale);
+        rowPaddingClass = 'py-0.5 px-1';
+      } else {
+        cellFontSizePx = Math.round(9.5 * effectiveScale);
+        classNameFontSizePx = Math.round(9 * effectiveScale);
+        headerDayFontPx = Math.round(9 * effectiveScale);
+        headerDateFontPx = Math.round(8 * effectiveScale);
+        shiftTitleFontPx = Math.round(9 * effectiveScale);
+        shiftTimeFontPx = Math.round(8 * effectiveScale);
+        rowPaddingClass = 'py-[1px] px-0.5';
+      }
     } else {
       if (numClasses <= 3) {
         cellFontSizePx = Math.round(18 * effectiveScale);
@@ -294,7 +328,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
 
     // Footer elements sizing
     const footerInstructionsMaxWidth = isClassMode 
-      ? 'max-w-[220px]' 
+      ? (numDays >= 10 ? 'max-w-[190px]' : 'max-w-[220px]')
       : isVeryFewClasses 
         ? 'max-w-[460px]' 
         : 'max-w-[420px]';
@@ -306,7 +340,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
         : 'px-3 py-1 text-[10px] mb-1';
 
     const footerInstructionsTextClass = isClassMode 
-      ? 'text-[8px] space-y-0.5 font-bold text-slate-600' 
+      ? (numDays >= 10 ? 'text-[7.5px] space-y-0 font-bold text-slate-600' : 'text-[8px] space-y-0.5 font-bold text-slate-600')
       : isVeryFewClasses
         ? 'text-[10.5px] space-y-1 font-bold text-slate-600'
         : isManyClasses
@@ -314,7 +348,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
           : 'text-[9.5px] space-y-0.5 font-bold text-slate-600';
     
     const footerSignBoxMinWidth = isClassMode 
-      ? 'min-w-[130px] p-1.5' 
+      ? (numDays >= 10 ? 'min-w-[115px] p-1' : 'min-w-[130px] p-1.5')
       : isVeryFewClasses
         ? 'min-w-[210px] p-2.5'
         : 'min-w-[190px] p-2';
@@ -322,7 +356,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     const footerSignTextClass = isClassMode ? 'text-[9px]' : isVeryFewClasses ? 'text-[11px]' : 'text-[10px]';
     const footerSignSubtextClass = isClassMode ? 'text-[8px]' : isVeryFewClasses ? 'text-[10px]' : 'text-[9px]';
     const signatureHeight = isClassMode 
-      ? 24 
+      ? (numDays >= 10 ? 18 : 24)
       : isVeryFewClasses
         ? Math.min(Math.max(Number(configObj?.signature_height) || 42, 32), 48)
         : isManyClasses
