@@ -667,6 +667,11 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Action not found' });
   } catch (err: any) {
     console.error(`Parents API error:`, err);
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    let msg = err.message || 'Internal server error';
+    if (msg.includes('JSON object') || msg.includes('multiple (or no) rows') || msg.includes('PGRST116')) {
+      msg = 'প্রদত্ত মোবাইল নম্বর বা আইডি দিয়ে একাধিক শিক্ষার্থী পাওয়া গেছে অথবা তথ্য মেলেনি। অনুগ্রহ করে শিক্ষার্থীর সঠিক রোল নম্বর বা রেজিস্ট্রেশন নম্বর দিয়ে চেষ্টা করুন।';
+    }
+    return res.status(500).json({ error: msg });
   }
 }
+

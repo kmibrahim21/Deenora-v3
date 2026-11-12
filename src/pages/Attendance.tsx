@@ -458,6 +458,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [endTime, setEndTime] = useState(madrasah?.config_json?.attendance_settings?.end_time || '14:00');
   const [halfDayTime, setHalfDayTime] = useState(madrasah?.config_json?.attendance_settings?.half_day_time || '12:00');
   const [fullDayTime, setFullDayTime] = useState(madrasah?.config_json?.attendance_settings?.full_day_time || '14:00');
+  const [lateGraceMinutes, setLateGraceMinutes] = useState<number>(
+    Number((madrasah?.config_json as any)?.attendance_settings?.late_grace_minutes ?? 10)
+  );
   const [savingSettings, setSavingSettings] = useState(false);
   const [date, setDate] = useState(getTodayDateString());
   const [selectedSession, setSelectedSession] = useState<string>('all');
@@ -610,6 +613,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         setEndTime(settings.end_time || '14:00');
         setHalfDayTime(settings.half_day_time || '12:00');
         setFullDayTime(settings.full_day_time || '14:00');
+        setLateGraceMinutes(Number(settings.late_grace_minutes ?? 10));
       } else {
         const classSessions = settings.class_sessions?.[settingsClassId];
         setSettingsSessions(classSessions || []);
@@ -620,6 +624,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         setEndTime(classTimes?.end_time || settings.end_time || '14:00');
         setHalfDayTime(classTimes?.half_day_time || settings.half_day_time || '12:00');
         setFullDayTime(classTimes?.full_day_time || settings.full_day_time || '14:00');
+        setLateGraceMinutes(Number(classTimes?.late_grace_minutes ?? settings.late_grace_minutes ?? 10));
       }
     }
   }, [settingsClassId, madrasah?.config_json]);
@@ -1779,6 +1784,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         updatedSettings.end_time = endTime;
         updatedSettings.half_day_time = halfDayTime;
         updatedSettings.full_day_time = fullDayTime;
+        updatedSettings.late_grace_minutes = Number(lateGraceMinutes) >= 0 ? Number(lateGraceMinutes) : 10;
       } else {
         classSessions[settingsClassId] = settingsSessions;
         updatedSettings.class_sessions = classSessions;
@@ -1788,6 +1794,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           end_time: endTime,
           half_day_time: halfDayTime,
           full_day_time: fullDayTime,
+          late_grace_minutes: Number(lateGraceMinutes) >= 0 ? Number(lateGraceMinutes) : 10,
         };
         updatedSettings.class_times = classTimes;
       }
@@ -2965,6 +2972,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           setEndTime(settings.end_time || '14:00');
                           setHalfDayTime(settings.half_day_time || '12:00');
                           setFullDayTime(settings.full_day_time || '14:00');
+                          setLateGraceMinutes(Number(settings.late_grace_minutes ?? 10));
                         }}
                         title="Copy Global Settings"
                         className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-blue-600 border-blue-100'}`}
@@ -2977,7 +2985,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শুরুর সময়' : 'Start Time'}</label>
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'হাজিরা শুরুর সময়' : 'Start Time'}</label>
                     <input 
                       type="time" 
                       value={startTime}
@@ -2986,7 +2994,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'ছুটির সময়' : 'End Time'}</label>
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'হাজিরা শেষের সময়' : 'End Time'}</label>
                     <input 
                       type="time" 
                       value={endTime}
@@ -2994,6 +3002,34 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       className={`w-full h-12 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2 mt-4 p-4 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-black text-amber-500 uppercase tracking-[0.2em]">
+                      {lang === 'bn' ? 'কত মিনিট পর লেট কাউন্ট হবে (গ্রেস টাইম)' : 'Late Grace Minutes'}
+                    </label>
+                    <span className="text-xs font-bold text-amber-500">{lateGraceMinutes} মিনিট</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="180"
+                      value={lateGraceMinutes}
+                      onChange={(e) => setLateGraceMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="১০"
+                      className={`w-28 h-11 px-3 border-2 rounded-xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500/50' : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500/50'}`}
+                    />
+                    <span className="text-xs text-slate-400 font-medium font-noto">
+                      {lang === 'bn' ? 'মিনিট পর থেকে লেট (উপস্থিত তবে দেরিতে)' : 'mins after start is counted as Late (Present)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed font-noto">
+                    {lang === 'bn' 
+                      ? `হাজিরা শুরুর সময়ের কত মিনিট পর পাঞ্চ করলে শিক্ষার্থী "লেট" হিসেবে গণ্য হবে। যেমন: শুরুর সময় ০৮:০০ এবং গ্রেস টাইম ${lateGraceMinutes} মিনিট হলে, ০৮:${String(lateGraceMinutes).padStart(2, '0')}-এর পর আসলে "উপস্থিত (লেট)" দেখাবে কিন্তু মোট উপস্থিতির তালিকায় গণনা করা হবে।`
+                      : `e.g. If start time is 08:00 and grace is ${lateGraceMinutes} mins, punches after 08:${String(lateGraceMinutes).padStart(2, '0')} are marked as Late (counted Present).`}
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-between px-1 mt-4">

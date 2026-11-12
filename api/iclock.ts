@@ -762,6 +762,7 @@ export default async function handler(req: any, res: any) {
 
           const classTimes = student.class_id ? settings.class_times?.[student.class_id] : null;
           const classStartTimeStr = classTimes?.start_time || settings.start_time || '08:00';
+          const classGraceMinutes = Number(classTimes?.late_grace_minutes ?? settings.late_grace_minutes ?? 10);
 
           let punchStatus: 'present' | 'late' = 'present';
           let lateMinutes: number | null = null;
@@ -773,7 +774,7 @@ export default async function handler(req: any, res: any) {
               const punchTotal = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1], 10);
               const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10);
               const diff = punchTotal - startTotal;
-              if (diff > graceMinutes) {
+              if (diff > classGraceMinutes) {
                 punchStatus = 'late';
                 lateMinutes = diff;
               }
