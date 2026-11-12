@@ -7,6 +7,7 @@ import { Institution, Language } from 'types';
 import * as XLSX from 'xlsx';
 import { generateStudentListPDF } from 'utils/pdfGenerator';
 import { checkStudentLimit } from '../utils/studentLimitChecker';
+import { extractStudentExtraFields, packStudentNotesWithExtra } from '../utils/studentExtraFields';
 import { 
   initAuth, 
   googleSignIn, 
@@ -780,11 +781,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         'Class': 'Class 1',
         'Roll': 1,
         'Student Name': 'Abdur Rahman',
+        'Registration No': 'REG-001',
+        'Biometric ID': 101,
         'Guardian Name': 'Abdullah',
         'Phone 1': '01700000000',
         'Phone 2': '',
-        'Admission ID': '12345',
         'Section': 'Section A / Science',
+        'Admission ID': '12345',
         'Address': 'Dhaka, Bangladesh',
         'Date of birth': '2010-01-01',
         'English Name': 'Abdur Rahman'
@@ -837,10 +840,14 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       
       const excelData = sortedStudents.map(s => {
         const info = getClassInfo(s);
+        const extra = extractStudentExtraFields(s);
+        const bioId = s.biometric_id || extra?.biometric_id || '';
         return { 
           'Class': info.className, 
           'Roll': s.roll || '', 
           'Student Name': s.student_name || '', 
+          'Registration No': s.registration_number || '',
+          'Biometric ID': bioId,
           'Guardian Name': s.guardian_name || '',
           'Phone 1': s.guardian_phone || '',
           'Phone 2': s.guardian_phone_2 || '',
@@ -1041,6 +1048,15 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           const sheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 'A', defval: '' }) as any[];
 
+          const headerRow = jsonData[0] || {};
+          let regColKey = '';
+          let bioColKey = '';
+          Object.keys(headerRow).forEach(key => {
+            const val = String(headerRow[key] || '').toLowerCase();
+            if (/reg|রেজি/.test(val)) regColKey = key;
+            if (/bio|বায়ো|বায়ো/.test(val)) bioColKey = key;
+          });
+
           let rows = jsonData.slice(1);
           if (rows.length === 0) throw new Error("File is empty");
 
@@ -1091,6 +1107,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             const address = String(row.I || '').trim();
             const dob = excelDateToISO(row.J);
             const nameEn = String(row.K || '').trim();
+            const regNoVal = String(regColKey ? row[regColKey] : (row.L || '')).trim();
+            const rawBioId = String(bioColKey ? row[bioColKey] : (row.M || '')).trim();
+            const cleanBioId = rawBioId
+              ? rawBioId.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '')
+              : '';
 
             // Skip entirely empty row without counting or reporting as a skip
             if (!studentName && !phone && !className) {
@@ -1187,6 +1208,15 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 guardian_phone: phone,
                 guardian_phone_2: phone2 || null
             };
+
+            if (regNoVal) {
+              studentData.registration_number = regNoVal;
+            }
+
+            if (cleanBioId) {
+              studentData.biometric_id = cleanBioId;
+              studentData.notes = packStudentNotesWithExtra('', { biometric_id: cleanBioId });
+            }
 
             if ((window as any)._hasSection !== false) {
               studentData.section = sectionValue || null;

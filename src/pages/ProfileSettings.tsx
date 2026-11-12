@@ -35,6 +35,7 @@ import { supabase } from '../supabase';
 import { Institution, Language } from '../types';
 import { requestManager } from '../services/RequestManager';
 import { NotificationService, DEFAULT_NOTIFICATION_SETTINGS } from '../services/NotificationService';
+import { packStudentNotesWithExtra } from '../utils/studentExtraFields';
 
 interface Props {
   madrasah: Institution | null;
@@ -81,8 +82,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [notifSaveSuccess, setNotifSaveSuccess] = useState(false);
   const [testingNotifPush, setTestingNotifPush] = useState(false);
 
-  // Registration Number Auto-Generator & Bulk Delete states
+  // Registration Number & Biometric ID Auto-Generator & Bulk Delete states
+  const [genTargetField, setGenTargetField] = useState<'reg_no' | 'biometric_id'>('reg_no');
   const [regExamplePattern, setRegExamplePattern] = useState('Abc001');
+  const [bioStartingNum, setBioStartingNum] = useState('101');
   const [regFormatMode, setRegFormatMode] = useState<'class_serial' | 'global_seq'>('class_serial');
   const [regTargetScope, setRegTargetScope] = useState<string>('all');
   const [regOverwriteMode, setRegOverwriteMode] = useState<'unassigned' | 'all'>('unassigned');
@@ -218,6 +221,36 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   };
 
   const getRegLivePreview = () => {
+    if (genTargetField === 'biometric_id') {
+      const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+      const raw = String(bioStartingNum || '').replace(/[০-৯]/g, d => String(bn.indexOf(d))).replace(/[^0-9]/g, '');
+      const startingNum = parseInt(raw, 10) || 101;
+
+      const samples: { className: string; sampleReg: string }[] = [];
+      const displayClasses = classesList.length > 0 ? classesList.slice(0, 3) : [
+        { id: '1', class_name: lang === 'bn' ? 'প্লে শ্রেণি (সিরিয়াল ১)' : 'Play Class (Serial 1)' },
+        { id: '2', class_name: lang === 'bn' ? 'নার্সারি শ্রেণি (সিরিয়াল ২)' : 'Nursery Class (Serial 2)' },
+        { id: '3', class_name: lang === 'bn' ? '১ম শ্রেণি (সিরিয়াল ৩)' : 'Class 1 (Serial 3)' },
+      ];
+
+      let seq = startingNum;
+      displayClasses.forEach((cls, idx) => {
+        const cSerial = idx + 1;
+        if (regFormatMode === 'class_serial') {
+          const sample1 = `${cSerial}01`;
+          const sample2 = `${cSerial}02`;
+          samples.push({ className: cls.class_name, sampleReg: `${sample1}, ${sample2}...` });
+        } else {
+          const sample1 = String(seq);
+          seq++;
+          const sample2 = String(seq);
+          seq++;
+          samples.push({ className: cls.class_name, sampleReg: `${sample1}, ${sample2}...` });
+        }
+      });
+      return samples;
+    }
+
     const example = regExamplePattern.trim() || 'Abc001';
     const match = example.match(/^(.*?)(0*(\d+))$/);
     let prefix = example;
@@ -259,6 +292,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     if (!madrasah?.id) return;
     setIsGeneratingRegNo(true);
     try {
+      const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+      const rawBio = String(bioStartingNum || '').replace(/[০-৯]/g, d => String(bn.indexOf(d))).replace(/[^0-9]/g, '');
+      const bioStart = parseInt(rawBio, 10) || 101;
+
       const example = regExamplePattern.trim() || 'Abc001';
       const match = example.match(/^(.*?)(0*(\d+))$/);
       let prefix = example;
@@ -290,7 +327,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
       let stQuery = supabase
         .from('students')
-        .select('id, class_id, roll, student_name, registration_number')
+        .select('id, class_id, roll, student_name, registration_number, biometric_id, notes')
         .eq('institution_id', madrasah.id);
 
       if (regTargetScope !== 'all') {
@@ -312,13 +349,20 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
       let targetStudents = fetchedStudents;
       if (regOverwriteMode === 'unassigned') {
-        targetStudents = fetchedStudents.filter(s => !s.registration_number || s.registration_number.trim() === '');
+        if (genTargetField === 'biometric_id') {
+          targetStudents = fetchedStudents.filter(s => !s.biometric_id && !(s.notes && s.notes.includes('"biometric_id"')));
+        } else {
+          targetStudents = fetchedStudents.filter(s => !s.registration_number || s.registration_number.trim() === '');
+        }
+
         if (targetStudents.length === 0) {
           setStatusModal({
             show: true,
             type: 'info',
             title: lang === 'bn' ? 'তথ্য' : 'Info',
-            message: lang === 'bn' ? 'সকল শিক্ষার্থীর ইতিমধ্যেই রেজিষ্ট্রেশন নম্বর বসানো আছে।' : 'All students already have registration numbers.'
+            message: lang === 'bn' 
+              ? `সকল শিক্ষার্থীর ইতিমধ্যেই ${genTargetField === 'biometric_id' ? 'বায়োমেট্রিক আইডি' : 'রেজিষ্ট্রেশন নম্বর'} বসানো আছে।` 
+              : 'All students already have IDs assigned.'
           });
           return;
         }
@@ -332,8 +376,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         studentsByClass.get(s.class_id)!.push(s);
       });
 
-      const updates: Array<{ id: string; registration_number: string }> = [];
-      let globalSeqCounter = startingNum;
+      const updates: Array<{ id: string; payload: Record<string, any> }> = [];
+      let globalSeqCounter = genTargetField === 'biometric_id' ? bioStart : startingNum;
 
       const targetClassesToProcess = regTargetScope === 'all'
         ? sortedClasses
@@ -346,17 +390,36 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
         clsStudents.forEach((st, sIndex) => {
           const rollNum = st.roll || (sIndex + 1);
-          let regStr = '';
-          if (regFormatMode === 'class_serial') {
-            regStr = `${prefix}${cSerial}${String(rollNum).padStart(paddingLength, '0')}`;
+          if (genTargetField === 'biometric_id') {
+            let bioVal = 0;
+            if (regFormatMode === 'class_serial') {
+              bioVal = parseInt(`${cSerial}${String(rollNum).padStart(2, '0')}`, 10);
+            } else {
+              bioVal = globalSeqCounter;
+              globalSeqCounter++;
+            }
+            updates.push({
+              id: st.id,
+              payload: {
+                biometric_id: bioVal,
+                notes: packStudentNotesWithExtra(st.notes || '', { biometric_id: String(bioVal) })
+              }
+            });
           } else {
-            regStr = `${prefix}${String(globalSeqCounter).padStart(paddingLength, '0')}`;
-            globalSeqCounter++;
+            let regStr = '';
+            if (regFormatMode === 'class_serial') {
+              regStr = `${prefix}${cSerial}${String(rollNum).padStart(paddingLength, '0')}`;
+            } else {
+              regStr = `${prefix}${String(globalSeqCounter).padStart(paddingLength, '0')}`;
+              globalSeqCounter++;
+            }
+            updates.push({
+              id: st.id,
+              payload: {
+                registration_number: regStr
+              }
+            });
           }
-          updates.push({
-            id: st.id,
-            registration_number: regStr
-          });
         });
       });
 
@@ -366,7 +429,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           chunk.map(u =>
             supabase
               .from('students')
-              .update({ registration_number: u.registration_number })
+              .update(u.payload)
               .eq('id', u.id)
               .eq('institution_id', madrasah.id)
           )
@@ -378,21 +441,23 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       requestManager.invalidatePattern(`students:${madrasah.id}`);
       if (onProfileUpdate) onProfileUpdate();
 
+      const label = genTargetField === 'biometric_id' ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID') : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর' : 'Registration No');
+
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল!' : 'Success!',
         message: lang === 'bn'
-          ? `মোট ${updates.length} জন শিক্ষার্থীর রেজিষ্ট্রেশন নম্বর সফলভাবে জেনারেট করা হয়েছে।`
-          : `Successfully generated registration numbers for ${updates.length} students.`
+          ? `মোট ${updates.length} জন শিক্ষার্থীর ${label} সফলভাবে জেনারেট করা হয়েছে।`
+          : `Successfully generated ${label} for ${updates.length} students.`
       });
     } catch (err: any) {
-      console.error('Registration generation error:', err);
+      console.error('Generation error:', err);
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ব্যর্থ!' : 'Failed!',
-        message: err.message || 'Failed to generate registration numbers.'
+        message: err.message || 'Failed to generate IDs.'
       });
     } finally {
       setIsGeneratingRegNo(false);
@@ -403,7 +468,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     if (!madrasah?.id) return;
     setIsDeletingRegNo(true);
     try {
-      let query = supabase.from('students').select('id').eq('institution_id', madrasah.id);
+      let query = supabase.from('students').select('id, notes').eq('institution_id', madrasah.id);
       if (regTargetScope !== 'all') {
         query = query.eq('class_id', regTargetScope);
       }
@@ -416,15 +481,28 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           show: true,
           type: 'error',
           title: lang === 'bn' ? 'কোনো শিক্ষার্থী পাওয়া যায়নি' : 'No Students Found',
-          message: lang === 'bn' ? 'রিসেট করার মতো কোনো শিক্ষার্থী পাওয়া যায়নি।' : 'No students found to clear registration numbers.'
+          message: lang === 'bn' ? 'রিসেট করার মতো কোনো শিক্ষার্থী পাওয়া যায়নি।' : 'No students found to clear IDs.'
         });
         return;
       }
 
-      const updates = targetStudents.map(s => ({
-        id: s.id,
-        registration_number: null
-      }));
+      const updates = targetStudents.map(s => {
+        if (genTargetField === 'biometric_id') {
+          return {
+            id: s.id,
+            payload: {
+              biometric_id: null,
+              notes: packStudentNotesWithExtra(s.notes || '', { biometric_id: '' })
+            }
+          };
+        }
+        return {
+          id: s.id,
+          payload: {
+            registration_number: null
+          }
+        };
+      });
 
       for (let i = 0; i < updates.length; i += 50) {
         const chunk = updates.slice(i, i + 50);
@@ -432,7 +510,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           chunk.map(u =>
             supabase
               .from('students')
-              .update({ registration_number: null })
+              .update(u.payload)
               .eq('id', u.id)
               .eq('institution_id', madrasah.id)
           )
@@ -444,13 +522,15 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       requestManager.invalidatePattern(`students:${madrasah.id}`);
       if (onProfileUpdate) onProfileUpdate();
 
+      const label = genTargetField === 'biometric_id' ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID') : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর' : 'Registration No');
+
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল!' : 'Success!',
         message: lang === 'bn'
-          ? `মোট ${updates.length} জন শিক্ষার্থীর রেজিষ্ট্রেশন নম্বর ডিলিট/রিসেট করা হয়েছে।`
-          : `Cleared registration numbers for ${updates.length} students.`
+          ? `মোট ${updates.length} জন শিক্ষার্থীর ${label} ডিলিট/রিসেট করা হয়েছে।`
+          : `Cleared ${label} for ${updates.length} students.`
       });
     } catch (err: any) {
       console.error('Bulk clear error:', err);
@@ -458,7 +538,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ব্যর্থ!' : 'Failed!',
-        message: err.message || 'Failed to clear registration numbers.'
+        message: err.message || 'Failed to clear IDs.'
       });
     } finally {
       setIsDeletingRegNo(false);
@@ -1486,38 +1566,83 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
-                  <Hash size={20} />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${genTargetField === 'biometric_id' ? (isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600') : (isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600')}`}>
+                  {genTargetField === 'biometric_id' ? <Fingerprint size={20} /> : <Hash size={20} />}
                 </div>
                 <div>
                   <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                    {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর অটো-জেনারেটর ও বাল্ক ব্যবস্থাপনা' : 'Auto Registration Generator & Bulk Manager'}
+                    {genTargetField === 'biometric_id'
+                      ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি অটো-জেনারেটর ও বাল্ক ব্যবস্থাপনা' : 'Biometric ID Auto-Generator & Bulk Manager')
+                      : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর অটো-জেনারেটর ও বাল্ক ব্যবস্থাপনা' : 'Auto Registration Generator & Bulk Manager')}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                    {lang === 'bn' ? 'প্যাটার্ন অনুযায়ী সকল শিক্ষার্থীর রেজিঃ নম্বর জেনারেট বা বাল্ক ডিলিট করুন' : 'Generate pattern-based registration numbers or clear in bulk'}
+                    {genTargetField === 'biometric_id'
+                      ? (lang === 'bn' ? 'ZKTeco মেশিনের জন্য শিক্ষার্থীদের শুধু সংখ্যা (0-9) আইডি তৈরি বা রিসেট করুন' : 'Generate pure numeric (0-9) IDs for ZKTeco machines or clear in bulk')
+                      : (lang === 'bn' ? 'প্যাটার্ন অনুযায়ী সকল শিক্ষার্থীর রেজিঃ নম্বর জেনারেট বা বাল্ক ডিলিট করুন' : 'Generate pattern-based registration numbers or clear in bulk')}
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Target Field Switcher: Reg No vs Biometric ID */}
+            <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+              <button
+                type="button"
+                onClick={() => setGenTargetField('reg_no')}
+                className={`flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all ${genTargetField === 'reg_no' ? (isDark ? 'bg-indigo-600 text-white shadow-lg' : 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20') : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Hash size={15} />
+                {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর' : 'Registration No'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGenTargetField('biometric_id')}
+                className={`flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all ${genTargetField === 'biometric_id' ? (isDark ? 'bg-emerald-600 text-white shadow-lg' : 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20') : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Fingerprint size={15} />
+                {lang === 'bn' ? 'বায়োমেট্রিক আইডি (Numeric Only)' : 'Biometric ID (Numeric Only)'}
+              </button>
             </div>
 
             <div className="space-y-5 pt-2">
               {/* Pattern Input */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex items-center justify-between">
-                  <span>{lang === 'bn' ? 'প্যাটার্ন বা উদাহরণ ফরম্যাট' : 'Pattern Example Format'}</span>
-                  <span className="text-[9px] text-indigo-500 font-bold">e.g. Abc001 / REG001 / 2026-001</span>
+                  <span>
+                    {genTargetField === 'biometric_id'
+                      ? (lang === 'bn' ? 'শুরুর সংখ্যা (শুধু ইংরেজি সংখ্যা, যেমন 101)' : 'Starting Number (Numeric Only, e.g. 101)')
+                      : (lang === 'bn' ? 'প্যাটার্ন বা উদাহরণ ফরম্যাট' : 'Pattern Example Format')}
+                  </span>
+                  <span className={`text-[9px] font-bold ${genTargetField === 'biometric_id' ? 'text-emerald-500' : 'text-indigo-500'}`}>
+                    {genTargetField === 'biometric_id' ? 'e.g. 101 / 1001' : 'e.g. Abc001 / REG001 / 2026-001'}
+                  </span>
                 </label>
                 <div className="relative group">
                   <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                    <Sparkles size={16} />
+                    {genTargetField === 'biometric_id' ? <Fingerprint size={16} /> : <Sparkles size={16} />}
                   </div>
-                  <input 
-                    type="text" 
-                    value={regExamplePattern} 
-                    onChange={(e) => setRegExamplePattern(e.target.value)} 
-                    placeholder="Abc001"
-                    className={`w-full h-12 border-2 rounded-2xl pl-12 pr-4 font-black text-[13px] outline-none transition-all duration-300 font-mono ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-indigo-500 focus:bg-white'}`}
-                  />
+                  {genTargetField === 'biometric_id' ? (
+                    <input 
+                      type="text" 
+                      inputMode="numeric"
+                      value={bioStartingNum} 
+                      onChange={(e) => {
+                        const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+                        const en = String(e.target.value || '').replace(/[০-৯]/g, d => String(bn.indexOf(d))).replace(/[^0-9]/g, '');
+                        setBioStartingNum(en);
+                      }} 
+                      placeholder="101"
+                      className={`w-full h-12 border-2 rounded-2xl pl-12 pr-4 font-mono font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 text-emerald-400 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-emerald-700 focus:border-emerald-500 focus:bg-white'}`}
+                    />
+                  ) : (
+                    <input 
+                      type="text" 
+                      value={regExamplePattern} 
+                      onChange={(e) => setRegExamplePattern(e.target.value)} 
+                      placeholder="Abc001"
+                      className={`w-full h-12 border-2 rounded-2xl pl-12 pr-4 font-black text-[13px] outline-none transition-all duration-300 font-mono ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-indigo-500 focus:bg-white'}`}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -1541,7 +1666,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       <span>{lang === 'bn' ? 'ক্লাসের সিরিয়াল অনুযায়ী' : 'By Class Serial'}</span>
                     </div>
                     <p className="text-[9px] mt-1 opacity-70 leading-snug">
-                      {lang === 'bn' ? 'যেমন: প্লে (সিরিয়াল ১) -> Abc101, নার্সারি (সিরিয়াল ২) -> Abc201' : 'e.g. Play (Serial 1) -> Abc101, Nursery (Serial 2) -> Abc201'}
+                      {genTargetField === 'biometric_id'
+                        ? (lang === 'bn' ? 'যেমন: ক্লাস ১ রোল ৫ -> 105, ক্লাস ২ রোল ১২ -> 212' : 'e.g. Class 1 Roll 5 -> 105, Class 2 Roll 12 -> 212')
+                        : (lang === 'bn' ? 'যেমন: প্লে (সিরিয়াল ১) -> Abc101, নার্সারি (সিরিয়াল ২) -> Abc201' : 'e.g. Play (Serial 1) -> Abc101, Nursery (Serial 2) -> Abc201')}
                     </p>
                   </button>
 
@@ -1559,7 +1686,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       <span>{lang === 'bn' ? 'একটানা গ্লোবাল সিরিয়াল' : 'Continuous Global Sequence'}</span>
                     </div>
                     <p className="text-[9px] mt-1 opacity-70 leading-snug">
-                      {lang === 'bn' ? 'যেমন: সকল শিক্ষার্থী ক্রমান্বয়ে Abc001, Abc002, Abc003...' : 'e.g. All students sequentially Abc001, Abc002, Abc003...'}
+                      {genTargetField === 'biometric_id'
+                        ? (lang === 'bn' ? `যেমন: ক্রমান্বয়ে ${bioStartingNum || '101'}, ${(parseInt(bioStartingNum, 10) || 101) + 1}...` : `e.g. Sequentially ${bioStartingNum || '101'}, ${(parseInt(bioStartingNum, 10) || 101) + 1}...`)
+                        : (lang === 'bn' ? 'যেমন: সকল শিক্ষার্থী ক্রমান্বয়ে Abc001, Abc002, Abc003...' : 'e.g. All students sequentially Abc001, Abc002, Abc003...')}
                     </p>
                   </button>
                 </div>
@@ -1592,7 +1721,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                     onChange={(e) => setRegOverwriteMode(e.target.value as any)}
                     className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-xs outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
                   >
-                    <option value="unassigned">{lang === 'bn' ? 'কেবল যাদের রেজিঃ নম্বর নেই' : 'Only for unassigned students'}</option>
+                    <option value="unassigned">{genTargetField === 'biometric_id' ? (lang === 'bn' ? 'কেবল যাদের বায়োমেট্রিক আইডি নেই' : 'Only for unassigned students') : (lang === 'bn' ? 'কেবল যাদের রেজিঃ নম্বর নেই' : 'Only for unassigned students')}</option>
                     <option value="all">{lang === 'bn' ? 'সকলের নতুন করে ওভাররাইট করুন' : 'Overwrite for all students'}</option>
                   </select>
                 </div>
@@ -1608,7 +1737,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   {getRegLivePreview().map((item, i) => (
                     <div key={i} className={`p-2.5 rounded-xl border text-xs ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
                       <span className="text-[10px] font-bold text-slate-400 block truncate">{item.className}</span>
-                      <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 mt-0.5 block truncate">{item.sampleReg}</span>
+                      <span className={`font-mono font-black mt-0.5 block truncate ${genTargetField === 'biometric_id' ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400'}`}>{item.sampleReg}</span>
                     </div>
                   ))}
                 </div>
@@ -1623,14 +1752,14 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 border border-rose-200 dark:border-rose-500/30 transition-all active:scale-95 disabled:opacity-50"
                 >
                   <Trash2 size={15} />
-                  <span>{lang === 'bn' ? 'বাল্ক ডিলিট / রিসেট করুন' : 'Bulk Clear / Delete'}</span>
+                  <span>{genTargetField === 'biometric_id' ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি ডিলিট করুন' : 'Clear Biometric IDs') : (lang === 'bn' ? 'বাল্ক ডিলিট / রিসেট করুন' : 'Bulk Clear / Delete')}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleGenerateRegNumbers}
                   disabled={isGeneratingRegNo || isDeletingRegNo}
-                  className="w-full sm:w-auto px-7 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50"
+                  className={`w-full sm:w-auto px-7 py-3 rounded-2xl text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 ${genTargetField === 'biometric_id' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'}`}
                 >
                   {isGeneratingRegNo ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
                   <span>{lang === 'bn' ? 'অটো-জেনারেট করুন' : 'Generate Now'}</span>
@@ -1655,12 +1784,14 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
                   <div>
                     <h3 className="text-lg font-black font-noto">
-                      {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর ডিলিট নিশ্চিতকরণ' : 'Confirm Bulk Delete'}
+                      {genTargetField === 'biometric_id'
+                        ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি ডিলিট নিশ্চিতকরণ' : 'Confirm Biometric ID Clear')
+                        : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর ডিলিট নিশ্চিতকরণ' : 'Confirm Bulk Delete')}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                      {lang === 'bn' 
-                        ? `আপনি কি নিশ্চিত যে ${regTargetScope === 'all' ? 'সকল শ্রেণির' : 'নির্বাচিত শ্রেণির'} শিক্ষার্থীদের রেজিষ্ট্রেশন নম্বর স্থায়ীভাবে মুছে ফেলতে চান? এটি পুনরায় নতুন করে জেনারেট করার সুযোগ দেবে।`
-                        : `Are you sure you want to clear registration numbers for ${regTargetScope === 'all' ? 'all classes' : 'the selected class'}? You can regenerate them anytime later.`}
+                      {lang === 'bn'
+                        ? `আপনি কি নিশ্চিত যে ${regTargetScope === 'all' ? 'সকল শ্রেণির' : 'নির্বাচিত শ্রেণির'} শিক্ষার্থীদের ${genTargetField === 'biometric_id' ? 'বায়োমেট্রিক আইডি' : 'রেজিষ্ট্রেশন নম্বর'} স্থায়ীভাবে মুছে ফেলতে চান? এটি পুনরায় নতুন করে জেনারেট করার সুযোগ দেবে।`
+                        : `Are you sure you want to clear ${genTargetField === 'biometric_id' ? 'Biometric IDs' : 'registration numbers'} for ${regTargetScope === 'all' ? 'all classes' : 'the selected class'}? You can regenerate them anytime later.`}
                     </p>
                   </div>
 

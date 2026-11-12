@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic, Hash, Sparkles, Trash2, Eye, RefreshCw, Settings2, Users } from 'lucide-react';
+import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic, Hash, Sparkles, Trash2, Eye, RefreshCw, Settings2, Users, Fingerprint, UserCheck } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
 import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -9,7 +9,7 @@ import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
-import { extractStudentExtraFields } from 'utils/studentExtraFields';
+import { extractStudentExtraFields, packStudentNotesWithExtra } from 'utils/studentExtraFields';
 import { isValidUUID } from 'utils/validation';
 import { useVoiceCall } from '../context/CallContext';
 
@@ -70,17 +70,20 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   }, [effectiveInstitutionId]);
 
 
-  // Registration Number Generator States
+  // Registration Number & Biometric ID Generator States
   const [showRegNoModal, setShowRegNoModal] = useState(false);
+  const [genTargetField, setGenTargetField] = useState<'reg_no' | 'biometric_id'>('reg_no');
   const [regTab, setRegTab] = useState<'generate' | 'clear'>('generate');
   const [regPatternInput, setRegPatternInput] = useState('Abc001');
+  const [bioPatternInput, setBioPatternInput] = useState('101');
   const [regScope, setRegScope] = useState<'all' | 'current'>('all');
+  const [regOverwriteMode, setRegOverwriteMode] = useState<'unassigned' | 'all'>('unassigned');
   const [regFormatMode, setRegFormatMode] = useState<'class_serial' | 'sequential'>('class_serial');
   const [isProcessingRegNo, setIsProcessingRegNo] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [classListForReg, setClassListForReg] = useState<any[]>([]);
 
-  // Parse pattern (e.g. Abc001 -> prefix: Abc, digits: 001, paddingLength: 3)
+  // Parse pattern for Registration No (e.g. Abc001 -> prefix: Abc, digits: 001, paddingLength: 3)
   const parsedRegPattern = useMemo(() => {
     const raw = regPatternInput.trim();
     if (!raw) return { prefix: 'Abc', digits: '001', paddingLength: 3 };
@@ -94,6 +97,20 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     }
     return { prefix: raw, digits: '001', paddingLength: 3 };
   }, [regPatternInput]);
+
+  // Parse pattern for Biometric ID (strictly numeric e.g. 101 -> startNum: 101, paddingLength: 2 for roll)
+  const parsedBioPattern = useMemo(() => {
+    const raw = String(bioPatternInput || '').replace(/[^0-9]/g, '');
+    const startNum = parseInt(raw, 10) || 101;
+    return { startNum, paddingLength: 2 };
+  }, [bioPatternInput]);
+
+  // Helper to handle strictly numeric biometric pattern change
+  const handleBioPatternChange = (val: string) => {
+    const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+    const en = String(val || '').replace(/[০-৯]/g, d => String(bn.indexOf(d))).replace(/[^0-9]/g, '');
+    setBioPatternInput(en);
+  };
 
   // Fetch all classes for sorting serials
   const fetchAllClassesForReg = useCallback(async () => {
@@ -129,16 +146,25 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           ];
 
     const previewItems: Array<{ class_name: string; roll: number; reg_no: string }> = [];
-    let globalSeq = 1;
+    let globalSeq = genTargetField === 'biometric_id' ? parsedBioPattern.startNum : 1;
 
     sampleClasses.slice(0, 4).forEach((cls) => {
       [1, 2].forEach((roll) => {
         let generated = '';
-        if (regFormatMode === 'class_serial') {
-          generated = `${parsedRegPattern.prefix}${cls.serial}${String(roll).padStart(parsedRegPattern.paddingLength, '0')}`;
+        if (genTargetField === 'biometric_id') {
+          if (regFormatMode === 'class_serial') {
+            generated = `${cls.serial}${String(roll).padStart(parsedBioPattern.paddingLength, '0')}`;
+          } else {
+            generated = String(globalSeq);
+            globalSeq++;
+          }
         } else {
-          generated = `${parsedRegPattern.prefix}${String(globalSeq).padStart(parsedRegPattern.paddingLength, '0')}`;
-          globalSeq++;
+          if (regFormatMode === 'class_serial') {
+            generated = `${parsedRegPattern.prefix}${cls.serial}${String(roll).padStart(parsedRegPattern.paddingLength, '0')}`;
+          } else {
+            generated = `${parsedRegPattern.prefix}${String(globalSeq).padStart(parsedRegPattern.paddingLength, '0')}`;
+            globalSeq++;
+          }
         }
         previewItems.push({
           class_name: cls.class_name,
@@ -149,9 +175,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     });
 
     return previewItems;
-  }, [regScope, selectedClass, classListForReg, regFormatMode, parsedRegPattern]);
+  }, [regScope, selectedClass, classListForReg, regFormatMode, parsedRegPattern, genTargetField, parsedBioPattern]);
 
-  // Bulk Generate Execution
+  // Bulk Generate Execution (Registration No or Numeric Biometric ID)
   const handleBulkGenerateRegNo = async () => {
     if (!effectiveInstitutionId) return;
     setIsProcessingRegNo(true);
@@ -179,7 +205,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       const classIds = targetClasses.map(c => c.id);
       const { data: targetStudents, error: fetchErr } = await supabase
         .from('students')
-        .select('id, class_id, roll, student_name')
+        .select('id, class_id, roll, student_name, registration_number, biometric_id, notes')
         .eq('institution_id', effectiveInstitutionId)
         .in('class_id', classIds)
         .order('roll', { ascending: true });
@@ -205,8 +231,8 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         studentsByClass.get(s.class_id)!.push(s);
       });
 
-      const updates: Array<{ id: string; registration_number: string }> = [];
-      let globalSeqCounter = 1;
+      const updates: Array<{ id: string; payload: Record<string, any> }> = [];
+      let globalSeqCounter = genTargetField === 'biometric_id' ? parsedBioPattern.startNum : 1;
 
       targetClasses.forEach(cls => {
         const cSerial = classSerialMap.get(cls.id) || 1;
@@ -214,20 +240,62 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         clsStudents.sort((a, b) => (Number(a.roll) || 9999) - (Number(b.roll) || 9999));
 
         clsStudents.forEach((st, sIndex) => {
-          const rollNum = st.roll || (sIndex + 1);
-          let regStr = '';
-          if (regFormatMode === 'class_serial') {
-            regStr = `${parsedRegPattern.prefix}${cSerial}${String(rollNum).padStart(parsedRegPattern.paddingLength, '0')}`;
-          } else {
-            regStr = `${parsedRegPattern.prefix}${String(globalSeqCounter).padStart(parsedRegPattern.paddingLength, '0')}`;
-            globalSeqCounter++;
+          // If only assigning unassigned students
+          if (regOverwriteMode === 'unassigned') {
+            if (genTargetField === 'biometric_id' && (st.biometric_id || (st.notes && st.notes.includes('"biometric_id"')))) {
+              return;
+            }
+            if (genTargetField === 'reg_no' && st.registration_number) {
+              return;
+            }
           }
-          updates.push({
-            id: st.id,
-            registration_number: regStr
-          });
+
+          const rollNum = st.roll || (sIndex + 1);
+          if (genTargetField === 'biometric_id') {
+            let bioVal = 0;
+            if (regFormatMode === 'class_serial') {
+              bioVal = parseInt(`${cSerial}${String(rollNum).padStart(parsedBioPattern.paddingLength, '0')}`, 10);
+            } else {
+              bioVal = globalSeqCounter;
+              globalSeqCounter++;
+            }
+            updates.push({
+              id: st.id,
+              payload: {
+                biometric_id: bioVal,
+                notes: packStudentNotesWithExtra(st.notes || '', { biometric_id: String(bioVal) })
+              }
+            });
+          } else {
+            let regStr = '';
+            if (regFormatMode === 'class_serial') {
+              regStr = `${parsedRegPattern.prefix}${cSerial}${String(rollNum).padStart(parsedRegPattern.paddingLength, '0')}`;
+            } else {
+              regStr = `${parsedRegPattern.prefix}${String(globalSeqCounter).padStart(parsedRegPattern.paddingLength, '0')}`;
+              globalSeqCounter++;
+            }
+            updates.push({
+              id: st.id,
+              payload: {
+                registration_number: regStr
+              }
+            });
+          }
         });
       });
+
+      if (updates.length === 0) {
+        setStatusModal({
+          show: true,
+          type: 'success',
+          title: lang === 'bn' ? 'তথ্য অপরিবর্তিত' : 'No Changes',
+          message: lang === 'bn'
+            ? 'সকল শিক্ষার্থীর ইতিমধ্যেই আইডি নির্ধারিত রয়েছে (Unassigned অন ছিল)।'
+            : 'All selected students already have an ID assigned.'
+        });
+        setIsProcessingRegNo(false);
+        return;
+      }
 
       for (let i = 0; i < updates.length; i += 50) {
         const chunk = updates.slice(i, i + 50);
@@ -235,7 +303,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           chunk.map(u =>
             supabase
               .from('students')
-              .update({ registration_number: u.registration_number })
+              .update(u.payload)
               .eq('id', u.id)
               .eq('institution_id', effectiveInstitutionId)
           )
@@ -248,21 +316,25 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       triggerRefresh();
       setShowRegNoModal(false);
 
+      const fieldLabel = genTargetField === 'biometric_id'
+        ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID')
+        : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর' : 'Registration No');
+
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল!' : 'Success!',
         message: lang === 'bn' 
-          ? `মোট ${updates.length} জন শিক্ষার্থীর রেজিষ্ট্রেশন নম্বর সফলভাবে জেনারেট করা হয়েছে।`
-          : `Successfully generated registration numbers for ${updates.length} students.`
+          ? `মোট ${updates.length} জন শিক্ষার্থীর ${fieldLabel} সফলভাবে জেনারেট করা হয়েছে।`
+          : `Successfully generated ${fieldLabel} for ${updates.length} students.`
       });
     } catch (err: any) {
-      console.error('Registration generation error:', err);
+      console.error('Generation error:', err);
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ব্যর্থ!' : 'Failed!',
-        message: err.message || 'Failed to generate registration numbers.'
+        message: err.message || 'Failed to generate IDs.'
       });
     } finally {
       setIsProcessingRegNo(false);
@@ -274,7 +346,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     if (!effectiveInstitutionId) return;
     setIsProcessingRegNo(true);
     try {
-      let query = supabase.from('students').select('id').eq('institution_id', effectiveInstitutionId);
+      let query = supabase.from('students').select('id, notes').eq('institution_id', effectiveInstitutionId);
       if (regScope === 'current') {
         query = query.eq('class_id', selectedClass.id);
       }
@@ -294,10 +366,23 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         return;
       }
 
-      const updates = targetStudents.map(s => ({
-        id: s.id,
-        registration_number: null
-      }));
+      const updates = targetStudents.map(s => {
+        if (genTargetField === 'biometric_id') {
+          return {
+            id: s.id,
+            payload: {
+              biometric_id: null,
+              notes: packStudentNotesWithExtra(s.notes || '', { biometric_id: '' })
+            }
+          };
+        }
+        return {
+          id: s.id,
+          payload: {
+            registration_number: null
+          }
+        };
+      });
 
       for (let i = 0; i < updates.length; i += 50) {
         const chunk = updates.slice(i, i + 50);
@@ -305,7 +390,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           chunk.map(u =>
             supabase
               .from('students')
-              .update({ registration_number: null })
+              .update(u.payload)
               .eq('id', u.id)
               .eq('institution_id', effectiveInstitutionId)
           )
@@ -319,21 +404,25 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       setShowClearConfirm(false);
       setShowRegNoModal(false);
 
+      const fieldLabel = genTargetField === 'biometric_id'
+        ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID')
+        : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর' : 'Registration No');
+
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'রিসেট সফল!' : 'Reset Successful!',
         message: lang === 'bn' 
-          ? `মোট ${updates.length} জন শিক্ষার্থীর রেজিষ্ট্রেশন নম্বর ডিলিট/রিসেট করা হয়েছে।`
-          : `Successfully cleared registration numbers for ${updates.length} students.`
+          ? `মোট ${updates.length} জন শিক্ষার্থীর ${fieldLabel} ডিলিট/রিসেট করা হয়েছে।`
+          : `Successfully cleared ${fieldLabel} for ${updates.length} students.`
       });
     } catch (err: any) {
-      console.error('Registration clear error:', err);
+      console.error('Clear error:', err);
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ব্যর্থ!' : 'Failed!',
-        message: err.message || 'Failed to clear registration numbers.'
+        message: err.message || 'Failed to clear IDs.'
       });
     } finally {
       setIsProcessingRegNo(false);
@@ -953,32 +1042,56 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             </button>
 
             {/* Modal Header */}
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-5">
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
-                <Hash size={24} strokeWidth={2.5} />
+                {genTargetField === 'biometric_id' ? <Fingerprint size={24} strokeWidth={2.5} /> : <Hash size={24} strokeWidth={2.5} />}
               </div>
               <div>
                 <h2 className="text-xl font-black font-noto tracking-tight">
-                  {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর জেনারেটর' : 'Registration No Manager'}
+                  {genTargetField === 'biometric_id'
+                    ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি জেনারেটর' : 'Biometric ID Generator')
+                    : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর জেনারেটর' : 'Registration No Manager')}
                 </h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                  {lang === 'bn' ? 'স্বয়ংক্রিয় রেজিষ্ট্রেশন নম্বর তৈরি ও রিসেট' : 'Auto Generate or Clear Registration IDs'}
+                  {genTargetField === 'biometric_id'
+                    ? (lang === 'bn' ? 'ZKTeco হাজিরা মেশিনের জন্য শুধু সংখ্যা (0-9) আইডি' : 'Numeric Only (0-9) for ZKTeco Biometric Device')
+                    : (lang === 'bn' ? 'স্বয়ংক্রিয় রেজিষ্ট্রেশন নম্বর তৈরি ও রিসেট' : 'Auto Generate or Clear Registration IDs')}
                 </p>
               </div>
             </div>
 
+            {/* Target Field Switcher: Reg No vs Biometric ID */}
+            <div className={`flex p-1.5 rounded-2xl border mb-5 ${isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+              <button
+                type="button"
+                onClick={() => setGenTargetField('reg_no')}
+                className={`flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all ${genTargetField === 'reg_no' ? (isDark ? 'bg-blue-600 text-white shadow-lg' : 'bg-blue-600 text-white shadow-md shadow-blue-500/20') : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Hash size={15} />
+                {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর' : 'Registration No'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGenTargetField('biometric_id')}
+                className={`flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all ${genTargetField === 'biometric_id' ? (isDark ? 'bg-emerald-600 text-white shadow-lg' : 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20') : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Fingerprint size={15} />
+                {lang === 'bn' ? 'বায়োমেট্রিক আইডি (Numeric)' : 'Biometric ID (Numeric)'}
+              </button>
+            </div>
+
             {/* Tab Selector */}
-            <div className={`flex p-1.5 rounded-2xl border mb-6 ${isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+            <div className={`flex p-1.5 rounded-2xl border mb-5 ${isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
               <button
                 onClick={() => setRegTab('generate')}
-                className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${regTab === 'generate' ? (isDark ? 'bg-blue-600 text-white shadow-lg' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-500/20') : 'text-slate-400 hover:text-slate-600'}`}
+                className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${regTab === 'generate' ? (genTargetField === 'biometric_id' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-500/20') : 'text-slate-400 hover:text-slate-600'}`}
               >
                 <Sparkles size={16} />
                 {lang === 'bn' ? 'অটো-জেনারেট' : 'Auto Generate'}
               </button>
               <button
                 onClick={() => setRegTab('clear')}
-                className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${regTab === 'clear' ? 'bg-red-600 text-white shadow-lg shadow-red-500/20' : 'text-slate-400 hover:text-red-500'}`}
+                className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${regTab === 'clear' ? 'bg-red-600 text-white shadow-lg shadow-red-500/20' : 'text-slate-400 hover:text-red-500'}`}
               >
                 <Trash2 size={16} />
                 {lang === 'bn' ? 'বাল্ক রিসেট / ডিলিট' : 'Bulk Clear'}
@@ -986,7 +1099,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             </div>
 
             {/* Scope Selection */}
-            <div className="space-y-2 mb-5">
+            <div className="space-y-2 mb-4">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
                 {lang === 'bn' ? 'প্রভাবের এলাকা (Scope)' : 'Target Scope'}
               </label>
@@ -994,7 +1107,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                 <button
                   type="button"
                   onClick={() => setRegScope('all')}
-                  className={`p-3.5 rounded-2xl border-2 font-black text-xs text-left transition-all ${regScope === 'all' ? (isDark ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
+                  className={`p-3 rounded-2xl border-2 font-black text-xs text-left transition-all ${regScope === 'all' ? (isDark ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
                 >
                   <p className="font-black">{lang === 'bn' ? 'সকল ক্লাস (All Classes)' : 'All Classes'}</p>
                   <p className="text-[9px] font-bold opacity-70 mt-0.5">{lang === 'bn' ? 'প্রতিষ্ঠানের সকল শিক্ষার্থী' : 'All students in institution'}</p>
@@ -1002,10 +1115,38 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                 <button
                   type="button"
                   onClick={() => setRegScope('current')}
-                  className={`p-3.5 rounded-2xl border-2 font-black text-xs text-left transition-all ${regScope === 'current' ? (isDark ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
+                  className={`p-3 rounded-2xl border-2 font-black text-xs text-left transition-all ${regScope === 'current' ? (isDark ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
                 >
                   <p className="font-black truncate">{selectedClass.class_name}</p>
                   <p className="text-[9px] font-bold opacity-70 mt-0.5">{lang === 'bn' ? 'শুধু বর্তমান শ্রেণীর শিক্ষার্থী' : 'Current class only'}</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Overwrite Mode (Unassigned vs Overwrite All) */}
+            <div className="space-y-2 mb-5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                {lang === 'bn' ? 'নির্ধারণের শর্ত' : 'Assignment Rule'}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRegOverwriteMode('unassigned')}
+                  className={`p-3 rounded-2xl border-2 font-black text-xs text-left transition-all ${regOverwriteMode === 'unassigned' ? (isDark ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400' : 'bg-emerald-50 border-emerald-500 text-emerald-700') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
+                >
+                  <p className="font-black flex items-center gap-1.5">
+                    <UserCheck size={14} />
+                    {lang === 'bn' ? 'শুধু ফাঁকাগুলোতে বসান' : 'Unassigned Only'}
+                  </p>
+                  <p className="text-[9px] font-bold opacity-70 mt-0.5">{lang === 'bn' ? 'আগের আইডি নষ্ট হবে না' : 'Preserves existing IDs'}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegOverwriteMode('all')}
+                  className={`p-3 rounded-2xl border-2 font-black text-xs text-left transition-all ${regOverwriteMode === 'all' ? (isDark ? 'bg-amber-600/20 border-amber-500 text-amber-400' : 'bg-amber-50 border-amber-500 text-amber-700') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
+                >
+                  <p className="font-black">{lang === 'bn' ? 'সব ওভাররাইট করুন' : 'Overwrite All'}</p>
+                  <p className="text-[9px] font-bold opacity-70 mt-0.5">{lang === 'bn' ? 'নতুন করে সিরিয়াল হবে' : 'Replaces all IDs'}</p>
                 </button>
               </div>
             </div>
@@ -1015,19 +1156,34 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                 {/* Pattern Example Input */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                    {lang === 'bn' ? 'প্যাটার্ন বা উদাহরণ ইনপুট (Example Input)' : 'Pattern / Example Input'}
+                    {genTargetField === 'biometric_id'
+                      ? (lang === 'bn' ? 'শুরুর সংখ্যা (শুধু সংখ্যা, যেমন 101)' : 'Starting Number (Numeric Only, e.g. 101)')
+                      : (lang === 'bn' ? 'প্যাটার্ন বা উদাহরণ ইনপুট (Example Input)' : 'Pattern / Example Input')}
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={regPatternInput}
-                      onChange={(e) => setRegPatternInput(e.target.value)}
-                      placeholder="e.g. Abc001 or REG100 or 2026-0001"
-                      className={`w-full h-14 px-5 border-2 rounded-2xl font-black text-base outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'}`}
-                    />
+                    {genTargetField === 'biometric_id' ? (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={bioPatternInput}
+                        onChange={(e) => handleBioPatternChange(e.target.value)}
+                        placeholder="e.g. 101 or 1001"
+                        className={`w-full h-14 px-5 border-2 rounded-2xl font-mono font-black text-base outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-emerald-400 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-emerald-700 focus:border-emerald-500'}`}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={regPatternInput}
+                        onChange={(e) => setRegPatternInput(e.target.value)}
+                        placeholder="e.g. Abc001 or REG100 or 2026-0001"
+                        className={`w-full h-14 px-5 border-2 rounded-2xl font-black text-base outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'}`}
+                      />
+                    )}
                   </div>
                   <p className="text-[10px] text-slate-400 font-bold leading-relaxed px-1">
-                    💡 উদাহরণ লিখলে সিস্টেম স্বয়ংক্রিয়ভাবে প্রিফিক্স (<span className="text-blue-500 font-black">{parsedRegPattern.prefix}</span>) এবং ডিজিটের সংখ্যা (<span className="text-blue-500 font-black">{parsedRegPattern.paddingLength} ডিজিট</span>) চিনে নিবে।
+                    {genTargetField === 'biometric_id'
+                      ? (lang === 'bn' ? '💡 বায়োমেট্রিক আইডি অবশ্যই শুধু ইংরেজি সংখ্যা (0-9) হতে হবে যাতে ZKTeco ফিঙ্গারপ্রিন্ট মেশিনে সরাসরি কাজ করে।' : '💡 Biometric ID must be pure numbers (0-9) for ZKTeco machines.')
+                      : (<>💡 উদাহরণ লিখলে সিস্টেম স্বয়ংক্রিয়ভাবে প্রিফিক্স (<span className="text-blue-500 font-black">{parsedRegPattern.prefix}</span>) এবং ডিজিটের সংখ্যা (<span className="text-blue-500 font-black">{parsedRegPattern.paddingLength} ডিজিট</span>) চিনে নিবে।</>)}
                   </p>
                 </div>
 
@@ -1048,10 +1204,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                       <div>
                         <p className="font-black text-xs">{lang === 'bn' ? 'ক্লাসের সিরিয়াল + রোল (Class Serial + Roll)' : 'Class Serial + Roll'}</p>
                         <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                          {lang === 'bn' ? 'যেমন: প্লে (সিরিয়াল ১) রোল ১ ➔ ' : 'e.g. Play (Serial 1) Roll 1 ➔ '}
-                          <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}1{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>, 
-                          {lang === 'bn' ? ' নার্সারি (সিরিয়াল ২) রোল ১ ➔ ' : ' Nursery (Serial 2) Roll 1 ➔ '}
-                          <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}2{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>
+                          {genTargetField === 'biometric_id'
+                            ? (lang === 'bn' ? 'যেমন: ক্লাস ১ রোল ৫ ➔ 105, ক্লাস ২ রোল ১২ ➔ 212' : 'e.g. Class 1 Roll 5 ➔ 105, Class 2 Roll 12 ➔ 212')
+                            : (<>{lang === 'bn' ? 'যেমন: প্লে (১) রোল ১ ➔ ' : 'e.g. Play (1) Roll 1 ➔ '}<span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}1{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span></>)}
                         </p>
                       </div>
                     </label>
@@ -1067,10 +1222,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                       <div>
                         <p className="font-black text-xs">{lang === 'bn' ? 'ধারাবাহিক নম্বর (Sequential ID)' : 'Sequential Numbering'}</p>
                         <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                          {lang === 'bn' ? 'যেমন: ' : 'e.g. '}
-                          <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>, 
-                          <span className="font-mono text-blue-500 font-black"> {parsedRegPattern.prefix}{String(2).padStart(parsedRegPattern.paddingLength, '0')}</span>, 
-                          <span className="font-mono text-blue-500 font-black"> {parsedRegPattern.prefix}{String(3).padStart(parsedRegPattern.paddingLength, '0')}</span>...
+                          {genTargetField === 'biometric_id'
+                            ? (lang === 'bn' ? `যেমন: ${parsedBioPattern.startNum}, ${parsedBioPattern.startNum + 1}, ${parsedBioPattern.startNum + 2}...` : `e.g. ${parsedBioPattern.startNum}, ${parsedBioPattern.startNum + 1}...`)
+                            : (<>{lang === 'bn' ? 'যেমন: ' : 'e.g. '}<span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>, <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}{String(2).padStart(parsedRegPattern.paddingLength, '0')}</span>...</>)}
                         </p>
                       </div>
                     </label>
@@ -1096,7 +1250,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                           <p className="font-black truncate text-[11px]">{item.class_name}</p>
                           <p className="text-[9px] text-slate-400 font-bold">রোল: {item.roll}</p>
                         </div>
-                        <span className="font-mono font-black text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-lg shrink-0 border border-amber-200/50">
+                        <span className={`font-mono font-black text-xs px-2 py-1 rounded-lg shrink-0 border ${genTargetField === 'biometric_id' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200/50' : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-200/50'}`}>
                           {item.reg_no}
                         </span>
                       </div>
@@ -1117,7 +1271,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                     type="button"
                     onClick={handleBulkGenerateRegNo}
                     disabled={isProcessingRegNo}
-                    className="flex-1 h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 text-xs uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className={`flex-1 h-14 text-white font-black rounded-2xl shadow-xl text-xs uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${genTargetField === 'biometric_id' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20' : 'bg-[#2563EB] hover:bg-blue-500 shadow-blue-500/20'}`}
                   >
                     {isProcessingRegNo ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
                     {isProcessingRegNo ? (lang === 'bn' ? 'জেনারেট হচ্ছে...' : 'Generating...') : (lang === 'bn' ? 'জেনারেট ও সেভ করুন' : 'Generate & Save')}
@@ -1130,11 +1284,15 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                 <div className={`p-5 rounded-2xl border-2 flex items-start gap-4 ${isDark ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-700'}`}>
                   <AlertTriangle size={28} className="shrink-0 text-red-500 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="font-black text-sm">{lang === 'bn' ? 'সতর্কতা: রেজিষ্ট্রেশন নম্বর মুছুন' : 'Warning: Clear Registration Numbers'}</p>
+                    <p className="font-black text-sm">
+                      {genTargetField === 'biometric_id'
+                        ? (lang === 'bn' ? 'সতর্কতা: বায়োমেট্রিক আইডি মুছুন' : 'Warning: Clear Biometric IDs')
+                        : (lang === 'bn' ? 'সতর্কতা: রেজিষ্ট্রেশন নম্বর মুছুন' : 'Warning: Clear Registration Numbers')}
+                    </p>
                     <p className="text-xs font-bold leading-relaxed opacity-90">
                       {lang === 'bn'
-                        ? `এই প্রক্রিয়া পরিচালনা করলে ${regScope === 'all' ? 'সকল' : selectedClass.class_name} শিক্ষার্থীদের রেজিষ্ট্রেশন নম্বর স্থায়ীভাবে ডাটাবেস থেকে মুছে গিয়ে ফাঁকা (Null) হয়ে যাবে।`
-                        : `This will clear and reset registration numbers for ${regScope === 'all' ? 'all' : selectedClass.class_name} students to empty/null.`
+                        ? `এই প্রক্রিয়া পরিচালনা করলে ${regScope === 'all' ? 'সকল' : selectedClass.class_name} শিক্ষার্থীদের ${genTargetField === 'biometric_id' ? 'বায়োমেট্রিক আইডি' : 'রেজিষ্ট্রেশন নম্বর'} স্থায়ীভাবে মুছে যাবে।`
+                        : `This will clear and reset ${genTargetField === 'biometric_id' ? 'Biometric IDs' : 'registration numbers'} for ${regScope === 'all' ? 'all' : selectedClass.class_name} students.`
                       }
                     </p>
                   </div>
@@ -1148,12 +1306,16 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                     className="w-full h-14 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-500/20 text-xs uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
                   >
                     <Trash2 size={18} />
-                    {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর মুছে ফেলুন' : 'Clear Registration Numbers'}
+                    {genTargetField === 'biometric_id'
+                      ? (lang === 'bn' ? 'বায়োমেট্রিক আইডি মুছে ফেলুন' : 'Clear Biometric IDs')
+                      : (lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর মুছে ফেলুন' : 'Clear Registration Numbers')}
                   </button>
                 ) : (
                   <div className={`p-4 rounded-2xl border-2 space-y-3 ${isDark ? 'bg-slate-800 border-red-500/40' : 'bg-red-50/50 border-red-200'}`}>
                     <p className="text-xs font-black text-center text-red-600">
-                      {lang === 'bn' ? 'আপনি কি নিশ্চিত যে রেজিষ্ট্রেশন নম্বর ডিলিট করতে চান?' : 'Are you sure you want to delete registration numbers?'}
+                      {lang === 'bn' 
+                        ? `আপনি কি নিশ্চিত যে ${genTargetField === 'biometric_id' ? 'বায়োমেট্রিক আইডি' : 'রেজিষ্ট্রেশন নম্বর'} ডিলিট করতে চান?`
+                        : `Are you sure you want to delete ${genTargetField === 'biometric_id' ? 'Biometric IDs' : 'registration numbers'}?`}
                     </p>
                     <div className="flex gap-2">
                       <button
@@ -1167,10 +1329,10 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                         type="button"
                         onClick={handleBulkClearRegNo}
                         disabled={isProcessingRegNo}
-                        className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isProcessingRegNo ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                        {isProcessingRegNo ? (lang === 'bn' ? 'মুছে ফেলা হচ্ছে...' : 'Clearing...') : (lang === 'bn' ? 'হ্যাঁ, ডিলিট করুন' : 'Yes, Delete')}
+                        {lang === 'bn' ? 'হ্যাঁ, মুছুন' : 'Yes, Delete'}
                       </button>
                     </div>
                   </div>

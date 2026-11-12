@@ -3,6 +3,11 @@ import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 const supabase = getSupabaseAdmin();
 
+function toEnDigits(str: string): string {
+  const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+  return String(str || '').replace(/[০-৯]/g, d => String(bn.indexOf(d)));
+}
+
 export default async function handler(req, res) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   let pathname = url.pathname;
@@ -49,8 +54,10 @@ export default async function handler(req, res) {
     }
 
     const { phone, reg_no, student_id } = body;
-    const qPhone = String(phone || req.query.phone || url.searchParams.get('phone') || '').trim();
-    const qRegNo = String(reg_no || req.query.reg_no || url.searchParams.get('reg_no') || '').trim();
+    const rawPhone = String(phone || req.query.phone || url.searchParams.get('phone') || '').trim();
+    const rawRegNo = String(reg_no || req.query.reg_no || url.searchParams.get('reg_no') || '').trim();
+    const qPhone = toEnDigits(rawPhone);
+    const qRegNo = toEnDigits(rawRegNo);
     const qStudentId = String(student_id || req.query.student_id || url.searchParams.get('student_id') || '').trim();
 
     if (!qPhone || (!qRegNo && !qStudentId)) {

@@ -61,9 +61,85 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [previousClass, setPreviousClass] = useState(initialExtra.previous_class || '');
 
   
+  const [hasManualBioId, setHasManualBioId] = useState(Boolean(student?.biometric_id || initialExtra?.biometric_id));
   const [errorModal, setErrorModal] = useState<{show: boolean, message: string}>({show: false, message: ''});
 
   const isDark = madrasah?.theme === 'dark';
+
+  const handleBiometricIdChange = (val: string) => {
+    setHasManualBioId(true);
+    const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+    const numericOnly = val.replace(/[০-৯]/g, m => bnToEn[m]).replace(/\D/g, '');
+    setBiometricId(numericOnly);
+  };
+
+  const autoGenerateNumericBioId = async (targetClassId?: string, targetRoll?: string) => {
+    if (!madrasah?.id) return '';
+    try {
+      const cId = targetClassId || classId;
+      const rStr = targetRoll !== undefined ? targetRoll : roll;
+      const bnToEn: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+      const cleanRollStr = rStr.replace(/[০-৯]/g, m => bnToEn[m]).replace(/\D/g, '');
+      const rollNum = parseInt(cleanRollStr, 10);
+
+      // Fetch existing biometric IDs in this institution to guarantee uniqueness
+      const { data: stList } = await supabase
+        .from('students')
+        .select('id, biometric_id, notes')
+        .eq('institution_id', madrasah.id);
+
+      const existingSet = new Set<string>();
+      let maxNum = 100;
+      (stList || []).forEach((st: any) => {
+        if (student && st.id === student.id) return;
+        const extra = extractStudentExtraFields(st);
+        const bId = (st.biometric_id || extra?.biometric_id || '').toString().trim();
+        if (bId && /^\d+$/.test(bId)) {
+          existingSet.add(bId);
+          const n = parseInt(bId, 10);
+          if (!isNaN(n) && n > maxNum && n < 65000) {
+            maxNum = n;
+          }
+        }
+      });
+
+      // Class serial (1-based index in classes list)
+      let classSerial = 1;
+      const cIdx = classes.findIndex(c => c.id === cId);
+      if (cIdx !== -1) {
+        classSerial = cIdx + 1;
+      }
+
+      // Formula: ClassSerial + Roll padded to 2+ digits (e.g. Class 1 Roll 5 -> 105, Class 2 Roll 12 -> 212)
+      if (!isNaN(rollNum) && rollNum > 0) {
+        const paddedRoll = rollNum < 10 ? `0${rollNum}` : `${rollNum}`;
+        const candidate = `${classSerial}${paddedRoll}`;
+        if (!existingSet.has(candidate)) {
+          setBiometricId(candidate);
+          return candidate;
+        }
+      }
+
+      // Fallback: maxExistingNumericBioId + 1 (starting from 101)
+      let nextNum = maxNum + 1;
+      while (existingSet.has(nextNum.toString())) {
+        nextNum++;
+      }
+      const generated = nextNum.toString();
+      setBiometricId(generated);
+      return generated;
+    } catch (err) {
+      console.error('Error auto-generating biometric ID:', err);
+      return '';
+    }
+  };
+
+  // Auto generate for new student when class and roll are filled if not manually entered
+  useEffect(() => {
+    if (!isEditing && !hasManualBioId && classId && roll && !biometricId) {
+      autoGenerateNumericBioId(classId, roll);
+    }
+  }, [classId, roll, isEditing, classes.length]);
 
   useEffect(() => {
     fetchClasses();
@@ -391,17 +467,41 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
               {Boolean((madrasah?.config_json as any)?.modules?.biometric_device_sync !== false) && (
                 <div className="space-y-2">
-                  <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
-                    <UserCheck size={11} className="text-[#2563EB]" /> 
-                    {lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID'}
-                  </label>
-                  <input 
-                    type="text" 
-                    placeholder={lang === 'bn' ? "মেশিনের আইডি (যেমন: 101)" : "Machine ID (e.g., 101)"}
-                    className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
-                    value={biometricId} 
-                    onChange={(e) => setBiometricId(e.target.value)} 
-                  />
+                  <div className="flex items-center justify-between px-2">
+                    <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider`}>
+                      <UserCheck size={11} className="text-[#2563EB]" /> 
+                      {lang === 'bn' ? 'বায়োমেট্রিক আইডি (শুধুমাত্র সংখ্যা)' : 'Biometric ID (Numeric Only)'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => autoGenerateNumericBioId()}
+                      className="text-[10px] font-black text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 active:scale-95 transition-all"
+                      title={lang === 'bn' ? 'স্বয়ংক্রিয় ইউনিক বায়োমেট্রিক আইডি তৈরি করুন' : 'Auto-generate unique numeric ID'}
+                    >
+                      ⚡ {lang === 'bn' ? 'অটো জেনারেট' : 'Auto Generate'}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder={lang === 'bn' ? "মেশিনের আইডি (যেমন: 101, 205)" : "Machine ID (e.g., 101, 205)"}
+                      className={`w-full h-[54px] px-5 pr-28 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-mono font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                      value={biometricId} 
+                      onChange={(e) => handleBiometricIdChange(e.target.value)} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => autoGenerateNumericBioId()}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 text-[11px] font-black hover:bg-blue-100 dark:hover:bg-blue-900/50 active:scale-95 transition-all flex items-center gap-1"
+                    >
+                      ⚡ {lang === 'bn' ? 'অটো' : 'Auto'}
+                    </button>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 px-2">
+                    {lang === 'bn' ? '💡 ZKTeco K40 মেশিনের জন্য শুধুমাত্র সংখ্যা (0-9) হতে হবে।' : '💡 Must be numeric digits only (0-9) for ZKTeco machine.'}
+                  </p>
                 </div>
               )}
 

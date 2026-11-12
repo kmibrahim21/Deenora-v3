@@ -1,4 +1,5 @@
 import React from 'react';
+import { extractStudentExtraFields } from '../../utils/studentExtraFields';
 
 interface StudentListTemplateProps {
     students: any[];
@@ -41,12 +42,13 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
 
         const nameLines = getLines(item.student_name, 26);
         const regLines = getLines(item.registration_number || item.admission_number, 16);
+        const bioLines = getLines(item.biometric_id, 10);
         const fatherLines = getLines(item.guardian_name, 24);
         const motherLines = getLines(item.mother_name, 24);
         const phone1Lines = getLines(item.guardian_phone, 16);
         const phone2Lines = getLines(item.guardian_phone_2, 16);
         
-        const otherLines = Math.max(1, nameLines, regLines, fatherLines, motherLines, phone1Lines, phone2Lines);
+        const otherLines = Math.max(1, nameLines, regLines, bioLines, fatherLines, motherLines, phone1Lines, phone2Lines);
         const otherHeight = 20 + (otherLines - 1) * 12.5;
 
         // Address font size is reduced (8.5px) so more characters fit per line and line height is smaller
@@ -135,24 +137,28 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
                             <thead>
                                 <tr style={{ backgroundColor: '#1e3a8a', color: '#ffffff' }}>
                                     <th style={{ ...thStyle, width: '4%' }}>{isBn ? 'রোল' : 'Roll'}</th>
-                                    <th style={{ ...thStyle, width: '9%' }}>{isBn ? 'ভর্তি/রেজি নং' : 'Reg/Adm No'}</th>
-                                    <th style={{ ...thStyle, textAlign: 'left', width: '15%' }}>{isBn ? 'শিক্ষার্থীর নাম' : 'Student Name'}</th>
-                                    <th style={{ ...thStyle, width: '5%' }}>{isBn ? 'শাখা' : 'Sec'}</th>
-                                    <th style={{ ...thStyle, textAlign: 'left', width: '13%' }}>{isBn ? 'পিতার নাম' : 'Father/Guardian'}</th>
-                                    <th style={{ ...thStyle, textAlign: 'left', width: '13%' }}>{isBn ? 'মাতার নাম' : "Mother's Name"}</th>
-                                    <th style={{ ...thStyle, width: '10%' }}>{isBn ? 'মোবাইল ১' : 'Mobile 1'}</th>
-                                    <th style={{ ...thStyle, width: '10%' }}>{isBn ? 'মোবাইল ২' : 'Mobile 2'}</th>
-                                    <th style={{ ...thStyle, width: '8%' }}>{isBn ? 'জন্ম তারিখ' : 'DOB'}</th>
+                                    <th style={{ ...thStyle, width: '8%' }}>{isBn ? 'ভর্তি/রেজি নং' : 'Reg/Adm No'}</th>
+                                    <th style={{ ...thStyle, width: '7%' }}>{isBn ? 'বায়োমেট্রিক আইডি' : 'Biometric ID'}</th>
+                                    <th style={{ ...thStyle, textAlign: 'left', width: '14%' }}>{isBn ? 'শিক্ষার্থীর নাম' : 'Student Name'}</th>
+                                    <th style={{ ...thStyle, width: '4%' }}>{isBn ? 'শাখা' : 'Sec'}</th>
+                                    <th style={{ ...thStyle, textAlign: 'left', width: '12%' }}>{isBn ? 'পিতার নাম' : 'Father/Guardian'}</th>
+                                    <th style={{ ...thStyle, textAlign: 'left', width: '12%' }}>{isBn ? 'মাতার নাম' : "Mother's Name"}</th>
+                                    <th style={{ ...thStyle, width: '9%' }}>{isBn ? 'মোবাইল ১' : 'Mobile 1'}</th>
+                                    <th style={{ ...thStyle, width: '9%' }}>{isBn ? 'মোবাইল ২' : 'Mobile 2'}</th>
+                                    <th style={{ ...thStyle, width: '7%' }}>{isBn ? 'জন্ম তারিখ' : 'DOB'}</th>
                                     <th style={{ ...thStyle, width: '4%' }}>{isBn ? 'রক্ত' : 'Blood'}</th>
-                                    <th style={{ ...thStyle, textAlign: 'left', width: '13%' }}>{isBn ? 'ঠিকানা' : 'Address'}</th>
+                                    <th style={{ ...thStyle, textAlign: 'left', width: '10%' }}>{isBn ? 'ঠিকানা' : 'Address'}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {page.data.map((item, idx) => {
+                                    const extra = extractStudentExtraFields(item);
+                                    const bioId = item.biometric_id || extra?.biometric_id || '-';
                                     return (
                                         <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fafc', pageBreakInside: 'avoid' }}>
                                             <td style={tdStyle}>{item.roll || '-'}</td>
                                             <td style={tdStyle}>{item.registration_number || item.admission_number || '-'}</td>
+                                            <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 'bold', color: '#047857' }}>{bioId}</td>
                                             <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 'bold', color: '#1e293b', wordBreak: 'break-word', overflow: 'visible' }}>{item.student_name}</td>
                                             <td style={tdStyle}>{item.section || '-'}</td>
                                             <td style={{ ...tdStyle, textAlign: 'left', wordBreak: 'break-word' }}>{item.guardian_name || '-'}</td>

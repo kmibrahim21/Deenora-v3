@@ -357,14 +357,17 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     try {
       clearAllLoginSessions();
       
+      const cleanPhone = toEnDigits(phone).trim();
+      const cleanRegNo = toEnDigits(regNo).trim();
+
       const response = await fetch('/api/parents/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          phone: phone.trim(),
-          reg_no: regNo.trim()
+          phone: cleanPhone,
+          reg_no: cleanRegNo
         })
       });
 
@@ -407,7 +410,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       } else if (msg.includes('প্যারেন্ট পোর্টাল বন্ধ') || msg.includes('ইন-অ্যাক্টিভ') || msg.includes('অ্যাক্সেস বন্ধ')) {
         setError(msg);
       } else if (msg.includes('JSON object') || msg.includes('multiple (or no) rows')) {
-        setError(lang === 'bn' ? 'একাধিক শিক্ষার্থীর তথ্য পাওয়া গেছে। অনুগ্রহ করে সঠিক রেজিস্ট্রেশন নম্বর বা রোল নম্বর দিয়ে লগইন করুন।' : 'Multiple records found. Please enter exact Registration Number or Roll.');
+        setError(lang === 'bn' ? 'একাধিক শিক্ষার্থীর তথ্য পাওয়া গেছে বা তথ্য মেলেনি। অনুগ্রহ করে সঠিক রেজিস্ট্রেশন নম্বর বা রোল নম্বর দিন।' : 'Multiple records found or mismatch. Please enter exact Registration Number or Roll.');
       } else {
         setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${msg}` : `Error logging in: ${msg}`);
       }
@@ -989,7 +992,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                     placeholder="অভিভাবকের ফোন নম্বর"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(toEnDigits(e.target.value))}
                   />
                 </div>
                 <div className="group relative">
@@ -997,11 +1000,16 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                   <input
                     type="text"
                     required
-                    placeholder="রেজিস্ট্রেশন নম্বর (Reg. No)"
+                    placeholder="রেজিস্ট্রেশন নম্বর / রোল নম্বর"
                     className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
                     value={regNo}
-                    onChange={(e) => setRegNo(e.target.value)}
+                    onChange={(e) => setRegNo(toEnDigits(e.target.value))}
                   />
+                </div>
+                <div className="text-center px-1">
+                  <p className="text-[11px] text-slate-400 font-noto">
+                    রেজিস্ট্রেশন নম্বর, শিক্ষার্থীর রোল নম্বর অথবা মোবাইল নম্বরের শেষের ৪ ডিজিট দিয়ে লগইন করুন
+                  </p>
                 </div>
               </div>
 
