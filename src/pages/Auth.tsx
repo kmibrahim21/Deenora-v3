@@ -402,10 +402,12 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     } catch (err: any) {
       console.error('Parent login error:', err);
       const msg = err.message || '';
-      if (msg.includes('Student not found')) {
-        setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর' : 'Invalid phone number or registration number');
-      } else if (msg.includes('প্যারেন্ট পোর্টাল বন্ধ')) {
+      if (msg.includes('Student not found') || msg.includes('ভুল ফোন নম্বর') || msg.includes('সঠিক তথ্য')) {
+        setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর / রোল নম্বর' : 'Invalid phone number or registration / roll number');
+      } else if (msg.includes('প্যারেন্ট পোর্টাল বন্ধ') || msg.includes('ইন-অ্যাক্টিভ') || msg.includes('অ্যাক্সেস বন্ধ')) {
         setError(msg);
+      } else if (msg.includes('JSON object') || msg.includes('multiple (or no) rows')) {
+        setError(lang === 'bn' ? 'একাধিক শিক্ষার্থীর তথ্য পাওয়া গেছে। অনুগ্রহ করে সঠিক রেজিস্ট্রেশন নম্বর বা রোল নম্বর দিয়ে লগইন করুন।' : 'Multiple records found. Please enter exact Registration Number or Roll.');
       } else {
         setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${msg}` : `Error logging in: ${msg}`);
       }

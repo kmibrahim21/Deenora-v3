@@ -60,73 +60,113 @@ export default async function handler(req, res) {
 
     console.log(`Parents API: Looking up student with Phone: ${qPhone}, Reg No: ${qRegNo}, Student ID: ${qStudentId}`);
 
-    // Lookup student by student_id or registration_number
+    // Lookup student by student_id or credentials (registration_number, roll, or PIN)
     let student: any = null;
-    let studentError: any = null;
+
+    const cleanPhone = qPhone.replace(/\D/g, '');
+    const last10Digits = cleanPhone.slice(-10);
+    const last4Digits = cleanPhone.slice(-4);
+
+    const phoneFilters = [
+      qPhone ? `guardian_phone.eq.${qPhone}` : null,
+      qPhone ? `guardian_phone_2.eq.${qPhone}` : null,
+      last10Digits ? `guardian_phone.ilike.%${last10Digits}` : null,
+      last10Digits ? `guardian_phone_2.ilike.%${last10Digits}` : null
+    ].filter(Boolean).join(',');
 
     if (qStudentId) {
-      const res = await supabase
-        .from('students')
-        .select('*, institutions(*), classes(*)')
-        .or(`guardian_phone.eq.${qPhone},guardian_phone_2.eq.${qPhone}`)
-        .eq('id', qStudentId)
-        .maybeSingle();
-      student = res.data;
-      studentError = res.error;
-    }
-
-    if (!student && qStudentId) {
-      const cleanPhone = qPhone.replace(/\D/g, '');
-      const last10Digits = cleanPhone.slice(-10);
-      if (last10Digits) {
-        const res = await supabase
+      try {
+        const { data, error } = await supabase
           .from('students')
           .select('*, institutions(*), classes(*)')
           .eq('id', qStudentId)
-          .or(`guardian_phone.ilike.%${last10Digits},guardian_phone_2.ilike.%${last10Digits}`)
-          .maybeSingle();
-        if (res.data) {
-          student = res.data;
+          .limit(1);
+
+        if (error) {
+          console.warn('Parents API: Error finding student by ID:', error);
+        } else if (data && data.length > 0) {
+          student = data[0];
         }
+      } catch (err: any) {
+        console.warn('Parents API: Exception finding student by ID:', err);
       }
     }
 
     if (!student && qRegNo) {
-      const res = await supabase
-        .from('students')
-        .select('*, institutions(*), classes(*)')
-        .or(`guardian_phone.eq.${qPhone},guardian_phone_2.eq.${qPhone}`)
-        .eq('registration_number', qRegNo)
-        .maybeSingle();
-      student = res.data;
-      studentError = res.error;
-    }
+      try {
+        const rollNum = parseInt(qRegNo, 10);
+        const isNumeric = !isNaN(rollNum);
 
-    // Secondary fallback without phone filter if phone matching with leading zero differences
-    if (!student && qRegNo) {
-      const cleanPhone = qPhone.replace(/\D/g, '');
-      const last10Digits = cleanPhone.slice(-10);
-      if (last10Digits) {
-        const res = await supabase
+        // Stage 1: Try matching registration_number, roll, or admission_number with guardian phone
+        let query = supabase
           .from('students')
           .select('*, institutions(*), classes(*)')
-          .eq('registration_number', qRegNo)
-          .or(`guardian_phone.ilike.%${last10Digits},guardian_phone_2.ilike.%${last10Digits}`)
-          .maybeSingle();
-        if (res.data) {
-          student = res.data;
-        }
-      }
-    }
+          .or(phoneFilters);
 
-    if (studentError) {
-      console.error('Parents API: Supabase error looking up student:', studentError);
-      throw studentError;
+        if (isNumeric) {
+          query = query.or(`registration_number.eq.${qRegNo},roll.eq.${rollNum},admission_number.eq.${qRegNo}`);
+        } else {
+          query = query.or(`registration_number.eq.${qRegNo},admission_number.eq.${qRegNo}`);
+        }
+
+        const { data: matches, error: matchErr } = await query
+          .order('is_active', { ascending: false })
+          .limit(10);
+
+        if (matchErr) {
+          console.warn('Parents API: Error querying students with phone filter:', matchErr);
+        } else if (matches && matches.length > 0) {
+          const exactReg = matches.find((s: any) => s.registration_number === qRegNo && s.is_active !== false);
+          student = exactReg || matches.find((s: any) => s.is_active !== false) || matches[0];
+        }
+
+        // Stage 2: If no match and qRegNo matches the last 4 digits (or last 6 digits) of the phone number,
+        // parents often enter their 4-digit PIN as their phone's last 4 digits!
+        if (!student && last4Digits && (qRegNo === last4Digits || qRegNo === cleanPhone.slice(-6))) {
+          const { data: phoneStudents, error: phoneErr } = await supabase
+            .from('students')
+            .select('*, institutions(*), classes(*)')
+            .or(phoneFilters)
+            .order('is_active', { ascending: false })
+            .limit(10);
+
+          if (!phoneErr && phoneStudents && phoneStudents.length > 0) {
+            student = phoneStudents.find((s: any) => s.is_active !== false) || phoneStudents[0];
+          }
+        }
+
+        // Stage 3: Secondary fallback without strict phone filter if phone has regional/country code differences
+        if (!student) {
+          let regQuery = supabase
+            .from('students')
+            .select('*, institutions(*), classes(*)')
+            .eq('registration_number', qRegNo);
+
+          const { data: regMatches, error: regErr } = await regQuery.limit(10);
+          if (!regErr && regMatches && regMatches.length > 0) {
+            // Find one that shares phone suffix
+            const matchedWithPhone = regMatches.find((s: any) => {
+              const sp1 = (s.guardian_phone || '').replace(/\D/g, '');
+              const sp2 = (s.guardian_phone_2 || '').replace(/\D/g, '');
+              return (last10Digits && (sp1.includes(last10Digits) || sp2.includes(last10Digits))) ||
+                     (cleanPhone && (sp1.includes(cleanPhone) || sp2.includes(cleanPhone)));
+            });
+            if (matchedWithPhone) {
+              student = matchedWithPhone;
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('Parents API: Exception searching for student:', err);
+      }
     }
 
     if (!student) {
-      console.warn('Parents API: Student not found');
-      return res.status(404).json({ error: 'Student not found with provided credentials' });
+      console.warn('Parents API: Student not found with provided credentials');
+      return res.status(404).json({ 
+        error: 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর/রোল নম্বর। সঠিক তথ্য দিয়ে পুনরায় চেষ্টা করুন।',
+        code: 'STUDENT_NOT_FOUND'
+      });
     }
 
     if (student.is_active === false) {
@@ -558,12 +598,20 @@ export default async function handler(req, res) {
           .from('students')
           .select('id, student_name, name_en, roll, registration_number, admission_number, photo_url, class_id, is_active, institution_id, guardian_phone, guardian_phone_2, section, classes(id, class_name), institutions(id, name, logo_url, is_active, config_json, phone)')
           .or(orFilter)
-          .eq('institution_id', student.institution_id)
           .eq('is_active', true)
           .order('roll', { ascending: true });
 
         if (siblings && siblings.length > 0) {
-          children = siblings.map((s: any) => ({
+          const activeSiblings = siblings.filter((s: any) => {
+            if (s.institutions?.is_active === false) return false;
+            let cfg: any = s.institutions?.config_json || {};
+            if (typeof cfg === 'string') {
+              try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; }
+            }
+            return cfg.modules?.parent_portal !== false;
+          });
+
+          children = activeSiblings.map((s: any) => ({
             id: s.id,
             student_name: s.student_name,
             name_en: s.name_en,
