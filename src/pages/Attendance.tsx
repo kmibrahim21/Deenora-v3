@@ -247,19 +247,180 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [testSn, setTestSn] = useState('');
   const [testingConn, setTestingConn] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const [savingDevice, setSavingDevice] = useState(false);
+  const [deletingDeviceSn, setDeletingDeviceSn] = useState<string | null>(null);
+  const [queueingUsers, setQueueingUsers] = useState(false);
+  const [queueResult, setQueueResult] = useState<any>(null);
 
-  const testBiometricConnection = async () => {
-    if (!testSn.trim()) return;
+  // Derived list of currently registered ADMS devices from madrasah config
+  const registeredDevices: Array<{ sn: string; name: string; added_at?: string }> = useMemo(() => {
+    const raw = (madrasah?.config_json as any)?.biometric_devices || [];
+    const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    return arr.map((item: any) => {
+      if (typeof item === 'string') return { sn: item.trim().toUpperCase(), name: 'ZKTeco ADMS Device' };
+      return {
+        sn: (item?.sn || item?.id || item?.device_sn || '').toString().trim().toUpperCase(),
+        name: item?.name || 'ZKTeco ADMS Device',
+        added_at: item?.added_at
+      };
+    }).filter(d => Boolean(d.sn));
+  }, [(madrasah?.config_json as any)?.biometric_devices]);
+
+  const testBiometricConnection = async (snToTestParam?: string) => {
+    const snTarget = (snToTestParam || testSn || '').trim().toUpperCase();
+    if (!snTarget) return;
     setTestingConn(true);
     setTestResult(null);
     try {
-      const res = await fetch(`/api/iclock?sn=${encodeURIComponent(testSn.trim().toUpperCase())}`);
+      const res = await fetch(`/api/iclock?sn=${encodeURIComponent(snTarget)}`);
       const data = await res.json();
       setTestResult(data);
+      if (snToTestParam && snToTestParam !== testSn) {
+        setTestSn(snToTestParam);
+      }
     } catch (err: any) {
       setTestResult({ success: false, error: err.message || 'কানেকশন টেস্ট ব্যর্থ হয়েছে' });
     } finally {
       setTestingConn(false);
+    }
+  };
+
+  const handleSaveDeviceSn = async (snToSave?: string) => {
+    const cleanSn = (snToSave || testSn || '').trim().toUpperCase();
+    if (!cleanSn) {
+      alert(lang === 'bn' ? 'অনুগ্রহ করে মেশিনের সিরিয়াল নম্বর (SN) লিখুন।' : 'Please enter machine Serial Number (SN).');
+      return;
+    }
+    if (!madrasah?.id) return;
+    setSavingDevice(true);
+    try {
+      const currentConfig = (madrasah.config_json as any) || {};
+      const rawList = currentConfig.biometric_devices || [];
+      const currentList = Array.isArray(rawList) ? rawList : (rawList ? [rawList] : []);
+
+      const existingSns = new Set(
+        currentList.map((d: any) => (typeof d === 'string' ? d : d?.sn || d?.id || '').toString().trim().toUpperCase())
+      );
+
+      let updatedList;
+      if (existingSns.has(cleanSn)) {
+        updatedList = currentList.map((d: any) => {
+          const s = (typeof d === 'string' ? d : d?.sn || d?.id || '').toString().trim().toUpperCase();
+          if (s === cleanSn) {
+            return typeof d === 'string'
+              ? { sn: cleanSn, name: 'ZKTeco ADMS Device', added_at: new Date().toISOString() }
+              : { ...d, sn: cleanSn };
+          }
+          return d;
+        });
+      } else {
+        updatedList = [
+          ...currentList,
+          { sn: cleanSn, name: 'ZKTeco ADMS Device', added_at: new Date().toISOString() }
+        ];
+      }
+
+      const updatedConfig = {
+        ...currentConfig,
+        biometric_devices: updatedList
+      };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+
+      if (triggerRefresh) triggerRefresh();
+
+      // Automatically test connection after saving
+      await testBiometricConnection(cleanSn);
+
+      setSuccessTitle(lang === 'bn' ? 'ডিভাইস রেজিস্টার সম্পন্ন!' : 'Device Registered!');
+      setSuccessMessage(lang === 'bn' 
+        ? `মেশিন SN "${cleanSn}" সফলভাবে ডাটাবেজে রেজিস্টার ও সেভ করা হয়েছে। এখন মেশিন থেকে সরাসরি ক্লাউডে হাজিরা জমা হবে।` 
+        : `Machine SN "${cleanSn}" successfully registered.`);
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setErrorTitle(lang === 'bn' ? 'ডিভাইস সেভ ব্যর্থ' : 'Failed to Save Device');
+      setErrorDetails(err.message || 'Unknown error');
+      setShowErrorModal(true);
+    } finally {
+      setSavingDevice(false);
+    }
+  };
+
+  const handleDeleteDeviceSn = async (snToDelete: string) => {
+    if (!confirm(lang === 'bn' ? `আপনি কি নিশ্চিত যে "${snToDelete}" ডিভাইসটি মুছে ফেলতে চান?` : `Remove device "${snToDelete}"?`)) return;
+    if (!madrasah?.id) return;
+    setDeletingDeviceSn(snToDelete);
+    try {
+      const currentConfig = (madrasah.config_json as any) || {};
+      const rawList = currentConfig.biometric_devices || [];
+      const currentList = Array.isArray(rawList) ? rawList : (rawList ? [rawList] : []);
+
+      const updatedList = currentList.filter((d: any) => {
+        const s = (typeof d === 'string' ? d : d?.sn || d?.id || '').toString().trim().toUpperCase();
+        return s !== snToDelete.toUpperCase();
+      });
+
+      const updatedConfig = {
+        ...currentConfig,
+        biometric_devices: updatedList
+      };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+
+      if (triggerRefresh) triggerRefresh();
+      if (testSn.trim().toUpperCase() === snToDelete.toUpperCase()) {
+        setTestResult(null);
+      }
+    } catch (err: any) {
+      setErrorTitle(lang === 'bn' ? 'ডিভাইস মুছতে ব্যর্থ' : 'Failed to Delete Device');
+      setErrorDetails(err.message || 'Unknown error');
+      setShowErrorModal(true);
+    } finally {
+      setDeletingDeviceSn(null);
+    }
+  };
+
+  const handlePushStudentsToAdms = async (snToPush?: string) => {
+    const targetSn = (snToPush || testSn || registeredDevices[0]?.sn || '').trim().toUpperCase();
+    if (!targetSn) {
+      alert(lang === 'bn' ? 'অনুগ্রহ করে প্রথমে মেশিনের সিরিয়াল নম্বর (SN) ইনপুট অথবা রেজিস্টার করুন।' : 'Please enter or select a machine Serial Number (SN).');
+      return;
+    }
+    if (!madrasah?.id) return;
+    setQueueingUsers(true);
+    setQueueResult(null);
+    try {
+      const res = await fetch(`/api/iclock?action=queue_users&institution_id=${encodeURIComponent(madrasah.id)}&sn=${encodeURIComponent(targetSn)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      setQueueResult(data);
+      if (data.success) {
+        setSuccessTitle(lang === 'bn' ? 'ক্লাউড কিউতে ডাটা জমা হয়েছে!' : 'Users Queued Successfully!');
+        setSuccessMessage(lang === 'bn' 
+          ? (data.message || `সফলভাবে শিক্ষার্থীদের তথ্য ক্লাউড কিউতে যুক্ত করা হয়েছে! ZKTeco ADMS মেশিনটি অনলাইন থাকলে পরবর্তী ১ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে সকল তথ্য গ্রহণ করে নিবে।`)
+          : 'User data successfully queued for ADMS push.');
+        setShowSuccessModal(true);
+      } else {
+        throw new Error(data.error || data.message || 'Failed to queue users');
+      }
+    } catch (err: any) {
+      setErrorTitle(lang === 'bn' ? 'ক্লাউড পুশ ব্যর্থ' : 'Cloud Push Failed');
+      setErrorDetails(err.message || 'Unknown error');
+      setShowErrorModal(true);
+    } finally {
+      setQueueingUsers(false);
     }
   };
   const [settingsSessions, setSettingsSessions] = useState<{ id: string; name: string }[]>([]);
@@ -3010,75 +3171,225 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         <span className="text-blue-600 font-black">443 (or 80)</span>
                       </div>
                     </div>
-
-                    <div className="mt-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-blue-100 dark:border-slate-800 flex items-center justify-between">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase">Institution Unique ID</p>
-                        <p className="text-xs font-mono font-black text-slate-800 dark:text-slate-200 truncate">
-                          {madrasah?.id}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (madrasah?.id) {
-                            navigator.clipboard.writeText(madrasah.id);
-                            setCopiedId(true);
-                            setTimeout(() => setCopiedId(false), 2000);
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all shrink-0"
-                      >
-                        <Copy size={13} />
-                        {copiedId ? 'কপি হয়েছে!' : 'কপি করুন'}
-                      </button>
-                    </div>
                   </div>
 
-                  {/* ADMS Machine Serial Test */}
+                  {/* 1. Registered ADMS Devices List */}
                   <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                    <h4 className="text-xs font-black text-slate-700 dark:text-slate-200 font-noto mb-2 flex items-center gap-2">
-                      <RefreshCw size={15} className="text-blue-500" />
-                      মেশিন কানেকশন টেস্ট করুন (Serial Number Ping)
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Cpu size={18} className="text-emerald-500" />
+                        <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto">
+                          রেজিস্টার্ড ADMS ডিভাইসসমূহ (Registered Devices)
+                        </h4>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        {registeredDevices.length}টি ডিভাইস
+                      </span>
+                    </div>
+
+                    {registeredDevices.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {registeredDevices.map((dev, idx) => (
+                          <div 
+                            key={idx}
+                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                              isDark ? 'bg-slate-900/90 border-slate-700/80' : 'bg-white border-slate-200 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto truncate">
+                                    {dev.name || 'ZKTeco ADMS Device'}
+                                  </p>
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700">
+                                    SN: {dev.sn}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                  ক্লাউড ডায়রেক্ট কানেকশন সক্রিয়
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => testBiometricConnection(dev.sn)}
+                                disabled={testingConn}
+                                title="কানেকশন চেক"
+                                className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-black flex items-center gap-1.5 hover:bg-blue-100 active:scale-95 transition-all"
+                              >
+                                <RefreshCw size={12} className={testingConn && testSn === dev.sn ? 'animate-spin' : ''} />
+                                <span>চেক</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handlePushStudentsToAdms(dev.sn)}
+                                disabled={queueingUsers}
+                                title="ক্লাউড থেকে শিক্ষার্থী পাঠান"
+                                className="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-black flex items-center gap-1.5 hover:bg-purple-100 active:scale-95 transition-all"
+                              >
+                                <Upload size={12} />
+                                <span>ডাটা পুশ</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDeviceSn(dev.sn)}
+                                disabled={deletingDeviceSn === dev.sn}
+                                title="ডিভাইস মুছুন"
+                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
+                              >
+                                {deletingDeviceSn === dev.sn ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={`p-3.5 rounded-xl border text-xs font-bold leading-relaxed ${
+                        isDark ? 'bg-amber-950/20 border-amber-900/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'
+                      }`}>
+                        ⚠️ এখনও কোনো ADMS ডিভাইস রেজিস্টার করা নেই। নিচের বক্সে মেশিনের সিরিয়াল নম্বর (SN) লিখে <b>"➕ ডিভাইস রেজিস্টার ও সেভ করুন"</b> বাটনে চাপ দিন।
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Device Serial Number (SN) Registration & Ping Test */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <h4 className="text-xs font-black text-slate-700 dark:text-slate-200 font-noto mb-1 flex items-center gap-2">
+                      <Save size={15} className="text-emerald-500" />
+                      মেশিন সিরিয়াল নম্বর (SN) রেজিস্টার ও কানেকশন চেক
                     </h4>
                     <p className="text-[11px] text-slate-400 font-bold mb-3">
-                      মেশিনের পেছনে থাকা সিরিয়াল নম্বর (SN, যেমন: UEED262800196) দিয়ে টেস্ট করে দেখতে পারেন ডিভাইসটি ক্লাউডের সাথে কানেক্টেড কিনা:
+                      মেশিনের পেছনের স্টিকার অথবা মেশিন মেনু (System Info) থেকে প্রাপ্ত Serial Number (যেমন: UEED262800196) নিচে লিখুন:
                     </p>
 
-                    <div className="flex gap-2">
+                    <div className="space-y-2.5">
                       <input
                         type="text"
-                        placeholder="মেশিন Serial Number (SN)"
+                        placeholder="মেশিন Serial Number (SN, যেমন: UEED262800196)"
                         value={testSn}
-                        onChange={(e) => setTestSn(e.target.value)}
-                        className={`flex-1 h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none ${
-                          isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                        onChange={(e) => setTestSn(e.target.value.toUpperCase())}
+                        className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none transition-all ${
+                          isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'
                         }`}
                       />
-                      <button
-                        type="button"
-                        onClick={testBiometricConnection}
-                        disabled={testingConn || !testSn.trim()}
-                        className="px-4 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shrink-0"
-                      >
-                        {testingConn ? <Loader2 size={16} className="animate-spin" /> : 'কানেকশন চেক'}
-                      </button>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveDeviceSn()}
+                          disabled={savingDevice || !testSn.trim()}
+                          className="flex-1 min-w-[160px] h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-md shadow-emerald-600/20"
+                        >
+                          {savingDevice ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          <span>➕ ডিভাইস রেজিস্টার ও সেভ করুন</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => testBiometricConnection()}
+                          disabled={testingConn || !testSn.trim()}
+                          className="px-4 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-md shadow-blue-600/20"
+                        >
+                          {testingConn ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                          <span>🔍 কানেকশন চেক</span>
+                        </button>
+                      </div>
                     </div>
 
                     {testResult && (
-                      <div className={`mt-3 p-3 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                      <div className={`mt-3.5 p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
                         testResult.success 
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
+                          : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                      }`}>
+                        {testResult.success ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                <CheckCircle2 size={16} />
+                                ডিভাইস সক্রিয় ও রেজিস্টার্ড!
+                              </p>
+                              {testResult.pending_commands_in_queue > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 font-mono font-black">
+                                  {testResult.pending_commands_in_queue}টি কমান্ড কিউতে
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {testResult.institution || 'রেজিস্টার্ড'}</p>
+                            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1">
+                              <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
+                                বায়োমেট্রিক শিক্ষার্থী: <b>{testResult.biometric_students_count || 0} জন</b>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
+                                বায়োমেট্রিক শিক্ষক: <b>{testResult.biometric_teachers_count || 0} জন</b>
+                              </div>
+                            </div>
+                            <p className="text-[10px] opacity-80 pt-0.5 font-noto">{testResult.recommendation}</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                            <p className="leading-relaxed">✕ {testResult.error || 'ডিভাইসটি এখনও সার্ভারে পাঞ্চ করেনি বা খুজে পাওয়া যায়নি।'}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Push Students to ADMS Machine via Cloud */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${
+                    isDark ? 'bg-purple-950/20 border-purple-900/40' : 'bg-gradient-to-br from-purple-50/80 to-blue-50/80 border-purple-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Upload size={18} className="text-purple-600 dark:text-purple-400" />
+                        <h4 className="text-xs font-black text-purple-950 dark:text-purple-200 font-noto">
+                          ☁️ ১-ক্লিকে ক্লাউড থেকে ADMS মেশিনে শিক্ষার্থী পাঠান
+                        </h4>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                        সরাসরি ক্লাউড সিঙ্ক
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-4 font-noto">
+                      কোনো পিসি, ডাটা কেবল বা পেনড্রাইভ ছাড়াই Deenora ক্লাউড থেকে সরাসরি সকল শিক্ষার্থীর নাম ও বায়োমেট্রিক আইডি ZKTeco ADMS মেশিনে পুশ করুন। মেশিনটি পরবর্তী ১ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে ক্লাউড থেকে ডাটা গ্রহণ করে নেবে।
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => handlePushStudentsToAdms()}
+                      disabled={queueingUsers || (registeredDevices.length === 0 && !testSn.trim())}
+                      className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-purple-600/20 uppercase tracking-wider"
+                    >
+                      {queueingUsers ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                      <span>{queueingUsers ? 'ক্লাউড কিউতে পাঠানো হচ্ছে...' : '☁️ ক্লাউড থেকে মেশিনে ডাটা পুশ করুন'}</span>
+                    </button>
+
+                    {queueResult && (
+                      <div className={`mt-3 p-3 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                        queueResult.success 
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
                           : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
                       }`}>
-                        {testResult.success ? (
+                        {queueResult.success ? (
                           <div className="space-y-1">
-                            <p className="font-black text-emerald-600 dark:text-emerald-400">✓ ডিভাইস সক্রিয় ও কানেক্টেড!</p>
-                            <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {testResult.institution || 'রেজিস্টার্ড'}</p>
-                            <p className="text-[10px] opacity-75">{testResult.recommendation}</p>
+                            <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 size={14} />
+                              ডাটা সফলভাবে কিউতে যোগ হয়েছে!
+                            </p>
+                            <p className="text-[11px] leading-relaxed opacity-90">{queueResult.message}</p>
                           </div>
                         ) : (
-                          <p>✕ {testResult.error || 'ডিভাইসটি এখনও সার্ভারে পাঞ্চ করেনি বা খুজে পাওয়া যায়নি।'}</p>
+                          <p>✕ {queueResult.error || 'ক্লাউড পুশ ব্যর্থ হয়েছে।'}</p>
                         )}
                       </div>
                     )}

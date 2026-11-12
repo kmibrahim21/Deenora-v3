@@ -17,9 +17,76 @@ let cachedDeviceList: DeviceCacheEntry[] | null = null;
 let lastDeviceFetchTime = 0;
 const DEVICE_CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
-async function getRegisteredDevices(): Promise<DeviceCacheEntry[]> {
+// In-Memory ADMS Command Queue for ZKTeco Cloud Sync: SN (Uppercase) -> string[]
+const pendingAdmsCommands = new Map<string, string[]>();
+let globalCmdCounter = 1;
+
+// Bengali to English Transliteration for ZKTeco Machine LCD (ASCII only, max 23 chars)
+const BN_TO_EN_NAME_MAP: Record<string, string> = {
+  'মোঃ': 'MD.', 'মো:': 'MD.', 'মুহাম্মদ': 'MD.', 'মোহাম্মদ': 'MD.',
+  'মোসাঃ': 'MST.', 'মোসা:': 'MST.', 'মোসাম্মৎ': 'MST.',
+  'আব্দুল্লাহ': 'ABDULLAH', 'আবদুল্লাহ': 'ABDULLAH', 'আব্দুর': 'ABDUR', 'রহমান': 'RAHMAN', 'রহিম': 'RAHIM',
+  'করিম': 'KARIM', 'হাসান': 'HASAN', 'হোসাইন': 'HOSSAIN', 'হুসাইন': 'HOSSAIN',
+  'আলী': 'ALI', 'আলি': 'ALI', 'আহমেদ': 'AHMED', 'মাহমুদ': 'MAHMUD', 'ইব্রাহিম': 'IBRAHIM',
+  'খলিল': 'KHALIL', 'ইসমাইল': 'ISMAIL', 'ইউসুফ': 'YOUSUF', 'ইউনুস': 'YUNUS',
+  'ফারুক': 'FARUK', 'ওমর': 'OMAR', 'উমর': 'UMAR', 'উসমান': 'USMAN', 'আবু': 'ABU', 'বকর': 'BAKR',
+  'শাকিল': 'SHAKIL', 'নাঈম': 'NAEEM', 'তানভীর': 'TANVIR', 'সাইফুল': 'SAIFUL',
+  'ইসলাম': 'ISLAM', 'হোসেন': 'HOSSAIN', 'খান': 'KHAN', 'শেখ': 'SHEIKH',
+  'মারুফ': 'MARUF', 'রাব্বি': 'RABBI', 'ফাহিম': 'FAHIM', 'আলম': 'ALAM',
+  'জান্নাত': 'JANNAT', 'ফাতেমা': 'FATEMA', 'আয়েশা': 'AYESHA', 'খাদিজা': 'KHADIJA',
+  'সুমাইয়া': 'SUMAIYA', 'মারিয়াম': 'MARIYAM', 'আক্তার': 'AKTER', 'খাতুন': 'KHATUN'
+};
+
+const BN_CHAR_MAP: Record<string, string> = {
+  'অ': 'O', 'আ': 'A', 'ই': 'I', 'ঈ': 'I', 'উ': 'U', 'ঊ': 'U', 'ঋ': 'RI',
+  'এ': 'E', 'ঐ': 'OI', 'ও': 'O', 'ঔ': 'OU',
+  'া': 'A', 'ি': 'I', 'ী': 'I', 'ু': 'U', 'ূ': 'U', 'ৃ': 'RI',
+  'ে': 'E', 'ৈ': 'OI', 'ো': 'O', 'ৌ': 'OU',
+  'ক': 'K', 'খ': 'KH', 'গ': 'G', 'ঘ': 'GH', 'ঙ': 'NG',
+  'চ': 'CH', 'ছ': 'CH', 'জ': 'J', 'ঝ': 'JH', 'ঞ': 'N',
+  'ট': 'T', 'ঠ': 'TH', 'ড': 'D', 'ঢ': 'DH', 'ণ': 'N',
+  'ত': 'T', 'থ': 'TH', 'দ': 'D', 'ধ': 'DH', 'ন': 'N',
+  'প': 'P', 'ফ': 'F', 'ব': 'B', 'ভ': 'BH', 'ম': 'M',
+  'য': 'Z', 'র': 'R', 'ল': 'L', 'শ': 'SH', 'ষ': 'SH', 'স': 'S', 'হ': 'H',
+  'ড়': 'R', 'ঢ়': 'RH', 'য়': 'Y', 'ৎ': 'T', 'ং': 'NG', 'ঃ': '', 'ঁ': ''
+};
+
+function transliterateBnToEn(text?: string | null): string {
+  if (!text || typeof text !== 'string') return 'STUDENT';
+  const trimmed = text.trim();
+  if (!trimmed) return 'STUDENT';
+
+  if (/^[A-Za-z0-9\s._-]+$/.test(trimmed)) {
+    return trimmed.toUpperCase().replace(/\s+/g, ' ').slice(0, 23);
+  }
+
+  const words = trimmed.split(/[\s._-]+/).filter(Boolean);
+  const convertedWords: string[] = [];
+
+  for (const word of words) {
+    if (BN_TO_EN_NAME_MAP[word]) {
+      convertedWords.push(BN_TO_EN_NAME_MAP[word]);
+      continue;
+    }
+    let res = '';
+    for (let i = 0; i < word.length; i++) {
+      const ch = word[i];
+      if (BN_CHAR_MAP[ch] !== undefined) {
+        res += BN_CHAR_MAP[ch];
+      } else if (/[A-Za-z0-9]/.test(ch)) {
+        res += ch.toUpperCase();
+      }
+    }
+    if (res) convertedWords.push(res);
+  }
+
+  const clean = convertedWords.join(' ').replace(/[^A-Za-z0-9\s._-]/g, '').replace(/\s+/g, ' ').trim();
+  return (clean ? clean.toUpperCase() : 'STUDENT').slice(0, 23);
+}
+
+async function getRegisteredDevices(forceRefresh: boolean = false): Promise<DeviceCacheEntry[]> {
   const now = Date.now();
-  if (cachedDeviceList && (now - lastDeviceFetchTime) < DEVICE_CACHE_TTL_MS) {
+  if (!forceRefresh && cachedDeviceList && (now - lastDeviceFetchTime) < DEVICE_CACHE_TTL_MS) {
     return cachedDeviceList;
   }
 
@@ -58,6 +125,77 @@ async function getRegisteredDevices(): Promise<DeviceCacheEntry[]> {
   } catch (err) {
     console.warn('[ZKteco ADMS] Exception in getRegisteredDevices:', err);
     return cachedDeviceList || [];
+  }
+}
+
+async function generateAndQueueCommandsForDevice(instId: string, sn: string): Promise<string[]> {
+  const [{ data: students }, { data: teachers }] = await Promise.all([
+    supabase
+      .from('students')
+      .select('id, student_name, name_en, roll, biometric_id, is_active, notes')
+      .eq('institution_id', instId)
+      .order('roll', { ascending: true }),
+    supabase
+      .from('teachers')
+      .select('id, teacher_name, name, biometric_id, permissions, is_active')
+      .eq('institution_id', instId)
+  ]);
+
+  const commands: string[] = [];
+  (students || []).forEach((st: any, idx: number) => {
+    if (st.is_active === false) return;
+    let rawBio = (st.biometric_id || '').toString().trim();
+    if (!rawBio && st.notes) {
+      try {
+        const parsed = typeof st.notes === 'string' ? JSON.parse(st.notes) : st.notes;
+        rawBio = (parsed?.biometric_id || '').toString().trim();
+      } catch (e) {}
+    }
+    if (!rawBio) {
+      rawBio = (st.roll !== null && st.roll !== undefined) ? String(st.roll).trim() : String(idx + 1);
+    }
+    const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
+    if (!cleanBioId) return;
+
+    const cleanName = transliterateBnToEn(st.name_en || st.student_name || 'STUDENT');
+    const cmdId = commands.length + 1;
+    commands.push(`C:${cmdId}:DATA UPDATE USERINFO PIN=${cleanBioId}\tName=${cleanName}\tPri=0\tPasswd=\tCard=\tGrp=1`);
+  });
+
+  (teachers || []).forEach((t: any) => {
+    if (t.is_active === false) return;
+    const perms = t.permissions || {};
+    const rawBio = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
+    const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
+    if (!cleanBioId) return;
+
+    const cleanName = transliterateBnToEn(t.name || t.teacher_name || 'TEACHER');
+    const cmdId = commands.length + 1;
+    commands.push(`C:${cmdId}:DATA UPDATE USERINFO PIN=${cleanBioId}\tName=${cleanName}\tPri=0\tPasswd=\tCard=\tGrp=1`);
+  });
+
+  pendingAdmsCommands.set(sn.toUpperCase(), commands);
+  return commands;
+}
+
+async function clearPendingAdmsSyncFlag(sn: string) {
+  try {
+    const devices = await getRegisteredDevices();
+    const dev = devices.find(d => d.sn === sn.toUpperCase());
+    if (!dev) return;
+    const { data: inst } = await supabase
+      .from('institutions')
+      .select('config_json')
+      .eq('id', dev.institution_id)
+      .maybeSingle();
+    if (inst && ((inst.config_json as any)?.pending_adms_sync_sn || (inst.config_json as any)?.pending_adms_sync)) {
+      const cfg = { ...(inst.config_json as any) };
+      delete cfg.pending_adms_sync_sn;
+      delete cfg.pending_adms_sync;
+      await supabase.from('institutions').update({ config_json: cfg }).eq('id', dev.institution_id);
+    }
+  } catch (e) {
+    console.warn('[ZKteco ADMS] Failed to clear pending_adms_sync_sn:', e);
   }
 }
 
@@ -120,21 +258,6 @@ export default async function handler(req: any, res: any) {
     const query = req.query || {};
     const method = req.method;
 
-    // Fast-path for ZKTeco ADMS machine heartbeats / handshakes:
-    // Biometric devices send frequent GET /iclock/cdata or /iclock/getrequest pulses.
-    // Return 200 OK instantly (< 5ms) without executing ANY database query.
-    const isDeviceHeartbeat = method === 'GET' && (
-      urlPath.includes('/cdata') || 
-      urlPath.includes('/getrequest') || 
-      urlPath.includes('/devicecmd') ||
-      urlPath.includes('/push')
-    );
-
-    if (isDeviceHeartbeat) {
-      res.setHeader('Content-Type', 'text/plain');
-      return res.status(200).send('OK');
-    }
-
     // Extract Serial Number (SN) from URL query regex, query object, body, or headers
     const urlSnMatch = (req.originalUrl || req.url || '').match(/[?&]sn=([^&]+)/i);
     const snFromUrl = urlSnMatch ? decodeURIComponent(urlSnMatch[1]) : '';
@@ -146,10 +269,159 @@ export default async function handler(req: any, res: any) {
     ).toString().trim();
     const SN = rawSN.toUpperCase();
 
-    // 1. Browser / Admin Connection Ping Diagnostic (GET requests not from machine firmware)
+    const action = (
+      query.action ||
+      (typeof req.body === 'object' && req.body !== null && req.body?.action) ||
+      ''
+    ).toString().trim().toLowerCase();
+
+    // 0. Handle ADMS User Queuing (Push students/teachers from Cloud to Machine)
+    if (action === 'queue_users' || action === 'push_users') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      
+      let targetInstId = (
+        query.institution_id || query.institutionId || query.inst ||
+        (typeof req.body === 'object' && req.body !== null && (req.body?.institution_id || req.body?.institutionId)) ||
+        req.headers['x-institution-id'] || ''
+      )?.toString().trim();
+
+      let targetSn = (
+        SN || query.target_sn || query.targetSn ||
+        (typeof req.body === 'object' && req.body !== null && (req.body?.sn || req.body?.SN || req.body?.target_sn)) ||
+        ''
+      )?.toString().trim().toUpperCase();
+
+      let registeredDevices = await getRegisteredDevices();
+      if (!targetInstId && targetSn) {
+        let dev = registeredDevices.find(d => d.sn === targetSn);
+        if (!dev) {
+          registeredDevices = await getRegisteredDevices(true);
+          dev = registeredDevices.find(d => d.sn === targetSn);
+        }
+        if (dev) {
+          targetInstId = dev.institution_id;
+        }
+      }
+
+      if (!targetInstId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Institution ID পাওয়া যায়নি। অনুগ্রহ করে institution_id প্যারামিটার প্রদান করুন।'
+        });
+      }
+
+      if (!targetSn) {
+        const instDevs = registeredDevices.filter(d => d.institution_id === targetInstId);
+        if (instDevs.length > 0) {
+          targetSn = instDevs[0].sn;
+        }
+      }
+
+      if (!targetSn) {
+        return res.status(400).json({
+          success: false,
+          error: 'ডিভাইসের সিরিয়াল নম্বর (SN) পাওয়া যায়নি। অনুগ্রহ করে প্রথমে একটি ADMS ডিভাইস রেজিস্টার করুন।'
+        });
+      }
+
+      const commands = await generateAndQueueCommandsForDevice(targetInstId, targetSn);
+
+      // Persist pending_adms_sync_sn in institutions.config_json
+      try {
+        const { data: inst } = await supabase
+          .from('institutions')
+          .select('config_json')
+          .eq('id', targetInstId)
+          .maybeSingle();
+
+        if (inst) {
+          const cfg = (inst.config_json as any) || {};
+          await supabase
+            .from('institutions')
+            .update({
+              config_json: {
+                ...cfg,
+                pending_adms_sync_sn: targetSn.toUpperCase()
+              }
+            })
+            .eq('id', targetInstId);
+        }
+      } catch (persistErr) {
+        console.warn('[ZKteco ADMS] Failed to persist pending_adms_sync_sn in DB:', persistErr);
+      }
+
+      return res.status(200).json({
+        success: true,
+        queued: commands.length,
+        device_sn: targetSn,
+        institution_id: targetInstId,
+        message: 'সকল শিক্ষার্থীর তথ্য ক্লাউড কিউতে যুক্ত হয়েছে। মেশিনটি অনলাইনে থাকলে কয়েক সেকেন্ডের মধ্যে স্বয়ংক্রিয়ভাবে সিঙ্ক হয়ে যাবে।'
+      });
+    }
+
+    // 1. ZKTeco Machine Command Polling: GET /iclock/getrequest
+    if (method === 'GET' && urlPath.includes('/getrequest')) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+
+      if (!SN) {
+        return res.status(200).send('OK');
+      }
+
+      let commands = pendingAdmsCommands.get(SN);
+
+      if (!commands || commands.length === 0) {
+        // Fallback: check if DB has pending_adms_sync_sn for this SN
+        try {
+          let devices = await getRegisteredDevices();
+          let dev = devices.find(d => d.sn === SN);
+          if (!dev) {
+            lastDeviceFetchTime = 0;
+            devices = await getRegisteredDevices(true);
+            dev = devices.find(d => d.sn === SN);
+          }
+          if (dev && (dev.config_json?.pending_adms_sync_sn === SN || dev.config_json?.pending_adms_sync?.sn === SN)) {
+            commands = await generateAndQueueCommandsForDevice(dev.institution_id, SN);
+          }
+        } catch (rebuildErr) {
+          console.warn('[ZKteco ADMS] Error checking pending_adms_sync_sn:', rebuildErr);
+        }
+      }
+
+      if (commands && commands.length > 0) {
+        const toSend = commands.splice(0, 50);
+        if (commands.length === 0) {
+          pendingAdmsCommands.delete(SN);
+          clearPendingAdmsSyncFlag(SN);
+        }
+        console.log(`[ZKteco ADMS] Sending ${toSend.length} queued commands to machine SN "${SN}" (${commands.length} remaining)`);
+        return res.status(200).send(toSend.join('\n'));
+      }
+
+      return res.status(200).send('OK');
+    }
+
+    // 2. Machine Execution Callback: POST /iclock/devicecmd
+    if (urlPath.includes('/devicecmd')) {
+      res.setHeader('Content-Type', 'text/plain');
+      return res.status(200).send('OK');
+    }
+
+    // 3. Fast-path for ZKTeco ADMS machine heartbeats / handshakes:
+    // Biometric devices send frequent GET /iclock/cdata or /push pulses.
+    const isDeviceHeartbeat = method === 'GET' && (
+      urlPath.includes('/cdata') || 
+      urlPath.includes('/push')
+    );
+
+    if (isDeviceHeartbeat) {
+      res.setHeader('Content-Type', 'text/plain');
+      return res.status(200).send('OK');
+    }
+
+    // 4. Browser / Admin Connection Ping Diagnostic (GET requests not from machine firmware)
     if (method === 'GET') {
       try {
-        const registeredDevices = await getRegisteredDevices();
+        let registeredDevices = await getRegisteredDevices();
         const reqInstId = (
           query.institution_id || query.institutionId || query.inst ||
           req.headers['x-institution-id'] || req.headers['institution-id']
@@ -158,6 +430,15 @@ export default async function handler(req: any, res: any) {
         let matchedDevice = SN ? registeredDevices.find(d => d.sn === SN) : null;
         if (!matchedDevice && reqInstId) {
           matchedDevice = registeredDevices.find(d => d.institution_id === reqInstId);
+        }
+
+        // Force fresh DB lookup if SN provided and not found in cache:
+        if (SN && !matchedDevice) {
+          registeredDevices = await getRegisteredDevices(true);
+          matchedDevice = registeredDevices.find(d => d.sn === SN);
+          if (!matchedDevice && reqInstId) {
+            matchedDevice = registeredDevices.find(d => d.institution_id === reqInstId);
+          }
         }
 
         let instId = matchedDevice?.institution_id || '';
@@ -191,6 +472,7 @@ export default async function handler(req: any, res: any) {
 
           const bioStudents = students.filter((s: any) => Boolean(s.biometric_id || s.roll));
           const bioTeachers = teachers.filter((t: any) => Boolean(t.permissions?.biometric_id || t.biometric_id));
+          const pendingCommandsCount = (SN && pendingAdmsCommands.get(SN)?.length) || 0;
 
           return res.status(200).json({
             success: true,
@@ -200,6 +482,7 @@ export default async function handler(req: any, res: any) {
             institution_id: instId,
             biometric_students_count: bioStudents.length,
             biometric_teachers_count: bioTeachers.length,
+            pending_commands_in_queue: pendingCommandsCount,
             recent_punches_logged: recentLogs || [],
             recommendation: bioStudents.length === 0 
               ? 'সতর্কতা: কোনো শিক্ষার্থীর বায়োমেট্রিক আইডি বা রোল যুক্ত করা হয়নি।'
@@ -290,6 +573,12 @@ export default async function handler(req: any, res: any) {
         matchedDevice = registeredDevices.find(d => d.institution_id === reqInstId);
       } else if (SN) {
         matchedDevice = registeredDevices.find(d => d.sn === SN);
+      }
+
+      // If SN provided and not matched in cache, force fresh DB query:
+      if (SN && !matchedDevice) {
+        const freshDevices = await getRegisteredDevices(true);
+        matchedDevice = freshDevices.find(d => d.sn === SN);
       }
 
       if (!matchedDevice && registeredDevices.length === 1) {
