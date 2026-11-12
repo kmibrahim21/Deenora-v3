@@ -139,9 +139,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const embeddedUsersJson = JSON.stringify(userList);
     const safeInstName = institutionName.replace(/["`$\\]/g, '');
 
+    const safeEmbeddedJson = embeddedUsersJson.replace(/['`\\]/g, '');
+
     const ps1UploadScript = `
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+$embeddedUsersJson = '${safeEmbeddedJson}';
 
 function Show-MsgBox([string]$msg, [string]$title, [string]$iconType) {
     try {
@@ -225,29 +228,27 @@ Write-Host "----------------------------------------------------------------" -F
 Write-Host "[1/4] শিক্ষার্থীদের তালিকা ফেচ করা হচ্ছে..." -ForegroundColor White
 $users = @()
 try {
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+    [System.Net.ServicePointManager]::SecurityProtocol = 3072
     $apiUrl = "${serverUrl}/api/biometric-upload?institution_id=${institutionId}&format=json"
-    $webReq = [System.Net.WebRequest]::Create($apiUrl)
-    $webReq.Timeout = 10000
-    $webResp = $webReq.GetResponse()
-    $reader = New-Object System.IO.StreamReader($webResp.GetResponseStream())
-    $rawJson = $reader.ReadToEnd()
-    $reader.Close()
-    $webResp.Close()
-    
+    $wc = New-Object System.Net.WebClient
+    $wc.Encoding = [System.Text.Encoding]::UTF8
+    $rawJson = $wc.DownloadString($apiUrl)
     $parsed = ConvertFrom-Json $rawJson
     if ($parsed.users -and $parsed.users.Count -gt 0) {
-        $users = $parsed.users
+        $users = @($parsed.users)
         Write-Host ("  -> ক্লাউড সার্ভার থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
     }
 } catch {
     Write-Host "  -> ক্লাউড সংযোগে বিলম্ব। অফলাইন প্রি-প্যাকড তালিকা যাচাই করা হচ্ছে..." -ForegroundColor Yellow
 }
 
-if ($users.Count -eq 0 -and $embeddedUsersJson.Trim().Length -gt 2) {
+if ($users.Count -eq 0 -and $embeddedUsersJson -and $embeddedUsersJson.Length -gt 2) {
     try {
-        $users = ConvertFrom-Json $embeddedUsersJson
-        Write-Host ("  -> অফলাইন তালিকা থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
+        $parsedOffline = ConvertFrom-Json $embeddedUsersJson
+        if ($parsedOffline) {
+            $users = @($parsedOffline)
+            Write-Host ("  -> অফলাইন তালিকা থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
+        }
     } catch {}
 }
 
@@ -444,7 +445,7 @@ echo [*] Connecting to Deenora Cloud Server...
 echo [*] Scanning local network for ZKTeco Biometric Machine...
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls; $u = '${serverUrl}/api/pc-agent?institution_id=${institutionId}&action=get_upload_script'; try { $wc = New-Object System.Net.WebClient; $wc.Encoding = [System.Text.Encoding]::UTF8; $code = $wc.DownloadString($u); Invoke-Expression $code; } catch { Write-Host '❌ ক্লাউড সার্ভারের সাথে সংযোগে ত্রুটি: ' $_.Exception.Message -ForegroundColor Red; [void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [void][System.Windows.Forms.MessageBox]::Show('সার্ভারের সাথে সংযোগ পাওয়া যায়নি। ইন্টারনেট কানেকশন চেক করুন।', 'Deenora Error', 0, 16); }; Write-Host ''; Write-Host 'উইন্ডো বন্ধ করতে যেকোনো কি চাপুন...' -ForegroundColor Gray; [void][Console]::ReadKey();"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; $u = '${serverUrl}/api/pc-agent?institution_id=${institutionId}&action=get_upload_script'; try { $wc = New-Object System.Net.WebClient; $wc.Encoding = [System.Text.Encoding]::UTF8; $code = $wc.DownloadString($u); Invoke-Expression $code; } catch { Write-Host '❌ ক্লাউড সংযোগে ত্রুটি: ' $_.Exception.Message -ForegroundColor Red; [void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [void][System.Windows.Forms.MessageBox]::Show('সার্ভারের সাথে সংযোগ পাওয়া যায়নি। ইন্টারনেট কানেকশন চেক করুন।', 'Deenora Error', 0, 16); }; Write-Host ''; Write-Host 'উইন্ডো বন্ধ করতে যেকোনো কি চাপুন...' -ForegroundColor Gray; [void][Console]::ReadKey();"
 
 exit /b 0
 `;

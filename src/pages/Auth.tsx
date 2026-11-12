@@ -402,8 +402,8 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     } catch (err: any) {
       console.error('Parent login error:', err);
       const msg = err.message || '';
-      if (msg.includes('Student not found') || msg.includes('ভুল ফোন নম্বর') || msg.includes('সঠিক তথ্য')) {
-        setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর / রোল নম্বর' : 'Invalid phone number or registration / roll number');
+      if (msg.includes('Student not found') || msg.includes('কোনো শিক্ষার্থী পাওয়া যায়নি') || msg.includes('ভুল ফোন নম্বর') || msg.includes('সঠিক তথ্য')) {
+        setError(msg || (lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর / রোল নম্বর' : 'Invalid phone number or registration / roll number'));
       } else if (msg.includes('প্যারেন্ট পোর্টাল বন্ধ') || msg.includes('ইন-অ্যাক্টিভ') || msg.includes('অ্যাক্সেস বন্ধ')) {
         setError(msg);
       } else if (msg.includes('JSON object') || msg.includes('multiple (or no) rows')) {
