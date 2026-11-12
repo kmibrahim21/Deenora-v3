@@ -8,28 +8,64 @@ const supabase = getSupabaseAdmin();
 // Common Bengali/Islamic Name Transliteration for ZKTeco LCD
 const BN_TO_EN_NAME_MAP: Record<string, string> = {
   'মোঃ': 'MD.', 'মো:': 'MD.', 'মুহাম্মদ': 'MD.', 'মোহাম্মদ': 'MD.',
+  'মোসাঃ': 'MST.', 'মোসা:': 'MST.', 'মোসাম্মৎ': 'MST.',
   'আব্দুল্লাহ': 'ABDULLAH', 'আবদুল্লাহ': 'ABDULLAH', 'আব্দুর': 'ABDUR', 'রহমান': 'RAHMAN', 'রহিম': 'RAHIM',
   'করিম': 'KARIM', 'হাসান': 'HASAN', 'হোসাইন': 'HOSSAIN', 'হুসাইন': 'HOSSAIN',
-  'আলী': 'ALI', 'আহমেদ': 'AHMED', 'মাহমুদ': 'MAHMUD', 'ইব্রাহিম': 'IBRAHIM',
+  'আলী': 'ALI', 'আলি': 'ALI', 'আহমেদ': 'AHMED', 'মাহমুদ': 'MAHMUD', 'ইব্রাহিম': 'IBRAHIM',
   'খলিল': 'KHALIL', 'ইসমাইল': 'ISMAIL', 'ইউসুফ': 'YOUSUF', 'ইউনুস': 'YUNUS',
-  'ফারুক': 'FARUK', 'ওমর': 'OMAR', 'উসমান': 'USMAN', 'আবু': 'ABU', 'বকর': 'BAKR',
+  'ফারুক': 'FARUK', 'ওমর': 'OMAR', 'উমর': 'UMAR', 'উসমান': 'USMAN', 'আবু': 'ABU', 'বকর': 'BAKR',
   'শাকিল': 'SHAKIL', 'নাঈম': 'NAEEM', 'তানভীর': 'TANVIR', 'সাইফুল': 'SAIFUL',
   'ইসলাম': 'ISLAM', 'হোসেন': 'HOSSAIN', 'খান': 'KHAN', 'শেখ': 'SHEIKH',
   'মারুফ': 'MARUF', 'রাব্বি': 'RABBI', 'ফাহিম': 'FAHIM', 'আলম': 'ALAM',
-  'জান্নাত': 'JANNAT', 'ফাতেমা': 'FATEMA', 'আয়েশা': 'AYESHA', 'খাদিজা': 'KHADIJA'
+  'জান্নাত': 'JANNAT', 'ফাতেমা': 'FATEMA', 'আয়েশা': 'AYESHA', 'খাদিজা': 'KHADIJA',
+  'সুমাইয়া': 'SUMAIYA', 'মারিয়াম': 'MARIYAM', 'আক্তার': 'AKTER', 'খাতুন': 'KHATUN'
+};
+
+const BN_CHAR_MAP: Record<string, string> = {
+  'অ': 'O', 'আ': 'A', 'ই': 'I', 'ঈ': 'I', 'উ': 'U', 'ঊ': 'U', 'ঋ': 'RI',
+  'এ': 'E', 'ঐ': 'OI', 'ও': 'O', 'ঔ': 'OU',
+  'া': 'A', 'ি': 'I', 'ী': 'I', 'ু': 'U', 'ূ': 'U', 'ৃ': 'RI',
+  'ে': 'E', 'ৈ': 'OI', 'ো': 'O', 'ৌ': 'OU',
+  'ক': 'K', 'খ': 'KH', 'গ': 'G', 'ঘ': 'GH', 'ঙ': 'NG',
+  'চ': 'CH', 'ছ': 'CH', 'জ': 'J', 'ঝ': 'JH', 'ঞ': 'N',
+  'ট': 'T', 'ঠ': 'TH', 'ড': 'D', 'ঢ': 'DH', 'ণ': 'N',
+  'ত': 'T', 'থ': 'TH', 'দ': 'D', 'ধ': 'DH', 'ন': 'N',
+  'প': 'P', 'ফ': 'F', 'ব': 'B', 'ভ': 'BH', 'ম': 'M',
+  'য': 'Z', 'র': 'R', 'ল': 'L', 'শ': 'SH', 'ষ': 'SH', 'স': 'S', 'হ': 'H',
+  'ড়': 'R', 'ঢ়': 'RH', 'য়': 'Y', 'ৎ': 'T', 'ং': 'NG', 'ঃ': '', 'ঁ': ''
 };
 
 function transliterateBnToEn(text?: string | null): string {
   if (!text || typeof text !== 'string') return 'STUDENT';
-  let clean = text.trim();
-  if (!clean) return 'STUDENT';
+  const trimmed = text.trim();
+  if (!trimmed) return 'STUDENT';
 
-  for (const [bn, en] of Object.entries(BN_TO_EN_NAME_MAP)) {
-    clean = clean.split(bn).join(en);
+  if (/^[A-Za-z0-9\s._-]+$/.test(trimmed)) {
+    return trimmed.toUpperCase().replace(/\s+/g, ' ').slice(0, 23);
   }
 
-  clean = clean.replace(/[^A-Za-z0-9\s._-]/g, '').replace(/\s+/g, ' ').trim();
-  return clean ? clean.toUpperCase() : 'STUDENT';
+  const words = trimmed.split(/[\s._-]+/).filter(Boolean);
+  const convertedWords: string[] = [];
+
+  for (const word of words) {
+    if (BN_TO_EN_NAME_MAP[word]) {
+      convertedWords.push(BN_TO_EN_NAME_MAP[word]);
+      continue;
+    }
+    let res = '';
+    for (let i = 0; i < word.length; i++) {
+      const ch = word[i];
+      if (BN_CHAR_MAP[ch] !== undefined) {
+        res += BN_CHAR_MAP[ch];
+      } else if (/[A-Za-z0-9]/.test(ch)) {
+        res += ch.toUpperCase();
+      }
+    }
+    if (res) convertedWords.push(res);
+  }
+
+  const clean = convertedWords.join(' ').replace(/[^A-Za-z0-9\s._-]/g, '').replace(/\s+/g, ' ').trim();
+  return (clean ? clean.toUpperCase() : 'STUDENT').slice(0, 23);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -51,7 +87,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const protocol = req.headers['x-forwarded-proto'] === 'https' || req.headers.referer?.startsWith('https') ? 'https' : 'http';
   const serverUrl = `${protocol}://${serverHost}`;
 
-  // Fetch institution name & users (students + teachers)
   let institutionName = 'Deenora Madrasah';
   let userList: Array<{ uid: number; user_id: string; name: string; role: string }> = [];
 
@@ -76,14 +111,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('institution_id', institutionId)
         .order('roll', { ascending: true });
 
+      // ZKTeco K40 internal slot uid MUST be 1..3000 (16-bit safe).
+      // Actual student roll / 6-digit ID goes into user_id (PIN2).
       const allocatedUids = new Set<number>();
       let autoUid = 1;
-      const allocateUid = (desired?: number): number => {
-        if (desired && desired > 0 && !allocatedUids.has(desired)) {
-          allocatedUids.add(desired);
-          return desired;
-        }
-        while (allocatedUids.has(autoUid)) {
+      const allocateUid = (): number => {
+        while (allocatedUids.has(autoUid) && autoUid < 65000) {
           autoUid++;
         }
         allocatedUids.add(autoUid);
@@ -91,9 +124,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       (students || []).forEach((st: any, idx: number) => {
+        if (st.is_active === false) return;
         const bioId = (st.biometric_id || st.roll || String(idx + 1)).toString().trim();
-        const numBioId = parseInt(bioId, 10);
-        const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
+        const uid = allocateUid();
         const rawName = st.name_en || st.student_name || 'STUDENT';
         const cleanName = transliterateBnToEn(rawName).substring(0, 23);
 
@@ -105,18 +138,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       });
 
-      // Teachers with biometric id
       const { data: teachers } = await supabase
         .from('teachers')
-        .select('id, teacher_name, name, biometric_id, permissions')
+        .select('id, teacher_name, name, biometric_id, permissions, is_active')
         .eq('institution_id', institutionId);
 
       (teachers || []).forEach((t: any) => {
+        if (t.is_active === false) return;
         const perms = t.permissions || {};
         const bioId = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
         if (bioId) {
-          const numBioId = parseInt(bioId, 10);
-          const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
+          const uid = allocateUid();
           const rawName = t.name || t.teacher_name || 'TEACHER';
           const cleanName = transliterateBnToEn(rawName).substring(0, 23);
           userList.push({
@@ -133,18 +165,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // =========================================================================
-  // 0a. Dynamic PowerShell Script for Student Uploader (Pure UTF-8 text)
+  // 0a. Dynamic PowerShell Script for Student Uploader
+  //     100% Pure 7-bit ASCII Source (All Bengali strings Base64-encoded so
+  //     Windows PowerShell 5.1 never hits the 0x93 smart-quote parser bug!)
   // =========================================================================
   if (action === 'get_upload_script') {
-    const embeddedUsersJson = JSON.stringify(userList);
-    const safeInstName = institutionName.replace(/["`$\\]/g, '');
+    const b64 = (s: string) => Buffer.from(s, 'utf-8').toString('base64');
+    const instNameB64 = b64(institutionName);
+    const embeddedUsersB64 = b64(JSON.stringify(userList));
 
-    const safeEmbeddedJson = embeddedUsersJson.replace(/['`\\]/g, '');
+    // Bengali UI Messages encoded as Base64 for 100% immunity against encoding corruption
+    const msgFetchingB64 = b64('[১/৪] সার্ভার থেকে শিক্ষার্থীদের তালিকা লোড করা হচ্ছে...');
+    const msgCloudLoadedB64 = b64('  -> ক্লাউড সার্ভার থেকে শিক্ষার্থীদের তালিকা লোড হয়েছে: ');
+    const msgOfflineLoadedB64 = b64('  -> প্রি-প্যাকড তালিকা থেকে শিক্ষার্থীদের তথ্য লোড হয়েছে: ');
+    const msgNoStudentsB64 = b64('কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি। অনুগ্রহ করে নিশ্চিত করুন প্রতিষ্ঠানে শিক্ষার্থী যুক্ত আছে।');
+    const msgScanningB64 = b64('[২/৪] লোকাল নেটওয়ার্কে ZKTeco হাজিরা মেশিন স্ক্যান করা হচ্ছে...');
+    const msgTestingIpB64 = b64('  -> আইপি পরীক্ষা করা হচ্ছে: ');
+    const msgConnectedB64 = b64('সংযুক্ত! [OK]');
+    const msgFailedShortB64 = b64('পাওয়া যায়নি');
+    const msgNoMachineErrB64 = b64('হাজিরা মেশিনের সাথে সংযোগ পাওয়া যায়নি! অনুগ্রহ করে নিশ্চিত করুন মেশিনটি চালু আছে এবং রাউটারের সাথে ল্যান (LAN) ক্যাবলে যুক্ত আছে।');
+    const msgUploadingStartB64 = b64('[৩/৪] ZKTeco মেশিনে শিক্ষার্থীদের নাম ও রোল আপলোড শুরু হচ্ছে...');
+    const msgRefreshingB64 = b64('[৪/৪] মেশিনের ইন্টারনাল মেমোরি রিফ্রেশ ও সেভ করা হচ্ছে...');
+    const msgDoneTitleB64 = b64('Deenora ZKTeco Uploader - সফল');
+    const msgDonePopupB64 = b64('সফলভাবে ZKTeco হাজিরা মেশিনে আপলোড সম্পন্ন হয়েছে! এখন শিক্ষার্থীরা মেশিনে ফিঙ্গারপ্রিন্ট বা কার্ড পাঞ্চ করতে পারবে। মোট আপলোড: ');
+    const msgPressEnterB64 = b64('উইন্ডো বন্ধ করতে Enter চাপুন...');
 
-    const ps1UploadScript = `
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    const ps1UploadScript = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
-$embeddedUsersJson = '${safeEmbeddedJson}';
+
+function Decode-B64([string]$b) {
+    return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b))
+}
+
+$instName = Decode-B64 "${instNameB64}"
+$embeddedUsersJson = Decode-B64 "${embeddedUsersB64}"
+
+$msgFetching = Decode-B64 "${msgFetchingB64}"
+$msgCloudLoaded = Decode-B64 "${msgCloudLoadedB64}"
+$msgOfflineLoaded = Decode-B64 "${msgOfflineLoadedB64}"
+$msgNoStudents = Decode-B64 "${msgNoStudentsB64}"
+$msgScanning = Decode-B64 "${msgScanningB64}"
+$msgTestingIp = Decode-B64 "${msgTestingIpB64}"
+$msgConnected = Decode-B64 "${msgConnectedB64}"
+$msgFailedShort = Decode-B64 "${msgFailedShortB64}"
+$msgNoMachineErr = Decode-B64 "${msgNoMachineErrB64}"
+$msgUploadingStart = Decode-B64 "${msgUploadingStartB64}"
+$msgRefreshing = Decode-B64 "${msgRefreshingB64}"
+$msgDoneTitle = Decode-B64 "${msgDoneTitleB64}"
+$msgDonePopup = Decode-B64 "${msgDonePopupB64}"
+$msgPressEnter = Decode-B64 "${msgPressEnterB64}"
 
 function Show-MsgBox([string]$msg, [string]$title, [string]$iconType) {
     try {
@@ -154,7 +223,7 @@ function Show-MsgBox([string]$msg, [string]$title, [string]$iconType) {
         } elseif ($iconType -eq "Warning") {
             $icon = [System.Windows.Forms.MessageBoxIcon]::Warning
         }
-        [System.Windows.Forms.MessageBox]::Show($msg, $title, [System.Windows.Forms.MessageBoxButtons]::OK, $icon)
+        [void][System.Windows.Forms.MessageBox]::Show($msg, $title, [System.Windows.Forms.MessageBoxButtons]::OK, $icon)
     } catch {
         Write-Host ($title + ": " + $msg)
     }
@@ -165,50 +234,77 @@ function Calculate-ZKChecksum([byte[]]$buf) {
     $len = $buf.Length
     $i = 0
     while ($len -gt 1) {
-        $chk += [uint32]($buf[$i] -bor ($buf[$i+1] -shl 8))
+        $word = [uint32]([int]$buf[$i] -bor ([int]$buf[$i+1] -shl 8))
+        $chk += $word
         $i += 2
         $len -= 2
     }
     if ($len -eq 1) {
         $chk += [uint32]$buf[$i]
     }
-    $chk = ($chk -shr 16) + ($chk -band 0xFFFF)
-    $chk = $chk + ($chk -shr 16)
-    $inverted = -bnot ($chk -band 0xFFFF)
-    return [uint16]($inverted -band 0xFFFF)
+    while (($chk -shr 16) -gt 0) {
+        $chk = ($chk -band 0xFFFF) + ($chk -shr 16)
+    }
+    return [uint16]((-bnot $chk) -band 0xFFFF)
+}
+
+function Make-ZKCommKey([uint32]$key, [uint16]$sessionId) {
+    [uint32]$k = 0
+    for ($i = 0; $i -lt 32; $i++) {
+        if (($key -band ([uint32]1 -shl $i)) -ne 0) {
+            $k = (($k -shl 1) -bor 1) -band 0xFFFFFFFF
+        } else {
+            $k = ($k -shl 1) -band 0xFFFFFFFF
+        }
+    }
+    $k = ($k + [uint32]$sessionId) -band 0xFFFFFFFF
+    $b = [System.BitConverter]::GetBytes([uint32]$k)
+    $b[0] = [byte]($b[0] -bxor 0x5A)
+    $b[1] = [byte]($b[1] -bxor 0x4B)
+    $b[2] = [byte]($b[2] -bxor 0x53)
+    $b[3] = [byte]($b[3] -bxor 0x4F)
+    $t0 = $b[0]; $t1 = $b[1]
+    $b[0] = $b[2]; $b[1] = $b[3]
+    $b[2] = $t0; $b[3] = $t1
+    [byte]$ticks = 50
+    $b[0] = [byte]($b[0] -bxor $ticks)
+    $b[1] = [byte]($b[1] -bxor $ticks)
+    $b[2] = $ticks
+    $b[3] = [byte]($b[3] -bxor $ticks)
+    return $b
 }
 
 function Build-ZKPacket([uint16]$cmd, [uint16]$session, [uint16]$reply, [byte[]]$payload) {
     $pLen = if ($payload) { $payload.Length } else { 0 }
     $full = New-Object byte[] (8 + $pLen)
-    $full[0] = [byte]($cmd -band 0xFF)
-    $full[1] = [byte](($cmd -shr 8) -band 0xFF)
-    $full[2] = 0
-    $full[3] = 0
-    $full[4] = [byte]($session -band 0xFF)
-    $full[5] = [byte](($session -shr 8) -band 0xFF)
-    $full[6] = [byte]($reply -band 0xFF)
-    $full[7] = [byte](($reply -shr 8) -band 0xFF)
+    $cmdB = [System.BitConverter]::GetBytes([uint16]$cmd)
+    $sesB = [System.BitConverter]::GetBytes([uint16]$session)
+    $repB = [System.BitConverter]::GetBytes([uint16]$reply)
+    $full[0] = $cmdB[0]; $full[1] = $cmdB[1]
+    $full[2] = 0;        $full[3] = 0
+    $full[4] = $sesB[0]; $full[5] = $sesB[1]
+    $full[6] = $repB[0]; $full[7] = $repB[1]
     if ($pLen -gt 0) {
         [System.Buffer]::BlockCopy($payload, 0, $full, 8, $pLen)
     }
     $chk = Calculate-ZKChecksum $full
-    $full[2] = [byte]($chk -band 0xFF)
-    $full[3] = [byte](($chk -shr 8) -band 0xFF)
+    $chkB = [System.BitConverter]::GetBytes([uint16]$chk)
+    $full[2] = $chkB[0]; $full[3] = $chkB[1]
     return $full
 }
 
 function Build-UserPayload([uint16]$uid, [string]$name, [string]$userId) {
     $bytes = New-Object byte[] 72
-    $bytes[0] = [byte]($uid -band 0xFF)
-    $bytes[1] = [byte](($uid -shr 8) -band 0xFF)
+    $uidB = [System.BitConverter]::GetBytes([uint16]$uid)
+    $bytes[0] = $uidB[0]
+    $bytes[1] = $uidB[1]
     $bytes[2] = 0
     $cleanName = ($name -replace '[^A-Za-z0-9\\s._-]', '').Trim().ToUpper()
     if ([string]::IsNullOrWhiteSpace($cleanName)) { $cleanName = "STUDENT" }
     $nameBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanName)
     $maxName = [Math]::Min($nameBytes.Length, 24)
     [System.Buffer]::BlockCopy($nameBytes, 0, $bytes, 11, $maxName)
-    $bytes[39] = 1
+    $bytes[40] = 0x31
     $cleanId = ($userId -replace '[^A-Za-z0-9._-]', '').Trim()
     if ([string]::IsNullOrWhiteSpace($cleanId)) { $cleanId = "" + $uid }
     $idBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanId)
@@ -220,12 +316,11 @@ function Build-UserPayload([uint16]$uid, [string]$name, [string]$userId) {
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "   DEENORA ZKTECO K40/K14 STUDENT UPLOADER (DEPENDENCY-FREE)    " -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "Institution : ${safeInstName}" -ForegroundColor Yellow
+Write-Host ("Institution : " + $instName) -ForegroundColor Yellow
 Write-Host "Server URL  : ${serverUrl}" -ForegroundColor Gray
 Write-Host "----------------------------------------------------------------" -ForegroundColor Gray
 
-# Step 1: Automatically fetch active students
-Write-Host "[1/4] শিক্ষার্থীদের তালিকা ফেচ করা হচ্ছে..." -ForegroundColor White
+Write-Host $msgFetching -ForegroundColor White
 $users = @()
 try {
     [System.Net.ServicePointManager]::SecurityProtocol = 3072
@@ -236,36 +331,48 @@ try {
     $parsed = ConvertFrom-Json $rawJson
     if ($parsed.users -and $parsed.users.Count -gt 0) {
         $users = @($parsed.users)
-        Write-Host ("  -> ক্লাউড সার্ভার থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
+        Write-Host ($msgCloudLoaded + $users.Count) -ForegroundColor Green
     }
-} catch {
-    Write-Host "  -> ক্লাউড সংযোগে বিলম্ব। অফলাইন প্রি-প্যাকড তালিকা যাচাই করা হচ্ছে..." -ForegroundColor Yellow
-}
+} catch {}
 
 if ($users.Count -eq 0 -and $embeddedUsersJson -and $embeddedUsersJson.Length -gt 2) {
     try {
         $parsedOffline = ConvertFrom-Json $embeddedUsersJson
         if ($parsedOffline) {
             $users = @($parsedOffline)
-            Write-Host ("  -> অফলাইন তালিকা থেকে " + $users.Count + " জন শিক্ষার্থীর তথ্য লোড হয়েছে।") -ForegroundColor Green
+            Write-Host ($msgOfflineLoaded + $users.Count) -ForegroundColor Green
         }
     } catch {}
 }
 
 if ($users.Count -eq 0) {
-    Write-Host "❌ কোনো শিক্ষার্থী পাওয়া যায়নি।" -ForegroundColor Red
-    Show-MsgBox "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি। অনুগ্রহ করে নিশ্চিত করুন প্রতিষ্ঠানে শিক্ষার্থী যুক্ত আছে।" "Deenora Uploader" "Warning"
-    Read-Host "উইন্ডো বন্ধ করতে Enter চাপুন..."
-    exit 1
+    Write-Host $msgNoStudents -ForegroundColor Red
+    Show-MsgBox $msgNoStudents "Deenora Uploader" "Warning"
+    Read-Host $msgPressEnter
+    return
 }
 
-Write-Host ("সর্বমোট শিক্ষার্থী: " + $users.Count + " জন") -ForegroundColor Cyan
-
-# Step 2: Auto IP Subnet Scan
 Write-Host ""
-Write-Host "[2/4] লোকাল নেটওয়ার্কে ZKTeco মেশিন স্ক্যান করা হচ্ছে..." -ForegroundColor White
+Write-Host $msgScanning -ForegroundColor White
 
-$candidateIps = [System.Collections.Generic.List[string]]::new()
+$candidateIps = New-Object System.Collections.Generic.List[string]
+
+# 1. Auto-detect ZKTeco MAC address (00-17-61) from Windows ARP table first!
+try {
+    $arpLines = arp -a
+    foreach ($line in $arpLines) {
+        if ($line -match "(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+([0-9a-fA-F-]{17})") {
+            $arpIp = $Matches[1]
+            $arpMac = $Matches[2].ToLower()
+            if ($arpMac.StartsWith("00-17-61")) {
+                if (-not $candidateIps.Contains($arpIp)) {
+                    $candidateIps.Add($arpIp)
+                }
+            }
+        }
+    }
+} catch {}
+
 $defaultIp = "${deviceIp}"
 if ($defaultIp -and -not $candidateIps.Contains($defaultIp)) { $candidateIps.Add($defaultIp) }
 $presetIps = @("192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202", "192.168.0.100", "192.168.1.100")
@@ -280,7 +387,7 @@ try {
             foreach ($ipInfo in $nic.GetIPProperties().UnicastAddresses) {
                 if ($ipInfo.Address.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork) {
                     $ipStr = $ipInfo.Address.ToString()
-                    if (-not $ipStr.StartsWith("127.")) {
+                    if (-not $ipStr.StartsWith("127.") -and -not $ipStr.StartsWith("169.254.")) {
                         $parts = $ipStr.Split('.')
                         if ($parts.Length -eq 4) {
                             $sub = "" + $parts[0] + "." + $parts[1] + "." + $parts[2]
@@ -300,14 +407,14 @@ try {
 
 $port = 4370
 $activeIp = $null
-$activeSession = 0
-$activeReply = 0
+$activeSession = [uint16]0
+$activeReply = [uint16]0
 $udpClient = New-Object System.Net.Sockets.UdpClient
-$udpClient.Client.ReceiveTimeout = 1200
-$udpClient.Client.SendTimeout = 1200
+$udpClient.Client.ReceiveTimeout = 1500
+$udpClient.Client.SendTimeout = 1500
 
 foreach ($tip in $candidateIps) {
-    Write-Host ("  -> আইপি টেস্ট: " + $tip + ":4370 ... ") -NoNewline -ForegroundColor Gray
+    Write-Host ($msgTestingIp + $tip + ":4370 ... ") -NoNewline -ForegroundColor Gray
     try {
         $targetEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($tip), $port)
         # CMD_CONNECT = 1000
@@ -316,111 +423,113 @@ foreach ($tip in $candidateIps) {
         $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
         $recv = $udpClient.Receive([ref]$remoteEp)
         if ($recv -and $recv.Length -ge 8) {
-            $respCode = [uint16]($recv[0] -bor ($recv[1] -shl 8))
-            $respSession = [uint16]($recv[4] -bor ($recv[5] -shl 8))
-            $respReply = [uint16]($recv[6] -bor ($recv[7] -shl 8))
+            $respCode = [System.BitConverter]::ToUInt16($recv, 0)
+            $respSession = [System.BitConverter]::ToUInt16($recv, 4)
+            $respReply = [System.BitConverter]::ToUInt16($recv, 6)
+
+            # Handle CMD_ACK_UNAUTH (2005) by sending CMD_AUTH (1102)
+            if ($respCode -eq 2005) {
+                $authKey = Make-ZKCommKey 0 $respSession
+                $nextReply = [uint16](([int]$respReply + 1) -band 0xFFFF)
+                $authPkt = Build-ZKPacket 1102 $respSession $nextReply $authKey
+                $udpClient.Send($authPkt, $authPkt.Length, $targetEp) | Out-Null
+                $recvAuth = $udpClient.Receive([ref]$remoteEp)
+                if ($recvAuth -and $recvAuth.Length -ge 8) {
+                    $respCode = [System.BitConverter]::ToUInt16($recvAuth, 0)
+                    $respReply = [System.BitConverter]::ToUInt16($recvAuth, 6)
+                }
+            }
+
             if ($respCode -eq 2000 -or $respCode -eq 1000) {
-                Write-Host "সংযুক্ত! [OK]" -ForegroundColor Green
+                Write-Host $msgConnected -ForegroundColor Green
                 $activeIp = $tip
                 $activeSession = $respSession
-                $activeReply = [uint16](($respReply + 1) -band 0xFFFF)
+                $activeReply = [uint16](([int]$respReply + 1) -band 0xFFFF)
                 break
             }
         }
-        Write-Host "না" -ForegroundColor DarkGray
+        Write-Host $msgFailedShort -ForegroundColor DarkGray
     } catch {
-        Write-Host "না" -ForegroundColor DarkGray
+        Write-Host $msgFailedShort -ForegroundColor DarkGray
     }
 }
 
-# Step 5: Error Handling if machine cannot be reached
 if (-not $activeIp) {
     Write-Host ""
-    Write-Host "❌ কোনো ZKTeco মেশিনের সাথে সংযোগ পাওয়া যায়নি!" -ForegroundColor Red
-    Write-Host "পরীক্ষা করা আইপিসমূহ:" -ForegroundColor DarkGray
-    foreach ($cand in $candidateIps) {
-        Write-Host ("  - " + $cand + ":4370") -ForegroundColor DarkGray
-    }
-    Write-Host ""
-    Write-Host "অনুগ্রহ করে নিশ্চিত করুন:" -ForegroundColor Yellow
-    Write-Host "  ১. ZKTeco মেশিনটি পাওয়ার অন (চালু) আছে।" -ForegroundColor Yellow
-    Write-Host "  ২. মেশিনটি নেটওয়ার্ক ক্যাবল দিয়ে রাউটারের সাথে যুক্ত আছে।" -ForegroundColor Yellow
-    Write-Host "  ৩. এই কম্পিউটারটি একই রাউটার নেটওয়ার্কে যুক্ত আছে।" -ForegroundColor Yellow
-    
-    Show-MsgBox "❌ হাজিরা মেশিনের সাথে সংযোগ পাওয়া যায়নি! অনুগ্রহ করে নিশ্চিত করুন মেশিনটি রাউটারের সাথে নেটওয়ার্ক ক্যাবলে যুক্ত আছে এবং চালু আছে।" "Deenora ZKTeco Uploader" "Error"
-    Read-Host "উইন্ডো বন্ধ করতে Enter চাপুন..."
-    exit 1
+    Write-Host $msgNoMachineErr -ForegroundColor Red
+    Show-MsgBox $msgNoMachineErr "Deenora ZKTeco Uploader" "Error"
+    Read-Host $msgPressEnter
+    return
 }
 
-# Step 3: Push to Machine
 Write-Host ""
-Write-Host ("[3/4] ZKTeco মেশিনে (" + $activeIp + ") শিক্ষার্থী আপলোড শুরু হচ্ছে...") -ForegroundColor White
+Write-Host ($msgUploadingStart + " (" + $activeIp + ")") -ForegroundColor White
 $machineEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($activeIp), $port)
 $udpClient.Client.ReceiveTimeout = 2500
 
 $successCount = 0
 for ($i = 0; $i -lt $users.Count; $i++) {
     $u = $users[$i]
-    $uidVal = [uint16]($u.uid)
+    # Always use safe 16-bit sequential slot index (1..3000) for uid so 6-digit IDs like 269596 never overflow UInt16
+    $uidVal = [uint16]($i + 1)
     $cleanName = [string]($u.name)
     $userBioId = [string]($u.user_id)
     if ([string]::IsNullOrWhiteSpace($userBioId)) { $userBioId = "" + $uidVal }
-    
+
     $payload = Build-UserPayload $uidVal $cleanName $userBioId
-    # CMD_SET_USERINFO = 8
+    # CMD_USER_WRQ = 8
     $pkt = Build-ZKPacket 8 $activeSession $activeReply $payload
-    $activeReply = [uint16](($activeReply + 1) -band 0xFFFF)
-    
-    for ($retry = 0; $retry -lt 2; $retry++) {
+    $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
+
+    $ackOk = $false
+    for ($retry = 0; $retry -lt 3; $retry++) {
         try {
             $udpClient.Send($pkt, $pkt.Length, $machineEp) | Out-Null
             $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
             $recv = $udpClient.Receive([ref]$remoteEp)
             if ($recv -and $recv.Length -ge 8) {
-                $code = [uint16]($recv[0] -bor ($recv[1] -shl 8))
+                $code = [System.BitConverter]::ToUInt16($recv, 0)
                 if ($code -eq 2000 -or $code -eq 8) {
+                    $ackOk = $true
                     break
                 }
             }
         } catch {
-            Start-Sleep -Milliseconds 40
+            Start-Sleep -Milliseconds 50
         }
     }
-    
-    $successCount++
-    Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [OK] রোল/আইডি: " + $userBioId.PadRight(6) + " | নাম: " + $cleanName) -ForegroundColor Green
-    Start-Sleep -Milliseconds 25
+
+    if ($ackOk) {
+        $successCount++
+        Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [OK] Slot: " + $uidVal + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor Green
+    } else {
+        Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [RETRY] Slot: " + $uidVal + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor Yellow
+    }
+    Start-Sleep -Milliseconds 20
 }
 
-# Refresh machine's internal buffer (CMD_REFRESHDATA = 1013)
 Write-Host ""
-Write-Host "[+] মেশিনের ইন্টারনাল মেমোরি রিফ্রেশ করা হচ্ছে (CMD_REFRESHDATA)..." -ForegroundColor White
+Write-Host $msgRefreshing -ForegroundColor White
 try {
     $refreshPkt = Build-ZKPacket 1013 $activeSession $activeReply $null
-    $activeReply = [uint16](($activeReply + 1) -band 0xFFFF)
+    $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
     $udpClient.Send($refreshPkt, $refreshPkt.Length, $machineEp) | Out-Null
+    $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+    $udpClient.Receive([ref]$remoteEp) | Out-Null
 } catch {}
 
-# Clean disconnect (CMD_EXIT = 1001)
 try {
     $exitPkt = Build-ZKPacket 1001 $activeSession $activeReply $null
     $udpClient.Send($exitPkt, $exitPkt.Length, $machineEp) | Out-Null
 } catch {}
 $udpClient.Close()
 
-# Step 4: Visible Windows Success Dialog
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host "      🎉 শিক্ষার্থী আপলোড সফল ও সম্পন্ন!                         " -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host ("মোট আপলোড হয়েছে : " + $successCount + " জন") -ForegroundColor Cyan
-Write-Host ("টার্গেট মেশিন IP : " + $activeIp) -ForegroundColor Cyan
+Write-Host ("   UPLOAD COMPLETED: " + $successCount + " / " + $users.Count + " STUDENTS UPLOADED TO " + $activeIp) -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
 
-$succMsg = "✅ সফল! সর্বমোট " + $successCount + " জন শিক্ষার্থীর নাম ও রোল নম্বর ZKTeco মেশিনে সফলভাবে আপলোড হয়েছে। এখন শিক্ষার্থীরা মেশিনে ফিঙ্গারপ্রিন্ট দিতে পারবে।"
-Show-MsgBox $succMsg "Deenora ZKTeco Uploader - সফল" "Info"
-
-Read-Host "কার্যক্রম শেষ হয়েছে। উইন্ডো বন্ধ করতে Enter চাপুন..."
+Show-MsgBox ($msgDonePopup + $successCount + " / " + $users.Count) $msgDoneTitle "Info"
 `;
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -429,26 +538,34 @@ Read-Host "কার্যক্রম শেষ হয়েছে। উইন্
   }
 
   // =========================================================================
-  // 0b. Lightweight Windows Batch Runner (.bat) - Under 600 characters
-  //     (ZERO CMD character limit issues, ZERO base64 overflow)
+  // 0b. Pure 7-Bit ASCII Windows Batch Runner (.bat) with CRLF (\r\n)
+  //     Zero UTF-8 CMD parser bugs, zero 1-second crashes!
   // =========================================================================
   if (action === 'upload_students' || format === 'upload' || format === 'upload_students') {
-    const uploadBat = `@echo off
-title Deenora ZKTeco Student Uploader
-chcp 65001 >nul
-cls
-
-echo ================================================================
-echo       DEENORA - ZKTECO K40/K14 STUDENT UPLOAD ENGINE
-echo ================================================================
-echo [*] Connecting to Deenora Cloud Server...
-echo [*] Scanning local network for ZKTeco Biometric Machine...
-echo.
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; $u = '${serverUrl}/api/pc-agent?institution_id=${institutionId}&action=get_upload_script'; try { $wc = New-Object System.Net.WebClient; $wc.Encoding = [System.Text.Encoding]::UTF8; $code = $wc.DownloadString($u); Invoke-Expression $code; } catch { Write-Host '❌ ক্লাউড সংযোগে ত্রুটি: ' $_.Exception.Message -ForegroundColor Red; [void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [void][System.Windows.Forms.MessageBox]::Show('সার্ভারের সাথে সংযোগ পাওয়া যায়নি। ইন্টারনেট কানেকশন চেক করুন।', 'Deenora Error', 0, 16); }; Write-Host ''; Write-Host 'উইন্ডো বন্ধ করতে যেকোনো কি চাপুন...' -ForegroundColor Gray; [void][Console]::ReadKey();"
-
-exit /b 0
-`;
+    const scriptUrl = `${serverUrl}/api/pc-agent?institution_id=${institutionId}&device_ip=${encodeURIComponent(deviceIp)}&action=get_upload_script`;
+    const uploadBatLines = [
+      '@echo off',
+      'title Deenora ZKTeco K40 Student Uploader',
+      'cls',
+      'echo ================================================================',
+      'echo       DEENORA - ZKTECO K40/K14 STUDENT UPLOAD ENGINE',
+      'echo ================================================================',
+      'echo [*] Connecting to Deenora Cloud Server...',
+      'set "PS_FILE=%TEMP%\\deenora_upload_students.ps1"',
+      'del /f /q "%PS_FILE%" >nul 2>&1',
+      `curl.exe -sSL "${scriptUrl}" -o "%PS_FILE%"`,
+      'if not exist "%PS_FILE%" (',
+      `  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; (New-Object System.Net.WebClient).DownloadFile('${scriptUrl}', '%PS_FILE%')"`,
+      ')',
+      'if exist "%PS_FILE%" (',
+      '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_FILE%"',
+      ') else (',
+      '  echo [!] Failed to download uploader script from server. Check internet connection.',
+      ')',
+      'echo.',
+      'pause'
+    ];
+    const uploadBat = uploadBatLines.join('\r\n') + '\r\n';
 
     res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="Deenora_Upload_Students.bat"');
@@ -465,22 +582,14 @@ exit /b 0
 
       userList.forEach((u, idx) => {
         const offset = idx * RECORD_SIZE;
-        const pin = u.uid & 0xffff;
+        const pin = (idx + 1) & 0xffff;
         const bioId = u.user_id.substring(0, 23);
         const cleanName = u.name.substring(0, 23);
 
-        // 1. PIN (U16, 2 bytes, little-endian)
         buffer.writeUInt16LE(pin, offset + 0);
-        // 2. Privilege (U8, 1 byte) = 0 (Normal User)
         buffer.writeUInt8(0, offset + 2);
-        // 3. Password (char[8]) = 0 (offset 3 to 10)
-        // 4. Name (char[24], offset 11 to 34)
         buffer.write(cleanName, offset + 11, cleanName.length, 'ascii');
-        // 5. Card (U8[4], offset 35 to 38) = 0
-        // 6. Group (U8, offset 39) = 1 (Default Group)
-        buffer.writeUInt8(1, offset + 39);
-        // 7. TimeZones (U16[4], offset 40 to 47) = 0
-        // 8. PIN2 (char[24], offset 48 to 71) = Alphanumeric user_id/biometric_id
+        buffer.writeUInt8(0x31, offset + 40);
         buffer.write(bioId, offset + 48, bioId.length, 'ascii');
       });
 
@@ -494,7 +603,6 @@ exit /b 0
 
   // =========================================================================
   // 2. Full Standalone Python Tkinter Desktop GUI Application (.pyw)
-  //    WITH AUTOMATIC UPLOAD ON APPLICATION LAUNCH & DUAL-SUBNET IP SCANNING
   // =========================================================================
   const embeddedUsersJson = JSON.stringify(userList);
 
@@ -519,7 +627,12 @@ def ensure_package(pkg, mod=None):
         __import__(mod)
     except ImportError:
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--quiet"], check=True)
+            py_exe = sys.executable
+            if py_exe.lower().endswith("pythonw.exe"):
+                candidate = py_exe[:-5] + ".exe"
+                if os.path.exists(candidate):
+                    py_exe = candidate
+            subprocess.run([py_exe, "-m", "pip", "install", pkg, "--quiet"], check=True)
             __import__(mod)
         except Exception:
             pass
@@ -541,6 +654,7 @@ EMBEDDED_USERS = ${embeddedUsersJson}
 
 BN_TO_EN_MAP = {
     'মোঃ': 'MD.', 'মো:': 'MD.', 'মুহাম্মদ': 'MD.', 'মোহাম্মদ': 'MD.',
+    'মোসাঃ': 'MST.', 'মোসা:': 'MST.', 'মোসাম্মৎ': 'MST.',
     'আব্দুল্লাহ': 'ABDULLAH', 'আবদুল্লাহ': 'ABDULLAH', 'আব্দুর': 'ABDUR', 'রহমান': 'RAHMAN', 'রহিম': 'RAHIM',
     'করিম': 'KARIM', 'হাসান': 'HASAN', 'হোসাইন': 'HOSSAIN', 'হুসাইন': 'HOSSAIN',
     'আলী': 'ALI', 'আহমেদ': 'AHMED', 'মাহমুদ': 'MAHMUD', 'ইব্রাহিম': 'IBRAHIM',
@@ -578,8 +692,6 @@ class DeenoraBiometricApp(tk.Tk):
 
         self.setup_ui()
         self.check_cloud_connection_async()
-
-        # 🚀 IMMEDIATE AUTO-START ON LAUNCH: Zero Manual Clicks Required!
         self.after(500, self.start_auto_sync_and_upload)
 
     def setup_ui(self):
@@ -588,14 +700,13 @@ class DeenoraBiometricApp(tk.Tk):
         style.configure(".", background="#0F172A", foreground="#F8FAFC", font=("Segoe UI", 9))
         style.configure("TProgressbar", thickness=18, troughcolor="#1E293B", background="#10B981")
 
-        # 1. Header Frame
         header = tk.Frame(self, bg="#1E1B4B", padx=20, pady=16)
         header.pack(fill=tk.X)
 
         title_box = tk.Frame(header, bg="#1E1B4B")
         title_box.pack(side=tk.LEFT, fill=tk.Y)
 
-        lbl_logo = tk.Label(title_box, text="﷽  DEENORA BIOMETRIC SYNC", font=("Segoe UI", 11, "bold"), fg="#A5B4FC", bg="#1E1B4B")
+        lbl_logo = tk.Label(title_box, text="DEENORA BIOMETRIC SYNC", font=("Segoe UI", 11, "bold"), fg="#A5B4FC", bg="#1E1B4B")
         lbl_logo.pack(anchor="w")
 
         lbl_inst = tk.Label(title_box, text=INSTITUTION_NAME, font=("Segoe UI", 15, "bold"), fg="#FFFFFF", bg="#1E1B4B")
@@ -604,7 +715,6 @@ class DeenoraBiometricApp(tk.Tk):
         lbl_sub = tk.Label(title_box, text="ZKTeco K40/K14 Biometric Machine Management Platform", font=("Segoe UI", 9), fg="#94A3B8", bg="#1E1B4B")
         lbl_sub.pack(anchor="w")
 
-        # 2. Status Pills Bar
         status_bar = tk.Frame(self, bg="#1E293B", padx=16, pady=10)
         status_bar.pack(fill=tk.X, padx=16, pady=(12, 0))
 
@@ -614,7 +724,6 @@ class DeenoraBiometricApp(tk.Tk):
         self.pill_machine = tk.Label(status_bar, text="🟡 মেশিন: স্ক্যানিং...", font=("Segoe UI", 9, "bold"), fg="#FEF08A", bg="#854D0E", padx=10, pady=4)
         self.pill_machine.pack(side=tk.LEFT)
 
-        # IP Settings inline on right
         ip_frame = tk.Frame(status_bar, bg="#1E293B")
         ip_frame.pack(side=tk.RIGHT)
 
@@ -626,7 +735,6 @@ class DeenoraBiometricApp(tk.Tk):
         btn_test = tk.Button(ip_frame, text="🔌 রি-স্ক্যান", font=("Segoe UI", 9, "bold"), bg="#4F46E5", fg="white", activebackground="#4338CA", activeforeground="white", bd=0, padx=8, pady=2, cursor="hand2", command=self.start_auto_sync_and_upload)
         btn_test.pack(side=tk.LEFT, padx=4)
 
-        # 3. Dedicated Bengali Error Banner (Initially Hidden)
         self.banner_error = tk.Frame(self, bg="#7F1D1D", padx=16, pady=10)
         lbl_err_text = tk.Label(
             self.banner_error, 
@@ -655,7 +763,6 @@ class DeenoraBiometricApp(tk.Tk):
         )
         btn_retry.pack(side=tk.RIGHT, padx=4)
 
-        # 4. Automated Upload Progress Card
         self.card_progress = tk.Frame(self, bg="#1E293B", padx=16, pady=12, highlightbackground="#334155", highlightthickness=1)
         self.card_progress.pack(fill=tk.X, padx=16, pady=10)
 
@@ -674,7 +781,6 @@ class DeenoraBiometricApp(tk.Tk):
         self.lbl_sub_progress = tk.Label(self.card_progress, text="অপেক্ষা করুন, রাউটারের 192.168.0.x এবং 192.168.1.x সাবনেট পরীক্ষা করা হচ্ছে...", font=("Segoe UI", 8), fg="#94A3B8", bg="#1E293B")
         self.lbl_sub_progress.pack(anchor="w")
 
-        # 5. Live Sync Controls Bar
         sync_bar = tk.Frame(self, bg="#0F172A", padx=16)
         sync_bar.pack(fill=tk.X, pady=(2, 6))
 
@@ -687,7 +793,6 @@ class DeenoraBiometricApp(tk.Tk):
         btn_min = tk.Button(sync_bar, text="🗕 উইন্ডো মিনিমাইজ", font=("Segoe UI", 9, "bold"), bg="#1E293B", fg="#94A3B8", activebackground="#334155", activeforeground="white", bd=0, padx=12, pady=6, cursor="hand2", command=self.iconify)
         btn_min.pack(side=tk.RIGHT)
 
-        # 6. Live Activity Log Section
         log_header = tk.Frame(self, bg="#0F172A", padx=16)
         log_header.pack(fill=tk.X, pady=(6, 2))
 
@@ -737,9 +842,6 @@ class DeenoraBiometricApp(tk.Tk):
 
         def worker():
             try:
-                # -------------------------------------------------------------
-                # ধাপ ১: Cloud Fetch (with offline fallback to embedded users)
-                # -------------------------------------------------------------
                 users = []
                 self.log("সার্ভার থেকে শিক্ষার্থীদের তথ্য ফেচ করা হচ্ছে...")
                 try:
@@ -765,26 +867,20 @@ class DeenoraBiometricApp(tk.Tk):
                 self.lbl_counter.config(text=f"মোট: {total_users} জন")
                 self.progress["value"] = 15
 
-                # -------------------------------------------------------------
-                # ধাপ ২: Smart Dual-Subnet & Candidate IP Scan
-                # -------------------------------------------------------------
                 self.lbl_sub_progress.config(text="লোকাল নেটওয়ার্কে ZKTeco K40 মেশিন খোঁজা হচ্ছে...")
                 candidate_ips = []
-                
-                # Priority 1: User typed or default IP
+
                 custom_ip = self.ent_ip.get().strip()
                 if custom_ip and custom_ip not in candidate_ips:
                     candidate_ips.append(custom_ip)
                 if DEFAULT_IP and DEFAULT_IP not in candidate_ips:
                     candidate_ips.append(DEFAULT_IP)
 
-                # Priority 2: Standard Dual-Subnet candidates (192.168.0.x and 192.168.1.x)
                 defaults = ["192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202", "192.168.0.100", "192.168.1.100"]
                 for tip in defaults:
                     if tip not in candidate_ips:
                         candidate_ips.append(tip)
 
-                # Priority 3: Local adapter subnet auto-discovery
                 try:
                     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                     s.connect(("8.8.8.8", 80))
@@ -808,14 +904,13 @@ class DeenoraBiometricApp(tk.Tk):
 
                 for tip in candidate_ips:
                     self.lbl_sub_progress.config(text=f"আইপি পরীক্ষা করা হচ্ছে: {tip}:{DEFAULT_PORT}...")
-                    # 1. Quick TCP check
                     try:
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         sock.settimeout(1.2)
                         res = sock.connect_ex((tip, DEFAULT_PORT))
                         sock.close()
                         if res == 0:
-                            zk = ZK(tip, port=DEFAULT_PORT, timeout=3, password=0, force_udp=False, ommit_ping=True)
+                            zk = ZK(tip, port=DEFAULT_PORT, timeout=4, password=0, force_udp=False, ommit_ping=True)
                             conn = zk.connect()
                             active_ip = tip
                             is_udp = False
@@ -824,9 +919,8 @@ class DeenoraBiometricApp(tk.Tk):
                     except Exception:
                         pass
 
-                    # 2. Quick UDP check
                     try:
-                        zk = ZK(tip, port=DEFAULT_PORT, timeout=3, password=0, force_udp=True, ommit_ping=True)
+                        zk = ZK(tip, port=DEFAULT_PORT, timeout=4, password=0, force_udp=True, ommit_ping=True)
                         conn = zk.connect()
                         active_ip = tip
                         is_udp = True
@@ -835,7 +929,6 @@ class DeenoraBiometricApp(tk.Tk):
                     except Exception:
                         pass
 
-                # If connection failed across all candidate IPs:
                 if not conn or not active_ip:
                     self.log("❌ মেশিনের সাথে সংযোগ করা যায়নি! ক্যাবল ও পাওয়ার নিশ্চিত করুন।")
                     self.pill_machine.config(text="🔴 মেশিন: পাওয়া যায়নি", bg="#991B1B", fg="#FECACA")
@@ -846,16 +939,12 @@ class DeenoraBiometricApp(tk.Tk):
                     self.upload_in_progress = False
                     return
 
-                # Record active IP
                 self.active_machine_ip = active_ip
                 self.active_is_udp = is_udp
                 self.ent_ip.delete(0, tk.END)
                 self.ent_ip.insert(0, active_ip)
                 self.pill_machine.config(text=f"🟢 মেশিন: সংযুক্ত ({active_ip})", bg="#065F46", fg="#A7F3D0")
 
-                # -------------------------------------------------------------
-                # ধাপ ৩: Auto Upload to Machine
-                # -------------------------------------------------------------
                 self.log(f"🚀 ZKTeco মেশিনে {total_users} জন শিক্ষার্থী স্বয়ংক্রিয়ভাবে আপলোড হচ্ছে...")
                 self.lbl_task_title.config(text=f"📥 মেশিনে শিক্ষার্থী আপলোড হচ্ছে ({active_ip})...", fg="#38BDF8")
                 
@@ -863,13 +952,14 @@ class DeenoraBiometricApp(tk.Tk):
                 for idx, u in enumerate(users, 1):
                     raw_name = u.get("name", "STUDENT")
                     clean_name = clean_student_name(raw_name)
-                    uid_val = int(u.get("uid", idx))
+                    # Always use sequential 16-bit slot index (idx) for uid so 6-digit IDs like 269596 never crash struct.pack('<H')
+                    uid_val = idx
                     user_id_val = str(u.get("user_id", uid_val))
 
                     try:
-                        conn.set_user(uid=uid_val, name=clean_name, privilege=0, password='', group_id='', user_id=user_id_val, card=0)
+                        conn.set_user(uid=uid_val, name=clean_name, privilege=0, password='', group_id='1', user_id=user_id_val, card=0)
                         success_count += 1
-                        self.log(f"[{idx}/{total_users}] [OK] রোল/আইডি: {user_id_val:<5} | নাম: {clean_name}")
+                        self.log(f"[{idx}/{total_users}] [OK] রোল/আইডি: {user_id_val:<6} | নাম: {clean_name}")
                     except Exception as u_err:
                         self.log(f"[{idx}/{total_users}] [ত্রুটি] আইডি: {user_id_val} -> {u_err}")
 
@@ -878,7 +968,6 @@ class DeenoraBiometricApp(tk.Tk):
                     self.lbl_counter.config(text=f"আপলোড হচ্ছে: {idx}/{total_users}")
                     self.lbl_sub_progress.config(text=f"রোল: {user_id_val} - {clean_name} ({pct}%)")
 
-                # Sync machine time with PC
                 try:
                     conn.set_time(datetime.now())
                 except Exception:
@@ -886,24 +975,17 @@ class DeenoraBiometricApp(tk.Tk):
 
                 conn.disconnect()
 
-                # -------------------------------------------------------------
-                # ধাপ ৪: Success Notification
-                # -------------------------------------------------------------
                 self.progress["value"] = 100
                 self.lbl_task_title.config(text="🎉 শিক্ষার্থী আপলোড সফল ও সম্পন্ন!", fg="#34D399")
                 self.lbl_counter.config(text=f"সফল: {success_count}/{total_users}")
                 self.lbl_sub_progress.config(text=f"🎉 সফল! সর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।")
                 self.log(f"🎉 সফল! সর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।")
 
-                # Non-blocking dialog info
                 try:
                     messagebox.showinfo("সফল আপলোড", f"🎉 সফল!\\n\\nসর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।\\nএখন লাইভ হাজিরা সিঙ্ক স্বয়ংক্রিয়ভাবে চালু হচ্ছে...")
                 except Exception:
                     pass
 
-                # -------------------------------------------------------------
-                # ধাপ ৫: Auto Live Sync (ব্যাকগ্রাউন্ডে অটো সিঙ্ক শুরু)
-                # -------------------------------------------------------------
                 self.log("🚀 লাইভ হাজিরা সিঙ্ক সার্ভিস ব্যাকগ্রাউন্ডে স্বয়ংক্রিয়ভাবে চালু করা হচ্ছে...")
                 self.start_sync_service()
 
@@ -987,7 +1069,6 @@ if __name__ == "__main__":
     app.mainloop()
 `;
 
-  // Return raw Python Tkinter GUI script if requested
   if (format === 'pyw' || format === 'py') {
     res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="DeenoraBiometricManager_${institutionId || 'Setup'}.pyw"`);
@@ -996,77 +1077,45 @@ if __name__ == "__main__":
 
   // =========================================================================
   // 3. Dependency-Free 1-Click Native Windows Batch/PowerShell Script (.bat)
-  //    (Works natively on ANY Windows 7/8/10/11 with zero configuration)
   // =========================================================================
   if (format === 'bat' || format === 'cmd') {
-    const batScript = `@echo off
-setlocal EnableDelayedExpansion
-title Deenora ZKTeco Biometric Sync Manager
-chcp 65001 >nul
-cls
-
-echo ===================================================================
-echo           DEENORA BIOMETRIC SYNC - ZKTECO K40/K14 MANAGER
-echo ===================================================================
-echo Institution : ${institutionName}
-echo Server URL  : ${serverUrl}
-echo Default IP  : ${deviceIp}
-echo ===================================================================
-echo.
-echo [*] Checking local environment...
-
-set SCRIPT_DIR=%LOCALAPPDATA%\\DeenoraBiometric
-if not exist "%SCRIPT_DIR%" mkdir "%SCRIPT_DIR%"
-set PY_FILE=%SCRIPT_DIR%\\DeenoraBiometricManager.pyw
-
-:: Check if python or py is available
-where pythonw >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set RUN_CMD=pythonw
-    goto EXTRACT_AND_RUN
-)
-
-where python >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set RUN_CMD=python
-    goto EXTRACT_AND_RUN
-)
-
-where py >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set RUN_CMD=py
-    goto EXTRACT_AND_RUN
-)
-
-:: If Python is not installed, download the lightweight official Python embeddable zip in 5s
-echo [!] Python was not found in PATH.
-echo [*] Setting up portable standalone runtime into %SCRIPT_DIR%...
-set PY_ZIP=%SCRIPT_DIR%\\py_embed.zip
-set PY_DIR=%SCRIPT_DIR%\\python
-
-if not exist "%PY_DIR%\\python.exe" (
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip', '%PY_ZIP%')"
-    powershell -Command "Expand-Archive -Path '%PY_ZIP%' -DestinationPath '%PY_DIR%' -Force"
-    del /f /q "%PY_ZIP%" >nul 2>&1
-)
-
-if exist "%PY_DIR%\\python.exe" (
-    set RUN_CMD="%PY_DIR%\\python.exe"
-    goto EXTRACT_AND_RUN
-)
-
-echo.
-echo [!] Could not initialize runtime automatically.
-echo Please install Python from https://www.python.org (Check "Add python.exe to PATH")
-pause
-exit /b 1
-
-:EXTRACT_AND_RUN
-echo [*] Launching Deenora Biometric GUI Application...
-powershell -Command "[System.IO.File]::WriteAllBytes('%PY_FILE%', [System.Convert]::FromBase64String('${Buffer.from(pythonGuiScript, 'utf-8').toString('base64')}'))"
-start "" %RUN_CMD% "%PY_FILE%"
-exit /b 0
-`;
+    const batLines = [
+      '@echo off',
+      'setlocal EnableDelayedExpansion',
+      'title Deenora ZKTeco Biometric Sync Manager',
+      'cls',
+      'echo ===================================================================',
+      'echo           DEENORA BIOMETRIC SYNC - ZKTECO K40/K14 MANAGER',
+      'echo ===================================================================',
+      'echo [*] Checking local environment...',
+      'set "SCRIPT_DIR=%LOCALAPPDATA%\\DeenoraBiometric"',
+      'if not exist "%SCRIPT_DIR%" mkdir "%SCRIPT_DIR%"',
+      'set "PY_FILE=%SCRIPT_DIR%\\DeenoraBiometricManager.pyw"',
+      'where pythonw >nul 2>&1',
+      'if %ERRORLEVEL% EQU 0 (',
+      '    set RUN_CMD=pythonw',
+      '    goto EXTRACT_AND_RUN',
+      ')',
+      'where python >nul 2>&1',
+      'if %ERRORLEVEL% EQU 0 (',
+      '    set RUN_CMD=python',
+      '    goto EXTRACT_AND_RUN',
+      ')',
+      'where py >nul 2>&1',
+      'if %ERRORLEVEL% EQU 0 (',
+      '    set RUN_CMD=py',
+      '    goto EXTRACT_AND_RUN',
+      ')',
+      'echo [!] Python is not installed. Please use Button 2 (Student Upload Downloader) which requires zero Python!',
+      'pause',
+      'exit /b 1',
+      ':EXTRACT_AND_RUN',
+      'echo [*] Launching Deenora Biometric GUI Application...',
+      `powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllBytes('%PY_FILE%', [System.Convert]::FromBase64String('${Buffer.from(pythonGuiScript, 'utf-8').toString('base64')}'))"`,
+      'start "" %RUN_CMD% "%PY_FILE%"',
+      'exit /b 0'
+    ];
+    const batScript = batLines.join('\r\n') + '\r\n';
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="Deenora1ClickRunner.bat"');
@@ -1095,7 +1144,6 @@ exit /b 0
     }
   }
 
-  // Fallback: If stub is missing, return the standalone GUI script
   res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="DeenoraBiometricManager.pyw"');
   return res.status(200).send(pythonGuiScript);
