@@ -3582,8 +3582,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     <div className="grid grid-cols-1 gap-3.5 pt-1">
                       {/* বাটন ১: হাজিরা ডাউনলোডার (Attendance Sync Downloader) */}
                       <a
-                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&format=exe`}
-                        download="DeenoraBiometricSetup.exe"
+                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&action=sync_attendance`}
+                        download="Deenora_Attendance_Sync.bat"
                         className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-700 via-blue-700 to-indigo-900 hover:from-indigo-800 hover:via-blue-800 hover:to-indigo-950 text-white shadow-xl shadow-indigo-600/20 active:scale-[0.99] transition-all cursor-pointer border border-indigo-400/30 overflow-hidden"
                       >
                         <div className="flex items-center gap-3.5 mb-3 sm:mb-0">

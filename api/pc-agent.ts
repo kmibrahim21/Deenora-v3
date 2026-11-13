@@ -573,6 +573,351 @@ Show-MsgBox ($msgDonePopup + $successCount + " / " + $users.Count) $msgDoneTitle
   }
 
   // =========================================================================
+  // 0c. Dynamic Pure PowerShell Script for Live Attendance Sync
+  //     100% Pure 7-bit ASCII Source - Zero Python, Zero 3rd-Party Libraries!
+  // =========================================================================
+  if (action === 'get_sync_script') {
+    const b64 = (s: string) => Buffer.from(s, 'utf-8').toString('base64');
+    const instNameB64 = b64(institutionName);
+
+    const ps1SyncScript = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[System.Net.ServicePointManager]::SecurityProtocol = 3072
+
+function Decode-B64([string]$b) {
+    return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b))
+}
+
+$institutionId = "${institutionId}"
+$instName = Decode-B64 "${instNameB64}"
+$deviceIp = "${deviceIp}"
+$serverUrl = "${serverUrl}"
+
+function Calculate-ZKChecksum([byte[]]$buf) {
+    [uint32]$chk = 0
+    $len = $buf.Length
+    $i = 0
+    while ($len -gt 1) {
+        $word = [uint32]([int]$buf[$i] -bor ([int]$buf[$i+1] -shl 8))
+        $chk += $word
+        $i += 2
+        $len -= 2
+    }
+    if ($len -eq 1) {
+        $chk += [uint32]$buf[$i]
+    }
+    while (($chk -shr 16) -gt 0) {
+        $chk = ($chk -band 0xFFFF) + ($chk -shr 16)
+    }
+    return [uint16]((-bnot $chk) -band 0xFFFF)
+}
+
+function Make-ZKCommKey([uint32]$key, [uint16]$sessionId) {
+    [uint32]$k = 0
+    for ($i = 0; $i -lt 32; $i++) {
+        if (($key -band ([uint32]1 -shl $i)) -ne 0) {
+            $k = (($k -shl 1) -bor 1) -band 0xFFFFFFFF
+        } else {
+            $k = ($k -shl 1) -band 0xFFFFFFFF
+        }
+    }
+    $k = ($k + [uint32]$sessionId) -band 0xFFFFFFFF
+    $b = [System.BitConverter]::GetBytes([uint32]$k)
+    $b[0] = [byte]($b[0] -bxor 0x5A)
+    $b[1] = [byte]($b[1] -bxor 0x4B)
+    $b[2] = [byte]($b[2] -bxor 0x53)
+    $b[3] = [byte]($b[3] -bxor 0x4F)
+    $t0 = $b[0]; $t1 = $b[1]
+    $b[0] = $b[2]; $b[1] = $b[3]
+    $b[2] = $t0; $b[3] = $t1
+    [byte]$ticks = 50
+    $b[0] = [byte]($b[0] -bxor $ticks)
+    $b[1] = [byte]($b[1] -bxor $ticks)
+    $b[2] = $ticks
+    $b[3] = [byte]($b[3] -bxor $ticks)
+    return $b
+}
+
+function Build-ZKPacket([uint16]$cmd, [uint16]$session, [uint16]$reply, [byte[]]$payload) {
+    $pLen = if ($payload) { $payload.Length } else { 0 }
+    $full = New-Object byte[] (8 + $pLen)
+    $cmdB = [System.BitConverter]::GetBytes([uint16]$cmd)
+    $sesB = [System.BitConverter]::GetBytes([uint16]$session)
+    $repB = [System.BitConverter]::GetBytes([uint16]$reply)
+    $full[0] = $cmdB[0]; $full[1] = $cmdB[1]
+    $full[2] = 0;        $full[3] = 0
+    $full[4] = $sesB[0]; $full[5] = $sesB[1]
+    $full[6] = $repB[0]; $full[7] = $repB[1]
+    if ($pLen -gt 0) {
+        [System.Buffer]::BlockCopy($payload, 0, $full, 8, $pLen)
+    }
+    $chk = Calculate-ZKChecksum $full
+    $chkB = [System.BitConverter]::GetBytes([uint16]$chk)
+    $full[2] = $chkB[0]; $full[3] = $chkB[1]
+    return $full
+}
+
+function Decode-ZKTime([uint32]$t) {
+    $second = $t % 60; $t = [Math]::Floor($t / 60)
+    $minute = $t % 60; $t = [Math]::Floor($t / 60)
+    $hour   = $t % 24; $t = [Math]::Floor($t / 24)
+    $day    = ($t % 31) + 1; $t = [Math]::Floor($t / 31)
+    $month  = ($t % 12) + 1; $t = [Math]::Floor($t / 12)
+    $year   = $t + 2000
+    return ("{0:D4}-{1:D2}-{2:D2} {3:D2}:{4:D2}:{5:D2}" -f [int]$year, [int]$month, [int]$day, [int]$hour, [int]$minute, [int]$second)
+}
+
+# Register silent background runner in Windows Startup folder so sync starts automatically on PC boot
+try {
+    $appDir = Join-Path $env:LOCALAPPDATA "DeenoraBiometric"
+    if (-not (Test-Path $appDir)) {
+        New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+    }
+    $savedPs1 = Join-Path $appDir "deenora_sync_attendance.ps1"
+    if ($MyInvocation.MyCommand.Path -and (Test-Path $MyInvocation.MyCommand.Path)) {
+        Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $savedPs1 -Force -ErrorAction SilentlyContinue
+    }
+    $startupVbs = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DeenoraAutoSync.vbs"
+    $vbsLines = @(
+        'Set WshShell = CreateObject("WScript.Shell")',
+        ('WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """"' + $savedPs1 + '""""", 0, False')
+    )
+    [System.IO.File]::WriteAllLines($startupVbs, $vbsLines, [System.Text.Encoding]::ASCII)
+} catch {}
+
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "   DEENORA ZKTECO LIVE ATTENDANCE SYNC ENGINE (PYTHON-FREE)     " -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ("Institution : " + $instName) -ForegroundColor Yellow
+Write-Host ("Server URL  : " + $serverUrl) -ForegroundColor Gray
+Write-Host "Auto-Start  : Registered in Windows Startup (DeenoraAutoSync.vbs)" -ForegroundColor Green
+Write-Host "----------------------------------------------------------------" -ForegroundColor Gray
+Write-Host "[*] Live punch monitoring active (checks every 4 seconds)..." -ForegroundColor White
+Write-Host ""
+
+$syncedKeys = New-Object System.Collections.Generic.HashSet[string]
+$port = 4370
+$lastConnectedIp = $null
+
+while ($true) {
+    $candidateIps = New-Object System.Collections.Generic.List[string]
+    if ($lastConnectedIp) { $candidateIps.Add($lastConnectedIp) }
+    if ($deviceIp -and -not $candidateIps.Contains($deviceIp)) { $candidateIps.Add($deviceIp) }
+
+    try {
+        $arpLines = arp -a
+        foreach ($line in $arpLines) {
+            if ($line -match "(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+([0-9a-fA-F-]{17})") {
+                $arpIp = $Matches[1]
+                $arpMac = $Matches[2].ToLower()
+                if ($arpMac.StartsWith("00-17-61") -and -not $candidateIps.Contains($arpIp)) {
+                    $candidateIps.Add($arpIp)
+                }
+            }
+        }
+    } catch {}
+
+    foreach ($tip in @("192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202")) {
+        if (-not $candidateIps.Contains($tip)) { $candidateIps.Add($tip) }
+    }
+
+    $activeIp = $null
+    $activeSession = [uint16]0
+    $activeReply = [uint16]0
+    $udp = New-Object System.Net.Sockets.UdpClient
+    $udp.Client.ReceiveTimeout = 1800
+    $udp.Client.SendTimeout = 1800
+
+    foreach ($tip in $candidateIps) {
+        try {
+            $ep = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($tip), $port)
+            $pkt = Build-ZKPacket 1000 0 0 $null
+            $udp.Send($pkt, $pkt.Length, $ep) | Out-Null
+            $rem = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+            $recv = $udp.Receive([ref]$rem)
+            if ($recv -and $recv.Length -ge 8) {
+                $code = [System.BitConverter]::ToUInt16($recv, 0)
+                $ses  = [System.BitConverter]::ToUInt16($recv, 4)
+                $rep  = [System.BitConverter]::ToUInt16($recv, 6)
+
+                if ($code -eq 2005) {
+                    $authKey = Make-ZKCommKey 0 $ses
+                    $nextRep = [uint16](([int]$rep + 1) -band 0xFFFF)
+                    $authPkt = Build-ZKPacket 1102 $ses $nextRep $authKey
+                    $udp.Send($authPkt, $authPkt.Length, $ep) | Out-Null
+                    $recvAuth = $udp.Receive([ref]$rem)
+                    if ($recvAuth -and $recvAuth.Length -ge 8) {
+                        $code = [System.BitConverter]::ToUInt16($recvAuth, 0)
+                        $rep  = [System.BitConverter]::ToUInt16($recvAuth, 6)
+                    }
+                }
+
+                if ($code -eq 2000 -or $code -eq 1000) {
+                    $activeIp = $tip
+                    $activeSession = $ses
+                    $activeReply = [uint16](([int]$rep + 1) -band 0xFFFF)
+                    if ($lastConnectedIp -ne $activeIp) {
+                        Write-Host ("[OK] Connected to ZKTeco " + $activeIp) -ForegroundColor Green
+                        $lastConnectedIp = $activeIp
+                    }
+                    break
+                }
+            }
+        } catch {}
+    }
+
+    if ($activeIp) {
+        try {
+            $ep = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($activeIp), $port)
+            $udp.Client.ReceiveTimeout = 2500
+
+            # CMD_ATTLOG_RRQ = 13
+            $rrqPkt = Build-ZKPacket 13 $activeSession $activeReply $null
+            $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
+            $udp.Send($rrqPkt, $rrqPkt.Length, $ep) | Out-Null
+
+            $rem = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+            $first = $udp.Receive([ref]$rem)
+            $rawStream = New-Object System.IO.MemoryStream
+
+            if ($first -and $first.Length -ge 8) {
+                $fCode = [System.BitConverter]::ToUInt16($first, 0)
+                if ($fCode -eq 2000 -and $first.Length -gt 8) {
+                    $rawStream.Write($first, 8, $first.Length - 8)
+                } elseif ($fCode -eq 1500) {
+                    # CMD_PREPARE_DATA (1500) -> Read 1501 data chunks until CMD_ACK_OK (2000)
+                    while ($true) {
+                        try {
+                            $chunk = $udp.Receive([ref]$rem)
+                            if (-not $chunk -or $chunk.Length -lt 8) { break }
+                            $cCode = [System.BitConverter]::ToUInt16($chunk, 0)
+                            if ($cCode -eq 1501 -and $chunk.Length -gt 8) {
+                                $rawStream.Write($chunk, 8, $chunk.Length - 8)
+                            } elseif ($cCode -eq 2000) {
+                                break
+                            }
+                        } catch {
+                            break
+                        }
+                    }
+                }
+            }
+
+            try {
+                $exitPkt = Build-ZKPacket 1001 $activeSession $activeReply $null
+                $udp.Send($exitPkt, $exitPkt.Length, $ep) | Out-Null
+            } catch {}
+            $udp.Close()
+
+            $raw = $rawStream.ToArray()
+            $rawStream.Dispose()
+
+            if ($raw -and $raw.Length -ge 40) {
+                $offset = if (($raw.Length - 4) % 40 -eq 0) { 4 } else { 0 }
+                $cutoffDate = (Get-Date).AddDays(-3).ToString("yyyy-MM-dd")
+                $newLogs = @()
+
+                for ($pos = $offset; ($pos + 40) -le $raw.Length; $pos += 40) {
+                    $idEnd = $pos + 2
+                    while ($idEnd -lt ($pos + 26) -and $raw[$idEnd] -ne 0) {
+                        $idEnd++
+                    }
+                    $userIdStr = ""
+                    if ($idEnd -gt ($pos + 2)) {
+                        $userIdStr = [System.Text.Encoding]::ASCII.GetString($raw, $pos + 2, $idEnd - ($pos + 2)).Trim()
+                    }
+                    if ([string]::IsNullOrWhiteSpace($userIdStr)) {
+                        $uidFallback = [System.BitConverter]::ToUInt16($raw, $pos)
+                        if ($uidFallback -gt 0) { $userIdStr = "" + $uidFallback }
+                    }
+
+                    $timeVal = [System.BitConverter]::ToUInt32($raw, $pos + 27)
+                    if ($userIdStr -and $timeVal -gt 0) {
+                        $dtStr = Decode-ZKTime $timeVal
+                        if ($dtStr.Length -ge 10 -and $dtStr.Substring(0, 10) -ge $cutoffDate) {
+                            $syncKey = $userIdStr + "_" + $dtStr
+                            if (-not $syncedKeys.Contains($syncKey)) {
+                                $newLogs += @{
+                                    userId = $userIdStr
+                                    checkTime = $dtStr
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ($newLogs.Count -gt 0) {
+                    try {
+                        $postUrl = $serverUrl + "/api/iclock?sn=PC_AGENT_" + $institutionId + "&institution_id=" + $institutionId
+                        $bodyObj = @{
+                            institution_id = $institutionId
+                            sn = ("PC_AGENT_" + $institutionId)
+                            logs = $newLogs
+                        }
+                        $jsonBody = ConvertTo-Json $bodyObj -Depth 5 -Compress
+                        $resp = Invoke-RestMethod -Uri $postUrl -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($jsonBody)) -TimeoutSec 15
+                        foreach ($item in $newLogs) {
+                            $k = $item.userId + "_" + $item.checkTime
+                            [void]$syncedKeys.Add($k)
+                            Write-Host ("[PUNCH SYNCED] ID: " + $item.userId + " | Time: " + $item.checkTime + " -> Uploaded to Deenora!") -ForegroundColor Green
+                        }
+                    } catch {
+                        Write-Host ("[!] Cloud upload retry pending: " + $_.Exception.Message) -ForegroundColor Yellow
+                    }
+                }
+            }
+        } catch {
+            try { $udp.Close() } catch {}
+        }
+    } else {
+        try { $udp.Close() } catch {}
+        Write-Host "[*] Scanning for ZKTeco machine on local network (4370/UDP)..." -ForegroundColor DarkGray
+    }
+
+    Start-Sleep -Seconds 4
+}
+`;
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline');
+    return res.status(200).send(ps1SyncScript);
+  }
+
+  // =========================================================================
+  // 0d. Pure 7-Bit ASCII Windows Batch Runner for Attendance Sync (.bat)
+  //     Zero Python, Zero Third-Party Libraries!
+  // =========================================================================
+  if (action === 'sync_attendance' || format === 'sync' || format === 'exe' || format === 'bat') {
+    const syncScriptUrl = `${serverUrl}/api/pc-agent?institution_id=${institutionId}&device_ip=${encodeURIComponent(deviceIp)}&action=get_sync_script`;
+    const syncBatLines = [
+      '@echo off',
+      'title Deenora ZKTeco Live Attendance Sync',
+      'cls',
+      'echo ================================================================',
+      'echo       DEENORA - ZKTECO K40/K14 LIVE ATTENDANCE SYNC ENGINE',
+      'echo ================================================================',
+      'echo [*] Connecting to Deenora Cloud Server...',
+      'set "PS_FILE=%TEMP%\\deenora_sync_attendance.ps1"',
+      'del /f /q "%PS_FILE%" >nul 2>&1',
+      `curl.exe -sSL "${syncScriptUrl}" -o "%PS_FILE%"`,
+      'if not exist "%PS_FILE%" (',
+      `  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; (New-Object System.Net.WebClient).DownloadFile('${syncScriptUrl}', '%PS_FILE%')"`,
+      ')',
+      'if exist "%PS_FILE%" (',
+      '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_FILE%"',
+      ') else (',
+      '  echo [!] Failed to download attendance sync script. Check internet connection.',
+      ')',
+      'echo.',
+      'pause'
+    ];
+    const syncBat = syncBatLines.join('\r\n') + '\r\n';
+
+    res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="Deenora_Attendance_Sync.bat"');
+    return res.status(200).send(syncBat);
+  }
+
+  // =========================================================================
   // 1. ZKTeco USB Pen Drive Export (user.dat 72-Byte Binary Format)
   // =========================================================================
   if (format === 'usb' || format === 'dat') {
