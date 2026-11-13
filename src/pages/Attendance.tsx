@@ -9,6 +9,7 @@ import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
+import { OfflineService } from '../services/OfflineService';
 import { SupabaseWrapper } from 'services/supabaseWrapper';
 import { SyncEngine } from 'services/syncEngine';
 import { NotificationService } from 'services/NotificationService';
@@ -196,7 +197,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
   const filteredDailyStudents = useMemo(() => {
     if (dailyFilter === 'all') return dailyAllStudents;
-    if (dailyFilter === 'present') return dailyAllStudents.filter(s => s.final_status === 'present');
+    if (dailyFilter === 'present') return dailyAllStudents.filter(s => s.final_status === 'present' || s.final_status === 'late');
     if (dailyFilter === 'absent') return dailyAllStudents.filter(s => s.final_status === 'absent');
     if (dailyFilter === 'late') return dailyAllStudents.filter(s => s.final_status === 'late');
     if (dailyFilter === 'leave') return dailyAllStudents.filter(s => s.final_status === 'leave');
@@ -629,19 +630,31 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     }
   }, [settingsClassId, madrasah?.config_json]);
 
-  const fetchDayEvents = async () => {
+  const fetchDayEvents = async (targetDate: string = date) => {
     if (!madrasah) return;
     try {
       // Invalidate the cache right before fetching to ensure we get the latest events for attendance
-      await requestManager.invalidatePattern(`calendar_events:${madrasah.id}:${date}`);
+      await requestManager.invalidatePattern(`calendar_events:${madrasah.id}:${targetDate}`);
       
-      const { data: customEvents } = await requestManager.cachedFetch(
-        'calendar_events',
-        (q: any) => q.select('*').eq('institution_id', madrasah.id).or(`event_date.eq.${date},and(event_date.lte.${date},end_date.gte.${date})`),
-        `calendar_events:${madrasah.id}:${date}`
-      );
+      const [{ data: customEvents }, { data: instData }] = await Promise.all([
+        requestManager.cachedFetch(
+          'calendar_events',
+          (q: any) => q.select('*').eq('institution_id', madrasah.id).or(`event_date.eq.${targetDate},and(event_date.lte.${targetDate},end_date.gte.${targetDate})`),
+          `calendar_events:${madrasah.id}:${targetDate}`
+        ),
+        supabase
+          .from('institutions')
+          .select('config_json')
+          .eq('id', madrasah.id)
+          .maybeSingle()
+      ]);
+
+      // Parse targetDate (YYYY-MM-DD) in local time safely without UTC shift
+      const [y, m, d] = targetDate.split('-').map(Number);
+      const localDate = new Date(y, (m || 1) - 1, d || 1);
+      const dayIndex = localDate.getDay();
       
-      let events = getEventsForDate(new Date(date), customEvents || []);
+      let events = getEventsForDate(localDate, customEvents || []);
       
       // Filter events by selected class
       if (selectedClass && selectedClass.id !== 'all') {
@@ -664,9 +677,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           });
       }
       
-      // Check for weekly holiday
-      const weeklyHolidays = madrasah.config_json?.weekly_holidays || [5]; // Default Friday
-      const dayIndex = new Date(date).getDay();
+      // Check for weekly holiday from latest config_json
+      const latestConfig: any = instData?.config_json || madrasah.config_json || {};
+      const weeklyHolidays: number[] = Array.isArray(latestConfig.weekly_holidays)
+        ? latestConfig.weekly_holidays.map((day: any) => Number(day))
+        : [5];
       const isWeeklyHoliday = weeklyHolidays.includes(dayIndex);
       
       if (isWeeklyHoliday) {
@@ -774,34 +789,31 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         return rollA - rollB;
       });
 
-      // Also fetch attendance with institution_id and session
-      const { data: attData, error: attError } = await requestManager.cachedFetch(
-        'attendance',
-        (q) => {
-          let query = q.select('*').eq('institution_id', madrasah.id).eq('date', date);
-          
-          // Only add class_id filter if it's not 'all'
-          if (cid && cid !== 'all') {
-            query = query.eq('class_id', cid);
-          }
-          
-          return query.order('created_at', { ascending: false });
-        },
-        `attendance:${madrasah.id}:${cid || 'all'}:${date}:${selectedSession}`,
-        CACHE_TTLS.SHORT
-      );
+      // Query attendance directly from Supabase (no 5-minute IndexedDB cache) so new biometric punches reflect immediately
+      await requestManager.invalidatePattern('attendance');
+
+      let attQuery = supabase
+        .from('attendance')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .eq('date', date);
+      if (cid && cid !== 'all') {
+        attQuery = attQuery.eq('class_id', cid);
+      }
+
+      const { data: attData, error: attError } = await attQuery.order('created_at', { ascending: false });
       
       let recordsToUse: any[] = attData || [];
       if (attError && isOnline) {
         // Handle potential missing class_id column in attendance table
         if (attError.code === 'PGRST204' || attError.message?.includes('class_id')) {
           console.warn('Attendance table missing class_id column, falling back to global fetch');
-          const { data: fallbackAttData } = await requestManager.cachedFetch(
-            'attendance',
-            (q) => q.select('*').eq('institution_id', madrasah.id).eq('date', date).order('created_at', { ascending: false }),
-            `attendance_fallback:${madrasah.id}:${date}:${selectedSession}`,
-            CACHE_TTLS.SHORT
-          );
+          const { data: fallbackAttData } = await supabase
+            .from('attendance')
+            .select('*')
+            .eq('institution_id', madrasah.id)
+            .eq('date', date)
+            .order('created_at', { ascending: false });
           recordsToUse = fallbackAttData || [];
           setExistingAttRecords(recordsToUse);
         } else {
@@ -1320,8 +1332,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const smsEligibleStudentIds = new Set<string>();
       
       for (const [sid, status] of Object.entries(attendance)) {
-        const arrTime = status === 'late' ? arrivalTime[sid] : null;
-        const mins = status === 'late' ? computeLateMins(arrivalTime[sid]) : null;
+        const existing = findMatchingAttendance(existingAttRecords, sid, selectedSession, sessions);
+        const arrTime = (status === 'late' || status === 'present') ? (arrivalTime[sid] || existing?.arrival_time || null) : null;
+        const mins = status === 'late' ? computeLateMins(arrTime) : null;
         
         const record = {
           institution_id: madrasah.id,
@@ -1338,7 +1351,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         
         payload.push(record);
 
-        const existing = findMatchingAttendance(existingAttRecords, sid, selectedSession, sessions);
         if (existing) {
           // Check if status or arrival time changed
           if (existing.status !== status || existing.arrival_time !== arrTime || existing.late_minutes !== mins) {
@@ -1810,15 +1822,111 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .eq('id', madrasah.id);
         
       if (error) throw error;
-      
+
+      // Update local madrasah config_json reference immediately
+      madrasah.config_json = updatedConfig;
+
+      // Update cached profile in OfflineService so useAuth immediately reflects updated settings
+      const cachedProfile = OfflineService.getCache('profile');
+      if (cachedProfile) {
+        if (cachedProfile.madrasah) {
+          OfflineService.setCache('profile', {
+            ...cachedProfile,
+            madrasah: {
+              ...cachedProfile.madrasah,
+              config_json: updatedConfig
+            }
+          });
+        } else {
+          OfflineService.setCache('profile', {
+            ...cachedProfile,
+            config_json: updatedConfig
+          });
+        }
+      }
+      const cachedInst = OfflineService.getCache('institution');
+      if (cachedInst) {
+        OfflineService.setCache('institution', {
+          ...cachedInst,
+          config_json: updatedConfig
+        });
+      }
+
+      // Immediately recalculate status ('present' vs 'late') and late_minutes for today's & selected date's biometric records
+      try {
+        const todayStr = getTodayDateString();
+        const datesToRecalc = Array.from(new Set([todayStr, date, reportDate].filter(Boolean)));
+        const { data: todayAtts } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('institution_id', madrasah.id)
+          .in('date', datesToRecalc)
+          .in('status', ['present', 'late']);
+
+        if (todayAtts && todayAtts.length > 0) {
+          const recalcPromises: any[] = [];
+          for (const rec of todayAtts) {
+            let punchTimeStr: string | null = rec.arrival_time || null;
+            if (!punchTimeStr && rec.updated_at && !rec.recorded_by) {
+              try {
+                const dt = new Date(rec.updated_at);
+                const dhakaStr = dt.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', hour12: false });
+                if (dhakaStr && dhakaStr.includes(':')) punchTimeStr = dhakaStr;
+              } catch {}
+            }
+
+            if (!punchTimeStr) continue;
+
+            const recClassTimes = rec.class_id ? updatedSettings.class_times?.[rec.class_id] : null;
+            const recStartTime = recClassTimes?.start_time || updatedSettings.start_time || '08:00';
+            const recGrace = Number(recClassTimes?.late_grace_minutes ?? updatedSettings.late_grace_minutes ?? 10);
+
+            const timeParts = punchTimeStr.split(':');
+            const startParts = recStartTime.split(':');
+            if (timeParts.length >= 2 && startParts.length >= 2) {
+              const punchTotal = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1], 10);
+              const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10);
+              const diff = punchTotal - startTotal;
+
+              const newStatus: 'present' | 'late' = diff > recGrace ? 'late' : 'present';
+              const newLateMins: number | null = newStatus === 'late' ? diff : null;
+
+              if (rec.status !== newStatus || rec.late_minutes !== newLateMins) {
+                recalcPromises.push(
+                  supabase
+                    .from('attendance')
+                    .update({ status: newStatus, late_minutes: newLateMins })
+                    .eq('id', rec.id)
+                );
+              }
+            }
+          }
+          if (recalcPromises.length > 0) {
+            await Promise.allSettled(recalcPromises);
+          }
+        }
+      } catch (recalcErr) {
+        console.warn('Error recalculating attendance after settings update:', recalcErr);
+      }
+
       // Invalidate Pattern on settings change as it affects attendance logic
-      requestManager.invalidatePattern(`attendance:${madrasah.id}`);
-      requestManager.invalidatePattern(`dashboard_`);
+      await requestManager.invalidatePattern('institution');
+      await requestManager.invalidatePattern('institutions');
+      await requestManager.invalidatePattern('attendance');
+      await requestManager.invalidatePattern(`attendance:${madrasah.id}`);
+      await requestManager.invalidatePattern(`dashboard_`);
+
+      if (selectedClass && selectedClass.id !== 'all') {
+        await fetchStudents(selectedClass.id);
+      }
+      if (activeTab === 'report') {
+        await fetchReport(selectedClass?.id || 'all');
+      }
       
       if (triggerRefresh) triggerRefresh();
       
       setSuccessTitle(lang === 'bn' ? 'সেটিংস সংরক্ষিত!' : 'Settings Saved!');
-      setSuccessMessage(lang === 'bn' ? 'আপনার হাজিরা সেটিংস সফলভাবে আপডেট করা হয়েছে।' : 'Your attendance settings have been successfully updated.');
+      setSuccessMessage(lang === 'bn' ? 'আপনার হাজিরা সেটিংস সফলভাবে আপডেট করা হয়েছে এবং আজকের হাজিরা পুনঃগণনা করা হয়েছে।' : 'Your attendance settings have been successfully updated.');
       setShowSuccessModal(true);
       setShowSettingsModal(false);
     } catch (err: any) {

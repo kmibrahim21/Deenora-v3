@@ -4,6 +4,7 @@ import MultiCalendar from "components/MultiCalendar";
 import { Language, View, Institution } from "types";
 import { supabase } from "supabase";
 import { requestManager } from "services/RequestManager";
+import { OfflineService } from "../services/OfflineService";
 
 interface AcademicCalendarPageProps {
   lang: Language;
@@ -41,21 +42,48 @@ const AcademicCalendarPage: React.FC<AcademicCalendarPageProps> = ({
     if (!madrasah) return;
     setIsSaving(true);
     try {
-      const updatedConfig = {
+      const newConfig = {
         ...madrasah.config_json,
         weekly_holidays: weeklyHolidays
       };
       
       const { error } = await supabase
         .from('institutions')
-        .update({ config_json: updatedConfig })
+        .update({ config_json: newConfig })
         .eq('id', madrasah.id);
         
       if (error) throw error;
       
+      // Update cached profile in OfflineService so useAuth immediately gets the updated weekly_holidays
+      const cachedProfile = OfflineService.getCache('profile');
+      if (cachedProfile) {
+        if (cachedProfile.madrasah) {
+          OfflineService.setCache('profile', {
+            ...cachedProfile,
+            madrasah: {
+              ...cachedProfile.madrasah,
+              config_json: newConfig
+            }
+          });
+        } else {
+          OfflineService.setCache('profile', {
+            ...cachedProfile,
+            config_json: newConfig
+          });
+        }
+      }
+      const cachedInst = OfflineService.getCache('institution');
+      if (cachedInst) {
+        OfflineService.setCache('institution', {
+          ...cachedInst,
+          config_json: newConfig
+        });
+      }
+
       // Invalidate patterns that might depend on institution config
-      requestManager.invalidatePattern(`institution`);
-      requestManager.invalidatePattern(`dashboard_`);
+      await requestManager.invalidatePattern('institution');
+      await requestManager.invalidatePattern('institutions');
+      await requestManager.invalidatePattern('dashboard_');
       
       setShowSettings(false);
       window.location.reload();

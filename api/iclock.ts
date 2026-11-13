@@ -641,7 +641,6 @@ export default async function handler(req: any, res: any) {
       }
 
       const matchedInstitutionId = matchedDevice.institution_id;
-      const instConfig = (matchedDevice.config_json as any) || {};
 
       // Parse all punch lines in memory
       interface ParsedPunch {
@@ -690,15 +689,23 @@ export default async function handler(req: any, res: any) {
         return res.status(200).send('OK');
       }
 
-      // Fetch directory (from in-memory cache) and existing attendance in parallel
-      const [{ students, teachers }, { data: existingAttendanceList }] = await Promise.all([
+      // Fetch directory, existing attendance, and fresh institution config_json in parallel
+      const [{ students, teachers }, { data: existingAttendanceList }, { data: freshInstData }] = await Promise.all([
         getInstitutionDirectory(matchedInstitutionId),
         supabase
           .from('attendance')
           .select('id, student_id, status, session, late_minutes, arrival_time, date')
           .eq('institution_id', matchedInstitutionId)
-          .in('date', Array.from(targetDates))
+          .in('date', Array.from(targetDates)),
+        supabase
+          .from('institutions')
+          .select('config_json')
+          .eq('id', matchedInstitutionId)
+          .maybeSingle()
       ]);
+
+      const instConfig = (freshInstData?.config_json as any) || (matchedDevice.config_json as any) || {};
+      matchedDevice.config_json = instConfig;
 
       const existingAttMap = new Map<string, any>();
       (existingAttendanceList || []).forEach((att: any) => {
@@ -806,12 +813,18 @@ export default async function handler(req: any, res: any) {
                 sms_count: 1
               });
             }
-          } else if (existingRec.status !== 'leave' && existingRec.status !== 'present' && existingRec.status !== 'late') {
+          } else if (
+            (existingRec.status !== 'leave' && existingRec.status !== 'present' && existingRec.status !== 'late') ||
+            (existingRec.status === 'late' && (
+              punchStatus === 'present' ||
+              (punchStatus === 'late' && lateMinutes !== null && (existingRec.late_minutes === null || existingRec.late_minutes === undefined || lateMinutes < Number(existingRec.late_minutes)))
+            ))
+          ) {
             updateStudentAttendanceBatch.push({
               id: existingRec.id,
               updates: {
                 status: punchStatus,
-                late_minutes: punchStatus === 'late' ? lateMinutes : existingRec.late_minutes,
+                late_minutes: punchStatus === 'late' ? lateMinutes : null,
                 arrival_time: time || existingRec.arrival_time || '08:30'
               }
             });
