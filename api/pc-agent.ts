@@ -580,7 +580,8 @@ Show-MsgBox ($msgDonePopup + $successCount + " / " + $users.Count) $msgDoneTitle
     const b64 = (s: string) => Buffer.from(s, 'utf-8').toString('base64');
     const instNameB64 = b64(institutionName);
 
-    const ps1SyncScript = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    const ps1SyncScript = `param([switch]$BackgroundMode)
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [System.Net.ServicePointManager]::SecurityProtocol = 3072
 
 function Decode-B64([string]$b) {
@@ -666,6 +667,12 @@ function Decode-ZKTime([uint32]$t) {
     return ("{0:D4}-{1:D2}-{2:D2} {3:D2}:{4:D2}:{5:D2}" -f [int]$year, [int]$month, [int]$day, [int]$hour, [int]$minute, [int]$second)
 }
 
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "   DEENORA ZKTECO LIVE ATTENDANCE SYNC ENGINE (PYTHON-FREE)     " -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ("Institution : " + $instName) -ForegroundColor Yellow
+Write-Host ("Server URL  : " + $serverUrl) -ForegroundColor Gray
+
 # Register silent background runner in Windows Startup folder so sync starts automatically on PC boot
 try {
     $appDir = Join-Path $env:LOCALAPPDATA "DeenoraBiometric"
@@ -673,23 +680,31 @@ try {
         New-Item -ItemType Directory -Path $appDir -Force | Out-Null
     }
     $savedPs1 = Join-Path $appDir "deenora_sync_attendance.ps1"
-    if ($MyInvocation.MyCommand.Path -and (Test-Path $MyInvocation.MyCommand.Path)) {
+    if ($MyInvocation.MyCommand.Path -and (Test-Path $MyInvocation.MyCommand.Path) -and ($MyInvocation.MyCommand.Path -ne $savedPs1)) {
         Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $savedPs1 -Force -ErrorAction SilentlyContinue
     }
     $startupVbs = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DeenoraAutoSync.vbs"
     $vbsLines = @(
         'Set WshShell = CreateObject("WScript.Shell")',
-        ('WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """"' + $savedPs1 + '""""", 0, False')
+        ('WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """"' + $savedPs1 + '"""" -BackgroundMode", 0, False')
     )
     [System.IO.File]::WriteAllLines($startupVbs, $vbsLines, [System.Text.Encoding]::ASCII)
+
+    if (-not $BackgroundMode) {
+        try {
+            Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+                Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like "*deenora_sync_attendance.ps1*-BackgroundMode*" } |
+                ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        } catch {}
+
+        try {
+            Start-Process "wscript.exe" -ArgumentList ('"' + $startupVbs + '"') -WindowStyle Hidden -ErrorAction SilentlyContinue
+        } catch {}
+
+        Write-Host "[OK] Background Auto-Sync Service is ACTIVE! Even if you close (X) this window, attendance sync will keep running 24/7 in the background." -ForegroundColor Green
+    }
 } catch {}
 
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "   DEENORA ZKTECO LIVE ATTENDANCE SYNC ENGINE (PYTHON-FREE)     " -ForegroundColor Cyan
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host ("Institution : " + $instName) -ForegroundColor Yellow
-Write-Host ("Server URL  : " + $serverUrl) -ForegroundColor Gray
-Write-Host "Auto-Start  : Registered in Windows Startup (DeenoraAutoSync.vbs)" -ForegroundColor Green
 Write-Host "----------------------------------------------------------------" -ForegroundColor Gray
 Write-Host "[*] Live punch monitoring active (checks every 4 seconds)..." -ForegroundColor White
 Write-Host ""
