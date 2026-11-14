@@ -5,7 +5,7 @@
 
 export type Language = 'bn' | 'en';
 
-export type UserRole = 'super_admin' | 'madrasah_admin' | 'manager' | 'accountant' | 'teacher' | 'parent';
+export type UserRole = 'super_admin' | 'madrasah_admin' | 'manager' | 'accountant' | 'teacher' | 'parent' | 'marketer';
 
 export interface SmsProviderConfig {
   reve: {
@@ -94,6 +94,10 @@ export interface Institution {
       paid_months?: string[];
     };
     institute_code?: string;
+    marketer_id?: string;
+    marketer_name?: string;
+    marketer_commission_rate?: number;
+    marketer_base_deduction?: number;
     weekly_holidays?: number[];
     seal_url?: string;
     signature_url?: string;
@@ -226,6 +230,9 @@ export interface Profile {
     voice_dashboard?: boolean;
     donations?: boolean;
     allowed_classes?: string[];
+    mobile?: string;
+    commission_rate?: number;
+    base_deduction?: number;
   };
 }
 
@@ -561,7 +568,8 @@ export type View =
   | 'profile-settings'
   | 'donations'
   | 'question-builder'
-  | 'chat';
+  | 'chat'
+  | 'marketer-portal';
 
 export type ConversationType = 'direct' | 'class_group' | 'announcement' | 'teacher_staff' | 'custom_group';
 

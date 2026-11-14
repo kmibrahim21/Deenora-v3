@@ -430,6 +430,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editStudentLimit, setEditStudentLimit] = useState<number>(0);
   const [editBranchLimit, setEditBranchLimit] = useState<number>(0);
   const [editSharedBranchStudentLimit, setEditSharedBranchStudentLimit] = useState<boolean>(true);
+  const [editMarketerId, setEditMarketerId] = useState<string>('');
+  const [editMarketerCommissionRate, setEditMarketerCommissionRate] = useState<number | ''>('');
+  const [marketersList, setMarketersList] = useState<any[]>([]);
 
   const formatMonthsRange = (months: string[]) => {
     if (!months || months.length === 0) return '';
@@ -1141,7 +1144,58 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [newInstPassword, setNewInstPassword] = useState('');
   const [showNewInstPassword, setShowNewInstPassword] = useState(false);
   const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching'>('madrasah');
+  const [newInstMarketerId, setNewInstMarketerId] = useState<string>('');
+  const [newInstMarketerCommissionRate, setNewInstMarketerCommissionRate] = useState<number | ''>('');
   const [isCreatingInst, setIsCreatingInst] = useState(false);
+
+  const fetchMarketersList = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'get_marketers' })
+        });
+        if (res.ok) {
+          const result = await res.json();
+          if (Array.isArray(result.marketers)) {
+            setMarketersList(result.marketers.filter((m: any) => m.is_active !== false));
+            return;
+          }
+        }
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, permissions, is_active')
+        .eq('role', 'marketer')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (data) {
+        setMarketersList(data.map((m: any) => ({
+          ...m,
+          mobile: m.permissions?.mobile || '',
+          commission_rate: Number(m.permissions?.commission_rate ?? 30),
+          base_deduction: Number(m.permissions?.base_deduction ?? 100)
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching marketers list in AdminPanel:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMarketersList();
+  }, []);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      fetchMarketersList();
+    }
+  }, [showCreateModal]);
 
   const fetchDetailedReport = async (force = false) => {
     const cacheKey = `${detailedFilterMode}_${detailedMonth}_${detailedYear}_${detailedStartDate}_${detailedEndDate}`;
@@ -2155,11 +2209,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditSubscriptionNote(userConfig?.subscription_note || '');
     setEditCustomSubscriptionFee(user.custom_subscription_fee || '');
     setEditDueAmount(userConfig?.due_amount || 0);
+    setEditMarketerId(userConfig?.marketer_id || '');
+    setEditMarketerCommissionRate(
+      userConfig?.marketer_commission_rate !== undefined && userConfig?.marketer_commission_rate !== null
+        ? Number(userConfig.marketer_commission_rate)
+        : ''
+    );
     setEditDiscount(0);
     setOverrideTotal('');
     
-    // Refresh packages to ensure they match Super Admin settings
+    // Refresh packages and marketers to ensure they match Super Admin settings
     fetchPackages();
+    fetchMarketersList();
     
     setView('details');
     fetchPaymentHistory(user.id);
@@ -2236,6 +2297,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         accounting_mode: editAccountingMode
       });
       const { data: { session } } = await supabase.auth.getSession();
+      const selectedMarketerObj = marketersList.find(m => m.id === editMarketerId);
       
         const res = await fetch('/api/admin', {
         method: 'POST',
@@ -2282,7 +2344,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             branch_limit: editBranchLimit,
             shared_branch_student_limit: editSharedBranchStudentLimit,
             institute_code: editInstituteCode.trim(),
-            user_pin: editPassword.trim()
+            user_pin: editPassword.trim(),
+            marketer_id: editMarketerId || null,
+            marketer_name: editMarketerId ? (selectedMarketerObj?.full_name || latestConfig?.marketer_name || '') : null,
+            marketer_commission_rate: editMarketerId && editMarketerCommissionRate !== '' ? Number(editMarketerCommissionRate) : null
           }
         })
       });
@@ -2615,6 +2680,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     try {
       // Use the Admin API for reliable user creation without affecting current session
       const { data: { session } } = await supabase.auth.getSession();
+      const selectedMarketer = marketersList.find(m => m.id === newInstMarketerId);
       
       const response = await fetch('/api/admin', {
         method: 'POST',
@@ -2628,7 +2694,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           phone: newInstPhone.trim(),
           email: newInstEmail.trim(),
           password: newInstPassword.trim(),
-          institution_type: newInstType
+          institution_type: newInstType,
+          marketer_id: newInstMarketerId || undefined,
+          marketer_name: selectedMarketer?.full_name || undefined,
+          marketer_commission_rate: newInstMarketerId && newInstMarketerCommissionRate !== '' ? Number(newInstMarketerCommissionRate) : undefined
         })
       });
 
@@ -2644,6 +2713,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setNewInstPhone('');
       setNewInstEmail('');
       setNewInstPassword('');
+      setNewInstMarketerId('');
+      setNewInstMarketerCommissionRate('');
       initData(true, true);
     } catch (err: any) {
       console.error("Create Error:", err);
@@ -4393,6 +4464,54 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institute Code</label>
                                  <input type="text" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editInstituteCode} onChange={(e) => setEditInstituteCode(e.target.value)} placeholder="Enter Institute Code" />
                               </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-2">অ্যাসাইনকৃত মার্কেটার (Assign Marketer)</label>
+                                 <select
+                                   disabled={!canWrite('institution_info')}
+                                   className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
+                                   value={editMarketerId}
+                                   onChange={(e) => {
+                                     const val = e.target.value;
+                                     setEditMarketerId(val);
+                                     if (val) {
+                                       const found = marketersList.find(m => m.id === val);
+                                       const defRate = found?.commission_rate ?? found?.permissions?.commission_rate;
+                                       if (defRate !== undefined && editMarketerCommissionRate === '') {
+                                         setEditMarketerCommissionRate(Number(defRate));
+                                       }
+                                     } else {
+                                       setEditMarketerCommissionRate('');
+                                     }
+                                   }}
+                                 >
+                                   <option value="">None / সরাসরি কোম্পানি (Direct)</option>
+                                   {marketersList.map((m) => {
+                                     const mRate = m.commission_rate ?? m.permissions?.commission_rate ?? 30;
+                                     return (
+                                       <option key={m.id} value={m.id}>
+                                         {m.full_name} — কমিশন: {mRate}% {m.mobile ? `(${m.mobile})` : (m.email ? `(${m.email})` : '')}
+                                       </option>
+                                     );
+                                   })}
+                                 </select>
+                              </div>
+                              {editMarketerId && (
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-purple-500 uppercase tracking-widest px-2">
+                                    মার্কেটার কমিশন পার্সেন্টেজ (%) — ১০০ টাকা সফটওয়্যার ফি বাদে
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    readOnly={!canWrite('institution_info')}
+                                    className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
+                                    value={editMarketerCommissionRate}
+                                    onChange={(e) => setEditMarketerCommissionRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                    placeholder="খালি রাখলে মার্কেটারের ডিফল্ট কমিশন রেট প্রযোজ্য হবে"
+                                  />
+                                </div>
+                              )}
                               <div className="md:col-span-2 space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Address</label>
                                  <textarea readOnly={!canWrite('institution_info')} className={`w-full h-28 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 py-4 font-black outline-none focus:border-blue-500 transition-all resize-none ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Enter full address..." />
@@ -5302,6 +5421,52 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   <option value="choching">Choching</option>
                 </select>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest px-2">অ্যাসাইনকৃত মার্কেটার (Assign Marketer)</label>
+                <select 
+                  className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl px-6 font-black text-[#1E3A8A] outline-none focus:border-[#2563EB]/20"
+                  value={newInstMarketerId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewInstMarketerId(val);
+                    if (val) {
+                      const found = marketersList.find(m => m.id === val);
+                      const defRate = found?.commission_rate ?? found?.permissions?.commission_rate ?? 30;
+                      setNewInstMarketerCommissionRate(Number(defRate));
+                    } else {
+                      setNewInstMarketerCommissionRate('');
+                    }
+                  }}
+                >
+                  <option value="">None / সরাসরি কোম্পানি (Direct)</option>
+                  {marketersList.map((m) => {
+                    const mRate = m.commission_rate ?? m.permissions?.commission_rate ?? 30;
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {m.full_name} — কমিশন: {mRate}% {m.mobile ? `(${m.mobile})` : (m.email ? `(${m.email})` : '')}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {newInstMarketerId && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-purple-600 uppercase tracking-widest px-2">
+                    মার্কেটার কমিশন পার্সেন্টেজ (%) — ১০০ টাকা সফটওয়্যার ফি বাদে
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl px-6 font-black text-[#1E3A8A] outline-none focus:border-[#2563EB]/20"
+                    value={newInstMarketerCommissionRate}
+                    onChange={(e) => setNewInstMarketerCommissionRate(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="যেমন: 30"
+                  />
+                </div>
+              )}
 
               <button 
                 onClick={handleCreateInstitution} 

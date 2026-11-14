@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     institution_id UUID REFERENCES institutions(id) ON DELETE SET NULL,
     full_name TEXT NOT NULL,
-    role TEXT CHECK (role IN ('super_admin', 'madrasah_admin', 'manager', 'accountant', 'teacher')) DEFAULT 'madrasah_admin',
+    role TEXT CHECK (role IN ('super_admin', 'madrasah_admin', 'manager', 'accountant', 'teacher', 'parent', 'marketer')) DEFAULT 'madrasah_admin',
     permissions JSONB DEFAULT '{}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()

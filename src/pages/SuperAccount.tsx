@@ -966,6 +966,262 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     }
   };
 
+  // Marketer Management States & Handlers
+  const [isEditingMarketers, setIsEditingMarketers] = useState(false);
+  const [marketers, setMarketers] = useState<any[]>([]);
+  const [showMarketerForm, setShowMarketerForm] = useState(false);
+  const [newMarketer, setNewMarketer] = useState({
+    name: '',
+    mobile: '',
+    email: '',
+    password: '',
+    commission_rate: '30',
+    base_deduction: '100'
+  });
+  const [editingMarketer, setEditingMarketer] = useState<any | null>(null);
+  const [isUpdatingMarketer, setIsUpdatingMarketer] = useState(false);
+  const [showNewMarketerPassword, setShowNewMarketerPassword] = useState(false);
+  const [showEditMarketerPassword, setShowEditMarketerPassword] = useState(false);
+
+  const fetchMarketers = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'get_marketers' })
+        });
+        if (res.ok) {
+          const result = await res.json();
+          if (result.marketers) {
+            setMarketers(result.marketers);
+            return;
+          }
+        }
+      }
+
+      // Fallback direct query
+      const [profilesRes, instsRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('role', 'marketer').order('created_at', { ascending: false }),
+        supabase.from('institutions').select('id, config_json').eq('is_super_admin', false)
+      ]);
+      const countMap = new Map<string, number>();
+      (instsRes.data || []).forEach((inst: any) => {
+        let cfg = inst.config_json;
+        if (typeof cfg === 'string') {
+          try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+        }
+        const mId = cfg?.marketer_id;
+        if (mId) countMap.set(mId, (countMap.get(mId) || 0) + 1);
+      });
+      setMarketers((profilesRes.data || []).map((p: any) => ({
+        ...p,
+        mobile: p.permissions?.mobile || '',
+        commission_rate: Number(p.permissions?.commission_rate ?? 30),
+        base_deduction: Number(p.permissions?.base_deduction ?? 100),
+        assigned_count: countMap.get(p.id) || 0,
+        month_collection: 0,
+        month_commission: 0,
+        total_collection: 0,
+        total_commission: 0
+      })));
+    } catch (err) {
+      console.error('Error fetching marketers:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isEditingMarketers) {
+      fetchMarketers();
+    }
+  }, [isEditingMarketers]);
+
+  const handleCreateMarketer = async () => {
+    const trimmedName = (newMarketer.name || '').trim();
+    const trimmedMobile = (newMarketer.mobile || '').trim();
+    const trimmedEmail = (newMarketer.email || '').trim().toLowerCase();
+    const trimmedPassword = (newMarketer.password || '').trim();
+    const parsedCommissionRate = Math.min(100, Math.max(0, Number(newMarketer.commission_rate) || 0));
+    const parsedBaseDeduction = Math.max(0, Number(newMarketer.base_deduction ?? 100));
+
+    if (!trimmedName || !trimmedEmail || !trimmedPassword) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'তথ্য অসম্পূর্ণ',
+        message: 'মার্কেটারের নাম, ইমেইল এবং পাসওয়ার্ড আবশ্যক।'
+      });
+      return;
+    }
+
+    if (trimmedPassword.length < 6) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'দুর্বল পাসওয়ার্ড',
+        message: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'create_staff',
+          name: trimmedName,
+          mobile: trimmedMobile,
+          email: trimmedEmail,
+          password: trimmedPassword,
+          role: 'marketer',
+          commission_rate: parsedCommissionRate,
+          base_deduction: parsedBaseDeduction,
+          permissions: {
+            mobile: trimmedMobile,
+            commission_rate: parsedCommissionRate,
+            base_deduction: parsedBaseDeduction
+          }
+        })
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) throw new Error(result.error || 'Failed to create marketer');
+
+      setShowMarketerForm(false);
+      setNewMarketer({ name: '', mobile: '', email: '', password: '', commission_rate: '30', base_deduction: '100' });
+      fetchMarketers();
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'মার্কেটার তৈরি সফল',
+        message: `নতুন মার্কেটার (${trimmedName}) সফলভাবে তৈরি হয়েছে। কমিশন রেট: ${parsedCommissionRate}% (সফটওয়্যার ফি কর্তন: ৳${parsedBaseDeduction})`
+      });
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'মার্কেটার তৈরি করা যায়নি।'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateMarketer = async () => {
+    if (!editingMarketer) return;
+
+    if (editingMarketer.password && editingMarketer.password.trim().length > 0 && editingMarketer.password.trim().length < 6) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'দুর্বল পাসওয়ার্ড',
+        message: 'পাসওয়ার্ড পরিবর্তন করতে চাইলে কমপক্ষে ৬ অক্ষরের হতে হবে।'
+      });
+      return;
+    }
+
+    const parsedCommissionRate = Math.min(100, Math.max(0, Number(editingMarketer.commission_rate ?? editingMarketer.permissions?.commission_rate ?? 30)));
+    const parsedBaseDeduction = Math.max(0, Number(editingMarketer.base_deduction ?? editingMarketer.permissions?.base_deduction ?? 100));
+
+    setIsUpdatingMarketer(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_staff',
+          id: editingMarketer.id,
+          name: (editingMarketer.full_name || '').trim(),
+          mobile: (editingMarketer.mobile || '').trim(),
+          role: 'marketer',
+          commission_rate: parsedCommissionRate,
+          base_deduction: parsedBaseDeduction,
+          permissions: {
+            ...(editingMarketer.permissions || {}),
+            mobile: (editingMarketer.mobile || '').trim(),
+            commission_rate: parsedCommissionRate,
+            base_deduction: parsedBaseDeduction
+          },
+          is_active: editingMarketer.is_active,
+          password: editingMarketer.password ? editingMarketer.password.trim() : undefined
+        })
+      });
+
+      const result = await res.json();
+      if (!res.ok || result.error) throw new Error(result.error || 'Failed to update marketer');
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: editingMarketer.password?.trim()
+          ? `মার্কেটারের তথ্য, পাসওয়ার্ড ও কমিশন সেটিং (${parsedCommissionRate}%) সফলভাবে আপডেট করা হয়েছে।`
+          : `মার্কেটারের তথ্য ও কমিশন সেটিং (${parsedCommissionRate}%) সফলভাবে আপডেট করা হয়েছে।`
+      });
+      setEditingMarketer(null);
+      fetchMarketers();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'আপডেট করা সম্ভব হয়নি।'
+      });
+    } finally {
+      setIsUpdatingMarketer(false);
+    }
+  };
+
+  const handleDeleteMarketer = async (id: string) => {
+    if (!confirm('আপনি কি এই মার্কেটার অ্যাকাউন্টটি ডিলিট করতে চান?')) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'delete_staff',
+          id
+        })
+      });
+
+      const result = await res.json();
+      if (!res.ok || result.error) throw new Error(result.error || 'Failed to delete marketer');
+
+      fetchMarketers();
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'মার্কেটার অ্যাকাউন্ট সফলভাবে ডিলিট করা হয়েছে।'
+      });
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'ডিলিট করতে সমস্যা হয়েছে।'
+      });
+    }
+  };
+
   const toggleManagerPermission = (perm: string) => {
     setGlobalSettings(prev => ({
       ...prev,
@@ -1142,6 +1398,21 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
             <div>
               <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'স্টাফ ম্যানেজমেন্ট' : 'Staff Management'}</h5>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Managers</p>
+            </div>
+          </button>
+        )}
+
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setIsEditingMarketers(true)}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users2 size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'মার্কেটার ব্যবস্থাপনা' : 'Marketer Management'}</h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Marketers</p>
             </div>
           </button>
         )}
@@ -1707,6 +1978,530 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     className="flex-1 p-4 bg-[#2563EB] text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                   >
                     {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                    {lang === 'bn' ? 'তৈরি করুন' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+
+      {/* Marketer Management Modal */}
+      {isEditingMarketers && createPortal(
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xl z-[9999] flex items-end sm:items-center justify-center p-2.5 sm:p-4">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-2xl rounded-t-[2.25rem] sm:rounded-[3rem] shadow-2xl border overflow-hidden flex flex-col max-h-[92vh]`}>
+            <div className="p-4 sm:p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
+                  <Users2 size={22} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className={`text-base sm:text-xl font-black font-noto truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {lang === 'bn' ? 'মার্কেটার ব্যবস্থাপনা' : 'Marketer Management'}
+                  </h3>
+                  <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest truncate">
+                    {lang === 'bn' ? 'মার্কেটার অ্যাকাউন্ট ও পোর্টাল অ্যাসাইনমেন্ট' : 'Marketer Accounts & Portal Assignments'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsEditingMarketers(false)}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center hover:text-red-500 transition-colors shrink-0"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-8 overflow-y-auto space-y-4 sm:space-y-6 custom-scrollbar">
+              {/* Overall Marketer Revenue & Commission Summary Banner */}
+              <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 p-3.5 sm:p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/70' : 'bg-blue-50/60 border-blue-100'}`}>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider font-noto">মোট প্রতিষ্ঠান</p>
+                  <p className={`text-sm sm:text-base font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {marketers.reduce((s, m) => s + (Number(m.assigned_count) || 0), 0).toLocaleString('bn-BD')} টি
+                  </p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider font-noto">চলতি মাসের কালেকশন</p>
+                  <p className="text-sm sm:text-base font-black text-blue-600 font-noto">
+                    ৳ {marketers.reduce((s, m) => s + (Number(m.month_collection) || 0), 0).toLocaleString('bn-BD')}
+                  </p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider font-noto">চলতি মাসের প্রদেয় কমিশন</p>
+                  <p className="text-sm sm:text-base font-black text-emerald-600 font-noto">
+                    ৳ {marketers.reduce((s, m) => s + (Number(m.month_commission) || 0), 0).toLocaleString('bn-BD')}
+                  </p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider font-noto">সর্বমোট প্রদেয় কমিশন</p>
+                  <p className="text-sm sm:text-base font-black text-purple-600 font-noto">
+                    ৳ {marketers.reduce((s, m) => s + (Number(m.total_commission) || 0), 0).toLocaleString('bn-BD')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col xs:flex-row sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                <h4 className={`text-xs sm:text-sm font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {lang === 'bn' ? `সকল মার্কেটার ও কমিশন সামারি (${marketers.length})` : `Active Marketers (${marketers.length})`}
+                </h4>
+                <button 
+                  onClick={() => setShowMarketerForm(true)}
+                  className="px-4 py-3 sm:py-2.5 bg-[#2563EB] text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-all"
+                >
+                  <Plus size={16} />
+                  {lang === 'bn' ? 'নতুন মার্কেটার যোগ করুন' : 'Add New Marketer'}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {marketers.map(member => {
+                  const commRate = Number(member.commission_rate ?? member.permissions?.commission_rate ?? 30);
+                  const baseDed = Number(member.base_deduction ?? member.permissions?.base_deduction ?? 100);
+                  const monthCol = Number(member.month_collection || 0);
+                  const monthComm = Number(member.month_commission || 0);
+                  const totalCol = Number(member.total_collection || 0);
+                  const totalComm = Number(member.total_commission || 0);
+
+                  return (
+                    <div 
+                      key={member.id}
+                      className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-start sm:items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-black shrink-0 mt-0.5 sm:mt-0">
+                            {member.full_name?.[0] || 'M'}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <h5 className={`font-black font-noto text-sm break-words ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                                {member.full_name}
+                              </h5>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${member.is_active !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                                {member.is_active !== false ? (lang === 'bn' ? 'সক্রিয়' : 'Active') : (lang === 'bn' ? 'নিষ্ক্রিয়' : 'Inactive')}
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-[#2563EB] font-noto">
+                                {lang === 'bn' ? `${(member.assigned_count || 0).toLocaleString('bn-BD')} টি প্রতিষ্ঠান` : `${member.assigned_count || 0} Portals`}
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700 font-noto">
+                                কমিশন: {commRate.toLocaleString('bn-BD')}% (বেস কর্তন: ৳{baseDed.toLocaleString('bn-BD')})
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1">
+                              {member.mobile && (
+                                <span className="text-[11px] font-bold text-slate-500">
+                                  📞 {member.mobile}
+                                </span>
+                              )}
+                              {member.email && (
+                                <span className="text-[11px] font-bold text-blue-500 break-all">
+                                  ✉️ {member.email}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-700/60 shrink-0">
+                          <button 
+                            onClick={() => {
+                              setShowEditMarketerPassword(false);
+                              setEditingMarketer({
+                                ...member,
+                                mobile: member.mobile || member.permissions?.mobile || '',
+                                commission_rate: String(commRate),
+                                base_deduction: String(baseDed),
+                                password: ''
+                              });
+                            }}
+                            className="px-3 py-1.5 sm:p-2 rounded-xl bg-blue-50 sm:bg-transparent text-[#2563EB] sm:text-slate-400 hover:text-blue-500 transition-colors flex items-center gap-1.5 text-xs font-black"
+                            title={lang === 'bn' ? 'কমিশন ও তথ্য সম্পাদনা করুন' : 'Edit'}
+                          >
+                            <Edit2 size={16} />
+                            <span className="sm:hidden">{lang === 'bn' ? 'কমিশন ও এডিট' : 'Edit'}</span>
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteMarketer(member.id)}
+                            className="px-3 py-1.5 sm:p-2 rounded-xl bg-red-50 sm:bg-transparent text-red-500 sm:text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1.5 text-xs font-black"
+                            title={lang === 'bn' ? 'ডিলিট করুন' : 'Delete'}
+                          >
+                            <Trash2 size={16} />
+                            <span className="sm:hidden">{lang === 'bn' ? 'ডিলিট' : 'Delete'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Marketer Collection & Payable Commission Mini Breakdown */}
+                      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 border-t border-dashed text-[11px] font-noto ${madrasah?.theme === 'dark' ? 'border-slate-700/80' : 'border-slate-200/80'}`}>
+                        <div className={`px-3 py-2 rounded-xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/60' : 'bg-white border border-slate-100'}`}>
+                          <span className="text-[9px] font-bold text-slate-400 block">চলতি মাসের কালেকশন</span>
+                          <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>৳ {monthCol.toLocaleString('bn-BD')}</span>
+                        </div>
+                        <div className={`px-3 py-2 rounded-xl ${madrasah?.theme === 'dark' ? 'bg-emerald-950/30 border border-emerald-800/40' : 'bg-emerald-50/70 border border-emerald-100'}`}>
+                          <span className="text-[9px] font-bold text-emerald-600/80 block">চলতি মাসের প্রদেয় কমিশন</span>
+                          <span className="font-black text-emerald-600">৳ {monthComm.toLocaleString('bn-BD')}</span>
+                        </div>
+                        <div className={`px-3 py-2 rounded-xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/60' : 'bg-white border border-slate-100'}`}>
+                          <span className="text-[9px] font-bold text-slate-400 block">সর্বমোট কালেকশন</span>
+                          <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>৳ {totalCol.toLocaleString('bn-BD')}</span>
+                        </div>
+                        <div className={`px-3 py-2 rounded-xl ${madrasah?.theme === 'dark' ? 'bg-purple-950/30 border border-purple-800/40' : 'bg-purple-50/70 border border-purple-100'}`}>
+                          <span className="text-[9px] font-bold text-purple-600/80 block">সর্বমোট প্রদেয় কমিশন</span>
+                          <span className="font-black text-purple-600">৳ {totalComm.toLocaleString('bn-BD')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {marketers.length === 0 && (
+                  <div className="text-center py-10 sm:py-12 text-slate-400 font-bold text-sm">
+                    {lang === 'bn' ? 'কোনো মার্কেটার অ্যাকাউন্ট পাওয়া যায়নি' : 'No marketer accounts found'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {editingMarketer && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[10001] flex items-end sm:items-center justify-center p-2.5 sm:p-4 animate-in fade-in duration-300">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-lg rounded-t-[2.25rem] sm:rounded-[3rem] shadow-2xl border overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-300`}>
+                <div className="p-5 sm:p-8 pb-3 sm:pb-4 flex items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                      <Users2 size={22} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className={`text-base sm:text-xl font-black font-noto tracking-tight truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {lang === 'bn' ? 'মার্কেটার প্রোফাইল ও কমিশন সেটিং' : 'Marketer Profile & Commission'}
+                      </h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                        {editingMarketer.email || editingMarketer.full_name}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setEditingMarketer(null)}
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all active:scale-90 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="p-5 sm:p-8 pt-3 sm:pt-4 overflow-y-auto space-y-4 sm:space-y-5 custom-scrollbar">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                      {lang === 'bn' ? 'মার্কেটারের নাম (Full Name)' : 'Full Name'}
+                    </label>
+                    <input 
+                      type="text" 
+                      value={editingMarketer.full_name}
+                      onChange={e => setEditingMarketer({...editingMarketer, full_name: e.target.value})}
+                      className={`w-full h-12 sm:h-14 px-4 sm:px-5 rounded-2xl border font-bold text-sm outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:bg-white focus:border-blue-500'}`}
+                      placeholder="Enter full name"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                      {lang === 'bn' ? 'মোবাইল নম্বর (Mobile)' : 'Mobile Number'}
+                    </label>
+                    <input 
+                      type="tel" 
+                      value={editingMarketer.mobile || ''}
+                      onChange={e => setEditingMarketer({...editingMarketer, mobile: e.target.value})}
+                      className={`w-full h-12 sm:h-14 px-4 sm:px-5 rounded-2xl border font-bold text-sm outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:bg-white focus:border-blue-500'}`}
+                      placeholder="017..."
+                    />
+                  </div>
+
+                  {/* Commission Percentage & Base Deduction Section */}
+                  <div className={`p-4 rounded-2xl border space-y-3.5 ${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-blue-50/50 border-blue-100'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[11px] font-black text-[#2563EB] uppercase tracking-wider font-noto">
+                        কমিশন ও লভ্যাংশ শেয়ারিং সেটআপ
+                      </label>
+                      <div className="flex items-center gap-1">
+                        {[15, 25, 30, 40, 50].map(preset => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setEditingMarketer({ ...editingMarketer, commission_rate: String(preset) })}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                              Number(editingMarketer.commission_rate) === preset
+                                ? 'bg-[#2563EB] text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {preset}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 font-noto px-1">
+                          কমিশন পার্সেন্টেজ (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={editingMarketer.commission_rate ?? 30}
+                          onChange={e => setEditingMarketer({ ...editingMarketer, commission_rate: e.target.value })}
+                          className={`w-full h-11 px-4 rounded-xl border font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-[#1E3A8A]'}`}
+                          placeholder="30"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 font-noto px-1">
+                          সফটওয়্যার ফি কর্তন (৳)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editingMarketer.base_deduction ?? 100}
+                          onChange={e => setEditingMarketer({ ...editingMarketer, base_deduction: e.target.value })}
+                          className={`w-full h-11 px-4 rounded-xl border font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-[#1E3A8A]'}`}
+                          placeholder="100"
+                        />
+                      </div>
+                    </div>
+
+                    {(() => {
+                      const rate = Math.min(100, Math.max(0, Number(editingMarketer.commission_rate) || 0));
+                      const ded = Math.max(0, Number(editingMarketer.base_deduction ?? 100));
+                      const sampleGross = 500;
+                      const commAmt = Math.max(0, sampleGross - ded);
+                      const mShare = Number(((commAmt * rate) / 100).toFixed(2));
+                      return (
+                        <div className={`p-2.5 rounded-xl text-[11px] font-bold font-noto ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 text-slate-300' : 'bg-white/90 text-slate-600 border border-blue-100'}`}>
+                          💡 হিসাব উদাহরণ (৳৫০০ পেমেন্টে): ৳৫০০ - ৳{ded.toLocaleString('bn-BD')} (সফটওয়্যার ফি) = ৳{commAmt.toLocaleString('bn-BD')} লভ্যাংশযোগ্য টাকা → <span className="text-emerald-600 font-black">{rate.toLocaleString('bn-BD')}% কমিশন = ৳{mShare.toLocaleString('bn-BD')} মার্কেটারের আয়</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {editingMarketer.email && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Login Email</label>
+                      <div className={`w-full h-12 px-4 sm:px-5 rounded-2xl border flex items-center font-bold text-xs break-all ${madrasah?.theme === 'dark' ? 'bg-slate-800/30 border-slate-800 text-slate-400' : 'bg-slate-100/70 border-slate-200/60 text-slate-500'}`}>
+                        {editingMarketer.email}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 px-1">
+                      <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
+                        {lang === 'bn' ? 'নতুন পাসওয়ার্ড সেট করুন (ঐচ্ছিক)' : 'Set New Password (Optional)'}
+                      </label>
+                      <span className="text-[9px] font-bold text-slate-400">
+                        {lang === 'bn' ? 'খালি রাখলে আগের পাসওয়ার্ড থাকবে' : 'Leave blank to keep unchanged'}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type={showEditMarketerPassword ? "text" : "password"}
+                        value={editingMarketer.password || ''}
+                        onChange={e => setEditingMarketer({...editingMarketer, password: e.target.value})}
+                        className={`w-full h-12 sm:h-14 pl-4 sm:pl-5 pr-12 rounded-2xl border font-bold text-sm outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:bg-white focus:border-blue-500'}`}
+                        placeholder={lang === 'bn' ? 'নতুন পাসওয়ার্ড লিখুন (কমপক্ষে ৬ অক্ষর)' : 'Enter new password (min 6 chars)'}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditMarketerPassword(!showEditMarketerPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showEditMarketerPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => setEditingMarketer({...editingMarketer, is_active: editingMarketer.is_active === false ? true : false})}
+                    className={`flex items-center justify-between p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all ${editingMarketer.is_active !== false ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'} hover:scale-[1.01] active:scale-95`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full animate-pulse shrink-0 ${editingMarketer.is_active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      <div className="space-y-0.5">
+                        <span className={`text-xs font-black uppercase tracking-widest ${editingMarketer.is_active !== false ? 'text-emerald-500' : 'text-rose-500'}`}>Account Status</span>
+                        <p className="text-[10px] font-bold text-slate-400">
+                          {lang === 'bn' ? 'মার্কেটার লগইন সক্রিয়/নিষ্ক্রিয় করুন' : 'Enable or disable marketer login'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 ${editingMarketer.is_active !== false ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                      {editingMarketer.is_active !== false ? 'Active' : 'Disabled'}
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={handleUpdateMarketer}
+                    disabled={isUpdatingMarketer}
+                    className="w-full h-14 sm:h-16 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white rounded-2xl sm:rounded-[1.25rem] font-black text-xs sm:text-sm uppercase tracking-[0.15em] shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 transition-all active:scale-95"
+                  >
+                    {isUpdatingMarketer ? (
+                      <Loader2 className="animate-spin" size={20} />
+                    ) : (
+                      <>
+                        <Save size={18} />
+                        {lang === 'bn' ? 'মার্কেটার তথ্য আপডেট করুন' : 'Update Marketer Details'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showMarketerForm && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10000] flex items-end sm:items-center justify-center p-2.5 sm:p-4">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-md rounded-t-[2.25rem] sm:rounded-[2.5rem] shadow-2xl border overflow-y-auto max-h-[92vh] p-5 sm:p-8`}>
+                <h4 className={`text-lg sm:text-xl font-black font-noto mb-5 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {lang === 'bn' ? 'নতুন মার্কেটার তৈরি করুন' : 'Create New Marketer'}
+                </h4>
+                <div className="space-y-3.5 sm:space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">
+                      {lang === 'bn' ? 'মার্কেটারের নাম (Full Name)' : 'Full Name'}
+                    </label>
+                    <input 
+                      type="text" 
+                      value={newMarketer.name}
+                      onChange={e => setNewMarketer({...newMarketer, name: e.target.value})}
+                      className={`w-full p-3.5 sm:p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      placeholder={lang === 'bn' ? 'যেমন: মো: আব্দুল্লাহ' : 'Enter marketer name'}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">
+                      {lang === 'bn' ? 'মোবাইল নম্বর (Mobile Number)' : 'Mobile Number'}
+                    </label>
+                    <input 
+                      type="tel" 
+                      value={newMarketer.mobile}
+                      onChange={e => setNewMarketer({...newMarketer, mobile: e.target.value})}
+                      className={`w-full p-3.5 sm:p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      placeholder="017..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">
+                      {lang === 'bn' ? 'ইমেইল অ্যাড্রেস (Login Email)' : 'Email Address (Login)'}
+                    </label>
+                    <input 
+                      type="email" 
+                      value={newMarketer.email}
+                      onChange={e => setNewMarketer({...newMarketer, email: e.target.value})}
+                      className={`w-full p-3.5 sm:p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      placeholder="e.g. marketer@deenora.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">
+                      {lang === 'bn' ? 'পাসওয়ার্ড (Password)' : 'Password'}
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type={showNewMarketerPassword ? "text" : "password"} 
+                        value={newMarketer.password}
+                        onChange={e => setNewMarketer({...newMarketer, password: e.target.value})}
+                        className={`w-full p-3.5 sm:p-4 pr-12 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                        placeholder="Min 6 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewMarketerPassword(!showNewMarketerPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showNewMarketerPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Commission Rate & Base Cost Deduction */}
+                  <div className={`p-3.5 rounded-2xl border space-y-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-blue-50/50 border-blue-100'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-black text-[#2563EB] uppercase tracking-wider font-noto">
+                        কমিশন ও লভ্যাংশ সেটআপ
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {[15, 25, 30, 40, 50].map(preset => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setNewMarketer({ ...newMarketer, commission_rate: String(preset) })}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                              Number(newMarketer.commission_rate) === preset
+                                ? 'bg-[#2563EB] text-white'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {preset}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-500 font-noto mb-1 block">
+                          কমিশন পার্সেন্টেজ (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={newMarketer.commission_rate}
+                          onChange={e => setNewMarketer({ ...newMarketer, commission_rate: e.target.value })}
+                          className={`w-full p-2.5 rounded-xl border font-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-[#1E3A8A]'}`}
+                          placeholder="30"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-500 font-noto mb-1 block">
+                          সফটওয়্যার ফি কর্তন (৳)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={newMarketer.base_deduction}
+                          onChange={e => setNewMarketer({ ...newMarketer, base_deduction: e.target.value })}
+                          className={`w-full p-2.5 rounded-xl border font-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-[#1E3A8A]'}`}
+                          placeholder="100"
+                        />
+                      </div>
+                    </div>
+                    {(() => {
+                      const rate = Math.min(100, Math.max(0, Number(newMarketer.commission_rate) || 0));
+                      const ded = Math.max(0, Number(newMarketer.base_deduction ?? 100));
+                      const sampleGross = 500;
+                      const commAmt = Math.max(0, sampleGross - ded);
+                      const mShare = Number(((commAmt * rate) / 100).toFixed(2));
+                      return (
+                        <div className={`p-2 rounded-xl text-[10px] font-bold font-noto ${madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-300' : 'bg-white text-slate-600 border border-blue-100'}`}>
+                          💡 উদাহরণ (৳৫০০ পেমেন্ট): ৳৫০০ - ৳{ded.toLocaleString('bn-BD')} = ৳{commAmt.toLocaleString('bn-BD')} → <span className="text-emerald-600 font-black">{rate.toLocaleString('bn-BD')}% = ৳{mShare.toLocaleString('bn-BD')} কমিশন</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6 sm:mt-8">
+                  <button 
+                    onClick={() => setShowMarketerForm(false)}
+                    className={`flex-1 p-3.5 sm:p-4 rounded-2xl font-bold text-sm transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                  >
+                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button 
+                    onClick={handleCreateMarketer}
+                    disabled={saving}
+                    className="flex-1 p-3.5 sm:p-4 bg-[#2563EB] text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                     {lang === 'bn' ? 'তৈরি করুন' : 'Create'}
                   </button>
                 </div>

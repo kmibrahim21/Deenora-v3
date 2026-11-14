@@ -89,7 +89,7 @@ export const useAuth = () => {
       
       if (cachedProfile && cachedProfile.id === userId) {
         setProfile(cachedProfile);
-        if (cachedMadrasah && (cachedMadrasah.id === cachedProfile.institution_id || cachedProfile.role === 'super_admin' || isSuperAdminEmail)) {
+        if (cachedMadrasah && (cachedMadrasah.id === cachedProfile.institution_id || cachedProfile.role === 'super_admin' || cachedProfile.role === 'marketer' || isSuperAdminEmail)) {
           setMadrasah(cachedMadrasah);
           setLoading(false); // Hide splash if we have cached data
         }
@@ -113,8 +113,8 @@ export const useAuth = () => {
 
       if (singleProfileData) {
         let finalProfile = isSuperAdminEmail 
-          ? { ...singleProfileData, role: 'super_admin' as const } 
-          : singleProfileData;
+          ? { ...singleProfileData, email: singleProfileData.email || userEmail || '', role: 'super_admin' as const } 
+          : { ...singleProfileData, email: singleProfileData.email || userEmail || '' };
           
         // If the user is a manager, prioritize individual manager permissions
         if (finalProfile.role === 'manager') {
@@ -142,9 +142,26 @@ export const useAuth = () => {
         OfflineService.setCache('user_profile', finalProfile);
         
         const isSystemStaff = finalProfile.role === 'super_admin' || finalProfile.role === 'manager';
+        const isMarketerRole = finalProfile.role === 'marketer';
 
         // 2. Get the institution (Cached)
-        if (isSystemStaff) {
+        if (isMarketerRole) {
+          const marketerInst: Institution = {
+            id: finalProfile.institution_id || '00000000-0000-0000-0000-000000000000',
+            name: 'Marketer Portal',
+            institution_type: 'system',
+            theme: 'default',
+            config_json: { modules: {} as any, result_engine: 'school', result_system: 'grading', attendance_type: 'daily', fee_structure: 'monthly', ui_mode: 'madrasah' },
+            is_active: true,
+            status: 'active',
+            balance: 0,
+            sms_balance: 0,
+            is_super_admin: false,
+            created_at: new Date().toISOString()
+          };
+          setMadrasah(marketerInst);
+          OfflineService.setCache('profile', marketerInst);
+        } else if (isSystemStaff) {
           const localTheme = localStorage.getItem('super_admin_theme') || 'default';
           const sysInst: Institution = {
             id: finalProfile.institution_id || '00000000-0000-0000-0000-000000000000',

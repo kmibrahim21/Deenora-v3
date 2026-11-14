@@ -79,6 +79,9 @@ const AdminAiAgentFloatingButton = React.lazy(() => import("components/agent/Adm
 const QuestionBuilderStudio = React.lazy(() =>
   import("pages/QuestionBuilderStudio").then((m) => ({ default: m.QuestionBuilderStudio }))
 );
+const MarketerPortal = React.lazy(() =>
+  import("pages/MarketerPortal").then((m) => ({ default: m.MarketerPortal }))
+);
 
 const App: React.FC = () => {
   useSyncEngine();
@@ -213,7 +216,7 @@ const App: React.FC = () => {
 
   // Preload primary route bundles in background when idle to prevent navigation lag
   useEffect(() => {
-    if (session && profile) {
+    if (session && profile && profile.role !== 'marketer') {
       const preloadCommonRoutes = () => {
         import("pages/Home");
         import("pages/Students");
@@ -473,6 +476,29 @@ const App: React.FC = () => {
           লগআউট করুন
         </button>
       </div>
+    );
+  }
+
+  if (profile?.role === "marketer") {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4 text-center">
+            <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mb-4" />
+            <h3 className="text-[#1E3A8A] font-black tracking-widest text-xs uppercase opacity-80">DEENORA MARKETER PORTAL</h3>
+          </div>
+        }
+      >
+        <MarketerPortal
+          profile={profile}
+          onLogout={handleLogout}
+          lang={lang}
+          setLang={(newLang) => {
+            setLang(newLang);
+            localStorage.setItem("app_lang", newLang);
+          }}
+        />
+      </Suspense>
     );
   }
 

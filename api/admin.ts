@@ -161,6 +161,145 @@ export default async function handler(req, res) {
     const roleStr = (userProfile?.role || user.user_metadata?.role || user.app_metadata?.role || '').toString().toLowerCase();
     const isSuperAdmin = isSuperAdminEmail || !!adminProfile?.is_super_admin || roleStr === 'super_admin';
     const isManager = roleStr === 'manager';
+    const isMarketer = roleStr === 'marketer';
+
+    if (action === 'get_marketer_dashboard') {
+      if (!isMarketer && !isSuperAdmin && !isManager) {
+        return res.status(403).json({ error: 'Forbidden: Requires Marketer or Admin role' });
+      }
+      const targetMarketerId = (isSuperAdmin || isManager) && body.marketer_id ? body.marketer_id : userId;
+
+      const { data: marketerProfile } = await supabase
+        .from('profiles')
+        .select('id, full_name, permissions')
+        .eq('id', targetMarketerId)
+        .maybeSingle();
+
+      const defaultCommissionRate = Number(marketerProfile?.permissions?.commission_rate ?? 30);
+      const defaultBaseDeduction = Number(marketerProfile?.permissions?.base_deduction ?? 100);
+
+      const { data: allInsts, error: instErr } = await supabase
+        .from('institutions')
+        .select('id, name, phone, institute_code, created_at, status, is_active, subscription_end, custom_subscription_fee, config_json')
+        .eq('is_super_admin', false)
+        .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
+        .order('created_at', { ascending: false });
+
+      if (instErr) throw instErr;
+
+      const instConfigMap = new Map<string, { rate: number; deduction: number }>();
+
+      const assignedInsts = (allInsts || []).filter((inst: any) => {
+        let cfg = inst.config_json;
+        if (typeof cfg === 'string') {
+          try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+        }
+        return cfg?.marketer_id === targetMarketerId;
+      }).map((inst: any) => {
+        let cfg = inst.config_json;
+        if (typeof cfg === 'string') {
+          try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+        }
+        const instRate = cfg?.marketer_commission_rate !== undefined && cfg?.marketer_commission_rate !== null && cfg?.marketer_commission_rate !== ''
+          ? Number(cfg.marketer_commission_rate)
+          : defaultCommissionRate;
+        const instDeduction = cfg?.marketer_base_deduction !== undefined && cfg?.marketer_base_deduction !== null && cfg?.marketer_base_deduction !== ''
+          ? Number(cfg.marketer_base_deduction)
+          : defaultBaseDeduction;
+
+        instConfigMap.set(inst.id, { rate: instRate, deduction: instDeduction });
+
+        return {
+          id: inst.id,
+          name: inst.name,
+          phone: inst.phone,
+          institute_code: inst.institute_code || cfg?.institute_code || '',
+          created_at: inst.created_at,
+          status: inst.status,
+          is_active: inst.is_active,
+          subscription_end: inst.subscription_end,
+          custom_subscription_fee: inst.custom_subscription_fee,
+          config_json: {
+            institute_code: cfg?.institute_code || inst.institute_code || '',
+            package_name: cfg?.package_name || cfg?.subscription?.package_name || '',
+            package_rate: cfg?.package_rate ?? cfg?.subscription?.package_rate ?? 0,
+            subscription_type: cfg?.subscription_type || cfg?.subscription?.subscription_type || 'monthly',
+            paid_months: cfg?.paid_months || cfg?.subscription?.paid_months || [],
+            due_amount: cfg?.due_amount || 0,
+            marketer_id: cfg?.marketer_id,
+            marketer_name: cfg?.marketer_name,
+            marketer_commission_rate: instRate,
+            marketer_base_deduction: instDeduction
+          }
+        };
+      });
+
+      const instIds = assignedInsts.map((i: any) => i.id);
+      let subTransactions: any[] = [];
+
+      if (instIds.length > 0) {
+        const { data: txData, error: txErr } = await supabase
+          .from('transactions')
+          .select('id, institution_id, amount, transaction_id, sender_phone, description, status, created_at, approved_at, module, metadata')
+          .in('institution_id', instIds)
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false })
+          .limit(2000);
+
+        if (!txErr && txData) {
+          const instNameMap = new Map<string, { name: string; code: string }>();
+          assignedInsts.forEach((i: any) => {
+            instNameMap.set(i.id, { name: i.name, code: i.institute_code || '' });
+          });
+
+          subTransactions = txData
+            .filter((t: any) => {
+              const desc = (t.description || '').toLowerCase();
+              return (
+                t.module === 'subscription' ||
+                desc.includes('subscription') ||
+                desc.includes('package') ||
+                desc.includes('renew') ||
+                desc.includes('প্যাকেজ') ||
+                desc.includes('সাবস্ক্রিপশন')
+              );
+            })
+            .map((t: any) => {
+              const grossAmount = Number(t.amount) || 0;
+              const instRule = instConfigMap.get(t.institution_id) || { rate: defaultCommissionRate, deduction: defaultBaseDeduction };
+              const baseDeduction = instRule.deduction;
+              const commissionRate = instRule.rate;
+              const commissionableAmount = grossAmount > baseDeduction ? Number((grossAmount - baseDeduction).toFixed(2)) : 0;
+              const marketerCommission = grossAmount > baseDeduction
+                ? Number(((commissionableAmount * commissionRate) / 100).toFixed(2))
+                : 0;
+              const companyShare = Number((grossAmount - marketerCommission).toFixed(2));
+
+              return {
+                ...t,
+                institution_name: instNameMap.get(t.institution_id)?.name || 'Unknown Institution',
+                institute_code: instNameMap.get(t.institution_id)?.code || '',
+                gross_amount: grossAmount,
+                base_deduction: baseDeduction,
+                commissionable_amount: commissionableAmount,
+                commission_rate: commissionRate,
+                marketer_commission: marketerCommission,
+                company_share: companyShare
+              };
+            });
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        commission_config: {
+          commission_rate: defaultCommissionRate,
+          base_deduction: defaultBaseDeduction
+        },
+        institutions: assignedInsts,
+        transactions: subTransactions
+      });
+    }
 
     if (!isSuperAdmin && !isManager) {
       return res.status(403).json({ error: 'Forbidden: Requires Super Admin or Manager role' });
@@ -1422,6 +1561,157 @@ export default async function handler(req, res) {
     }
 
 
+    if (action === 'get_marketers') {
+      const { data: marketerProfiles, error: mError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'marketer')
+        .order('created_at', { ascending: false });
+
+      if (mError) throw mError;
+
+      let userMap = new Map<string, { email: string; mobile: string }>();
+      try {
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        if (authUsers?.users) {
+          authUsers.users.forEach(u => {
+            if (u.id) {
+              userMap.set(u.id, {
+                email: u.email || '',
+                mobile: u.user_metadata?.mobile || u.phone || ''
+              });
+            }
+          });
+        }
+      } catch (authListErr) {
+        console.warn('Could not list auth users in get_marketers:', authListErr);
+      }
+
+      // Count assigned institutions & map institutions to marketers for revenue/commission stats
+      const { data: allInsts } = await supabase
+        .from('institutions')
+        .select('id, name, config_json')
+        .eq('is_super_admin', false)
+        .neq('name', 'SYSTEM_GLOBAL_INTERNAL');
+
+      const marketerInstCount = new Map<string, number>();
+      const instToMarketerMap = new Map<string, { marketerId: string; customRate?: number; customDeduction?: number }>();
+      const allAssignedInstIds: string[] = [];
+
+      (allInsts || []).forEach((inst: any) => {
+        let cfg = inst.config_json;
+        if (typeof cfg === 'string') {
+          try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+        }
+        const mId = cfg?.marketer_id;
+        if (mId) {
+          marketerInstCount.set(mId, (marketerInstCount.get(mId) || 0) + 1);
+          instToMarketerMap.set(inst.id, {
+            marketerId: mId,
+            customRate: cfg?.marketer_commission_rate !== undefined && cfg?.marketer_commission_rate !== null && cfg?.marketer_commission_rate !== ''
+              ? Number(cfg.marketer_commission_rate)
+              : undefined,
+            customDeduction: cfg?.marketer_base_deduction !== undefined && cfg?.marketer_base_deduction !== null && cfg?.marketer_base_deduction !== ''
+              ? Number(cfg.marketer_base_deduction)
+              : undefined
+          });
+          allAssignedInstIds.push(inst.id);
+        }
+      });
+
+      const marketerRuleMap = new Map<string, { rate: number; deduction: number }>();
+      (marketerProfiles || []).forEach((p: any) => {
+        marketerRuleMap.set(p.id, {
+          rate: Number(p.permissions?.commission_rate ?? 30),
+          deduction: Number(p.permissions?.base_deduction ?? 100)
+        });
+      });
+
+      const marketerStatsMap = new Map<string, {
+        month_collection: number;
+        month_commission: number;
+        total_collection: number;
+        total_commission: number;
+      }>();
+
+      if (allAssignedInstIds.length > 0) {
+        const { data: txData } = await supabase
+          .from('transactions')
+          .select('id, institution_id, amount, description, status, created_at, approved_at, module')
+          .in('institution_id', allAssignedInstIds)
+          .eq('status', 'approved')
+          .limit(5000);
+
+        const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+
+        (txData || []).forEach((t: any) => {
+          const desc = (t.description || '').toLowerCase();
+          const isSub =
+            t.module === 'subscription' ||
+            desc.includes('subscription') ||
+            desc.includes('package') ||
+            desc.includes('renew') ||
+            desc.includes('প্যাকেজ') ||
+            desc.includes('সাবস্ক্রিপশন');
+          if (!isSub) return;
+
+          const instAssign = instToMarketerMap.get(t.institution_id);
+          if (!instAssign) return;
+
+          const mId = instAssign.marketerId;
+          const mRules = marketerRuleMap.get(mId) || { rate: 30, deduction: 100 };
+          const rate = instAssign.customRate !== undefined ? instAssign.customRate : mRules.rate;
+          const deduction = instAssign.customDeduction !== undefined ? instAssign.customDeduction : mRules.deduction;
+
+          const gross = Number(t.amount) || 0;
+          const commissionable = gross > deduction ? gross - deduction : 0;
+          const comm = gross > deduction ? Number(((commissionable * rate) / 100).toFixed(2)) : 0;
+
+          const existing = marketerStatsMap.get(mId) || {
+            month_collection: 0,
+            month_commission: 0,
+            total_collection: 0,
+            total_commission: 0
+          };
+
+          existing.total_collection = Number((existing.total_collection + gross).toFixed(2));
+          existing.total_commission = Number((existing.total_commission + comm).toFixed(2));
+
+          const txDateStr = (t.approved_at || t.created_at || '').slice(0, 7);
+          if (txDateStr === currentMonthPrefix) {
+            existing.month_collection = Number((existing.month_collection + gross).toFixed(2));
+            existing.month_commission = Number((existing.month_commission + comm).toFixed(2));
+          }
+
+          marketerStatsMap.set(mId, existing);
+        });
+      }
+
+      const enrichedMarketers = (marketerProfiles || []).map((p: any) => {
+        const authInfo = userMap.get(p.id);
+        const mobile = p.permissions?.mobile || authInfo?.mobile || '';
+        const commission_rate = Number(p.permissions?.commission_rate ?? 30);
+        const base_deduction = Number(p.permissions?.base_deduction ?? 100);
+        const stats = marketerStatsMap.get(p.id) || {
+          month_collection: 0,
+          month_commission: 0,
+          total_collection: 0,
+          total_commission: 0
+        };
+        return {
+          ...p,
+          email: authInfo?.email || p.email || '',
+          mobile,
+          commission_rate,
+          base_deduction,
+          assigned_count: marketerInstCount.get(p.id) || 0,
+          ...stats
+        };
+      });
+
+      return res.status(200).json({ success: true, marketers: enrichedMarketers });
+    }
+
     if (action === 'get_staff') {
       const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').maybeSingle();
       const sysId = sysInst?.id;
@@ -1432,6 +1722,9 @@ export default async function handler(req, res) {
       }
       const { data: profileList, error: pError } = await profilesQuery;
       if (pError) throw pError;
+
+      // Filter out marketers from regular staff list unless explicitly requested
+      const filteredProfiles = (profileList || []).filter((p: any) => p.role === 'manager' || p.role === 'super_admin');
 
       // Enrich with emails from Supabase Auth admin
       let userMap = new Map<string, string>();
@@ -1446,7 +1739,7 @@ export default async function handler(req, res) {
         console.warn('Could not list auth users in get_staff:', authListErr);
       }
 
-      const enrichedStaff = (profileList || []).map(p => ({
+      const enrichedStaff = filteredProfiles.map(p => ({
         ...p,
         email: userMap.get(p.id) || p.email || ''
       }));
@@ -1455,7 +1748,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create_staff') {
-      const { name, email, password, role, permissions } = body;
+      const { name, email, mobile, password, role, permissions } = body;
 
       if (!name || !email || !password || !role) {
         return res.status(400).json({ error: 'সকল ঘর পূরণ করুন (Missing required fields)' });
@@ -1463,6 +1756,7 @@ export default async function handler(req, res) {
 
       const trimmedEmail = email.trim().toLowerCase();
       const trimmedPassword = password.trim();
+      const trimmedMobile = mobile ? String(mobile).trim() : '';
 
       if (trimmedPassword.length < 6) {
         return res.status(400).json({ error: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে (Password must be at least 6 characters)' });
@@ -1475,7 +1769,7 @@ export default async function handler(req, res) {
         email: trimmedEmail,
         password: trimmedPassword,
         email_confirm: true,
-        user_metadata: { name: name.trim() }
+        user_metadata: { name: name.trim(), ...(trimmedMobile ? { mobile: trimmedMobile } : {}) }
       });
 
       if (authError) {
@@ -1495,7 +1789,7 @@ export default async function handler(req, res) {
             const { error: updateErr } = await supabase.auth.admin.updateUserById(userId, {
               password: trimmedPassword,
               email_confirm: true,
-              user_metadata: { name: name.trim() }
+              user_metadata: { name: name.trim(), ...(trimmedMobile ? { mobile: trimmedMobile } : {}) }
             });
             if (updateErr) throw updateErr;
           } else {
@@ -1533,13 +1827,23 @@ export default async function handler(req, res) {
         sysId = newSys?.id;
       }
 
+      const finalPermissions: any = {
+        ...(permissions || {}),
+        ...(trimmedMobile ? { mobile: trimmedMobile } : {})
+      };
+
+      if (role === 'marketer') {
+        finalPermissions.commission_rate = body.commission_rate !== undefined ? Number(body.commission_rate) : (finalPermissions.commission_rate ?? 30);
+        finalPermissions.base_deduction = body.base_deduction !== undefined ? Number(body.base_deduction) : (finalPermissions.base_deduction ?? 100);
+      }
+
       // 3. Create or update profile with assigned permissions
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: userId,
         institution_id: sysId,
         full_name: name.trim(),
-        role: role, // 'manager' or 'super_admin'
-        permissions: permissions || {},
+        role: role, // 'manager', 'super_admin', or 'marketer'
+        permissions: finalPermissions,
         is_active: true
       });
 
@@ -1549,7 +1853,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update_staff') {
-      const { id, name, role, permissions, is_active, password } = body;
+      const { id, name, mobile, role, permissions, is_active, password } = body;
 
       if (!id) {
         return res.status(400).json({ error: 'Staff ID is required' });
@@ -1573,11 +1877,14 @@ export default async function handler(req, res) {
         }
       }
 
-      // 2. Update user_metadata in Auth if name provided
-      if (name && typeof name === 'string' && name.trim()) {
+      // 2. Update user_metadata in Auth if name or mobile provided
+      if ((name && typeof name === 'string' && name.trim()) || mobile !== undefined) {
         try {
+          const metaUpdate: any = {};
+          if (name && typeof name === 'string' && name.trim()) metaUpdate.name = name.trim();
+          if (mobile !== undefined) metaUpdate.mobile = String(mobile).trim();
           await supabase.auth.admin.updateUserById(id, {
-            user_metadata: { name: name.trim() }
+            user_metadata: metaUpdate
           });
         } catch (e) {
           console.warn('Could not update Auth user_metadata:', e);
@@ -1588,7 +1895,17 @@ export default async function handler(req, res) {
       const updateData: any = {};
       if (name !== undefined) updateData.full_name = name.trim();
       if (role !== undefined) updateData.role = role;
-      if (permissions !== undefined) updateData.permissions = permissions;
+      if (permissions !== undefined || mobile !== undefined || body.commission_rate !== undefined || body.base_deduction !== undefined) {
+        const { data: existingProf } = await supabase.from('profiles').select('permissions').eq('id', id).maybeSingle();
+        const mergedPerms: any = {
+          ...(existingProf?.permissions || {}),
+          ...(permissions || {})
+        };
+        if (mobile !== undefined) mergedPerms.mobile = String(mobile).trim();
+        if (body.commission_rate !== undefined) mergedPerms.commission_rate = Number(body.commission_rate);
+        if (body.base_deduction !== undefined) mergedPerms.base_deduction = Number(body.base_deduction);
+        updateData.permissions = mergedPerms;
+      }
       if (is_active !== undefined) updateData.is_active = is_active;
 
       const { error: profileError } = await supabase
@@ -1598,7 +1915,7 @@ export default async function handler(req, res) {
 
       if (profileError) throw profileError;
 
-      return res.status(200).json({ success: true, message: 'ম্যানেজার তথ্য ও পাসওয়ার্ড সফলভাবে আপডেট হয়েছে।' });
+      return res.status(200).json({ success: true, message: 'তথ্য ও পাসওয়ার্ড সফলভাবে আপডেট হয়েছে।' });
     }
 
     if (action === 'delete_staff') {
@@ -1616,7 +1933,7 @@ export default async function handler(req, res) {
       const { error: profDelErr } = await supabase.from('profiles').delete().eq('id', id);
       if (profDelErr) throw profDelErr;
 
-      return res.status(200).json({ success: true, message: 'স্টাফ মেম্বার সফলভাবে ডিলিট করা হয়েছে।' });
+      return res.status(200).json({ success: true, message: 'সফলভাবে ডিলিট করা হয়েছে।' });
     }
 
     return res.status(404).json({ error: 'Action not found' });
@@ -1627,7 +1944,7 @@ export default async function handler(req, res) {
 }
 
 async function setupInstitution(supabase, userId, body, res) {
-  const { name, phone, email, institution_type } = body;
+  const { name, phone, email, institution_type, marketer_id, marketer_name, marketer_commission_rate, marketer_base_deduction } = body;
 
   // 2. Create/Update the institution record
   const { data: instData, error: instError } = await supabase.from('institutions').upsert({
@@ -1641,6 +1958,12 @@ async function setupInstitution(supabase, userId, body, res) {
     status: 'active',
     config_json: {
       student_limit: 200,
+      ...(marketer_id ? {
+        marketer_id,
+        marketer_name: marketer_name || '',
+        ...(marketer_commission_rate !== undefined && marketer_commission_rate !== '' ? { marketer_commission_rate: Number(marketer_commission_rate) } : {}),
+        ...(marketer_base_deduction !== undefined && marketer_base_deduction !== '' ? { marketer_base_deduction: Number(marketer_base_deduction) } : {})
+      } : {}),
       modules: {
         attendance: true,
         exam: true,
