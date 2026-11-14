@@ -275,79 +275,94 @@ const AdmissionFormPreview: React.FC<Props> = ({
             {/* Top Container */}
             <div className="flex flex-col">
               {/* Header */}
-              <div className="flex justify-between items-center border-b-2 pb-2 mb-3" style={{ borderColor: config.themeColor }}>
-                <div className="flex items-center gap-3">
-                  {config.showLogo && (
-                    <div className="w-16 h-16 bg-white border border-slate-100 rounded-xl flex items-center justify-center overflow-hidden shadow-sm">
-                      {((logoBase64 || madrasah?.logo_url) && !logoError) ? (
-                        <img 
-                          src={getProxiedUrl(logoBase64 || madrasah?.logo_url)} 
-                          alt="Logo" 
-                          className="max-w-full max-h-full object-contain"
-                          onError={() => setLogoError(true)}
-                          crossOrigin="anonymous"
-                        />
-                      ) : (
-                        <span className="text-xs font-black text-slate-300">LOGO</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="space-y-0.5">
-                    <h1 
-                      className="font-black leading-tight uppercase tracking-tight"
-                      style={{ fontSize: `${16 * config.fontScale}px`, color: config.themeColor }}
-                    >
-                      {madrasah?.name || 'Institution Name'}
-                    </h1>
-                    <p 
-                      className="font-bold text-slate-600 max-w-[400px] leading-snug"
-                      style={{ fontSize: `${8.5 * config.fontScale}px` }}
-                    >
-                      {madrasah?.address || 'Address of the Institution'}
-                    </p>
-                    {madrasah?.phone && (
-                      <p 
-                        className="font-black opacity-80"
-                        style={{ fontSize: `${8 * config.fontScale}px`, color: config.themeColor }}
-                      >
-                        Phone: {madrasah?.phone}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex flex-col items-end gap-2">
-                  <div 
-                    className="w-20 h-24 border-2 bg-slate-50 overflow-hidden shadow-inner flex flex-col items-center justify-center p-0.5 rounded-sm text-center" 
-                    style={{ borderColor: config.themeColor, borderStyle: isBlank ? 'dashed' : 'solid' }}
+              <div className="flex justify-between items-center gap-4 border-b-2 pb-2.5 mb-3" style={{ borderColor: config.themeColor }}>
+                {/* Left: Logo Box (same size & format as Photo Box) */}
+                {config.showLogo ? (
+                  <div
+                    className="w-20 h-24 bg-white border-2 rounded-xl flex items-center justify-center overflow-hidden shadow-sm p-1 shrink-0"
+                    style={{ borderColor: config.themeColor }}
                   >
-                    {((photoBase64 || formData.photoUrl) && !isBlank && !photoError) ? (
+                    {((logoBase64 || madrasah?.logo_url) && !logoError) ? (
                       <img 
-                        src={getProxiedUrl(photoBase64 || formData.photoUrl)} 
-                        alt="Student" 
-                        className="w-full h-full object-cover border border-white"
-                        onError={() => setPhotoError(true)}
+                        src={getProxiedUrl(logoBase64 || madrasah?.logo_url)} 
+                        alt="Logo" 
+                        className="w-full h-full object-contain rounded-lg"
+                        onError={() => setLogoError(true)}
                         crossOrigin="anonymous"
                       />
                     ) : (
-                      <div className="text-center p-1 flex flex-col items-center justify-center h-full">
-                         <span className="text-[8.5px] font-black uppercase leading-tight" style={{ color: config.themeColor }}>
-                           {lang === 'bn' ? 'ছবি' : 'Photo'}
-                         </span>
-                         <span className="text-[7.5px] font-bold text-slate-400 uppercase leading-none mt-0.5">
-                           {lang === 'bn' ? 'পাসপোর্ট সাইজ' : 'Passport Size'}
-                         </span>
-                         {isBlank && (
-                           <span className="text-[6.5px] font-semibold text-slate-400 mt-1 leading-tight">
-                             {lang === 'bn' ? '(এখানে লাগান)' : '(Attach Here)'}
-                           </span>
-                         )}
-                      </div>
+                      <span className="text-xs font-black text-slate-300">LOGO</span>
                     )}
                   </div>
-                  <div className="text-white px-3.5 py-0.5 rounded-full shadow-sm" style={{ backgroundColor: config.themeColor }}>
-                    <span className="font-black uppercase tracking-widest text-[10px]" style={{ fontSize: `${10 * config.fontScale}px` }}>{t.title}</span>
+                ) : (
+                  <div className="w-20 h-24 shrink-0" />
+                )}
+
+                {/* Center: Madrasah Name, Address, Phone & Form Title Badge */}
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-2 space-y-0.5">
+                  <h1 
+                    className="font-black leading-tight uppercase tracking-tight text-center"
+                    style={{ fontSize: `${16 * config.fontScale}px`, color: config.themeColor }}
+                  >
+                    {madrasah?.name || 'Institution Name'}
+                  </h1>
+                  <p 
+                    className="font-bold text-slate-600 max-w-[440px] leading-snug text-center"
+                    style={{ fontSize: `${8.5 * config.fontScale}px` }}
+                  >
+                    {madrasah?.address || 'Address of the Institution'}
+                  </p>
+                  {madrasah?.phone && (
+                    <p 
+                      className="font-black opacity-80 text-center"
+                      style={{ fontSize: `${8 * config.fontScale}px`, color: config.themeColor }}
+                    >
+                      Phone: {madrasah?.phone}
+                    </p>
+                  )}
+                  <div className="pt-1">
+                    <div
+                      className="inline-flex items-center justify-center text-white px-5 py-0.5 rounded-full shadow-sm"
+                      style={{ backgroundColor: config.themeColor }}
+                    >
+                      <span
+                        className="font-black uppercase tracking-widest text-[10px] whitespace-nowrap"
+                        style={{ fontSize: `${10 * config.fontScale}px` }}
+                      >
+                        {t.title}
+                      </span>
+                    </div>
                   </div>
+                </div>
+                
+                {/* Right: Photo Box (same size & format as Logo Box) */}
+                <div 
+                  className="w-20 h-24 border-2 bg-slate-50 overflow-hidden shadow-sm flex flex-col items-center justify-center p-1 rounded-xl text-center shrink-0" 
+                  style={{ borderColor: config.themeColor, borderStyle: isBlank ? 'dashed' : 'solid' }}
+                >
+                  {((photoBase64 || formData.photoUrl) && !isBlank && !photoError) ? (
+                    <img 
+                      src={getProxiedUrl(photoBase64 || formData.photoUrl)} 
+                      alt="Student" 
+                      className="w-full h-full object-cover rounded-lg"
+                      onError={() => setPhotoError(true)}
+                      crossOrigin="anonymous"
+                    />
+                  ) : (
+                    <div className="text-center p-1 flex flex-col items-center justify-center h-full">
+                       <span className="text-[8.5px] font-black uppercase leading-tight" style={{ color: config.themeColor }}>
+                         {lang === 'bn' ? 'ছবি' : 'Photo'}
+                       </span>
+                       <span className="text-[7.5px] font-bold text-slate-400 uppercase leading-none mt-0.5">
+                         {lang === 'bn' ? 'পাসপোর্ট সাইজ' : 'Passport Size'}
+                       </span>
+                       {isBlank && (
+                         <span className="text-[6.5px] font-semibold text-slate-400 mt-1 leading-tight">
+                           {lang === 'bn' ? '(এখানে লাগান)' : '(Attach Here)'}
+                         </span>
+                       )}
+                    </div>
+                  )}
                 </div>
               </div>
 
