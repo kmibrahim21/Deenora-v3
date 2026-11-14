@@ -24,6 +24,30 @@
       "destination": "/api/iclock.ts"
     },
     {
+      "source": "/hdata.aspx",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/hdata.aspx/:path*",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/ebkn",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/ebkn/:path*",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/fkweb",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/ISAPI/:path*",
+      "destination": "/api/iclock.ts"
+    },
+    {
       "source": "/api/agent/:path*",
       "destination": "/api/agent.ts"
     },

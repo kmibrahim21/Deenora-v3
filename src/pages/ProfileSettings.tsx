@@ -735,16 +735,102 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       
       // Update local cache so UI doesn't bounce
       try {
-         const { OfflineService } = await import('../services/OfflineService');
-         const cachedMadrasah = OfflineService.getCache('profile');
-         if (cachedMadrasah && cachedMadrasah.id === madrasah.id) {
-           OfflineService.setCache('profile', { ...cachedMadrasah, name: newName.trim(), address: newAddress.trim(), phone: newPhone.trim(), contact_email: newContactEmail.trim(), config_json: updatedConfig });
-         }
+        const { OfflineService } = await import('../services/OfflineService');
+        const cachedData = OfflineService.getCache('profile');
+        if (cachedData) {
+          if (cachedData.id === madrasah.id) {
+            OfflineService.setCache('profile', { ...cachedData, name: newName.trim(), address: newAddress.trim(), phone: newPhone.trim(), contact_email: newContactEmail.trim(), config_json: updatedConfig });
+          } else if (cachedData.madrasah && cachedData.madrasah.id === madrasah.id) {
+            OfflineService.setCache('profile', {
+              ...cachedData,
+              madrasah: {
+                ...cachedData.madrasah,
+                name: newName.trim(),
+                address: newAddress.trim(),
+                phone: newPhone.trim(),
+                contact_email: newContactEmail.trim(),
+                config_json: updatedConfig
+              }
+            });
+          }
+        }
       } catch(e) {}
 
       if (onProfileUpdate) onProfileUpdate();
       setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: lang === 'bn' ? 'প্রোফাইল সেটিংস সফলভাবে সেভ হয়েছে' : 'Profile updated successfully' });
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
+  };
+
+  const handleToggleAdminFeature = async (featureKey: 'delete_class' | 'delete_accounting', nextVal: boolean) => {
+    if (featureKey === 'delete_class') setFeatureDeleteClass(nextVal);
+    if (featureKey === 'delete_accounting') setFeatureDeleteAccounting(nextVal);
+    if (!madrasah) return;
+    try {
+      let currentConfigObj: any = {};
+      if (typeof madrasah.config_json === 'string') {
+        try { currentConfigObj = JSON.parse(madrasah.config_json); } catch (e) { currentConfigObj = {}; }
+      } else if (madrasah.config_json && typeof madrasah.config_json === 'object') {
+        currentConfigObj = madrasah.config_json;
+      }
+
+      const updatedConfig = {
+        ...currentConfigObj,
+        features: {
+          ...(currentConfigObj.features || {}),
+          delete_class: featureKey === 'delete_class' ? nextVal : featureDeleteClass,
+          delete_accounting: featureKey === 'delete_accounting' ? nextVal : featureDeleteAccounting
+        }
+      };
+
+      requestManager.invalidatePattern(`institution:${madrasah.id}`);
+      requestManager.invalidatePattern('institution');
+
+      let updateSuccess = false;
+      try {
+        const res = await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-settings',
+            institutionId: madrasah.id,
+            name: newName.trim() || madrasah.name,
+            address: newAddress.trim() || madrasah.address || null,
+            phone: newPhone.trim() || madrasah.phone,
+            contact_email: newContactEmail.trim() || madrasah.contact_email || null,
+            voice_sender_id: voiceSenderId.trim() || madrasah.voice_sender_id || null,
+            logo_url: logoUrl || madrasah.logo_url,
+            config_json: updatedConfig
+          })
+        });
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.success) updateSuccess = true;
+        }
+      } catch (e) {}
+
+      if (!updateSuccess) {
+        await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
+      }
+
+      try {
+        const { OfflineService } = await import('../services/OfflineService');
+        const cachedData = OfflineService.getCache('profile');
+        if (cachedData) {
+          if (cachedData.id === madrasah.id) {
+            OfflineService.setCache('profile', { ...cachedData, config_json: updatedConfig });
+          } else if (cachedData.madrasah && cachedData.madrasah.id === madrasah.id) {
+            OfflineService.setCache('profile', {
+              ...cachedData,
+              madrasah: { ...cachedData.madrasah, config_json: updatedConfig }
+            });
+          }
+        }
+      } catch (e) {}
+
+      if (onProfileUpdate) onProfileUpdate();
+    } catch (e) {
+      console.warn('Failed to auto-save admin permission toggle:', e);
+    }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature' | 'calligraphy') => {
@@ -1226,12 +1312,12 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
                 <div className="space-y-4">
                   {[
-                    { label: lang === 'bn' ? 'ক্লাস ডিলিট' : 'Delete Class', description: lang === 'bn' ? 'ক্লাস ডিলিট করার অপশন চালু করুন' : 'Enable option to delete classes', checked: featureDeleteClass, setter: setFeatureDeleteClass },
-                    { label: lang === 'bn' ? 'হিসাব ইতিহাস ডিলিট' : 'Delete Accounting History', description: lang === 'bn' ? 'হিসাবের লেনদেন ডিলিট করুন' : 'Enable option to delete transactions', checked: featureDeleteAccounting, setter: setFeatureDeleteAccounting },
+                    { key: 'delete_class' as const, label: lang === 'bn' ? 'ক্লাস ডিলিট' : 'Delete Class', description: lang === 'bn' ? 'ক্লাস ডিলিট করার অপশন চালু করুন' : 'Enable option to delete classes', checked: featureDeleteClass },
+                    { key: 'delete_accounting' as const, label: lang === 'bn' ? 'হিসাব ইতিহাস ডিলিট' : 'Delete Accounting History', description: lang === 'bn' ? 'হিসাবের লেনদেন ডিলিট করুন' : 'Enable option to delete transactions', checked: featureDeleteAccounting },
                   ].map((feature, idx) => (
                     <label key={idx} className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.02] ${feature.checked ? (isDark ? 'bg-rose-500/10 border-rose-500/30' : 'bg-white border-rose-200 shadow-md shadow-rose-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/60 border-transparent')}`}>
                       <div className="relative inline-flex items-center">
-                        <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => feature.setter(e.target.checked)} />
+                        <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => handleToggleAdminFeature(feature.key, e.target.checked)} />
                         <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-rose-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
                       </div>
                       <div className="flex-1 min-w-0">

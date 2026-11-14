@@ -197,8 +197,8 @@ async function startServer() {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 
-  // ZKTeco ADMS Route (Biometric Machine Sync)
-  app.all('/iclock/*all', async (req, res) => {
+  // ZKTeco ADMS, Vnotify.ai & Hikvision Routes (Biometric Machine Sync)
+  app.all(['/iclock', '/iclock/*all', '/hdata.aspx', '/hdata.aspx/*all', '/ebkn', '/ebkn/*all', '/fkweb', '/ISAPI/*all'], async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'iclock.ts'), req, res);
   });
 

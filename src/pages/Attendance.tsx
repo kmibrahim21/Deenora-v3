@@ -241,53 +241,106 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [settingsClassId, setSettingsClassId] = useState<string>('global');
   const [copiedId, setCopiedId] = useState(false);
   
-  // Biometric Machine Modal States
+  // Biometric Machine Modal States (Isolated per Brand)
   const [showBiometricModal, setShowBiometricModal] = useState(false);
-  const [biometricTab, setBiometricTab] = useState<'adms' | 'non_adms'>('adms');
+  const [biometricBrandTab, setBiometricBrandTab] = useState<'zkteco' | 'vnotify' | 'hikvision'>('zkteco');
+  const [zkSubTab, setZkSubTab] = useState<'adms' | 'non_adms'>('adms');
   const [agentDeviceIp, setAgentDeviceIp] = useState('192.168.0.201');
-  const [testSn, setTestSn] = useState('');
+
+  // Isolated per-brand Serial Number inputs & results
+  const [zkSn, setZkSn] = useState('');
+  const [zkTestResult, setZkTestResult] = useState<any>(null);
+  const [zkQueueResult, setZkQueueResult] = useState<any>(null);
+
+  const [vnotifySn, setVnotifySn] = useState('');
+  const [vnotifyTestResult, setVnotifyTestResult] = useState<any>(null);
+  const [vnotifyQueueResult, setVnotifyQueueResult] = useState<any>(null);
+
+  const [hikSn, setHikSn] = useState('');
+  const [hikTestResult, setHikTestResult] = useState<any>(null);
+
   const [testingConn, setTestingConn] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [testingSnTarget, setTestingSnTarget] = useState<string | null>(null);
   const [savingDevice, setSavingDevice] = useState(false);
   const [deletingDeviceSn, setDeletingDeviceSn] = useState<string | null>(null);
   const [queueingUsers, setQueueingUsers] = useState(false);
-  const [queueResult, setQueueResult] = useState<any>(null);
 
-  // Derived list of currently registered ADMS devices from madrasah config
-  const registeredDevices: Array<{ sn: string; name: string; added_at?: string }> = useMemo(() => {
+  // Derived list of all registered biometric devices from madrasah config (defaulting brand to 'zkteco')
+  const registeredDevices: Array<{ sn: string; name: string; brand: 'zkteco' | 'vnotify' | 'hikvision'; added_at?: string }> = useMemo(() => {
     const raw = (madrasah?.config_json as any)?.biometric_devices || [];
     const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
     return arr.map((item: any) => {
-      if (typeof item === 'string') return { sn: item.trim().toUpperCase(), name: 'ZKTeco ADMS Device' };
+      if (typeof item === 'string') {
+        return { sn: item.trim().toUpperCase(), name: 'ZKTeco ADMS Device', brand: 'zkteco' as const };
+      }
+      const brandVal: 'zkteco' | 'vnotify' | 'hikvision' =
+        item?.brand === 'vnotify' ? 'vnotify' : item?.brand === 'hikvision' ? 'hikvision' : 'zkteco';
       return {
         sn: (item?.sn || item?.id || item?.device_sn || '').toString().trim().toUpperCase(),
-        name: item?.name || 'ZKTeco ADMS Device',
+        name: item?.name || (brandVal === 'vnotify' ? 'Vnotify.ai Device' : brandVal === 'hikvision' ? 'Hikvision Terminal' : 'ZKTeco ADMS Device'),
+        brand: brandVal,
         added_at: item?.added_at
       };
     }).filter(d => Boolean(d.sn));
   }, [(madrasah?.config_json as any)?.biometric_devices]);
 
-  const testBiometricConnection = async (snToTestParam?: string) => {
-    const snTarget = (snToTestParam || testSn || '').trim().toUpperCase();
+  const zkDevices = useMemo(
+    () => registeredDevices.filter(d => d.brand === 'zkteco' || !d.brand),
+    [registeredDevices]
+  );
+  const vnotifyDevices = useMemo(
+    () => registeredDevices.filter(d => d.brand === 'vnotify'),
+    [registeredDevices]
+  );
+  const hikvisionDevices = useMemo(
+    () => registeredDevices.filter(d => d.brand === 'hikvision'),
+    [registeredDevices]
+  );
+
+  const testBiometricConnection = async (
+    snToTestParam?: string,
+    brand: 'zkteco' | 'vnotify' | 'hikvision' = biometricBrandTab
+  ) => {
+    const fallbackSn = brand === 'vnotify' ? vnotifySn : brand === 'hikvision' ? hikSn : zkSn;
+    const snTarget = (snToTestParam || fallbackSn || '').trim().toUpperCase();
     if (!snTarget) return;
+
     setTestingConn(true);
-    setTestResult(null);
+    setTestingSnTarget(snTarget);
+    if (brand === 'vnotify') setVnotifyTestResult(null);
+    else if (brand === 'hikvision') setHikTestResult(null);
+    else setZkTestResult(null);
+
     try {
       const res = await fetch(`/api/iclock?sn=${encodeURIComponent(snTarget)}`);
       const data = await res.json();
-      setTestResult(data);
-      if (snToTestParam && snToTestParam !== testSn) {
-        setTestSn(snToTestParam);
+      if (brand === 'vnotify') {
+        setVnotifyTestResult(data);
+        if (snToTestParam && snToTestParam !== vnotifySn) setVnotifySn(snToTestParam);
+      } else if (brand === 'hikvision') {
+        setHikTestResult(data);
+        if (snToTestParam && snToTestParam !== hikSn) setHikSn(snToTestParam);
+      } else {
+        setZkTestResult(data);
+        if (snToTestParam && snToTestParam !== zkSn) setZkSn(snToTestParam);
       }
     } catch (err: any) {
-      setTestResult({ success: false, error: err.message || 'কানেকশন টেস্ট ব্যর্থ হয়েছে' });
+      const errPayload = { success: false, error: err.message || 'কানেকশন টেস্ট ব্যর্থ হয়েছে' };
+      if (brand === 'vnotify') setVnotifyTestResult(errPayload);
+      else if (brand === 'hikvision') setHikTestResult(errPayload);
+      else setZkTestResult(errPayload);
     } finally {
       setTestingConn(false);
+      setTestingSnTarget(null);
     }
   };
 
-  const handleSaveDeviceSn = async (snToSave?: string) => {
-    const cleanSn = (snToSave || testSn || '').trim().toUpperCase();
+  const handleSaveDeviceSn = async (
+    snToSave?: string,
+    brand: 'zkteco' | 'vnotify' | 'hikvision' = biometricBrandTab
+  ) => {
+    const fallbackSn = brand === 'vnotify' ? vnotifySn : brand === 'hikvision' ? hikSn : zkSn;
+    const cleanSn = (snToSave || fallbackSn || '').trim().toUpperCase();
     if (!cleanSn) {
       alert(lang === 'bn' ? 'অনুগ্রহ করে মেশিনের সিরিয়াল নম্বর (SN) লিখুন।' : 'Please enter machine Serial Number (SN).');
       return;
@@ -299,6 +352,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const rawList = currentConfig.biometric_devices || [];
       const currentList = Array.isArray(rawList) ? rawList : (rawList ? [rawList] : []);
 
+      const defaultName =
+        brand === 'vnotify'
+          ? 'Vnotify.ai Device'
+          : brand === 'hikvision'
+            ? 'Hikvision Terminal'
+            : 'ZKTeco ADMS Device';
+
       const existingSns = new Set(
         currentList.map((d: any) => (typeof d === 'string' ? d : d?.sn || d?.id || '').toString().trim().toUpperCase())
       );
@@ -309,15 +369,15 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           const s = (typeof d === 'string' ? d : d?.sn || d?.id || '').toString().trim().toUpperCase();
           if (s === cleanSn) {
             return typeof d === 'string'
-              ? { sn: cleanSn, name: 'ZKTeco ADMS Device', added_at: new Date().toISOString() }
-              : { ...d, sn: cleanSn };
+              ? { sn: cleanSn, name: defaultName, brand, added_at: new Date().toISOString() }
+              : { ...d, sn: cleanSn, name: d?.name || defaultName, brand };
           }
           return d;
         });
       } else {
         updatedList = [
           ...currentList,
-          { sn: cleanSn, name: 'ZKTeco ADMS Device', added_at: new Date().toISOString() }
+          { sn: cleanSn, name: defaultName, brand, added_at: new Date().toISOString() }
         ];
       }
 
@@ -333,10 +393,23 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       if (error) throw error;
 
+      const cachedProfile = OfflineService.getCache('profile');
+      if (cachedProfile && cachedProfile.madrasah) {
+        OfflineService.setCache('profile', {
+          ...cachedProfile,
+          madrasah: {
+            ...cachedProfile.madrasah,
+            config_json: updatedConfig
+          }
+        });
+      }
+      await requestManager.invalidatePattern('institution');
+      await requestManager.invalidatePattern('institutions');
+
       if (triggerRefresh) triggerRefresh();
 
       // Automatically test connection after saving
-      await testBiometricConnection(cleanSn);
+      await testBiometricConnection(cleanSn, brand);
 
       setSuccessTitle(lang === 'bn' ? 'ডিভাইস রেজিস্টার সম্পন্ন!' : 'Device Registered!');
       setSuccessMessage(lang === 'bn' 
@@ -352,7 +425,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     }
   };
 
-  const handleDeleteDeviceSn = async (snToDelete: string) => {
+  const handleDeleteDeviceSn = async (
+    snToDelete: string,
+    brand: 'zkteco' | 'vnotify' | 'hikvision' = biometricBrandTab
+  ) => {
     if (!confirm(lang === 'bn' ? `আপনি কি নিশ্চিত যে "${snToDelete}" ডিভাইসটি মুছে ফেলতে চান?` : `Remove device "${snToDelete}"?`)) return;
     if (!madrasah?.id) return;
     setDeletingDeviceSn(snToDelete);
@@ -378,9 +454,27 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       if (error) throw error;
 
+      const cachedProfile = OfflineService.getCache('profile');
+      if (cachedProfile && cachedProfile.madrasah) {
+        OfflineService.setCache('profile', {
+          ...cachedProfile,
+          madrasah: {
+            ...cachedProfile.madrasah,
+            config_json: updatedConfig
+          }
+        });
+      }
+      await requestManager.invalidatePattern('institution');
+      await requestManager.invalidatePattern('institutions');
+
       if (triggerRefresh) triggerRefresh();
-      if (testSn.trim().toUpperCase() === snToDelete.toUpperCase()) {
-        setTestResult(null);
+      const upperDel = snToDelete.toUpperCase();
+      if (brand === 'vnotify' && vnotifySn.trim().toUpperCase() === upperDel) {
+        setVnotifyTestResult(null);
+      } else if (brand === 'hikvision' && hikSn.trim().toUpperCase() === upperDel) {
+        setHikTestResult(null);
+      } else if (zkSn.trim().toUpperCase() === upperDel) {
+        setZkTestResult(null);
       }
     } catch (err: any) {
       setErrorTitle(lang === 'bn' ? 'ডিভাইস মুছতে ব্যর্থ' : 'Failed to Delete Device');
@@ -391,22 +485,28 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     }
   };
 
-  const handlePushStudentsToAdms = async (snToPush?: string) => {
-    const targetSn = (snToPush || testSn || registeredDevices[0]?.sn || '').trim().toUpperCase();
+  const handlePushStudentsToAdms = async (snToPush?: string, brand: 'zkteco' | 'vnotify' = 'zkteco') => {
+    const targetSn = (
+      snToPush ||
+      (brand === 'vnotify' ? (vnotifySn || vnotifyDevices[0]?.sn) : (zkSn || zkDevices[0]?.sn)) ||
+      ''
+    ).trim().toUpperCase();
     if (!targetSn) {
       alert(lang === 'bn' ? 'অনুগ্রহ করে প্রথমে মেশিনের সিরিয়াল নম্বর (SN) ইনপুট অথবা রেজিস্টার করুন।' : 'Please enter or select a machine Serial Number (SN).');
       return;
     }
     if (!madrasah?.id) return;
     setQueueingUsers(true);
-    setQueueResult(null);
+    if (brand === 'vnotify') setVnotifyQueueResult(null);
+    else setZkQueueResult(null);
     try {
       const res = await fetch(`/api/iclock?action=queue_users&institution_id=${encodeURIComponent(madrasah.id)}&sn=${encodeURIComponent(targetSn)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
       const data = await res.json();
-      setQueueResult(data);
+      if (brand === 'vnotify') setVnotifyQueueResult(data);
+      else setZkQueueResult(data);
       if (data.success) {
         setSuccessTitle(lang === 'bn' ? 'ক্লাউড কিউতে ডাটা জমা হয়েছে!' : 'Users Queued Successfully!');
         setSuccessMessage(lang === 'bn' 
@@ -3224,13 +3324,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       {/* Standalone Dedicated Biometric Machine Sync Center Modal */}
       {showBiometricModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-6 sm:pt-6 animate-in fade-in duration-300">
-          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/20' : 'bg-white border-white shadow-blue-200/50'}`}>
+          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
             
             {/* Modal Header */}
-            <div className={`p-5 sm:p-6 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50/90 border-slate-100'}`}>
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+            <div className={`p-5 sm:p-6 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-[#2563EB]"></div>
               <div className="flex items-center gap-3.5">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-slate-900 text-blue-400' : 'bg-white text-[#2563EB] border border-slate-100'}`}>
                   <Cpu size={24} strokeWidth={2.5} />
                 </div>
                 <div>
@@ -3238,106 +3338,665 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     {lang === 'bn' ? 'বায়োমেট্রিক ডিভাইস ম্যানেজার' : 'Biometric Device Manager'}
                   </h2>
                   <p className="text-[11px] font-bold text-slate-400 mt-0.5">
-                    {lang === 'bn' ? 'ADMS ও নন-ADMS ডিভাইসের সম্পূর্ণ সেটআপ নির্দেশিকা' : 'ADMS & Non-ADMS setup instructions & app'}
+                    {lang === 'bn' ? 'ZKTeco, Vnotify.ai ও Hikvision মেশিন সেটআপ ও ক্লাউড সিঙ্ক' : 'ZKTeco, Vnotify.ai & Hikvision setup & cloud sync'}
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowBiometricModal(false)} 
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${isDark ? 'bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-900/20' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100'}`}
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${isDark ? 'bg-slate-900 text-slate-400 hover:text-rose-400 hover:bg-rose-900/20' : 'bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 border border-slate-100'}`}
               >
                 <XCircle size={22} />
               </button>
             </div>
 
-            {/* Sub-Tab Switcher: ADMS vs Non-ADMS */}
-            <div className={`p-3 border-b flex gap-2 shrink-0 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+            {/* 3 Main Brand Tabs: ZKTeco | Vnotify.ai | Hikvision */}
+            <div className={`p-3 border-b grid grid-cols-3 gap-2 shrink-0 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
               <button
                 type="button"
-                onClick={() => setBiometricTab('adms')}
-                className={`flex-1 py-3 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                  biometricTab === 'adms'
-                    ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300 dark:ring-blue-500/50'
-                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60')
+                onClick={() => setBiometricBrandTab('zkteco')}
+                className={`py-2.5 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                  biometricBrandTab === 'zkteco'
+                    ? 'bg-[#2563EB] text-white shadow-sm'
+                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80')
                 }`}
               >
-                <Cpu size={16} />
-                <span>ADMS ডিভাইস (ক্লাউড)</span>
+                <Cpu size={15} />
+                <span>ZKTeco</span>
+                {zkDevices.length > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${biometricBrandTab === 'zkteco' ? 'bg-white/20 text-white' : (isDark ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
+                    {zkDevices.length}
+                  </span>
+                )}
               </button>
 
               <button
                 type="button"
-                onClick={() => setBiometricTab('non_adms')}
-                className={`flex-1 py-3 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                  biometricTab === 'non_adms'
-                    ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-300 dark:ring-purple-500/50'
-                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60')
+                onClick={() => setBiometricBrandTab('vnotify')}
+                className={`py-2.5 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                  biometricBrandTab === 'vnotify'
+                    ? 'bg-[#2563EB] text-white shadow-sm'
+                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80')
                 }`}
               >
-                <Laptop size={16} />
-                <span>নন-ADMS (১-ক্লিক পিসি অ্যাপ)</span>
+                <Cpu size={15} />
+                <span>Vnotify.ai</span>
+                {vnotifyDevices.length > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${biometricBrandTab === 'vnotify' ? 'bg-white/20 text-white' : (isDark ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
+                    {vnotifyDevices.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBiometricBrandTab('hikvision')}
+                className={`py-2.5 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                  biometricBrandTab === 'hikvision'
+                    ? 'bg-[#2563EB] text-white shadow-sm'
+                    : (isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80')
+                }`}
+              >
+                <Cpu size={15} />
+                <span>Hikvision</span>
+                {hikvisionDevices.length > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${biometricBrandTab === 'hikvision' ? 'bg-white/20 text-white' : (isDark ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
+                    {hikvisionDevices.length}
+                  </span>
+                )}
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1 no-scrollbar">
-              {biometricTab === 'adms' ? (
-                /* TAB 1: ADMS SETUP GUIDE & PING TEST */
+            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 no-scrollbar">
+              {/* =====================================================================
+                  MAIN TAB 1: ZKTeco (with ADMS & Non-ADMS Sub-Tabs)
+              ===================================================================== */}
+              {biometricBrandTab === 'zkteco' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
-                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-blue-950/20 border-blue-900/40' : 'bg-blue-50/70 border-blue-100'}`}>
+                  {/* ZKTeco Sub-Tab Switcher: ADMS vs Non-ADMS */}
+                  <div className={`p-1.5 rounded-2xl border flex gap-1.5 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                    <button
+                      type="button"
+                      onClick={() => setZkSubTab('adms')}
+                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                        zkSubTab === 'adms'
+                          ? 'bg-[#2563EB] text-white shadow-sm'
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900')
+                      }`}
+                    >
+                      <Cpu size={15} />
+                      <span>ADMS (ক্লাউড)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setZkSubTab('non_adms')}
+                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                        zkSubTab === 'non_adms'
+                          ? 'bg-[#2563EB] text-white shadow-sm'
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900')
+                      }`}
+                    >
+                      <Laptop size={15} />
+                      <span>নন-ADMS (পিসি সিঙ্ক)</span>
+                    </button>
+                  </div>
+
+                  {zkSubTab === 'adms' ? (
+                    /* SUB-TAB 1: ZKTECO ADMS CLOUD */
+                    <div className="space-y-5 animate-in fade-in duration-200">
+                      <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <h3 className={`text-sm font-black font-noto ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                              ZKTeco ADMS ডায়রেক্ট ক্লাউড সিঙ্ক (পিসির প্রয়োজন নেই)
+                            </h3>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                            সরাসরি ক্লাউড
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-bold mb-4">
+                          ZKTeco, Realtime বা সমমানের বায়োমেট্রিক মেশিনের কিপ্যাড চেপে মেনু থেকে নিচের এড্রেস সেটিং করুন:
+                        </p>
+
+                        <div className="space-y-2 text-xs font-mono font-bold">
+                          <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                            <span className="text-slate-400">1. Enable Domain Name:</span>
+                            <span className="text-emerald-500 font-black">ON</span>
+                          </div>
+                          <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                            <span className="text-slate-400">2. Server Address:</span>
+                            <span className="text-[#2563EB] dark:text-blue-400 font-black select-all">deenora.app</span>
+                          </div>
+                          <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                            <span className="text-slate-400">3. Server Port:</span>
+                            <span className="text-[#2563EB] dark:text-blue-400 font-black">443 (or 80)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 1. Registered ZKTeco Devices List */}
+                      <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Cpu size={18} className="text-emerald-500" />
+                            <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto">
+                              রেজিস্টার্ড ZKTeco ডিভাইসসমূহ
+                            </h4>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                            {zkDevices.length}টি ডিভাইস
+                          </span>
+                        </div>
+
+                        {zkDevices.length > 0 ? (
+                          <div className="space-y-2.5">
+                            {zkDevices.map((dev, idx) => (
+                              <div 
+                                key={idx}
+                                className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                                  isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-xs'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <p className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto truncate">
+                                        {dev.name || 'ZKTeco ADMS Device'}
+                                      </p>
+                                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                                        SN: {dev.sn}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                      ক্লাউড ডায়রেক্ট কানেকশন সক্রিয়
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => testBiometricConnection(dev.sn, 'zkteco')}
+                                    disabled={testingConn}
+                                    title="কানেকশন চেক"
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'}`}
+                                  >
+                                    <RefreshCw size={12} className={testingConn && testingSnTarget === dev.sn ? 'animate-spin' : ''} />
+                                    <span>চেক</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePushStudentsToAdms(dev.sn, 'zkteco')}
+                                    disabled={queueingUsers}
+                                    title="ক্লাউড থেকে শিক্ষার্থী পাঠান"
+                                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all"
+                                  >
+                                    <Upload size={12} />
+                                    <span>ডাটা পুশ</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDeviceSn(dev.sn, 'zkteco')}
+                                    disabled={deletingDeviceSn === dev.sn}
+                                    title="ডিভাইস মুছুন"
+                                    className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
+                                  >
+                                    {deletingDeviceSn === dev.sn ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={`p-3.5 rounded-xl border text-xs font-bold leading-relaxed ${
+                            isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-100 text-slate-600'
+                          }`}>
+                            এখনও কোনো ZKTeco ADMS ডিভাইস রেজিস্টার করা নেই। নিচের বক্সে মেশিনের সিরিয়াল নম্বর (SN) লিখে <b>"➕ ডিভাইস রেজিস্টার ও সেভ করুন"</b> বাটনে চাপ দিন।
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. ZKTeco Serial Number (SN) Registration & Ping Test */}
+                      <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                        <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto mb-1 flex items-center gap-2">
+                          <Save size={15} className="text-[#2563EB] dark:text-blue-400" />
+                          ZKTeco সিরিয়াল নম্বর (SN) রেজিস্টার ও কানেকশন চেক
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-bold mb-3">
+                          মেশিনের পেছনের স্টিকার অথবা মেশিন মেনু (System Info) থেকে প্রাপ্ত Serial Number (যেমন: UEED262800196) নিচে লিখুন:
+                        </p>
+
+                        <div className="space-y-2.5">
+                          <input
+                            type="text"
+                            placeholder="ZKTeco Serial Number (SN, যেমন: UEED262800196)"
+                            value={zkSn}
+                            onChange={(e) => setZkSn(e.target.value.toUpperCase())}
+                            className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none transition-all ${
+                              isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'
+                            }`}
+                          />
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveDeviceSn(zkSn, 'zkteco')}
+                              disabled={savingDevice || !zkSn.trim()}
+                              className="flex-1 min-w-[160px] h-11 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-sm"
+                            >
+                              {savingDevice ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                              <span>➕ ডিভাইস রেজিস্টার ও সেভ করুন</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => testBiometricConnection(zkSn, 'zkteco')}
+                              disabled={testingConn || !zkSn.trim()}
+                              className={`px-4 h-11 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 border ${
+                                isDark ? 'bg-slate-900 text-blue-400 border-slate-700 hover:bg-slate-800' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'
+                              }`}
+                            >
+                              {testingConn && testingSnTarget === zkSn.trim().toUpperCase() ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                              <span>🔍 কানেকশন চেক</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {zkTestResult && (
+                          <div className={`mt-3.5 p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                            zkTestResult.success 
+                              ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
+                              : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                          }`}>
+                            {zkTestResult.success ? (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                    <CheckCircle2 size={16} />
+                                    ডিভাইস সক্রিয় ও রেজিস্টার্ড!
+                                  </p>
+                                  {zkTestResult.pending_commands_in_queue > 0 && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                                      {zkTestResult.pending_commands_in_queue}টি কমান্ড কিউতে
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {zkTestResult.institution || 'রেজিস্টার্ড'}</p>
+                                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1">
+                                  <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
+                                    বায়োমেট্রিক শিক্ষার্থী: <b>{zkTestResult.biometric_students_count || 0} জন</b>
+                                  </div>
+                                  <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
+                                    বায়োমেট্রিক শিক্ষক: <b>{zkTestResult.biometric_teachers_count || 0} জন</b>
+                                  </div>
+                                </div>
+                                <p className="text-[10px] opacity-80 pt-0.5 font-noto">{zkTestResult.recommendation}</p>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2">
+                                <AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                                <p className="leading-relaxed">✕ {zkTestResult.error || 'ডিভাইসটি এখনও সার্ভারে পাঞ্চ করেনি বা খুঁজে পাওয়া যায়নি।'}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. Push Students to ZKTeco ADMS Machine via Cloud */}
+                      <div className={`p-4 sm:p-5 rounded-2xl border ${
+                        isDark ? 'bg-slate-800/50 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Upload size={18} className="text-[#2563EB] dark:text-blue-400" />
+                            <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto">
+                              ☁️ ১-ক্লিকে ক্লাউড থেকে ZKTeco ADMS মেশিনে শিক্ষার্থী পাঠান
+                            </h4>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                            সরাসরি ক্লাউড সিঙ্ক
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-4 font-noto">
+                          কোনো পিসি, ডাটা কেবল বা পেনড্রাইভ ছাড়াই Deenora ক্লাউড থেকে সরাসরি সকল শিক্ষার্থীর নাম ও বায়োমেট্রিক আইডি ZKTeco ADMS মেশিনে পুশ করুন। মেশিনটি পরবর্তী ১ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে ক্লাউড থেকে ডাটা গ্রহণ করে নেবে।
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => handlePushStudentsToAdms(undefined, 'zkteco')}
+                          disabled={queueingUsers || (zkDevices.length === 0 && !zkSn.trim())}
+                          className="w-full h-12 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 shadow-sm uppercase tracking-wider"
+                        >
+                          {queueingUsers ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                          <span>{queueingUsers ? 'ক্লাউড কিউতে পাঠানো হচ্ছে...' : '☁️ ক্লাউড থেকে মেশিনে ডাটা পুশ করুন'}</span>
+                        </button>
+
+                        {zkQueueResult && (
+                          <div className={`mt-3 p-3 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                            zkQueueResult.success 
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
+                              : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                          }`}>
+                            {zkQueueResult.success ? (
+                              <div className="space-y-1">
+                                <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                  <CheckCircle2 size={14} />
+                                  ডাটা সফলভাবে কিউতে যোগ হয়েছে!
+                                </p>
+                                <p className="text-[11px] leading-relaxed opacity-90">{zkQueueResult.message}</p>
+                              </div>
+                            ) : (
+                              <p>✕ {zkQueueResult.error || 'ক্লাউড পুশ ব্যর্থ হয়েছে।'}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* SUB-TAB 2: ZKTECO NON-ADMS (1-CLICK WINDOWS PC AGENT) */
+                    <div className="space-y-5 animate-in fade-in duration-200">
+                      <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Laptop size={20} className="text-[#2563EB] dark:text-blue-400" />
+                            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 font-noto">
+                              ১-ক্লিক উইন্ডোজ পিসি এজেন্ট (নন-ADMS মেশিনের জন্য)
+                            </h3>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                            ১-ক্লিক ইনস্টল
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-3">
+                          যেসব ZKTeco মেশিনে সরাসরি ADMS ক্লাউড ফিচার নেই (কেবল লোকাল পিসির সাথে রাউটার বা নেটওয়ার্ক ক্যাবলে যুক্ত), সেগুলোর জন্য আপনার মেশিনের লোকাল আইপি অ্যাড্রেস নিচে বসিয়ে ডাউনলোড করুন:
+                        </p>
+
+                        <div className="space-y-1.5 mb-4">
+                          <label className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                            <span>মেশিনের লোকাল আইপি অ্যাড্রেস (Machine Local IP):</span>
+                            <span className="text-[10px] text-[#2563EB] dark:text-blue-400 font-bold font-noto">রাউটার Subnet (0 বা 1)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={agentDeviceIp}
+                            onChange={(e) => setAgentDeviceIp(e.target.value)}
+                            placeholder="যেমন: 192.168.0.201 বা 192.168.1.201"
+                            className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none ${
+                              isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'
+                            }`}
+                          />
+                          <p className="text-[10px] text-slate-400 font-bold">
+                            💡 আপনার রাউটার অনুযায়ী আইপি <code className="text-[#2563EB] dark:text-blue-400 font-mono">192.168.0.201</code> অথবা <code className="text-[#2563EB] dark:text-blue-400 font-mono">192.168.1.201</code> হতে পারে। যেকোনো একটি বেছে নিন, সিস্টেম উভয়েই অটো-স্ক্যান করবে।
+                          </p>
+                        </div>
+
+                        {/* TWO CLEAN APP-THEMED BUTTONS: Button 1 (Attendance Sync) & Button 2 (Student Upload) */}
+                        <div className="grid grid-cols-1 gap-3.5 pt-1">
+                          {/* বাটন ১: হাজিরা ডাউনলোডার (Attendance Sync Downloader) */}
+                          <a
+                            href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&action=sync_attendance`}
+                            download="Deenora_Attendance_Sync.bat"
+                            className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-[#2563EB] hover:bg-blue-700 text-white shadow-sm active:scale-[0.99] transition-all cursor-pointer border border-blue-500 overflow-hidden"
+                          >
+                            <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
+                              <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                <Download size={24} className="text-white" />
+                              </div>
+                              <div>
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white uppercase tracking-wide inline-block mb-1">
+                                  স্বয়ংক্রিয় লাইভ পাঞ্চ
+                                </span>
+                                <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
+                                  📥 ১. হাজিরা সিঙ্ক অ্যাপ ডাউনলোড (Deenora_Attendance_Sync.bat)
+                                </h4>
+                                <p className="text-[11px] text-blue-100 font-bold font-noto mt-1 leading-relaxed">
+                                  মেশিনের হাজিরা ক্লাউডে স্বয়ংক্রিয়ভাবে জমা করার জন্য।
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 text-xs font-black shrink-0 self-start sm:self-auto">
+                              <span>সিঙ্ক অ্যাপ ডাউনলোড</span>
+                              <Download size={15} />
+                            </div>
+                          </a>
+
+                          {/* বাটন ২: শিক্ষার্থী আপলোড ডাউনলোডার (Student Upload Downloader) */}
+                          <a
+                            href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&action=upload_students`}
+                            download="Deenora_Upload_Students.bat"
+                            className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white shadow-sm active:scale-[0.99] transition-all cursor-pointer border border-slate-700 overflow-hidden"
+                          >
+                            <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
+                              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                <Upload size={24} className="text-blue-400" />
+                              </div>
+                              <div>
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase tracking-wide inline-block mb-1">
+                                  পাইথন ছাড়া ১-ক্লিকে
+                                </span>
+                                <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
+                                  📤 ২. শিক্ষার্থী আপলোড ডাউনলোডার (Deenora_Upload_Students.bat)
+                                </h4>
+                                <p className="text-[11px] text-slate-300 font-bold font-noto mt-1 leading-relaxed">
+                                  Deenora-র সকল শিক্ষার্থীর নাম ও রোল সরাসরি হাজিরা মেশিনে ১-ক্লিকে আপলোড করুন।
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-black shrink-0 self-start sm:self-auto">
+                              <span>আপলোডার ডাউনলোড</span>
+                              <Download size={15} />
+                            </div>
+                          </a>
+                        </div>
+
+                        {/* Live Server Punch Sync Diagnostics & Status Monitor */}
+                        <div className={`mt-4 pt-4 border-t ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-2.5">
+                            <div>
+                              <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto flex items-center gap-1.5">
+                                <RefreshCw size={14} className="text-[#2563EB] dark:text-blue-400" />
+                                সার্ভার সংযোগ ও লাইভ পাঞ্চ মনিটর
+                              </h4>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
+                                পিসির সফটওয়্যার থেকে পাঞ্চ সার্ভারে পৌঁছাচ্ছে কিনা তাৎক্ষণিক যাচাই করুন
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={checkNonAdmsStatus}
+                              disabled={testingNonAdms}
+                              className="px-3.5 h-9 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shrink-0 shadow-sm"
+                            >
+                              {testingNonAdms ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                              {testingNonAdms ? 'চেক করা হচ্ছে...' : 'পাঞ্চ টেস্ট ও স্ট্যাটাস চেক'}
+                            </button>
+                          </div>
+
+                          {nonAdmsResult && (
+                            <div className={`p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                              nonAdmsResult.success 
+                                ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800' 
+                                : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
+                            }`}>
+                              {nonAdmsResult.success ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-black text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                                      ✓ ক্লাউড সার্ভার সক্রিয় ও সংযুক্ত!
+                                    </span>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200">
+                                      {nonAdmsResult.institution || 'রেজিস্টার্ড প্রতিষ্ঠান'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+                                    <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900">
+                                      <span className="text-slate-500 dark:text-slate-400 block text-[10px]">বায়োমেট্রিক শিক্ষার্থী:</span>
+                                      <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.biometric_students_count ?? 0} জন</span>
+                                    </div>
+                                    <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900">
+                                      <span className="text-slate-500 dark:text-slate-400 block text-[10px]">বায়োমেট্রিক শিক্ষক:</span>
+                                      <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.biometric_teachers_count ?? 0} জন</span>
+                                    </div>
+                                    <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900 col-span-2 sm:col-span-1">
+                                      <span className="text-slate-500 dark:text-slate-400 block text-[10px]">আজকের সাম্প্রতিক পাঞ্চ:</span>
+                                      <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.recent_punches_logged?.length || 0}টি লগ</span>
+                                    </div>
+                                  </div>
+                                  {nonAdmsResult.recent_punches_logged && nonAdmsResult.recent_punches_logged.length > 0 && (
+                                    <div className="mt-2 p-2 rounded-lg bg-white/70 dark:bg-slate-900/70 border border-emerald-100 dark:border-emerald-900">
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-black mb-1">সর্বশেষ সফল পাঞ্চগুলো:</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {nonAdmsResult.recent_punches_logged.slice(0, 5).map((log: any, idx: number) => (
+                                          <span key={idx} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 text-[10px] font-mono">
+                                            {log.date} {log.arrival_time || ''} ({log.status === 'late' ? 'বিলম্ব' : 'উপস্থিত'})
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] opacity-80 pt-0.5">{nonAdmsResult.recommendation}</p>
+                                </div>
+                              ) : (
+                                <p>✕ {nonAdmsResult.error || 'সার্ভার স্ট্যাটাস পাওয়া যায়নি।'}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 3-Step Simple Setup Instructions */}
+                      <div className={`p-4 sm:p-5 rounded-2xl border space-y-3.5 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-wider flex items-center gap-2">
+                            <CheckCircle2 size={16} className="text-[#2563EB] dark:text-blue-400" />
+                            পিসি অ্যাপ ব্যবহারের ৩টি সহজ ধাপ:
+                          </h4>
+                          <span className="text-[10px] text-[#2563EB] dark:text-blue-400 font-black">
+                            ১০০% অটোমেটিক (জিরো ক্লিক)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-600 dark:text-slate-300 font-bold">
+                          <div className={`flex items-start gap-3 p-3.5 rounded-xl border shadow-xs ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                            <span className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                              ১
+                            </span>
+                            <div>
+                              <p className="font-black text-slate-900 dark:text-white mb-0.5">ডাউনলোড ও ওপেন</p>
+                              <p className="text-[11px] leading-relaxed">
+                                <code className="text-[#2563EB] dark:text-blue-400 font-mono">.bat</code> ফাইলটি ডাউনলোড করে ডাবল-ক্লিক করুন। কোনো পাইথন বা অতিরিক্ত সফটওয়্যার ইনস্টল করতে হবে না।
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={`flex items-start gap-3 p-3.5 rounded-xl border shadow-xs ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                            <span className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                              ২
+                            </span>
+                            <div>
+                              <p className="font-black text-slate-900 dark:text-white mb-0.5">জিরো-ক্লিক অটো স্ক্যান</p>
+                              <p className="text-[11px] leading-relaxed">
+                                সফটওয়্যারটি ওপেন হওয়ামাত্র স্বয়ংক্রিয়ভাবে <code className="text-[#2563EB] dark:text-blue-400 font-mono">192.168.0.x</code> ও <code className="text-[#2563EB] dark:text-blue-400 font-mono">192.168.1.x</code> স্ক্যান করে মেশিনের সাথে সংযুক্ত হবে।
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={`flex items-start gap-3 p-3.5 rounded-xl border shadow-xs ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                            <span className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                              ৩
+                            </span>
+                            <div>
+                              <p className="font-black text-slate-900 dark:text-white mb-0.5">২৪/৭ ব্যাকগ্রাউন্ড সিঙ্ক</p>
+                              <p className="text-[11px] leading-relaxed">
+                                একবার চালু করলেই ব্যাকগ্রাউন্ড সার্ভিস সক্রিয় হয়ে যায়। উইন্ডো বন্ধ করলেও শিক্ষার্থীরা ফিঙ্গারপ্রিন্ট দেওয়া মাত্রই ক্লাউডে উপস্থিতি জমা হবে।
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* =====================================================================
+                  MAIN TAB 2: Vnotify.ai (VN-70 / Soft: SS900 V4.0)
+              ===================================================================== */}
+              {biometricBrandTab === 'vnotify' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  {/* Setup Guide Card */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <h3 className="text-sm font-black text-blue-900 dark:text-blue-300 font-noto">
-                          ADMS ডায়রেক্ট ক্লাউড সিঙ্ক (পিসির প্রয়োজন নেই)
+                        <h3 className={`text-sm font-black font-noto ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                          Vnotify.ai (VN-70 / Soft: SS900 V4.0) ক্লাউড সেটআপ
                         </h3>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        সরাসরি ক্লাউড
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                        সরাসরি ক্লাউড (পিসি প্রয়োজন নেই)
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-bold mb-4">
-                      ZKTeco, Realtime বা সমমানের বায়োমেট্রিক মেশিনের কিপ্যাড চেপে মেনু থেকে নিচের এড্রেস সেটিং করুন:
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-bold mb-4 font-noto">
+                      Vnotify.ai মেশিনের কিপ্যাড থেকে <code className="text-[#2563EB] dark:text-blue-400 font-mono">Menu -&gt; Comm / Ethernet -&gt; Server</code> অপশনে গিয়ে নিচের তথ্যগুলো সেট করুন:
                     </p>
 
                     <div className="space-y-2 text-xs font-mono font-bold">
-                      <div className="p-2.5 rounded-xl border flex justify-between items-center bg-white dark:bg-slate-900 border-blue-100 dark:border-slate-800">
-                        <span className="text-slate-400">1. Enable Domain Name:</span>
-                        <span className="text-emerald-600 font-black">ON</span>
+                      <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                        <span className="text-slate-400">1. Server / Cloud Mode:</span>
+                        <span className="text-emerald-500 font-black">Yes / Enable</span>
                       </div>
-                      <div className="p-2.5 rounded-xl border flex justify-between items-center bg-white dark:bg-slate-900 border-blue-100 dark:border-slate-800">
-                        <span className="text-slate-400">2. Server Address:</span>
-                        <span className="text-blue-600 font-black select-all">deenora.app</span>
+                      <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                        <span className="text-slate-400">2. Server Domain / URL:</span>
+                        <span className="text-[#2563EB] dark:text-blue-400 font-black select-all">deenora.app</span>
                       </div>
-                      <div className="p-2.5 rounded-xl border flex justify-between items-center bg-white dark:bg-slate-900 border-blue-100 dark:border-slate-800">
+                      <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                         <span className="text-slate-400">3. Server Port:</span>
-                        <span className="text-blue-600 font-black">443 (or 80)</span>
+                        <span className="text-[#2563EB] dark:text-blue-400 font-black">80</span>
+                      </div>
+                      <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                        <span className="text-slate-400">4. Machine Local Port:</span>
+                        <span className="text-slate-700 dark:text-slate-200 font-black">5005 (Default)</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 1. Registered ADMS Devices List */}
-                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                  {/* Registered Vnotify.ai Devices List */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Cpu size={18} className="text-emerald-500" />
                         <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto">
-                          রেজিস্টার্ড ADMS ডিভাইসসমূহ (Registered Devices)
+                          রেজিস্টার্ড Vnotify.ai ডিভাইসসমূহ
                         </h4>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        {registeredDevices.length}টি ডিভাইস
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                        {vnotifyDevices.length}টি ডিভাইস
                       </span>
                     </div>
 
-                    {registeredDevices.length > 0 ? (
+                    {vnotifyDevices.length > 0 ? (
                       <div className="space-y-2.5">
-                        {registeredDevices.map((dev, idx) => (
+                        {vnotifyDevices.map((dev, idx) => (
                           <div 
                             key={idx}
                             className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                              isDark ? 'bg-slate-900/90 border-slate-700/80' : 'bg-white border-slate-200 shadow-xs'
+                              isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-xs'
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
@@ -3347,14 +4006,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto truncate">
-                                    {dev.name || 'ZKTeco ADMS Device'}
+                                    {dev.name || 'Vnotify.ai Device'}
                                   </p>
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
                                     SN: {dev.sn}
                                   </span>
                                 </div>
                                 <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                                  ক্লাউড ডায়রেক্ট কানেকশন সক্রিয়
+                                  FKWeb / /hdata.aspx ক্লাউড সিঙ্ক সক্রিয়
                                 </p>
                               </div>
                             </div>
@@ -3362,29 +4021,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
-                                onClick={() => testBiometricConnection(dev.sn)}
+                                onClick={() => testBiometricConnection(dev.sn, 'vnotify')}
                                 disabled={testingConn}
                                 title="কানেকশন চেক"
-                                className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-black flex items-center gap-1.5 hover:bg-blue-100 active:scale-95 transition-all"
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'}`}
                               >
-                                <RefreshCw size={12} className={testingConn && testSn === dev.sn ? 'animate-spin' : ''} />
+                                <RefreshCw size={12} className={testingConn && testingSnTarget === dev.sn ? 'animate-spin' : ''} />
                                 <span>চেক</span>
                               </button>
 
                               <button
                                 type="button"
-                                onClick={() => handlePushStudentsToAdms(dev.sn)}
-                                disabled={queueingUsers}
-                                title="ক্লাউড থেকে শিক্ষার্থী পাঠান"
-                                className="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-black flex items-center gap-1.5 hover:bg-purple-100 active:scale-95 transition-all"
-                              >
-                                <Upload size={12} />
-                                <span>ডাটা পুশ</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteDeviceSn(dev.sn)}
+                                onClick={() => handleDeleteDeviceSn(dev.sn, 'vnotify')}
                                 disabled={deletingDeviceSn === dev.sn}
                                 title="ডিভাইস মুছুন"
                                 className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
@@ -3397,29 +4045,29 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </div>
                     ) : (
                       <div className={`p-3.5 rounded-xl border text-xs font-bold leading-relaxed ${
-                        isDark ? 'bg-amber-950/20 border-amber-900/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'
+                        isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-100 text-slate-600'
                       }`}>
-                        ⚠️ এখনও কোনো ADMS ডিভাইস রেজিস্টার করা নেই। নিচের বক্সে মেশিনের সিরিয়াল নম্বর (SN) লিখে <b>"➕ ডিভাইস রেজিস্টার ও সেভ করুন"</b> বাটনে চাপ দিন।
+                        এখনও কোনো Vnotify.ai ডিভাইস রেজিস্টার করা নেই। নিচের বক্সে মেশিনের সিরিয়াল নম্বর (যেমন: ZYTH09089351) লিখে <b>"➕ ডিভাইস রেজিস্টার ও সেভ করুন"</b> বাটনে চাপ দিন।
                       </div>
                     )}
                   </div>
 
-                  {/* 2. Device Serial Number (SN) Registration & Ping Test */}
-                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                    <h4 className="text-xs font-black text-slate-700 dark:text-slate-200 font-noto mb-1 flex items-center gap-2">
-                      <Save size={15} className="text-emerald-500" />
-                      মেশিন সিরিয়াল নম্বর (SN) রেজিস্টার ও কানেকশন চেক
+                  {/* Vnotify.ai SN Registration & Connection Check */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                    <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto mb-1 flex items-center gap-2">
+                      <Save size={15} className="text-[#2563EB] dark:text-blue-400" />
+                      Vnotify.ai সিরিয়াল নম্বর (SN) রেজিস্টার ও কানেকশন চেক
                     </h4>
                     <p className="text-[11px] text-slate-400 font-bold mb-3">
-                      মেশিনের পেছনের স্টিকার অথবা মেশিন মেনু (System Info) থেকে প্রাপ্ত Serial Number (যেমন: UEED262800196) নিচে লিখুন:
+                      Vnotify.ai (VN-70 / SS900 V4.0) মেশিনের Device Info থেকে প্রাপ্ত Serial Number (যেমন: ZYTH09089351) নিচে লিখুন:
                     </p>
 
                     <div className="space-y-2.5">
                       <input
                         type="text"
-                        placeholder="মেশিন Serial Number (SN, যেমন: UEED262800196)"
-                        value={testSn}
-                        onChange={(e) => setTestSn(e.target.value.toUpperCase())}
+                        placeholder="Vnotify.ai Serial Number (SN, যেমন: ZYTH09089351)"
+                        value={vnotifySn}
+                        onChange={(e) => setVnotifySn(e.target.value.toUpperCase())}
                         className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none transition-all ${
                           isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'
                         }`}
@@ -3428,9 +4076,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => handleSaveDeviceSn()}
-                          disabled={savingDevice || !testSn.trim()}
-                          className="flex-1 min-w-[160px] h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-md shadow-emerald-600/20"
+                          onClick={() => handleSaveDeviceSn(vnotifySn, 'vnotify')}
+                          disabled={savingDevice || !vnotifySn.trim()}
+                          className="flex-1 min-w-[160px] h-11 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-sm"
                         >
                           {savingDevice ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                           <span>➕ ডিভাইস রেজিস্টার ও সেভ করুন</span>
@@ -3438,331 +4086,251 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
                         <button
                           type="button"
-                          onClick={() => testBiometricConnection()}
-                          disabled={testingConn || !testSn.trim()}
-                          className="px-4 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-md shadow-blue-600/20"
+                          onClick={() => testBiometricConnection(vnotifySn, 'vnotify')}
+                          disabled={testingConn || !vnotifySn.trim()}
+                          className={`px-4 h-11 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 border ${
+                            isDark ? 'bg-slate-900 text-blue-400 border-slate-700 hover:bg-slate-800' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'
+                          }`}
                         >
-                          {testingConn ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                          {testingConn && testingSnTarget === vnotifySn.trim().toUpperCase() ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                           <span>🔍 কানেকশন চেক</span>
                         </button>
                       </div>
                     </div>
 
-                    {testResult && (
+                    {vnotifyTestResult && (
                       <div className={`mt-3.5 p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
-                        testResult.success 
+                        vnotifyTestResult.success 
                           ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
                           : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
                       }`}>
-                        {testResult.success ? (
+                        {vnotifyTestResult.success ? (
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                                <CheckCircle2 size={16} />
-                                ডিভাইস সক্রিয় ও রেজিস্টার্ড!
-                              </p>
-                              {testResult.pending_commands_in_queue > 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 font-mono font-black">
-                                  {testResult.pending_commands_in_queue}টি কমান্ড কিউতে
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {testResult.institution || 'রেজিস্টার্ড'}</p>
+                            <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 size={16} />
+                              Vnotify.ai ডিভাইস সক্রিয় ও রেজিস্টার্ড!
+                            </p>
+                            <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {vnotifyTestResult.institution || 'রেজিস্টার্ড'}</p>
                             <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1">
                               <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
-                                বায়োমেট্রিক শিক্ষার্থী: <b>{testResult.biometric_students_count || 0} জন</b>
+                                বায়োমেট্রিক শিক্ষার্থী: <b>{vnotifyTestResult.biometric_students_count || 0} জন</b>
                               </div>
                               <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
-                                বায়োমেট্রিক শিক্ষক: <b>{testResult.biometric_teachers_count || 0} জন</b>
+                                বায়োমেট্রিক শিক্ষক: <b>{vnotifyTestResult.biometric_teachers_count || 0} জন</b>
                               </div>
                             </div>
-                            <p className="text-[10px] opacity-80 pt-0.5 font-noto">{testResult.recommendation}</p>
+                            <p className="text-[10px] opacity-80 pt-0.5 font-noto">{vnotifyTestResult.recommendation}</p>
                           </div>
                         ) : (
                           <div className="flex items-start gap-2">
-                            <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                            <p className="leading-relaxed">✕ {testResult.error || 'ডিভাইসটি এখনও সার্ভারে পাঞ্চ করেনি বা খুজে পাওয়া যায়নি।'}</p>
+                            <AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                            <p className="leading-relaxed">✕ {vnotifyTestResult.error || 'ডিভাইসটি এখনও সার্ভারে পাঞ্চ করেনি বা খুঁজে পাওয়া যায়নি।'}</p>
                           </div>
                         )}
                       </div>
                     )}
-                  </div>
 
-                  {/* 3. Push Students to ADMS Machine via Cloud */}
-                  <div className={`p-4 sm:p-5 rounded-2xl border ${
-                    isDark ? 'bg-purple-950/20 border-purple-900/40' : 'bg-gradient-to-br from-purple-50/80 to-blue-50/80 border-purple-200'
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Upload size={18} className="text-purple-600 dark:text-purple-400" />
-                        <h4 className="text-xs font-black text-purple-950 dark:text-purple-200 font-noto">
-                          ☁️ ১-ক্লিকে ক্লাউড থেকে ADMS মেশিনে শিক্ষার্থী পাঠান
-                        </h4>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                        সরাসরি ক্লাউড সিঙ্ক
-                      </span>
+                    <div className={`mt-4 p-3 rounded-xl border text-[11px] font-bold leading-relaxed font-noto ${
+                      isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-100 text-slate-600'
+                    }`}>
+                      💡 <b>নোট:</b> এখানে আপনার Vnotify মেশিনের সিরিয়াল নম্বর (<code className="text-[#2563EB] dark:text-blue-400 font-mono">ZYTH...</code>) রেজিস্টার করার পর মেশিনের Server সেটিংয়ে <code className="text-[#2563EB] dark:text-blue-400 font-mono">deenora.app</code> এবং Port <code className="text-[#2563EB] dark:text-blue-400 font-mono">80</code> বসালে কোনো পিসি ছাড়াই <code className="text-[#2563EB] dark:text-blue-400 font-mono">/hdata.aspx</code> প্রোটোকলের মাধ্যমে সরাসরি ক্লাউডে হাজিরা সিঙ্ক হবে।
                     </div>
-
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-4 font-noto">
-                      কোনো পিসি, ডাটা কেবল বা পেনড্রাইভ ছাড়াই Deenora ক্লাউড থেকে সরাসরি সকল শিক্ষার্থীর নাম ও বায়োমেট্রিক আইডি ZKTeco ADMS মেশিনে পুশ করুন। মেশিনটি পরবর্তী ১ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে ক্লাউড থেকে ডাটা গ্রহণ করে নেবে।
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePushStudentsToAdms()}
-                      disabled={queueingUsers || (registeredDevices.length === 0 && !testSn.trim())}
-                      className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-purple-600/20 uppercase tracking-wider"
-                    >
-                      {queueingUsers ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                      <span>{queueingUsers ? 'ক্লাউড কিউতে পাঠানো হচ্ছে...' : '☁️ ক্লাউড থেকে মেশিনে ডাটা পুশ করুন'}</span>
-                    </button>
-
-                    {queueResult && (
-                      <div className={`mt-3 p-3 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
-                        queueResult.success 
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
-                          : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-                      }`}>
-                        {queueResult.success ? (
-                          <div className="space-y-1">
-                            <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                              <CheckCircle2 size={14} />
-                              ডাটা সফলভাবে কিউতে যোগ হয়েছে!
-                            </p>
-                            <p className="text-[11px] leading-relaxed opacity-90">{queueResult.message}</p>
-                          </div>
-                        ) : (
-                          <p>✕ {queueResult.error || 'ক্লাউড পুশ ব্যর্থ হয়েছে।'}</p>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
-              ) : (
-                /* TAB 2: NON-ADMS ONE-CLICK WINDOWS PC AGENT APP */
+              )}
+
+              {/* =====================================================================
+                  MAIN TAB 3: Hikvision (MinMoe / Access Control Terminals)
+              ===================================================================== */}
+              {biometricBrandTab === 'hikvision' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
-                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-purple-950/20 border-purple-900/40' : 'bg-purple-50/70 border-purple-100'}`}>
+                  {/* Setup Guide Card */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <Laptop size={20} className="text-purple-600 dark:text-purple-400" />
-                        <h3 className="text-sm font-black text-purple-950 dark:text-purple-300 font-noto">
-                          ১-ক্লিক উইন্ডোজ পিসি এজেন্ট (নন-ADMS মেশিনের জন্য)
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <h3 className={`text-sm font-black font-noto ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                          Hikvision MinMoe / Access Control টার্মিনাল সেটআপ
                         </h3>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                        ১-ক্লিক ইনস্টল
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                        ISAPI / HTTP Listening
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed mb-3">
-                      যেসব বায়োমেট্রিক মেশিনে সরাসরি ADMS ক্লাউড ফিচার নেই (কেবল লোকাল পিসির সাথে ইউএসবি বা নেটওয়ার্ক ক্যাবলে যুক্ত), সেগুলোর জন্য আপনার মেশিনের লোকাল আইপি অ্যাড্রেস নিচে বসিয়ে ডাউনলোড করুন:
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-bold mb-4 font-noto">
+                      Hikvision ওয়েব কনফিগারেশন (<code className="text-[#2563EB] dark:text-blue-400 font-mono">Network -&gt; Advanced -&gt; HTTP Listening / Server</code>) থেকে নিচের তথ্যগুলো সেট করুন:
                     </p>
 
-                    <div className="space-y-1.5 mb-4">
-                      <label className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center justify-between">
-                        <span>মেশিনের লোকাল আইপি অ্যাড্রেস (Machine Local IP):</span>
-                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold font-noto">রাউটার Subnet (0 বা 1)</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={agentDeviceIp}
-                        onChange={(e) => setAgentDeviceIp(e.target.value)}
-                        placeholder="যেমন: 192.168.0.201 বা 192.168.1.201"
-                        className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none ${
-                          isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-purple-200 text-slate-900'
-                        }`}
-                      />
-                      <p className="text-[10px] text-slate-400 font-bold">
-                        💡 আপনার রাউটার অনুযায়ী আইপি <code className="text-purple-600 dark:text-purple-300 font-mono">192.168.0.201</code> অথবা <code className="text-purple-600 dark:text-purple-300 font-mono">192.168.1.201</code> হতে পারে। যেকোনো একটি বেছে নিন, সিস্টেম উভয়েই অটো-স্ক্যান করবে।
-                      </p>
-                    </div>
-
-                    {/* ONLY TWO CLEAR BUTTONS: Button 1 (Attendance Sync) & Button 2 (Student Upload) */}
-                    <div className="grid grid-cols-1 gap-3.5 pt-1">
-                      {/* বাটন ১: হাজিরা ডাউনলোডার (Attendance Sync Downloader) */}
-                      <a
-                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&device_ip=${encodeURIComponent(agentDeviceIp.trim() || '192.168.0.201')}&action=sync_attendance`}
-                        download="Deenora_Attendance_Sync.bat"
-                        className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-700 via-blue-700 to-indigo-900 hover:from-indigo-800 hover:via-blue-800 hover:to-indigo-950 text-white shadow-xl shadow-indigo-600/20 active:scale-[0.99] transition-all cursor-pointer border border-indigo-400/30 overflow-hidden"
-                      >
-                        <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
-                          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-                            <Download size={24} className="text-white animate-bounce-subtle" />
-                          </div>
-                          <div>
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950 uppercase tracking-wide inline-block mb-1">
-                              🟢 স্বয়ংক্রিয় লাইভ পাঞ্চ
-                            </span>
-                            <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
-                              📥 ১. হাজিরা সিঙ্ক অ্যাপ ডাউনলোড (পাঞ্চ নেওয়ার জন্য)
-                            </h4>
-                            <p className="text-[11px] text-blue-100/90 font-bold font-noto mt-1 leading-relaxed">
-                              মেশিনের হাজিরা ক্লাউডে স্বয়ংক্রিয়ভাবে জমা করার জন্য।
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-xs font-black shrink-0 self-start sm:self-auto shadow-md">
-                          <span>সিঙ্ক অ্যাপ ডাউনলোড</span>
-                          <Download size={15} />
-                        </div>
-                      </a>
-
-                      {/* বাটন ২: শিক্ষার্থী আপলোড ডাউনলোডার (Student Upload Downloader) */}
-                      <a
-                        href={`/api/pc-agent?institution_id=${madrasah?.id || ''}&action=upload_students`}
-                        download="Deenora_Upload_Students.bat"
-                        className="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-700 via-fuchsia-700 to-purple-900 hover:from-purple-800 hover:via-fuchsia-800 hover:to-purple-950 text-white shadow-xl shadow-purple-600/20 active:scale-[0.99] transition-all cursor-pointer border border-purple-400/30 overflow-hidden"
-                      >
-                        <div className="flex items-center gap-3.5 mb-3 sm:mb-0">
-                          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-                            <Upload size={24} className="text-white" />
-                          </div>
-                          <div>
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 uppercase tracking-wide inline-block mb-1">
-                              ⚡ পাইথন বা কোডিং ছাড়া ১-ক্লিকে
-                            </span>
-                            <h4 className="text-sm sm:text-base font-black font-noto leading-tight text-white">
-                              📤 ২. শিক্ষার্থী আপলোড ডাউনলোডার (মেশিনে ডাটা পাঠাতে)
-                            </h4>
-                            <p className="text-[11px] text-purple-100/90 font-bold font-noto mt-1 leading-relaxed">
-                              Deenora-র সকল শিক্ষার্থীর নাম ও রোল সরাসরি হাজিরা মেশিনে ১-ক্লিকে আপলোড করুন।
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-xs font-black shrink-0 self-start sm:self-auto shadow-md">
-                          <span>আপলোডার ডাউনলোড</span>
-                          <Download size={15} />
-                        </div>
-                      </a>
-                    </div>
-
-                    {/* Live Server Punch Sync Diagnostics & Status Monitor */}
-                    <div className="mt-4 pt-4 border-t border-purple-200/50 dark:border-purple-900/40">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-2.5">
-                        <div>
-                          <h4 className="text-xs font-black text-purple-950 dark:text-purple-300 font-noto flex items-center gap-1.5">
-                            <RefreshCw size={14} className="text-purple-600 dark:text-purple-400" />
-                            সার্ভার সংযোগ ও লাইভ পাঞ্চ মনিটর
-                          </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
-                            পিসির সফটওয়্যার থেকে পাঞ্চ সার্ভারে পৌঁছাচ্ছে কিনা তাৎক্ষণিক যাচাই করুন
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={checkNonAdmsStatus}
-                          disabled={testingNonAdms}
-                          className="px-3.5 h-9 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shrink-0"
-                        >
-                          {testingNonAdms ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                          {testingNonAdms ? 'চেক করা হচ্ছে...' : 'পাঞ্চ টেস্ট ও স্ট্যাটাস চেক'}
-                        </button>
+                    <div className="space-y-2 text-xs font-mono font-bold">
+                      <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                        <span className="text-slate-400">1. Server Address:</span>
+                        <span className="text-[#2563EB] dark:text-blue-400 font-black select-all">deenora.app</span>
                       </div>
-
-                      {nonAdmsResult && (
-                        <div className={`p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
-                          nonAdmsResult.success 
-                            ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800' 
-                            : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
-                        }`}>
-                          {nonAdmsResult.success ? (
-                            <div className="space-y-1.5">
-                              <div className="flex items-center justify-between">
-                                <span className="font-black text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                                  ✓ ক্লাউড সার্ভার সক্রিয় ও সংযুক্ত!
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200">
-                                  {nonAdmsResult.institution || 'রেজিস্টার্ড প্রতিষ্ঠান'}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
-                                <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900">
-                                  <span className="text-slate-500 dark:text-slate-400 block text-[10px]">বায়োমেট্রিক শিক্ষার্থী:</span>
-                                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.biometric_students_count ?? 0} জন</span>
-                                </div>
-                                <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900">
-                                  <span className="text-slate-500 dark:text-slate-400 block text-[10px]">বায়োমেট্রিক শিক্ষক:</span>
-                                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.biometric_teachers_count ?? 0} জন</span>
-                                </div>
-                                <div className="p-2 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900 col-span-2 sm:col-span-1">
-                                  <span className="text-slate-500 dark:text-slate-400 block text-[10px]">আজকের সাম্প্রতিক পাঞ্চ:</span>
-                                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">{nonAdmsResult.recent_punches_logged?.length || 0}টি লগ</span>
-                                </div>
-                              </div>
-                              {nonAdmsResult.recent_punches_logged && nonAdmsResult.recent_punches_logged.length > 0 && (
-                                <div className="mt-2 p-2 rounded-lg bg-white/70 dark:bg-slate-900/70 border border-emerald-100 dark:border-emerald-900">
-                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-black mb-1">সর্বশেষ সফল পাঞ্চগুলো:</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {nonAdmsResult.recent_punches_logged.slice(0, 5).map((log: any, idx: number) => (
-                                      <span key={idx} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 text-[10px] font-mono">
-                                        {log.date} {log.arrival_time || ''} ({log.status === 'late' ? 'বিলম্ব' : 'উপস্থিত'})
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              <p className="text-[10px] opacity-80 pt-0.5">{nonAdmsResult.recommendation}</p>
-                            </div>
-                          ) : (
-                            <p>✕ {nonAdmsResult.error || 'সার্ভার স্ট্যাটাস পাওয়া যায়নি।'}</p>
-                          )}
-                        </div>
-                      )}
+                      <div className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                        <span className="text-slate-400">2. URL:</span>
+                        <span className="text-[#2563EB] dark:text-blue-400 font-black select-all text-[11px]">/ISAPI/Event/notification/httpHosts (or /iclock/cdata?SN=YOUR_SN)</span>
+                      </div>
+                      <div className={`p-2.5 rounded-xl border flex justify-between items-center ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                        <span className="text-slate-400">3. Port:</span>
+                        <span className="text-[#2563EB] dark:text-blue-400 font-black">443 (HTTPS) or 80 (HTTP)</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* 3-Step Simple Setup Instructions for Teachers */}
-                  <div className={`p-4 sm:p-5 rounded-2xl border space-y-3.5 ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-wider flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-purple-600 dark:text-purple-400" />
-                        পিসি অ্যাপ ব্যবহারের ৩টি সহজ ধাপ:
-                      </h4>
-                      <span className="text-[10px] text-purple-600 dark:text-purple-400 font-black">
-                        ১০০% অটোমেটিক (জিরো ক্লিক)
+                  {/* Registered Hikvision Devices List */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Cpu size={18} className="text-emerald-500" />
+                        <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto">
+                          রেজিস্টার্ড Hikvision ডিভাইসসমূহ
+                        </h4>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                        {hikvisionDevices.length}টি ডিভাইস
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-600 dark:text-slate-300 font-bold">
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm">
-                        <span className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
-                          ১
-                        </span>
-                        <div>
-                          <p className="font-black text-slate-900 dark:text-white mb-0.5">ডাউনলোড ও ওপেন</p>
-                          <p className="text-[11px] leading-relaxed">
-                            <code className="text-purple-600 dark:text-purple-300 font-mono">.exe</code> ফাইলটি ডাউনলোড করে ডাবল-ক্লিক করুন। কোনো কালো টার্মিনাল আসবে না, সাধারণ সফটওয়্যারের মতো পরিচ্ছন্ন ইন্টারফেস ওপেন হবে।
-                          </p>
-                        </div>
-                      </div>
+                    {hikvisionDevices.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {hikvisionDevices.map((dev, idx) => (
+                          <div 
+                            key={idx}
+                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                              isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto truncate">
+                                    {dev.name || 'Hikvision Terminal'}
+                                  </p>
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                                    SN: {dev.sn}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                  ISAPI / HTTP Listening সংযোগ সক্রিয়
+                                </p>
+                              </div>
+                            </div>
 
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm">
-                        <span className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
-                          ২
-                        </span>
-                        <div>
-                          <p className="font-black text-slate-900 dark:text-white mb-0.5">জিরো-ক্লিক অটো আপলোড</p>
-                          <p className="text-[11px] leading-relaxed">
-                            সফটওয়্যারটি ওপেন হওয়ামাত্র কোনো বাটনে ক্লিক ছাড়াই স্বয়ংক্রিয়ভাবে <code className="text-purple-600 dark:text-purple-300 font-mono">192.168.0.x</code> ও <code className="text-purple-600 dark:text-purple-300 font-mono">192.168.1.x</code> স্ক্যান করে সব শিক্ষার্থীকে মেশিনে লোড করে দিবে।
-                          </p>
-                        </div>
-                      </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => testBiometricConnection(dev.sn, 'hikvision')}
+                                disabled={testingConn}
+                                title="কানেকশন চেক"
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'}`}
+                              >
+                                <RefreshCw size={12} className={testingConn && testingSnTarget === dev.sn ? 'animate-spin' : ''} />
+                                <span>চেক</span>
+                              </button>
 
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm">
-                        <span className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 font-black text-xs flex items-center justify-center shrink-0">
-                          ৩
-                        </span>
-                        <div>
-                          <p className="font-black text-slate-900 dark:text-white mb-0.5">অটো লাইভ সিঙ্ক</p>
-                          <p className="text-[11px] leading-relaxed">
-                            আপলোড সম্পন্ন হওয়ামাত্রই সফটওয়্যারটি অটোমেটিক লাইভ সিঙ্ক চালু রাখবে। শিক্ষার্থীরা ফিঙ্গারপ্রিন্ট দেওয়া মাত্রই Deenora ক্লাউডে তাৎক্ষণিক উপস্থিতি জমা হবে।
-                          </p>
-                        </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDeviceSn(dev.sn, 'hikvision')}
+                                disabled={deletingDeviceSn === dev.sn}
+                                title="ডিভাইস মুছুন"
+                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
+                              >
+                                {deletingDeviceSn === dev.sn ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={`p-3.5 rounded-xl border text-xs font-bold leading-relaxed ${
+                        isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-100 text-slate-600'
+                      }`}>
+                        এখনও কোনো Hikvision টার্মিনাল রেজিস্টার করা নেই। নিচের বক্সে টার্মিনালের Serial Number (SN) লিখে <b>"➕ ডিভাইস রেজিস্টার ও সেভ করুন"</b> বাটনে চাপ দিন।
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Hikvision SN Registration & Connection Check */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200/80'}`}>
+                    <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto mb-1 flex items-center gap-2">
+                      <Save size={15} className="text-[#2563EB] dark:text-blue-400" />
+                      Hikvision সিরিয়াল নম্বর (SN) রেজিস্টার ও কানেকশন চেক
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-bold mb-3">
+                      Hikvision টার্মিনালের সিরিয়াল নম্বর (Serial No / Device UUID) নিচে লিখুন:
+                    </p>
+
+                    <div className="space-y-2.5">
+                      <input
+                        type="text"
+                        placeholder="Hikvision Serial Number (SN)"
+                        value={hikSn}
+                        onChange={(e) => setHikSn(e.target.value.toUpperCase())}
+                        className={`w-full h-11 px-3.5 rounded-xl border text-xs font-mono font-black outline-none transition-all ${
+                          isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'
+                        }`}
+                      />
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveDeviceSn(hikSn, 'hikvision')}
+                          disabled={savingDevice || !hikSn.trim()}
+                          className="flex-1 min-w-[160px] h-11 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 shadow-sm"
+                        >
+                          {savingDevice ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          <span>➕ ডিভাইস রেজিস্টার ও সেভ করুন</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => testBiometricConnection(hikSn, 'hikvision')}
+                          disabled={testingConn || !hikSn.trim()}
+                          className={`px-4 h-11 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 border ${
+                            isDark ? 'bg-slate-900 text-blue-400 border-slate-700 hover:bg-slate-800' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'
+                          }`}
+                        >
+                          {testingConn && testingSnTarget === hikSn.trim().toUpperCase() ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                          <span>🔍 কানেকশন চেক</span>
+                        </button>
                       </div>
                     </div>
+
+                    {hikTestResult && (
+                      <div className={`mt-3.5 p-3.5 rounded-xl border text-xs font-bold animate-in fade-in duration-300 ${
+                        hikTestResult.success 
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
+                          : 'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                      }`}>
+                        {hikTestResult.success ? (
+                          <div className="space-y-1.5">
+                            <p className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 size={16} />
+                              Hikvision টার্মিনাল সক্রিয় ও রেজিস্টার্ড!
+                            </p>
+                            <p className="text-[11px] opacity-90">প্রতিষ্ঠান: {hikTestResult.institution || 'রেজিস্টার্ড'}</p>
+                            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1">
+                              <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
+                                বায়োমেট্রিক শিক্ষার্থী: <b>{hikTestResult.biometric_students_count || 0} জন</b>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-emerald-200/50">
+                                বায়োমেট্রিক শিক্ষক: <b>{hikTestResult.biometric_teachers_count || 0} জন</b>
+                              </div>
+                            </div>
+                            <p className="text-[10px] opacity-80 pt-0.5 font-noto">{hikTestResult.recommendation}</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                            <p className="leading-relaxed">✕ {hikTestResult.error || 'টার্মিনালটি এখনও সার্ভারে পাঞ্চ করেনি বা খুঁজে পাওয়া যায়নি।'}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

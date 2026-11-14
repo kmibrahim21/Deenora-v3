@@ -51,7 +51,20 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<(Class & { student_count?: number }) | null>(null);
   const isDark = madrasah?.theme === 'dark';
-  const canDeleteClass = profile?.role === 'super_admin' || profile?.role === 'madrasah_admin' || profile?.permissions?.can_manage_classes || (madrasah?.config_json as any)?.features?.delete_class !== false;
+  const isDeleteClassEnabled = React.useMemo(() => {
+    if (!madrasah?.config_json) return false;
+    let cfg = madrasah.config_json as any;
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg); } catch (e) { cfg = {}; }
+    }
+    return cfg?.features?.delete_class === true;
+  }, [madrasah?.config_json]);
+  const canDeleteClass = isDeleteClassEnabled && (
+    !profile ||
+    profile?.role === 'super_admin' ||
+    profile?.role === 'madrasah_admin' ||
+    Boolean(profile?.permissions?.can_manage_classes)
+  );
 
   const targetYear = selectedYear || activeYear;
   const isAdvanceOrHistorical = Boolean(targetYear && targetYear.status !== 'active');

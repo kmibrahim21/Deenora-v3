@@ -8,6 +8,7 @@ const supabase = getSupabaseAdmin();
 interface DeviceCacheEntry {
   sn: string;
   name?: string;
+  brand?: 'zkteco' | 'vnotify' | 'hikvision';
   institution_id: string;
   institution_name: string;
   config_json?: any;
@@ -19,6 +20,8 @@ const DEVICE_CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
 // In-Memory ADMS Command Queue for ZKTeco Cloud Sync: SN (Uppercase) -> string[]
 const pendingAdmsCommands = new Map<string, string[]>();
+// In-Memory Device Heartbeat Tracker: SN (Uppercase) -> ISO Timestamp
+const deviceHeartbeats = new Map<string, string>();
 let globalCmdCounter = 1;
 
 // Bengali to English Transliteration for ZKTeco Machine LCD (ASCII only, max 23 chars)
@@ -111,6 +114,7 @@ async function getRegisteredDevices(forceRefresh: boolean = false): Promise<Devi
           devices.push({
             sn: snVal.trim().toUpperCase(),
             name: dev?.name || `ZKteco Device ${snVal}`,
+            brand: dev?.brand || 'zkteco',
             institution_id: inst.id,
             institution_name: inst.name,
             config_json: inst.config_json
@@ -244,6 +248,196 @@ async function getInstitutionDirectory(institutionId: string): Promise<{ student
   }
 }
 
+async function resolveInstitutionBySn(sn?: string, fallbackInstId?: string): Promise<string | null> {
+  if (fallbackInstId && fallbackInstId.trim()) {
+    return fallbackInstId.trim();
+  }
+  const cleanSn = (sn || '').trim().toUpperCase();
+  if (!cleanSn) return null;
+
+  let devices = await getRegisteredDevices();
+  let matched = devices.find(d => d.sn === cleanSn);
+  if (!matched) {
+    devices = await getRegisteredDevices(true);
+    matched = devices.find(d => d.sn === cleanSn);
+  }
+  if (matched) return matched.institution_id;
+
+  if (devices.length === 1) {
+    return devices[0].institution_id;
+  }
+  return null;
+}
+
+async function processPunch(institutionId: string, pin: string, timestampStr: string): Promise<boolean> {
+  if (!institutionId || !pin || !timestampStr) return false;
+
+  const userId = String(pin).trim();
+  let normTime = String(timestampStr).trim();
+
+  // Convert 14-digit YYYYMMDDHHmmss to YYYY-MM-DD HH:mm:ss
+  if (/^\d{14}$/.test(normTime)) {
+    normTime = `${normTime.slice(0, 4)}-${normTime.slice(4, 6)}-${normTime.slice(6, 8)} ${normTime.slice(8, 10)}:${normTime.slice(10, 12)}:${normTime.slice(12, 14)}`;
+  } else if (normTime.includes('T')) {
+    normTime = normTime.replace('T', ' ');
+  }
+
+  const date = normTime.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(normTime)
+    ? normTime.substring(0, 10)
+    : new Date(Date.now() + 6 * 3600 * 1000).toISOString().substring(0, 10);
+
+  const time = normTime.length >= 16
+    ? normTime.substring(11, 16)
+    : (normTime.includes(':') && normTime.length <= 8 ? normTime.substring(0, 5) : '08:30');
+
+  const [{ students, teachers }, { data: existingAttendanceList }, { data: freshInstData }] = await Promise.all([
+    getInstitutionDirectory(institutionId),
+    supabase
+      .from('attendance')
+      .select('id, student_id, status, session, late_minutes, arrival_time, date')
+      .eq('institution_id', institutionId)
+      .eq('date', date),
+    supabase
+      .from('institutions')
+      .select('config_json')
+      .eq('id', institutionId)
+      .maybeSingle()
+  ]);
+
+  const instConfig = (freshInstData?.config_json as any) || {};
+  const settings = instConfig.attendance_settings || {};
+  const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
+  const numUserId = Number(userId);
+
+  // 1. Match Student
+  const student = students.find((s: any) => {
+    const bId = (s.biometric_id || '').toString().trim();
+    const regNo = (s.registration_number || '').toString().trim();
+    const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
+    const sId = (s.id || '').toString().trim();
+
+    if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
+    if (rollNo && rollNo === userId) return true;
+    if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
+    if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
+    if (s.notes) {
+      if (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`)) return true;
+      if (!isNaN(numUserId) && (s.notes.includes(`"biometric_id":${numUserId}`) || s.notes.includes(`"biometric_id":"${numUserId}"`))) return true;
+    }
+    if (sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+    return false;
+  });
+
+  if (student) {
+    const classSessions = student.class_id ? settings.class_sessions?.[student.class_id] : null;
+    const sessionsList = (classSessions && classSessions.length > 0) ? classSessions : (settings.sessions || []);
+    const activeSessionId = sessionsList.length > 0 ? sessionsList[0].id : 'morning';
+    const academicYearId = student.academic_year_id || instConfig.active_academic_year_id || null;
+
+    const classTimes = student.class_id ? settings.class_times?.[student.class_id] : null;
+    const classStartTimeStr = classTimes?.start_time || settings.start_time || '08:00';
+    const classGraceMinutes = Number(classTimes?.late_grace_minutes ?? settings.late_grace_minutes ?? 10);
+
+    let punchStatus: 'present' | 'late' = 'present';
+    let lateMinutes: number | null = null;
+
+    if (time && classStartTimeStr) {
+      const timeParts = time.split(':');
+      const startParts = classStartTimeStr.split(':');
+      if (timeParts.length >= 2 && startParts.length >= 2) {
+        const punchTotal = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1], 10);
+        const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10);
+        const diff = punchTotal - startTotal;
+        if (diff > classGraceMinutes) {
+          punchStatus = 'late';
+          lateMinutes = diff;
+        }
+      }
+    }
+
+    const existingRec = (existingAttendanceList || []).find((a: any) => a.student_id === student.id);
+
+    if (!existingRec) {
+      await supabase.from('attendance').insert([{
+        institution_id: institutionId,
+        student_id: student.id,
+        class_id: student.class_id,
+        date: date,
+        status: punchStatus,
+        late_minutes: lateMinutes,
+        session: activeSessionId,
+        arrival_time: time || '08:30',
+        academic_year_id: academicYearId
+      }]);
+
+      if (shouldSendSms && student.guardian_phone) {
+        await supabase.from('sms_logs').insert([{
+          institution_id: institutionId,
+          recipient: student.guardian_phone,
+          message: `শ্রদ্ধেয় অভিভাবক, আপনার সন্তান ${student.student_name || 'শিক্ষার্থী'} আজ ${date} তারিখ সময় ${time || '08:30'}-এ মাদরাসায় প্রবেশ করেছে। ধন্যবাদ।`,
+          status: 'queued',
+          sms_count: 1
+        }]);
+      }
+      return true;
+    } else if (
+      (existingRec.status !== 'leave' && existingRec.status !== 'present' && existingRec.status !== 'late') ||
+      (existingRec.status === 'late' && (
+        punchStatus === 'present' ||
+        (punchStatus === 'late' && lateMinutes !== null && (existingRec.late_minutes === null || existingRec.late_minutes === undefined || lateMinutes < Number(existingRec.late_minutes)))
+      ))
+    ) {
+      await supabase.from('attendance').update({
+        status: punchStatus,
+        late_minutes: punchStatus === 'late' ? lateMinutes : null,
+        arrival_time: time || existingRec.arrival_time || '08:30'
+      }).eq('id', existingRec.id);
+      return true;
+    }
+    return true;
+  }
+
+  // 2. Match Teacher
+  const teacher = teachers.find((t: any) => {
+    const perms = t.permissions || {};
+    const bioId = (perms.biometric_id || t.biometric_id || '').toString().trim();
+    const teachId = (perms.teacher_id_number || t.teacher_id_number || '').toString().trim();
+    const mobile = (t.mobile || '').toString().trim();
+    const tId = (t.id || '').toString().trim();
+
+    if (bioId && bioId.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === numUserId) return true;
+    if (teachId && teachId.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === numUserId) return true;
+    if (mobile && (mobile === userId || mobile.endsWith(userId))) return true;
+    if (tId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+    return false;
+  });
+
+  if (teacher) {
+    const existingTeacherAttConfig: Record<string, Record<string, string>> = {
+      ...((instConfig.teacher_attendance as any) || {})
+    };
+    if (!existingTeacherAttConfig[date]) {
+      existingTeacherAttConfig[date] = {};
+    }
+    if (existingTeacherAttConfig[date][teacher.id] !== 'present') {
+      existingTeacherAttConfig[date][teacher.id] = 'present';
+      await supabase.from('institutions').update({
+        config_json: {
+          ...instConfig,
+          teacher_attendance: existingTeacherAttConfig
+        }
+      }).eq('id', institutionId);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -254,9 +448,191 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send('OK');
     }
 
-    const urlPath = (req.originalUrl || req.url || '').toLowerCase();
+    const rawUrl = (req.originalUrl || req.url || '').toString();
+    const urlPath = rawUrl.toLowerCase();
     const query = req.query || {};
     const method = req.method;
+
+    // =========================================================================
+    // 1. ISOLATED PROTOCOL HANDLER: Vnotify.ai (SS900 V4.0 / FKWeb / EBKN)
+    // =========================================================================
+    const isVnotifyRequest = Boolean(
+      req.headers?.['dev_id'] ||
+      req.headers?.['request_code'] ||
+      urlPath.startsWith('/hdata.aspx') ||
+      urlPath.startsWith('/ebkn') ||
+      urlPath.startsWith('/fkweb')
+    );
+
+    if (isVnotifyRequest) {
+      const vnotifySn = (
+        req.headers?.['dev_id'] ||
+        req.headers?.['device_id'] ||
+        query.dev_id ||
+        query.sn ||
+        query.SN ||
+        ''
+      ).toString().trim().toUpperCase();
+
+      if (vnotifySn) {
+        deviceHeartbeats.set(vnotifySn, new Date().toISOString());
+      }
+
+      res.setHeader('response_code', 'OK');
+      res.setHeader('trans_id', String(req.headers?.['trans_id'] || '1'));
+      res.setHeader('Content-Type', 'application/octet-stream');
+
+      const requestCode = String(req.headers?.['request_code'] || query.request_code || '').toLowerCase().trim();
+      if (requestCode === 'receive_cmd' || requestCode === 'fk_info' || requestCode === 'keepalive') {
+        return res.status(200).send('result=OK');
+      }
+
+      // Parse attendance log payload (realtime_glog, send_log, or POST body containing JSON/XML)
+      let rawBodyStr = '';
+      let parsedObj: any = null;
+
+      if (Buffer.isBuffer(req.body)) {
+        rawBodyStr = req.body.toString('utf-8');
+      } else if (typeof req.body === 'string') {
+        rawBodyStr = req.body;
+      } else if (typeof req.body === 'object' && req.body !== null) {
+        parsedObj = req.body;
+        try {
+          rawBodyStr = JSON.stringify(req.body);
+        } catch (e) {}
+      }
+
+      if (!parsedObj && rawBodyStr) {
+        const firstBrace = rawBodyStr.indexOf('{');
+        const lastBrace = rawBodyStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const jsonCandidate = rawBodyStr.substring(firstBrace, lastBrace + 1);
+          try {
+            parsedObj = JSON.parse(jsonCandidate);
+          } catch (e) {}
+        }
+      }
+
+      let pin = '';
+      let timestampStr = '';
+
+      if (parsedObj && typeof parsedObj === 'object') {
+        pin = String(
+          parsedObj.user_id ??
+          parsedObj.enroll_id ??
+          parsedObj.userId ??
+          parsedObj.pin ??
+          ''
+        ).trim();
+        timestampStr = String(
+          parsedObj.io_time ??
+          parsedObj.verify_time ??
+          parsedObj.time ??
+          ''
+        ).trim();
+      }
+
+      if ((!pin || !timestampStr) && rawBodyStr) {
+        const xmlUserMatch = rawBodyStr.match(/<UserID>([^<]+)<\/UserID>/i);
+        const xmlTimeMatch = rawBodyStr.match(/<Time>([^<]+)<\/Time>/i);
+        if (!pin && xmlUserMatch) pin = xmlUserMatch[1].trim();
+        if (!timestampStr && xmlTimeMatch) timestampStr = xmlTimeMatch[1].trim();
+      }
+
+      if (/^\d{14}$/.test(timestampStr)) {
+        const s = timestampStr;
+        timestampStr = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)} ${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}`;
+      }
+
+      if (pin && timestampStr) {
+        const institutionId = await resolveInstitutionBySn(vnotifySn, query.institution_id || query.institutionId);
+        if (institutionId) {
+          await processPunch(institutionId, pin, timestampStr);
+        } else {
+          console.warn(`[Vnotify.ai] Unregistered device SN "${vnotifySn}" sent punch for PIN=${pin}`);
+        }
+      }
+
+      return res.status(200).send('result=OK');
+    }
+
+    // =========================================================================
+    // 2. ISOLATED PROTOCOL HANDLER: Hikvision (ISAPI / AccessControllerEvent)
+    // =========================================================================
+    const rawBodyForHik = Buffer.isBuffer(req.body)
+      ? req.body.toString('utf-8')
+      : typeof req.body === 'string'
+        ? req.body
+        : '';
+
+    const isHikvisionRequest = Boolean(
+      rawUrl.startsWith('/ISAPI') ||
+      urlPath.startsWith('/isapi') ||
+      (typeof req.body === 'object' && req.body !== null && (req.body.AccessControllerEvent || req.body.event_log)) ||
+      (rawBodyForHik && rawBodyForHik.includes('AccessControllerEvent'))
+    );
+
+    if (isHikvisionRequest) {
+      let hikPayload: any = typeof req.body === 'object' && req.body !== null ? req.body : null;
+      if (hikPayload?.event_log && typeof hikPayload.event_log === 'string') {
+        try {
+          hikPayload = JSON.parse(hikPayload.event_log);
+        } catch (e) {}
+      }
+      if (!hikPayload && rawBodyForHik) {
+        const firstBrace = rawBodyForHik.indexOf('{');
+        const lastBrace = rawBodyForHik.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          try {
+            hikPayload = JSON.parse(rawBodyForHik.substring(firstBrace, lastBrace + 1));
+          } catch (e) {}
+        }
+      }
+
+      const acEvent = hikPayload?.AccessControllerEvent || hikPayload || {};
+      const hikSn = String(
+        query.SN ||
+        query.sn ||
+        acEvent.serialNo ||
+        acEvent.deviceUUID ||
+        acEvent.macAddress ||
+        hikPayload?.serialNo ||
+        hikPayload?.deviceUUID ||
+        hikPayload?.macAddress ||
+        ''
+      ).trim().toUpperCase();
+
+      if (hikSn) {
+        deviceHeartbeats.set(hikSn, new Date().toISOString());
+      }
+
+      const pin = String(
+        acEvent.employeeNoString ??
+        acEvent.employeeNo ??
+        hikPayload?.employeeNoString ??
+        hikPayload?.employeeNo ??
+        ''
+      ).trim();
+
+      const timestampStr = String(
+        hikPayload?.dateTime ??
+        acEvent.dateTime ??
+        acEvent.time ??
+        hikPayload?.time ??
+        ''
+      ).trim();
+
+      if (pin && timestampStr) {
+        const institutionId = await resolveInstitutionBySn(hikSn, query.institution_id || query.institutionId);
+        if (institutionId) {
+          await processPunch(institutionId, pin, timestampStr);
+        } else {
+          console.warn(`[Hikvision ISAPI] Unregistered device SN "${hikSn}" sent punch for PIN=${pin}`);
+        }
+      }
+
+      return res.status(200).json({ status: 'OK' });
+    }
 
     // Extract Serial Number (SN) from URL query regex, query object, body, or headers
     const urlSnMatch = (req.originalUrl || req.url || '').match(/[?&]sn=([^&]+)/i);
@@ -268,6 +644,10 @@ export default async function handler(req: any, res: any) {
       req.headers['x-device-sn'] || ''
     ).toString().trim();
     const SN = rawSN.toUpperCase();
+
+    if (SN) {
+      deviceHeartbeats.set(SN, new Date().toISOString());
+    }
 
     const action = (
       query.action ||
