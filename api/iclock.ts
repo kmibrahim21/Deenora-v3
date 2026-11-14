@@ -141,7 +141,7 @@ async function generateAndQueueCommandsForDevice(instId: string, sn: string): Pr
       .order('roll', { ascending: true }),
     supabase
       .from('teachers')
-      .select('id, teacher_name, name, biometric_id, permissions, is_active')
+      .select('id, teacher_name, mobile, permissions, is_active')
       .eq('institution_id', instId)
   ]);
 
@@ -168,12 +168,17 @@ async function generateAndQueueCommandsForDevice(instId: string, sn: string): Pr
 
   (teachers || []).forEach((t: any) => {
     if (t.is_active === false) return;
-    const perms = t.permissions || {};
-    const rawBio = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
+    let perms: any = {};
+    try {
+      perms = (typeof t.permissions === 'string' ? JSON.parse(t.permissions) : t.permissions) || {};
+    } catch {
+      perms = {};
+    }
+    const rawBio = (perms.biometric_id || perms.teacher_id_number || '').toString().trim();
     const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
     if (!cleanBioId) return;
 
-    const cleanName = transliterateBnToEn(t.name || t.teacher_name || 'TEACHER');
+    const cleanName = transliterateBnToEn(t.teacher_name || 'TEACHER');
     const cmdId = commands.length + 1;
     commands.push(`C:${cmdId}:DATA UPDATE USERINFO PIN=${cleanBioId}\tName=${cleanName}\tPri=0\tPasswd=\tCard=\tGrp=1`);
   });
@@ -228,7 +233,7 @@ async function getInstitutionDirectory(institutionId: string): Promise<{ student
         .eq('institution_id', institutionId),
       supabase
         .from('teachers')
-        .select('id, permissions, teacher_name, mobile')
+        .select('id, teacher_name, mobile, permissions, is_active')
         .eq('institution_id', institutionId)
     ]);
 
@@ -267,6 +272,90 @@ async function resolveInstitutionBySn(sn?: string, fallbackInstId?: string): Pro
     return devices[0].institution_id;
   }
   return null;
+}
+
+async function readRawRequestBody(req: any): Promise<string> {
+  if (typeof req._cachedRawBody === 'string') return req._cachedRawBody;
+  if (Buffer.isBuffer(req.body)) {
+    req._cachedRawBody = req.body.toString('utf-8');
+    return req._cachedRawBody;
+  }
+  if (typeof req.body === 'string' && req.body.length > 0) {
+    req._cachedRawBody = req.body;
+    return req._cachedRawBody;
+  }
+  if (typeof req.body === 'object' && req.body !== null && Object.keys(req.body).length > 0) {
+    try {
+      req._cachedRawBody = JSON.stringify(req.body);
+      return req._cachedRawBody;
+    } catch {
+      return '';
+    }
+  }
+  try {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    }
+    req._cachedRawBody = Buffer.concat(chunks).toString('utf-8');
+    return req._cachedRawBody;
+  } catch {
+    return '';
+  }
+}
+
+function matchTeacherByPin(teachers: any[], userId: string, numUserId: number): any | undefined {
+  return teachers.find((t: any) => {
+    if (t.is_active === false) return false;
+    let perms: any = {};
+    try {
+      perms = (typeof t.permissions === 'string' ? JSON.parse(t.permissions) : t.permissions) || {};
+    } catch {
+      perms = {};
+    }
+    const bioId = (perms.biometric_id || t.biometric_id || '').toString().trim();
+    const teachId = (perms.teacher_id_number || t.teacher_id_number || '').toString().trim();
+    const mobile = (t.mobile || '').toString().trim();
+    const tId = (t.id || '').toString().trim();
+
+    if (bioId && bioId.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === numUserId) return true;
+    if (teachId && teachId.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === numUserId) return true;
+    if (mobile && (mobile === userId || (userId.length >= 6 && mobile.endsWith(userId)))) return true;
+    if (userId.length >= 8 && tId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+    return false;
+  });
+}
+
+function matchStudentByExplicitBioId(students: any[], userId: string, numUserId: number): any | undefined {
+  return students.find((s: any) => {
+    const bId = (s.biometric_id || '').toString().trim();
+    const regNo = (s.registration_number || '').toString().trim();
+
+    if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
+    if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
+    if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
+    if (s.notes) {
+      const notesStr = typeof s.notes === 'string' ? s.notes : JSON.stringify(s.notes);
+      if (notesStr.includes(`"biometric_id":"${userId}"`) || notesStr.includes(`biometric_id:${userId}`)) return true;
+      if (!isNaN(numUserId) && (notesStr.includes(`"biometric_id":${numUserId}`) || notesStr.includes(`"biometric_id":"${numUserId}"`))) return true;
+    }
+    return false;
+  });
+}
+
+function matchStudentByRollFallback(students: any[], userId: string, numUserId: number): any | undefined {
+  return students.find((s: any) => {
+    const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
+    const sId = (s.id || '').toString().trim();
+
+    if (rollNo && rollNo === userId) return true;
+    if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
+    if (userId.length >= 8 && sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+    return false;
+  });
 }
 
 async function processPunch(institutionId: string, pin: string, timestampStr: string): Promise<boolean> {
@@ -309,26 +398,11 @@ async function processPunch(institutionId: string, pin: string, timestampStr: st
   const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
   const numUserId = Number(userId);
 
-  // 1. Match Student
-  const student = students.find((s: any) => {
-    const bId = (s.biometric_id || '').toString().trim();
-    const regNo = (s.registration_number || '').toString().trim();
-    const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
-    const sId = (s.id || '').toString().trim();
-
-    if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
-    if (rollNo && rollNo === userId) return true;
-    if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
-    if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
-    if (s.notes) {
-      if (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`)) return true;
-      if (!isNaN(numUserId) && (s.notes.includes(`"biometric_id":${numUserId}`) || s.notes.includes(`"biometric_id":"${numUserId}"`))) return true;
-    }
-    if (sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
-    return false;
-  });
+  // 1. Check Teacher explicit biometric_id / teacher_id_number / mobile AND Student explicit biometric_id / registration_number
+  // Only fall back to Student roll if neither Teacher nor Student explicit biometric_id matched!
+  const teacher = matchTeacherByPin(teachers, userId, numUserId);
+  const explicitStudent = matchStudentByExplicitBioId(students, userId, numUserId);
+  const student = explicitStudent || (!teacher ? matchStudentByRollFallback(students, userId, numUserId) : undefined);
 
   if (student) {
     const classSessions = student.class_id ? settings.class_sessions?.[student.class_id] : null;
@@ -399,32 +473,44 @@ async function processPunch(institutionId: string, pin: string, timestampStr: st
     return true;
   }
 
-  // 2. Match Teacher
-  const teacher = teachers.find((t: any) => {
-    const perms = t.permissions || {};
-    const bioId = (perms.biometric_id || t.biometric_id || '').toString().trim();
-    const teachId = (perms.teacher_id_number || t.teacher_id_number || '').toString().trim();
-    const mobile = (t.mobile || '').toString().trim();
-    const tId = (t.id || '').toString().trim();
-
-    if (bioId && bioId.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === numUserId) return true;
-    if (teachId && teachId.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === numUserId) return true;
-    if (mobile && (mobile === userId || mobile.endsWith(userId))) return true;
-    if (tId.toLowerCase().startsWith(userId.toLowerCase())) return true;
-    return false;
-  });
-
+  // 2. Process Teacher Match
   if (teacher) {
-    const existingTeacherAttConfig: Record<string, Record<string, string>> = {
+    const teacherStartTimeStr = settings.start_time || '08:00';
+    const teacherGraceMinutes = Number(settings.late_grace_minutes ?? 10);
+    let punchStatus: 'present' | 'late' = 'present';
+    let lateMinutes = 0;
+
+    if (time && teacherStartTimeStr) {
+      const timeParts = time.split(':');
+      const startParts = teacherStartTimeStr.split(':');
+      if (timeParts.length >= 2 && startParts.length >= 2) {
+        const punchTotal = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1], 10);
+        const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10);
+        const diff = punchTotal - startTotal;
+        if (diff > teacherGraceMinutes) {
+          punchStatus = 'late';
+          lateMinutes = diff;
+        }
+      }
+    }
+
+    const existingTeacherAttConfig: Record<string, Record<string, any>> = {
       ...((instConfig.teacher_attendance as any) || {})
     };
     if (!existingTeacherAttConfig[date]) {
       existingTeacherAttConfig[date] = {};
     }
-    if (existingTeacherAttConfig[date][teacher.id] !== 'present') {
-      existingTeacherAttConfig[date][teacher.id] = 'present';
+
+    const currentVal = existingTeacherAttConfig[date][teacher.id];
+    const currentStatus = typeof currentVal === 'string' ? currentVal : currentVal?.status;
+
+    if (
+      !currentVal ||
+      (currentStatus !== 'present' && currentStatus !== 'leave' && (currentStatus !== 'late' || punchStatus === 'present'))
+    ) {
+      existingTeacherAttConfig[date][teacher.id] = punchStatus === 'late'
+        ? { status: 'late', arrival_time: time || '08:30', late_minutes: lateMinutes }
+        : 'present';
       await supabase.from('institutions').update({
         config_json: {
           ...instConfig,
@@ -448,7 +534,13 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send('OK');
     }
 
-    const rawUrl = (req.originalUrl || req.url || '').toString();
+    const rawUrl = (
+      req.headers?.['x-vercel-original-path'] ||
+      req.headers?.['x-matched-path'] ||
+      req.originalUrl ||
+      req.url ||
+      ''
+    ).toString();
     const urlPath = rawUrl.toLowerCase();
     const query = req.query || {};
     const method = req.method;
@@ -459,9 +551,9 @@ export default async function handler(req: any, res: any) {
     const isVnotifyRequest = Boolean(
       req.headers?.['dev_id'] ||
       req.headers?.['request_code'] ||
-      urlPath.startsWith('/hdata.aspx') ||
-      urlPath.startsWith('/ebkn') ||
-      urlPath.startsWith('/fkweb')
+      urlPath.includes('/hdata.aspx') ||
+      urlPath.includes('/ebkn') ||
+      urlPath.includes('/fkweb')
     );
 
     if (isVnotifyRequest) {
@@ -491,15 +583,13 @@ export default async function handler(req: any, res: any) {
       let rawBodyStr = '';
       let parsedObj: any = null;
 
-      if (Buffer.isBuffer(req.body)) {
-        rawBodyStr = req.body.toString('utf-8');
-      } else if (typeof req.body === 'string') {
-        rawBodyStr = req.body;
-      } else if (typeof req.body === 'object' && req.body !== null) {
+      if (typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body) && Object.keys(req.body).length > 0) {
         parsedObj = req.body;
         try {
           rawBodyStr = JSON.stringify(req.body);
         } catch (e) {}
+      } else {
+        rawBodyStr = await readRawRequestBody(req);
       }
 
       if (!parsedObj && rawBodyStr) {
@@ -559,21 +649,34 @@ export default async function handler(req: any, res: any) {
     // =========================================================================
     // 2. ISOLATED PROTOCOL HANDLER: Hikvision (ISAPI / AccessControllerEvent)
     // =========================================================================
-    const rawBodyForHik = Buffer.isBuffer(req.body)
-      ? req.body.toString('utf-8')
-      : typeof req.body === 'string'
-        ? req.body
-        : '';
+    const contentType = String(req.headers?.['content-type'] || '').toLowerCase();
+    let rawBodyForHik = '';
+    if (
+      rawUrl.startsWith('/ISAPI') ||
+      urlPath.includes('/isapi') ||
+      contentType.includes('multipart/form-data') ||
+      (typeof req.body === 'string' && req.body.includes('AccessControllerEvent')) ||
+      Buffer.isBuffer(req.body)
+    ) {
+      rawBodyForHik = await readRawRequestBody(req);
+    }
 
     const isHikvisionRequest = Boolean(
       rawUrl.startsWith('/ISAPI') ||
-      urlPath.startsWith('/isapi') ||
+      urlPath.includes('/isapi') ||
       (typeof req.body === 'object' && req.body !== null && (req.body.AccessControllerEvent || req.body.event_log)) ||
       (rawBodyForHik && rawBodyForHik.includes('AccessControllerEvent'))
     );
 
     if (isHikvisionRequest) {
-      let hikPayload: any = typeof req.body === 'object' && req.body !== null ? req.body : null;
+      if (!rawBodyForHik && (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0)) {
+        rawBodyForHik = await readRawRequestBody(req);
+      }
+
+      let hikPayload: any = (typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body) && Object.keys(req.body).length > 0)
+        ? req.body
+        : null;
+
       if (hikPayload?.event_log && typeof hikPayload.event_log === 'string') {
         try {
           hikPayload = JSON.parse(hikPayload.event_log);
@@ -593,12 +696,12 @@ export default async function handler(req: any, res: any) {
       const hikSn = String(
         query.SN ||
         query.sn ||
-        acEvent.serialNo ||
+        hikPayload?.shortSerialNumber ||
+        hikPayload?.deviceID ||
         acEvent.deviceUUID ||
-        acEvent.macAddress ||
-        hikPayload?.serialNo ||
         hikPayload?.deviceUUID ||
         hikPayload?.macAddress ||
+        acEvent.macAddress ||
         ''
       ).trim().toUpperCase();
 
@@ -851,7 +954,11 @@ export default async function handler(req: any, res: any) {
             .limit(10);
 
           const bioStudents = students.filter((s: any) => Boolean(s.biometric_id || s.roll));
-          const bioTeachers = teachers.filter((t: any) => Boolean(t.permissions?.biometric_id || t.biometric_id));
+          const bioTeachers = teachers.filter((t: any) => {
+            let perms: any = {};
+            try { perms = (typeof t.permissions === 'string' ? JSON.parse(t.permissions) : t.permissions) || {}; } catch {}
+            return Boolean(perms.biometric_id || perms.teacher_id_number || t.biometric_id);
+          });
           const pendingCommandsCount = (SN && pendingAdmsCommands.get(SN)?.length) || 0;
 
           return res.status(200).json({
@@ -1092,8 +1199,8 @@ export default async function handler(req: any, res: any) {
         existingAttMap.set(`${att.student_id}_${att.date}`, att);
       });
 
-      // Teacher attendance in Deenora is stored in institutions.config_json.teacher_attendance[date][teacher_id] = status
-      const existingTeacherAttConfig: Record<string, Record<string, string>> = {
+      // Teacher attendance in Deenora is stored in institutions.config_json.teacher_attendance[date][teacher_id] = status | { status, arrival_time, late_minutes }
+      const existingTeacherAttConfig: Record<string, Record<string, any>> = {
         ...((instConfig.teacher_attendance as any) || {})
       };
       let teacherAttendanceModified = false;
@@ -1116,26 +1223,11 @@ export default async function handler(req: any, res: any) {
         const { userId, date, time } = punch;
         const numUserId = Number(userId);
 
-        // 1. Match Student
-        const student = students.find((s: any) => {
-          const bId = (s.biometric_id || '').toString().trim();
-          const regNo = (s.registration_number || '').toString().trim();
-          const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
-          const sId = (s.id || '').toString().trim();
-
-          if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
-          if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
-          if (rollNo && rollNo === userId) return true;
-          if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
-          if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
-          if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
-          if (s.notes) {
-            if (s.notes.includes(`"biometric_id":"${userId}"`) || s.notes.includes(`biometric_id:${userId}`)) return true;
-            if (!isNaN(numUserId) && (s.notes.includes(`"biometric_id":${numUserId}`) || s.notes.includes(`"biometric_id":"${numUserId}"`))) return true;
-          }
-          if (sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
-          return false;
-        });
+        // 1. Check Teacher explicit biometric_id / teacher_id_number / mobile AND Student explicit biometric_id / registration_number
+        // Only fall back to Student roll if neither Teacher nor Student explicit biometric_id matched!
+        const teacher = matchTeacherByPin(teachers, userId, numUserId);
+        const explicitStudent = matchStudentByExplicitBioId(students, userId, numUserId);
+        const student = explicitStudent || (!teacher ? matchStudentByRollFallback(students, userId, numUserId) : undefined);
 
         if (student) {
           const punchKey = `student_${student.id}_${date}`;
@@ -1212,42 +1304,50 @@ export default async function handler(req: any, res: any) {
           } else {
             alreadyMarkedCount++;
           }
-        } else {
-          // 2. Match Teacher
-          const teacher = teachers.find((t: any) => {
-            const perms = t.permissions || {};
-            const bioId = (perms.biometric_id || t.biometric_id || '').toString().trim();
-            const teachId = (perms.teacher_id_number || t.teacher_id_number || '').toString().trim();
-            const mobile = (t.mobile || '').toString().trim();
-            const tId = (t.id || '').toString().trim();
+        } else if (teacher) {
+          const punchKey = `teacher_${teacher.id}_${date}`;
+          if (processedKeys.has(punchKey)) continue;
+          processedKeys.add(punchKey);
 
-            if (bioId && bioId.toLowerCase() === userId.toLowerCase()) return true;
-            if (!isNaN(numUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === numUserId) return true;
-            if (teachId && teachId.toLowerCase() === userId.toLowerCase()) return true;
-            if (!isNaN(numUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === numUserId) return true;
-            if (mobile && (mobile === userId || mobile.endsWith(userId))) return true;
-            if (tId.toLowerCase().startsWith(userId.toLowerCase())) return true;
-            return false;
-          });
+          const teacherStartTimeStr = settings.start_time || '08:00';
+          const teacherGraceMinutes = Number(settings.late_grace_minutes ?? 10);
+          let punchStatus: 'present' | 'late' = 'present';
+          let lateMinutes = 0;
 
-          if (teacher) {
-            const punchKey = `teacher_${teacher.id}_${date}`;
-            if (processedKeys.has(punchKey)) continue;
-            processedKeys.add(punchKey);
-
-            if (!existingTeacherAttConfig[date]) {
-              existingTeacherAttConfig[date] = {};
+          if (time && teacherStartTimeStr) {
+            const timeParts = time.split(':');
+            const startParts = teacherStartTimeStr.split(':');
+            if (timeParts.length >= 2 && startParts.length >= 2) {
+              const punchTotal = parseInt(timeParts[0], 10) * 60 + parseInt(timeParts[1], 10);
+              const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1], 10);
+              const diff = punchTotal - startTotal;
+              if (diff > teacherGraceMinutes) {
+                punchStatus = 'late';
+                lateMinutes = diff;
+              }
             }
-            if (existingTeacherAttConfig[date][teacher.id] !== 'present') {
-              existingTeacherAttConfig[date][teacher.id] = 'present';
-              teacherAttendanceModified = true;
-              processedCount++;
-            } else {
-              alreadyMarkedCount++;
-            }
-          } else {
-            unmatchedUserIds.add(userId);
           }
+
+          if (!existingTeacherAttConfig[date]) {
+            existingTeacherAttConfig[date] = {};
+          }
+          const currentVal = existingTeacherAttConfig[date][teacher.id];
+          const currentStatus = typeof currentVal === 'string' ? currentVal : currentVal?.status;
+
+          if (
+            !currentVal ||
+            (currentStatus !== 'present' && currentStatus !== 'leave' && (currentStatus !== 'late' || punchStatus === 'present'))
+          ) {
+            existingTeacherAttConfig[date][teacher.id] = punchStatus === 'late'
+              ? { status: 'late', arrival_time: time || '08:30', late_minutes: lateMinutes }
+              : 'present';
+            teacherAttendanceModified = true;
+            processedCount++;
+          } else {
+            alreadyMarkedCount++;
+          }
+        } else {
+          unmatchedUserIds.add(userId);
         }
       }
 

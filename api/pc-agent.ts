@@ -140,20 +140,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data: teachers } = await supabase
         .from('teachers')
-        .select('id, teacher_name, name, biometric_id, permissions, is_active')
+        .select('id, teacher_name, mobile, permissions, is_active')
         .eq('institution_id', institutionId);
 
       (teachers || []).forEach((t: any) => {
         if (t.is_active === false) return;
-        const perms = t.permissions || {};
-        const bioId = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
-        if (bioId) {
+        let perms: any = {};
+        try {
+          perms = (typeof t.permissions === 'string' ? JSON.parse(t.permissions) : t.permissions) || {};
+        } catch {
+          perms = {};
+        }
+        const rawBio = (perms.biometric_id || perms.teacher_id_number || '').toString().trim();
+        const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '') || rawBio;
+        if (cleanBioId) {
           const uid = allocateUid();
-          const rawName = t.name || t.teacher_name || 'TEACHER';
-          const cleanName = transliterateBnToEn(rawName).substring(0, 23);
+          const cleanName = transliterateBnToEn(t.teacher_name || 'TEACHER').substring(0, 23);
           userList.push({
             uid,
-            user_id: bioId,
+            user_id: cleanBioId,
             name: cleanName,
             role: 'teacher'
           });

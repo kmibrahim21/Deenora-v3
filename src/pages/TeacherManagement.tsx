@@ -855,7 +855,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setSelectedTeacher(teacher);
     setFormData({
       teacher_id_number: teacher.teacher_id_number || (teacher.permissions as any)?.teacher_id_number || "",
-      biometric_id: teacher.biometric_id || "",
+      biometric_id: teacher.biometric_id || (teacher.permissions as any)?.biometric_id || "",
       name: teacher.name || "",
       phone: teacher.phone || "",
       pin: teacher.pin || "", 
@@ -1075,6 +1075,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       {teacher.teacher_id_number && (
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black font-mono tracking-wider ${isDark ? "bg-blue-900/40 text-blue-300 border border-blue-800/60" : "bg-blue-50 text-blue-700 border border-blue-100"}`}>
                           ID: {teacher.teacher_id_number}
+                        </span>
+                      )}
+                      {(teacher.biometric_id || (teacher.permissions as any)?.biometric_id) && (
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black font-mono tracking-wider ${isDark ? "bg-emerald-900/40 text-emerald-300 border border-emerald-800/60" : "bg-emerald-50 text-emerald-700 border border-emerald-100"}`}>
+                          BIO: {teacher.biometric_id || (teacher.permissions as any)?.biometric_id}
                         </span>
                       )}
                     </div>

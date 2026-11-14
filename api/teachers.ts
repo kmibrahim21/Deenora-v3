@@ -144,6 +144,7 @@ export default async function handler(req, res) {
           leave_date: parsedPermissions.leave_date || t.leave_date || "",
           sort_order: parsedPermissions.sort_order ?? t.sort_order ?? 0,
           teacher_id_number: parsedPermissions.teacher_id_number || t.teacher_id_number || t.teacher_id || "",
+          biometric_id: parsedPermissions.biometric_id || t.biometric_id || "",
           permissions: parsedPermissions
         };
       });
@@ -179,6 +180,7 @@ export default async function handler(req, res) {
         address,
         join_date,
         teacher_id_number: teacher_id_number ? String(teacher_id_number).trim() : "",
+        biometric_id: biometric_id ? String(biometric_id).trim() : "",
         permissions: finalPermissions
       }});
     }
@@ -292,7 +294,11 @@ export default async function handler(req, res) {
       if (teacherResult.error) throw teacherResult.error;
       if (profileResult.error) throw profileResult.error;
 
-      return res.status(200).json({ success: true });
+      return res.status(200).json({
+        success: true,
+        teacher_id_number: finalPermissions.teacher_id_number || "",
+        biometric_id: finalPermissions.biometric_id || ""
+      });
     }
 
     if (action === 'delete' && req.method === 'DELETE') {
