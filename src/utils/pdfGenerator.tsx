@@ -310,6 +310,36 @@ export const generateSeatPlanPDF = async (
     onProgress?: (progress: number) => void
 ) => {
     onProgress?.(5);
+
+    // Preload institution logo & signature as Base64 Data URLs so html-to-image never drops them due to CORS
+    let preparedMadrasah = madrasah ? { ...madrasah } : {};
+    let parsedCfg: any = preparedMadrasah?.config_json;
+    if (typeof parsedCfg === 'string') {
+        try { parsedCfg = JSON.parse(parsedCfg); } catch { parsedCfg = {}; }
+    }
+    parsedCfg = parsedCfg && typeof parsedCfg === 'object' ? { ...parsedCfg } : {};
+
+    const rawLogoUrl = preparedMadrasah?.logo_url || parsedCfg?.logo_url;
+    if (rawLogoUrl && typeof rawLogoUrl === 'string' && !rawLogoUrl.startsWith('data:')) {
+        try {
+            const logoDataUrl = await loadImage(rawLogoUrl);
+            preparedMadrasah.logo_url = logoDataUrl;
+            parsedCfg.logo_url = logoDataUrl;
+        } catch (e) {
+            console.warn('Could not convert seat plan logo to Data URL, using original URL:', e);
+        }
+    }
+
+    const rawSigUrl = parsedCfg?.signature_url;
+    if (rawSigUrl && typeof rawSigUrl === 'string' && !rawSigUrl.startsWith('data:')) {
+        try {
+            parsedCfg.signature_url = await loadImage(rawSigUrl);
+        } catch (e) {
+            console.warn('Could not convert seat plan signature to Data URL:', e);
+        }
+    }
+    preparedMadrasah.config_json = parsedCfg;
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -318,7 +348,7 @@ export const generateSeatPlanPDF = async (
     const root = createRoot(container);
     
     await new Promise<void>((resolve) => {
-        root.render(<SeatPlanTemplate assignments={assignments} madrasah={madrasah} templateId={templateId} lang={lang} examName={examName} />);
+        root.render(<SeatPlanTemplate assignments={assignments} madrasah={preparedMadrasah} templateId={templateId} lang={lang} examName={examName} />);
         setTimeout(resolve, 1500); // Give more time for fonts/images to render
     });
     onProgress?.(25);
@@ -340,6 +370,7 @@ export const generateSeatPlanPDF = async (
                 backgroundColor: '#ffffff',
                 width: 794,
                 height: 1123,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
                 style: {
                     transform: 'scale(1)',
                     transformOrigin: 'top left'
@@ -355,6 +386,7 @@ export const generateSeatPlanPDF = async (
         const imgData = await toPng(container.firstElementChild as HTMLElement, {
             pixelRatio: 3,
             backgroundColor: '#ffffff',
+            fontEmbedCSS: solaimanLipiFontEmbedCSS,
         });
         doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
         onProgress?.(90);

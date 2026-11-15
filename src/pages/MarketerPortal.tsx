@@ -497,7 +497,7 @@ export const MarketerPortal: React.FC<MarketerPortalProps> = ({
   const marketerInitial = (profile?.full_name || 'M').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] text-slate-900 pb-28 md:pb-16 font-noto selection:bg-blue-600 selection:text-white">
+    <div className="flex-1 h-full w-full overflow-y-auto overflow-x-hidden custom-scrollbar bg-[#F4F7FB] text-slate-900 pb-28 md:pb-16 font-noto selection:bg-blue-600 selection:text-white">
       {/* Top Sticky App Bar */}
       <header className="bg-gradient-to-r from-[#0F265C] via-[#1E3A8A] to-[#2563EB] text-white sticky top-0 z-40 shadow-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
