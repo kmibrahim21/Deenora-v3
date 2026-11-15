@@ -1860,10 +1860,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [searchTerm, setSearchTerm] = useState('');
   const [instFilterMonth, setInstFilterMonth] = useState(new Date().toISOString().slice(0, 7));
   const [instPaymentFilter, setInstPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [accountAgeFilter, setAccountAgeFilter] = useState<'all' | 'today' | 'last_3' | 'last_7' | 'last_15' | 'last_30' | 'zero_students' | 'last_3_zero' | 'custom_date'>('all');
+  const [createdDateFilter, setCreatedDateFilter] = useState<string>('');
 
   useEffect(() => {
     setVisibleCount(30);
-  }, [searchQuery, filterType, instFilterMonth, instPaymentFilter]);
+  }, [searchQuery, filterType, instFilterMonth, instPaymentFilter, accountAgeFilter, createdDateFilter]);
 
   // Bulk Communication State
   const [bulkMessage, setBulkMessage] = useState('');
@@ -2724,6 +2726,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
+  const getAccountAgeDays = (createdAt?: string): number | null => {
+    if (!createdAt) return null;
+    const createdTime = new Date(createdAt).getTime();
+    if (isNaN(createdTime)) return null;
+    const diffMs = Date.now() - createdTime;
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  };
+
   const filtered = useMemo(() => madrasahs.filter(m => {
     const query = (searchQuery || '').toLowerCase();
     const config = m.config_json as any || {};
@@ -2742,8 +2752,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (instPaymentFilter === 'unpaid' && isPaid) matchesPayment = false;
     }
 
-    return matchesSearch && matchesType && matchesPayment;
-  }), [madrasahs, searchQuery, filterType, instFilterMonth, instPaymentFilter]);
+    let matchesAgeOrDate = true;
+    const diffDays = getAccountAgeDays(m.created_at);
+    const stCount = Number(m.student_count || 0);
+
+    if (accountAgeFilter !== 'all') {
+      if (accountAgeFilter === 'today') {
+        matchesAgeOrDate = diffDays !== null && diffDays === 0;
+      } else if (accountAgeFilter === 'last_3') {
+        matchesAgeOrDate = diffDays !== null && diffDays <= 3;
+      } else if (accountAgeFilter === 'last_7') {
+        matchesAgeOrDate = diffDays !== null && diffDays <= 7;
+      } else if (accountAgeFilter === 'last_15') {
+        matchesAgeOrDate = diffDays !== null && diffDays <= 15;
+      } else if (accountAgeFilter === 'last_30') {
+        matchesAgeOrDate = diffDays !== null && diffDays <= 30;
+      } else if (accountAgeFilter === 'zero_students') {
+        matchesAgeOrDate = stCount === 0;
+      } else if (accountAgeFilter === 'last_3_zero') {
+        matchesAgeOrDate = diffDays !== null && diffDays <= 3 && stCount === 0;
+      } else if (accountAgeFilter === 'custom_date' && createdDateFilter) {
+        if (!m.created_at) {
+          matchesAgeOrDate = false;
+        } else {
+          const createdDateStr = new Date(m.created_at).toISOString().slice(0, 10);
+          matchesAgeOrDate = createdDateStr >= createdDateFilter;
+        }
+      }
+    }
+
+    if (createdDateFilter && accountAgeFilter !== 'custom_date') {
+      if (!m.created_at) {
+        matchesAgeOrDate = false;
+      } else {
+        const createdDateStr = new Date(m.created_at).toISOString().slice(0, 10);
+        matchesAgeOrDate = matchesAgeOrDate && createdDateStr >= createdDateFilter;
+      }
+    }
+
+    return matchesSearch && matchesType && matchesPayment && matchesAgeOrDate;
+  }), [madrasahs, searchQuery, filterType, instFilterMonth, instPaymentFilter, accountAgeFilter, createdDateFilter]);
 
   return (
     <div className={`min-h-screen pb-24 animate-in fade-in relative ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
@@ -3298,6 +3346,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   </div>
                   
                   <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
+                    {/* Single Account Age / Date Filter */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={accountAgeFilter}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          setAccountAgeFilter(val);
+                          if (val !== 'custom_date') setCreatedDateFilter('');
+                        }}
+                        className={`h-14 px-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-700'} font-bold font-noto text-xs outline-none shadow-premium focus:border-blue-500/50 transition-all`}
+                      >
+                        <option value="all">অ্যাকাউন্ট বয়স / সব তারিখ</option>
+                        <option value="today">আজকে (Today)</option>
+                        <option value="last_3">গত ৩ দিন (Last 3 Days)</option>
+                        <option value="last_7">গত ৭ দিন (Last 7 Days)</option>
+                        <option value="last_15">গত ১৫ দিন (Last 15 Days)</option>
+                        <option value="last_30">গত ৩০ দিন (Last 30 Days)</option>
+                        <option value="zero_students">০ স্টুডেন্ট (0 Students)</option>
+                        <option value="last_3_zero">গত ৩ দিন + ০ স্টুডেন্ট</option>
+                        <option value="custom_date">নির্দিষ্ট তারিখ থেকে...</option>
+                      </select>
+
+                      {accountAgeFilter === 'custom_date' && (
+                        <input
+                          type="date"
+                          value={createdDateFilter}
+                          onChange={(e) => setCreatedDateFilter(e.target.value)}
+                          className={`h-14 px-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-700'} font-bold text-xs outline-none shadow-premium focus:border-blue-500/50 transition-all`}
+                        />
+                      )}
+                    </div>
+
                     <div className="relative shrink-0">
                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                       <input 
@@ -3369,8 +3449,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           </button>
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <div className="flex flex-col mb-1">
                             <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none">Code: {(m.config_json as any)?.institute_code || 'N/A'}</p>
+                            {m.created_at && (
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mt-1">
+                                {new Date(m.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </p>
+                            )}
                           </div>
                           <h3 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} truncate font-noto text-lg leading-tight`}>{m.name}</h3>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 truncate">{m.phone || 'No Phone'}</p>
@@ -3394,8 +3479,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
                           {m.institution_type === 'choching' ? 'Choching' : (m.institution_type || 'madrasah')}
                         </span>
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                          {m.student_count || 0} Students
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600">
+                          Students: {m.student_count || 0}
                         </span>
                         {(m.teacher_count || 0) > 0 && (
                           <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
