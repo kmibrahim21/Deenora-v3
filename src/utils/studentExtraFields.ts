@@ -6,12 +6,23 @@ export interface StudentExtraFields {
   religion?: string | null;
   father_name?: string | null;
   father_occupation?: string | null;
+  father_nid?: string | null;
   mother_occupation?: string | null;
+  mother_nid?: string | null;
   guardian_relation?: string | null;
+  whatsapp_number?: string | null;
+  emergency_phone?: string | null;
   permanent_address?: string | null;
   previous_institution?: string | null;
   previous_class?: string | null;
+  tc_number?: string | null;
   biometric_id?: string | null;
+  birth_reg_no?: string | null;
+  department?: string | null;
+  residential_status?: string | null;
+  admission_fee?: string | null;
+  monthly_fee?: string | null;
+  receipt_number?: string | null;
 }
 
 const ADM_TAG_PREFIX = '[ADM_EXTRA:';
@@ -37,18 +48,31 @@ export function extractStudentExtraFields(student?: Student | null): StudentExtr
     }
   }
 
+  const s = student as any;
+
   return {
     gender: (student.gender ?? parsedFromNotes.gender) || '',
     nationality: (student.nationality ?? parsedFromNotes.nationality) || '',
     religion: (student.religion ?? parsedFromNotes.religion) || '',
     father_name: (student.father_name ?? parsedFromNotes.father_name) || '',
     father_occupation: (student.father_occupation ?? parsedFromNotes.father_occupation) || '',
+    father_nid: (s.father_nid ?? parsedFromNotes.father_nid) || '',
     mother_occupation: (student.mother_occupation ?? parsedFromNotes.mother_occupation) || '',
+    mother_nid: (s.mother_nid ?? parsedFromNotes.mother_nid) || '',
     guardian_relation: (student.guardian_relation ?? parsedFromNotes.guardian_relation) || '',
+    whatsapp_number: (s.whatsapp_number ?? parsedFromNotes.whatsapp_number) || '',
+    emergency_phone: (s.emergency_phone ?? parsedFromNotes.emergency_phone) || '',
     permanent_address: (student.permanent_address ?? parsedFromNotes.permanent_address) || '',
     previous_institution: (student.previous_institution ?? parsedFromNotes.previous_institution) || '',
     previous_class: (student.previous_class ?? parsedFromNotes.previous_class) || '',
+    tc_number: (s.tc_number ?? parsedFromNotes.tc_number) || '',
     biometric_id: (student.biometric_id ?? parsedFromNotes.biometric_id) || '',
+    birth_reg_no: (s.birth_reg_no ?? parsedFromNotes.birth_reg_no) || '',
+    department: (s.department ?? parsedFromNotes.department) || '',
+    residential_status: (s.residential_status ?? parsedFromNotes.residential_status) || '',
+    admission_fee: (s.admission_fee ?? parsedFromNotes.admission_fee) || '',
+    monthly_fee: (s.monthly_fee ?? parsedFromNotes.monthly_fee) || '',
+    receipt_number: (s.receipt_number ?? parsedFromNotes.receipt_number) || '',
   };
 }
 
@@ -57,11 +81,9 @@ export function extractStudentExtraFields(student?: Student | null): StudentExtr
  */
 export function packStudentNotesWithExtra(currentNotes: string | undefined | null, extra: StudentExtraFields): string {
   let cleanNotes = currentNotes || '';
-  // Remove existing ADM_EXTRA tag if present
   const regex = /\[ADM_EXTRA:.*?\]/g;
   cleanNotes = cleanNotes.replace(regex, '').trim();
 
-  // Check if there are any non-empty extra fields
   const cleanExtra: Record<string, string> = {};
   for (const [k, v] of Object.entries(extra)) {
     if (v !== undefined && v !== null && typeof v === 'string' && v.trim().length > 0) {
