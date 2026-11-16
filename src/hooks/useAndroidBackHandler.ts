@@ -57,15 +57,18 @@ export const useAndroidBackHandler = (
   currentView: string,
   setView: (view: any) => void,
   userRole?: string,
-  lang: 'bn' | 'en' = 'bn'
+  lang: 'bn' | 'en' = 'bn',
+  onStepBack?: () => void
 ) => {
   const currentViewRef = useRef(currentView);
   const userRoleRef = useRef(userRole);
+  const onStepBackRef = useRef(onStepBack);
 
   useEffect(() => {
     currentViewRef.current = currentView;
     userRoleRef.current = userRole;
-  }, [currentView, userRole]);
+    onStepBackRef.current = onStepBack;
+  }, [currentView, userRole, onStepBack]);
 
   useEffect(() => {
     // Universal native back bridge function called directly by Android MainActivity
@@ -87,16 +90,26 @@ export const useAndroidBackHandler = (
         } catch {}
       }
 
-      // 3. Sub-view to Root Navigation (If not on root dashboard)
+      // 3. Step-by-step hierarchical navigation if not on root dashboard
       const cView = currentViewRef.current;
       const uRole = userRoleRef.current;
-      const isRoot = cView === 'home' || cView === 'admin-dashboard' || cView === 'parent-portal';
+      const isRoot =
+        cView === 'home' ||
+        cView === 'admin-dashboard' ||
+        cView === 'parent-portal' ||
+        cView === 'marketer-portal';
 
       if (!isRoot) {
-        if (typeof window !== 'undefined' && window.history.length > 1) {
-          window.history.back();
+        if (onStepBackRef.current) {
+          onStepBackRef.current();
         } else {
-          setView(uRole === 'parent' ? 'parent-portal' : 'home');
+          setView(
+            uRole === 'parent'
+              ? 'parent-portal'
+              : uRole === 'super_admin' || uRole === 'manager'
+              ? 'admin-dashboard'
+              : 'home'
+          );
         }
         return true;
       }
@@ -108,12 +121,14 @@ export const useAndroidBackHandler = (
       }
       lastRootBackPress = now;
 
-      const exitMsg = lang === 'bn' ? 'অ্যাপ থেকে বের হতে আবার ব্যাক চাপুন' : 'Press back again to exit';
+      const exitMsg =
+        lang === 'bn' ? 'অ্যাপ থেকে বের হতে আবার ব্যাক চাপুন' : 'Press back again to exit';
       showExitToast(exitMsg);
       return true;
     };
 
-    // Push browser history state on view change to intercept hardware/browser back actions
+    // Keep a browser history entry so web/gesture popstate triggers step-by-step navigation
+    // without letting window.history.back() jump multiple levels.
     if (typeof window !== 'undefined' && window.history.state?.view !== currentView) {
       window.history.pushState({ view: currentView }, '');
     }
@@ -122,7 +137,6 @@ export const useAndroidBackHandler = (
       if (window.handleNativeBackPressed) {
         const handled = window.handleNativeBackPressed();
         if (handled) {
-          // Re-push state to keep history stack stable if user handled internal navigation
           window.history.pushState({ view: currentViewRef.current }, '');
         }
       }

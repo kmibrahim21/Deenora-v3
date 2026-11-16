@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { OfflineService } from "services/OfflineService";
@@ -83,6 +83,35 @@ const MarketerPortal = React.lazy(() =>
   import("pages/MarketerPortal").then((m) => ({ default: m.MarketerPortal }))
 );
 
+const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
+  // Academic Documents sub-views -> parent is academic-documents
+  "admission-form": "academic-documents",
+  "certificates": "academic-documents",
+  "id-cards": "academic-documents",
+  "class-routine": "academic-documents",
+  "question-builder": "academic-documents",
+
+  // Account / Settings sub-views -> parent is account
+  "academic-documents": "account",
+  "profile-settings": "account",
+  "academic-year": "account",
+  "academic-calendar": "account",
+  "data-management": "account",
+  "donations": "account",
+  "tutorials": "account",
+  "admin-voice-service": "account",
+  "admin-tutorials": "account",
+  "messages": "account",
+
+  // Students & Classes hierarchy
+  "student-form": "students",
+  "student-details": "students",
+  "students": "classes",
+  "class-form": "classes",
+  "transactions": "accounting",
+  "final-results": "exams",
+};
+
 const App: React.FC = () => {
   useSyncEngine();
   const {
@@ -140,9 +169,119 @@ const App: React.FC = () => {
     message: "",
   });
 
-  useAndroidBackHandler(view, setView, profile?.role, lang);
+  const viewHistoryRef = useRef<View[]>([]);
+  const prevViewRef = useRef<View>(view);
+  const isSteppingBackRef = useRef<boolean>(false);
 
-  // Global Back Handlers in App.tsx
+  // Track forward view navigation history
+  useEffect(() => {
+    const prev = prevViewRef.current;
+    if (prev !== view) {
+      if (!isSteppingBackRef.current) {
+        if (view === "home" || view === "admin-dashboard") {
+          viewHistoryRef.current = [];
+        } else {
+          const stack = viewHistoryRef.current;
+          if (stack[stack.length - 1] !== prev) {
+            stack.push(prev);
+          }
+          if (stack.length > 25) {
+            stack.shift();
+          }
+        }
+      }
+      isSteppingBackRef.current = false;
+      prevViewRef.current = view;
+    }
+  }, [view]);
+
+  const resolveAccountViewForRole = useCallback(
+    (targetView: View): View => {
+      if (targetView === "account") {
+        const r = profile?.role;
+        if (r === "super_admin" || r === "manager") return "super-account";
+        if (r === "teacher") return "teacheraccount";
+      }
+      return targetView;
+    },
+    [profile?.role]
+  );
+
+  const handleBack = useCallback(
+    (fallback?: View) => {
+      const r = profile?.role;
+      const rootView: View =
+        r === "super_admin" || r === "manager" ? "admin-dashboard" : "home";
+
+      // Clean up trailing duplicates of current view from history stack
+      while (
+        viewHistoryRef.current.length > 0 &&
+        viewHistoryRef.current[viewHistoryRef.current.length - 1] === view
+      ) {
+        viewHistoryRef.current.pop();
+      }
+
+      let nextView: View | undefined;
+
+      // Priority 1: Explicit non-root fallback provided by UI Back button
+      if (fallback && fallback !== view) {
+        if (fallback === "home" && viewHistoryRef.current.length > 0) {
+          nextView = viewHistoryRef.current.pop();
+        } else {
+          const idx = viewHistoryRef.current.lastIndexOf(fallback);
+          if (idx !== -1) {
+            viewHistoryRef.current.splice(idx);
+          } else if (viewHistoryRef.current.length > 0) {
+            viewHistoryRef.current.pop();
+          }
+          nextView = resolveAccountViewForRole(fallback);
+        }
+      }
+
+      // Priority 2: Pop from viewHistoryRef stack
+      if (!nextView && viewHistoryRef.current.length > 0) {
+        const popped = viewHistoryRef.current.pop()!;
+        if (popped === "students" && !selectedClass) {
+          nextView = viewHistoryRef.current.pop() || "classes";
+        } else {
+          nextView = popped;
+        }
+      }
+
+      // Priority 3: Declarative VIEW_PARENT_MAP hierarchy
+      if (!nextView) {
+        const mappedParent = VIEW_PARENT_MAP[view];
+        if (mappedParent && mappedParent !== view) {
+          if (mappedParent === "students" && !selectedClass) {
+            nextView = "classes";
+          } else {
+            nextView = resolveAccountViewForRole(mappedParent);
+          }
+        }
+      }
+
+      // Priority 4: Role root dashboard
+      if (!nextView) {
+        nextView = rootView;
+      }
+
+      // Maintain student/class state cleanly across step-back transitions
+      if (view === "student-details" && nextView !== "student-form") {
+        setSelectedStudent(null);
+      }
+      if (view === "students" && nextView === "classes") {
+        setSelectedClass(null);
+      }
+
+      isSteppingBackRef.current = true;
+      setView(nextView);
+    },
+    [view, profile?.role, selectedClass, resolveAccountViewForRole]
+  );
+
+  useAndroidBackHandler(view, setView, profile?.role, lang, () => handleBack());
+
+  // Global Back Handlers in App.tsx (for overlays/modals only)
   useBackHandler('app-status-modal', () => {
     if (statusModal.show) {
       setStatusModal(prev => ({ ...prev, show: false }));
@@ -150,22 +289,6 @@ const App: React.FC = () => {
     }
     return false;
   }, statusModal.show, 10);
-
-  useBackHandler('app-selected-student', () => {
-    if (selectedStudent !== null) {
-      setSelectedStudent(null);
-      return true;
-    }
-    return false;
-  }, selectedStudent !== null, 9);
-
-  useBackHandler('app-selected-class', () => {
-    if (selectedClass !== null) {
-      setSelectedClass(null);
-      return true;
-    }
-    return false;
-  }, selectedClass !== null, 9);
 
   const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
@@ -250,13 +373,6 @@ const App: React.FC = () => {
     refreshMadrasah();
   };
 
-  const handleBack = (fallback: View = "home") => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      setView(fallback);
-    }
-  };
 
   useEffect(() => {
     if ((profile?.role === "super_admin" || profile?.role === "manager") && view === "home") {
@@ -632,7 +748,7 @@ const App: React.FC = () => {
               setSelectedStudent(null);
               setView("student-form");
             }}
-            onBack={() => setView("classes")}
+            onBack={() => handleBack("classes")}
             lang={lang}
             dataVersion={dataVersion}
             triggerRefresh={triggerRefresh}
@@ -675,7 +791,7 @@ const App: React.FC = () => {
         );
       case "student-details":
         if (!selectedStudent) {
-          setView("home");
+          setView(selectedClass ? "students" : "home");
           return null;
         }
         return (
@@ -713,9 +829,10 @@ const App: React.FC = () => {
                 setSelectedStudent(updatedStudent);
               }
               triggerRefresh();
-              setView("students");
+              isSteppingBackRef.current = true;
+              setView(isEditing && selectedStudent ? "student-details" : "students");
             }}
-            onCancel={() => setView("students")}
+            onCancel={() => handleBack(isEditing && selectedStudent ? "student-details" : "students")}
             lang={lang}
           />
         );
@@ -756,7 +873,7 @@ const App: React.FC = () => {
         return (
           <AcademicYearManager
             institution={madrasah}
-            onClose={() => setView('account')}
+            onClose={() => handleBack('account')}
             onUpdate={refreshMadrasah}
             lang={lang}
             selectedViewingYear={selectedYear}
