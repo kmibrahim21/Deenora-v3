@@ -1858,7 +1858,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
     }
   };
 
-  const handleDownloadSingleMarksheet = async (std: any, rank: number, downloadLang: 'en' | 'bn' = lang) => {
+  const handleDownloadSingleMarksheet = async (std: any, rank: number | string, downloadLang: 'en' | 'bn' = lang) => {
     if (!selectedExam || !madrasah) return;
 
     setIsDownloading(true);
@@ -3753,6 +3753,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
             const totalPossible = subjects.reduce((sum, s) => sum + (s.total_marks || 100), 0);
             const sortedStds = students.map(std => {
                 const stdMarks = marksData[std.id] || {};
+                const hasAnyMark = subjects.some(s => stdMarks[s.id] !== undefined && stdMarks[s.id] !== '' && stdMarks[s.id] !== null);
                 const totalObtained = subjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
                 
                 const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
@@ -3764,30 +3765,52 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                     totalObtained,
                     percentage,
                     division,
-                    failed
+                    failed,
+                    hasAnyMark
                 };
             }).sort((a, b) => {
+                if (a.hasAnyMark && !b.hasAnyMark) return -1;
+                if (!a.hasAnyMark && b.hasAnyMark) return 1;
                 if (a.failed && !b.failed) return 1;
                 if (!a.failed && b.failed) return -1;
                 return b.totalObtained - a.totalObtained;
             });
 
             let currentRank = 1;
-            const rankedStds = sortedStds.map((std, index) => {
-                if (index > 0) {
-                    const prev = sortedStds[index - 1];
+            let validCount = 0;
+            const rankedStds = sortedStds.map((std) => {
+                if (!std.hasAnyMark) {
+                    return {
+                        ...std,
+                        rank: null
+                    };
+                }
+                if (validCount > 0) {
+                    const prev = sortedStds[validCount - 1];
                     const isTie = prev.totalObtained === std.totalObtained && prev.failed === std.failed;
                     if (!isTie) {
                         currentRank++;
                     }
                 }
+                validCount++;
                 return {
                     ...std,
                     rank: currentRank
                 };
             });
 
-            const topStudent = rankedStds[0];
+            const parseRoll = (r: any) => {
+                const normalized = String(r ?? '').trim().replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+                const n = parseInt(normalized, 10);
+                return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
+            };
+            const rollSortedStds = [...rankedStds].sort((a, b) => {
+                const diff = parseRoll(a.roll) - parseRoll(b.roll);
+                if (diff !== 0) return diff;
+                return String(a.roll ?? '').localeCompare(String(b.roll ?? ''), undefined, { numeric: true });
+            });
+
+            const topStudent = rankedStds.find(s => s.hasAnyMark) || rankedStds[0];
 
             if (rankedStds.length === 0) {
               return (
@@ -3813,13 +3836,13 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                     <Trophy size={40} className="text-amber-300 shrink-0" />
                 </div>
 
-                {/* Student Cards Grid (School Layout) */}
+                {/* Student Cards Grid (Roll Order, Merit Rank Shown on Card) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
-                    {rankedStds.map((item) => (
+                    {rollSortedStds.map((item) => (
                         <div key={item.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-2.5 sm:p-3 rounded-[1.2rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-2`}>
                             <div className="flex items-center gap-2 min-w-0">
-                                <div className={`w-5 h-5 sm:w-6 sm:h-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0`}>
-                                    {item.rank}
+                                <div className={`min-w-[1.5rem] sm:min-w-[1.75rem] h-5 sm:h-6 px-1 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0`}>
+                                    {item.roll || '-'}
                                 </div>
                                 <div className="min-w-0">
                                     <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'} font-noto truncate leading-relaxed mb-0.5 text-[12px] sm:text-[13px] pt-0.5`}>
@@ -3840,7 +3863,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                     <button 
                                         onClick={() => {
                                             setSelectedStudentForMarksheet(item);
-                                            setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadSingleMarksheet(item, item.rank, l));
+                                            setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadSingleMarksheet(item, item.rank || '-', l));
                                             setDownloadActionType('single-marksheet');
                                             setShowDownloadLangModal(true);
                                         }}
@@ -3852,22 +3875,29 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({
                                         {!item.failed ? (lang === 'bn' ? 'পাস' : 'Passed') : (lang === 'bn' ? 'ফেল' : 'Failed')}
                                     </div>
                                 </div>
-                                {!item.failed ? (
-                                    <div className="flex gap-1">
-                                        <span className="px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded-md text-[7px] font-black border border-blue-50">
-                                            নম্বর: {item.percentage.toFixed(1)}%
-                                        </span>
-                                        <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md text-[7px] font-black border border-purple-50">
-                                            {item.division}
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-1">
+                                <div className="flex flex-wrap justify-end gap-1">
+                                    <span className={`px-1.5 py-0.5 rounded-md text-[7px] font-black border font-noto ${
+                                      madrasah?.theme === 'dark'
+                                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                    }`}>
+                                        {lang === 'bn' ? 'মেধাস্থান' : 'Merit'}: {item.rank || '-'}
+                                    </span>
+                                    {!item.failed ? (
+                                        <>
+                                            <span className="px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded-md text-[7px] font-black border border-blue-50">
+                                                নম্বর: {item.percentage.toFixed(1)}%
+                                            </span>
+                                            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md text-[7px] font-black border border-purple-50">
+                                                {item.division}
+                                            </span>
+                                        </>
+                                    ) : (
                                         <span className="px-1.5 py-0.5 bg-red-50 text-red-500 rounded-md text-[7px] font-black border border-red-50">
                                             রাসিব
                                         </span>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}

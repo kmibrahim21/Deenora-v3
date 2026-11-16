@@ -1367,6 +1367,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
           if (m.practical_marks !== undefined && m.practical_marks !== null) studentMarksObjLocal[`${m.subject_id}_practical`] = m.practical_marks;
         });
 
+        const hasAnyMark = subs.some(s => studentMarksObjLocal[s.id] !== undefined && studentMarksObjLocal[s.id] !== '' && studentMarksObjLocal[s.id] !== null);
+
         const processedSubjectIds = new Set<string>();
         let totalMarks = 0;
         let totalPossible = 0;
@@ -1523,10 +1525,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
           pass_status: passStatus,
           gpa: finalGpa,
           attendance: attVal,
-          raw_attendance: rawAtt
+          raw_attendance: rawAtt,
+          has_any_mark: hasAnyMark
         };
       })
       .sort((a, b) => {
+        if (a.has_any_mark && !b.has_any_mark) return -1;
+        if (!a.has_any_mark && b.has_any_mark) return 1;
         if (a.pass_status && !b.pass_status) return -1;
         if (!a.pass_status && b.pass_status) return 1;
 
@@ -1587,9 +1592,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
 
       const currentMeritMode = (madrasah?.config_json as any)?.merit_ranking_mode || 'total_marks_first';
       let currentRank = 1;
-      const ranked = sortedRanked.map((item, idx) => {
-        if (idx > 0) {
-          const prev = sortedRanked[idx - 1];
+      let rankedValidCount = 0;
+      const ranked = sortedRanked.map((item) => {
+        if (!item.has_any_mark) {
+          return { ...item, rank: null };
+        }
+        if (rankedValidCount > 0) {
+          const prev = sortedRanked[rankedValidCount - 1];
           let isTie = false;
 
           if (currentMeritMode === 'gpa_first' || currentMeritMode === 'total_marks_first') {
@@ -1610,6 +1619,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
             currentRank++;
           }
         }
+        rankedValidCount++;
         return { ...item, rank: currentRank };
       });
 
@@ -4513,16 +4523,27 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                   <div className="bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] text-white flex items-center justify-between shadow-premium">
                       <div className="min-w-0">
                           <p className="text-[9px] font-black uppercase opacity-60">সেরা ফলাফল</p>
-                          <h3 className="text-lg sm:text-2xl font-black font-noto truncate pt-1">{rankingData[0]?.student_name || 'N/A'}</h3>
+                          <h3 className="text-lg sm:text-2xl font-black font-noto truncate pt-1">{(rankingData.find((r: any) => r.has_any_mark) || rankingData[0])?.student_name || 'N/A'}</h3>
                       </div>
                       <Trophy size={40} className="text-amber-300" />
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
-                      {rankingData.map((item: any) => (
+                      {(() => {
+                        const parseRoll = (r: any) => {
+                          const normalized = String(r ?? '').trim().replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+                          const n = parseInt(normalized, 10);
+                          return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
+                        };
+                        const rollSortedRanking = [...rankingData].sort((a: any, b: any) => {
+                          const diff = parseRoll(a.roll) - parseRoll(b.roll);
+                          if (diff !== 0) return diff;
+                          return String(a.roll ?? '').localeCompare(String(b.roll ?? ''), undefined, { numeric: true });
+                        });
+                        return rollSortedRanking.map((item: any) => (
                           <div key={item.student_id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-2.5 sm:p-3 rounded-[1.2rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-2`}>
                               <div className="flex items-center gap-2 min-w-0">
-                                  <div className={`w-5 h-5 sm:w-6 sm:h-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0`}>{item.rank}</div>
+                                  <div className={`min-w-[1.5rem] sm:min-w-[1.75rem] h-5 sm:h-6 px-1 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0`}>{item.roll || '-'}</div>
                                   <div className="min-w-0">
                                       <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'} font-noto truncate leading-relaxed mb-0.5 text-[12px] sm:text-[13px] pt-0.5`}>{item.student_name}</h5>
                                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter truncate opacity-80">
@@ -4633,22 +4654,28 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                                           {item.pass_status ? (lang === 'bn' ? 'পাস' : 'Passed') : (lang === 'bn' ? 'ফেল' : 'Failed')}
                                       </div>
                                   </div>
-                                  {item.pass_status && (
-                                    <div className="flex gap-1">
-                                       {(() => {
-                                           const info = calculateStudentResult(item.student_id, subjects);
-                                           return (
-                                               <>
-                                                  <span className="px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded-md text-[7px] font-black border border-blue-50">{t('gpa', lang)}: {info.gpa}</span>
-                                                  <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md text-[7px] font-black border border-purple-50">{t('grade', lang)}: {info.grade}</span>
-                                               </>
-                                           );
-                                       })()}
-                                    </div>
-                                  )}
+                                  <div className="flex flex-wrap justify-end gap-1">
+                                     <span className={`px-1.5 py-0.5 rounded-md text-[7px] font-black border font-noto ${
+                                       madrasah?.theme === 'dark'
+                                         ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                         : 'bg-amber-50 text-amber-700 border-amber-100'
+                                     }`}>
+                                        {lang === 'bn' ? 'মেধাস্থান' : 'Merit'}: {item.rank || '-'}
+                                     </span>
+                                     {item.pass_status && (() => {
+                                         const info = calculateStudentResult(item.student_id, subjects);
+                                         return (
+                                             <>
+                                                <span className="px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded-md text-[7px] font-black border border-blue-50">{t('gpa', lang)}: {info.gpa}</span>
+                                                <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md text-[7px] font-black border border-purple-50">{t('grade', lang)}: {info.grade}</span>
+                                             </>
+                                         );
+                                     })()}
+                                  </div>
                               </div>
                           </div>
-                      ))}
+                        ));
+                      })()}
                   </div>
                 </>
               )}
