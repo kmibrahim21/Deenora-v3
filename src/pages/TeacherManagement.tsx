@@ -158,8 +158,83 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     is_active: true,
   });
 
+  const [pendingPhotoBase64, setPendingPhotoBase64] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string>("");
+
   const [permissions, setPermissions] =
     useState<Partial<TeacherPermissions>>(initialPermissions);
+
+  const compressTeacherPhotoToDataUrl = (file: File, maxSize = 450): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            }
+          } else if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('Could not get 2D context'));
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/webp', 0.65));
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleModalPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressTeacherPhotoToDataUrl(file);
+      setPendingPhotoBase64(dataUrl);
+      setPhotoPreviewUrl(dataUrl);
+    } catch (err) {
+      console.error('Failed to process teacher photo:', err);
+      setError(lang === 'bn' ? 'ছবি প্রসেস করতে সমস্যা হয়েছে।' : 'Failed to process selected photo.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const uploadTeacherPhotoViaApi = async (teacherId: string, imageBase64: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Session expired');
+    const res = await fetch('/api/teachers/update-photo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({
+        id: teacherId,
+        imageBase64,
+        contentType: 'image/webp'
+      })
+    });
+    const resData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(resData.error || 'Failed to upload teacher photo');
+    }
+    return resData.photo_url as string;
+  };
 
   const formatSalaryMonth = (monthStr: string) => {
     if (!monthStr) return "";
@@ -711,13 +786,21 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         throw new Error(data.error || data.message || "Failed to add teacher");
       }
 
+      if (pendingPhotoBase64 && data?.teacher?.id) {
+        try {
+          await uploadTeacherPhotoViaApi(data.teacher.id, pendingPhotoBase64);
+        } catch (photoErr: any) {
+          console.error("Teacher created, but photo upload failed:", photoErr);
+        }
+      }
+
       // Invalidate caches
       requestManager.invalidatePattern(`teachers:${madrasah.id}`);
       requestManager.invalidatePattern(`stats:${madrasah.id}`);
       requestManager.invalidatePattern(`dashboard_`);
       await CacheService.clearCache('teachers', madrasah.id);
 
-      await fetchTeachers();
+      await fetchTeachers(true);
       if (activeTab === 'attendance' && attendanceSubTab === 'take') {
         fetchTeacherAttendance(isHoliday);
       }
@@ -771,6 +854,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         );
       }
 
+      let uploadedPhotoUrl: string | undefined;
+      if (pendingPhotoBase64) {
+        uploadedPhotoUrl = await uploadTeacherPhotoViaApi(selectedTeacher.id, pendingPhotoBase64);
+      }
+
       // Invalidate caches
       requestManager.invalidatePattern(`teachers:${madrasah?.id}`);
       requestManager.invalidatePattern(`profile:${selectedTeacher.id}`);
@@ -781,11 +869,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       await fetchTeachers(true);
       if (viewProfile && viewProfile.id === selectedTeacher.id) {
-        // Find the updated teacher in the new list to be safe, or just merge
         setViewProfile(prev => prev ? { 
           ...prev, 
           ...formData, 
           basic_salary: Number(formData.basic_salary),
+          ...(uploadedPhotoUrl ? { photo_url: `${uploadedPhotoUrl}?t=${Date.now()}` } : {}),
           permissions 
         } : null);
       }
@@ -847,6 +935,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       sort_order: 0,
       is_active: true,
     });
+    setPendingPhotoBase64(null);
+    setPhotoPreviewUrl("");
     setPermissions(initialPermissions);
     setShowPassword(true);
   };
@@ -867,6 +957,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       sort_order: teacher.sort_order || 0,
       is_active: teacher.is_active,
     });
+    setPendingPhotoBase64(null);
+    setPhotoPreviewUrl(teacher.photo_url || "");
     setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
     setShowPassword(true);
     setShowEditModal(true);
@@ -978,7 +1070,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
             lang={lang} 
             onBack={() => setViewProfile(null)} 
             onTeacherUpdate={(updatedTeacher) => {
-              setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
+              setTeachers(prev => {
+                const next = prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t);
+                if (madrasah?.id) {
+                  CacheService.cacheData('teachers', madrasah.id, next).catch(() => {});
+                  requestManager.invalidatePattern(`teachers:${madrasah.id}`);
+                }
+                return next;
+              });
               setViewProfile(updatedTeacher);
             }} 
             onEdit={(teacher) => {
@@ -1728,6 +1827,26 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     {error}
                   </div>
                 )}
+
+                <div className="flex items-center gap-4 px-2">
+                  <div className={`w-16 h-16 rounded-2xl border-2 overflow-hidden flex items-center justify-center shrink-0 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-blue-50 border-blue-100'}`}>
+                    {photoPreviewUrl ? (
+                      <img src={photoPreviewUrl} alt="Teacher" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={28} className="text-blue-400" />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer active:scale-95 transition-all shadow-sm">
+                      <Camera size={14} />
+                      <span>{photoPreviewUrl ? (lang === 'bn' ? 'ছবি পরিবর্তন করুন' : 'Change Photo') : (lang === 'bn' ? 'শিক্ষকের ছবি যুক্ত করুন' : 'Add Teacher Photo')}</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleModalPhotoChange} />
+                    </label>
+                    <p className="text-[10px] font-bold text-slate-400">
+                      {lang === 'bn' ? 'ঐচ্ছিক (সর্বোচ্চ সাইজ অটো-কম্প্রেস হবে)' : 'Optional (auto-compressed)'}
+                    </p>
+                  </div>
+                </div>
 
                 <div className="space-y-5">
                   <div className="flex items-center gap-3 px-2">

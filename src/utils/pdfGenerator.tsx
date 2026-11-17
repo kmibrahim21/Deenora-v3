@@ -2375,6 +2375,38 @@ export const generateMessagePDF = async (
   onProgress?: (progress: number) => void
 ) => {
     onProgress?.(10);
+
+    // Preload institution logo & signature as Base64 Data URLs so html-to-image never drops them due to CORS
+    let preparedMadrasah: any = madrasah ? { ...madrasah } : null;
+    if (preparedMadrasah) {
+        let parsedCfg: any = preparedMadrasah.config_json;
+        if (typeof parsedCfg === 'string') {
+            try { parsedCfg = JSON.parse(parsedCfg); } catch { parsedCfg = {}; }
+        }
+        parsedCfg = parsedCfg && typeof parsedCfg === 'object' ? { ...parsedCfg } : {};
+
+        const rawLogoUrl = preparedMadrasah.logo_url || parsedCfg.logo_url;
+        if (rawLogoUrl && typeof rawLogoUrl === 'string' && !rawLogoUrl.startsWith('data:')) {
+            try {
+                const logoDataUrl = await loadImage(rawLogoUrl);
+                preparedMadrasah.logo_url = logoDataUrl;
+                parsedCfg.logo_url = logoDataUrl;
+            } catch (e) {
+                console.warn('Could not convert message PDF logo to Data URL, using original URL:', e);
+            }
+        }
+
+        const rawSigUrl = parsedCfg.signature_url;
+        if (rawSigUrl && typeof rawSigUrl === 'string' && !rawSigUrl.startsWith('data:')) {
+            try {
+                parsedCfg.signature_url = await loadImage(rawSigUrl);
+            } catch (e) {
+                console.warn('Could not convert message PDF signature to Data URL, using original URL:', e);
+            }
+        }
+        preparedMadrasah.config_json = parsedCfg;
+    }
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.top = '-9999px';
@@ -2388,12 +2420,12 @@ export const generateMessagePDF = async (
             try {
                 // Determine template based on class_name
                 const msgClass = (messageData.class_name || '').toLowerCase();
-                let TemplateComponent = <NoticePDFTemplate madrasah={madrasah} notice={messageData} lang={lang} />;
+                let TemplateComponent = <NoticePDFTemplate madrasah={preparedMadrasah} notice={messageData} lang={lang} />;
                 
                 if (msgClass.includes('syllabus') || msgClass.includes('suggestion')) {
-                    TemplateComponent = <SyllabusPDFTemplate madrasah={madrasah} syllabus={messageData} lang={lang} />;
+                    TemplateComponent = <SyllabusPDFTemplate madrasah={preparedMadrasah} syllabus={messageData} lang={lang} />;
                 } else if (msgClass.includes('diary')) {
-                    TemplateComponent = <DiaryPDFTemplate madrasah={madrasah} diary={messageData} lang={lang} />;
+                    TemplateComponent = <DiaryPDFTemplate madrasah={preparedMadrasah} diary={messageData} lang={lang} />;
                 }
 
                 root.render(
@@ -2406,6 +2438,20 @@ export const generateMessagePDF = async (
                 reject(e);
             }
         });
+
+        // Wait for any remaining <img> elements inside #pdf-wrapper to complete loading
+        const imgs = Array.from(container.querySelectorAll('img'));
+        await Promise.all(
+            imgs.map(img =>
+                img.complete
+                    ? Promise.resolve()
+                    : new Promise<void>(res => {
+                          const timer = setTimeout(res, 2000);
+                          img.onload = () => { clearTimeout(timer); res(); };
+                          img.onerror = () => { clearTimeout(timer); res(); };
+                      })
+            )
+        );
         onProgress?.(40);
 
         const doc = new jsPDF('p', 'mm', 'a4');

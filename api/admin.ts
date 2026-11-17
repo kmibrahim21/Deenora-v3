@@ -14,6 +14,111 @@ const serverAdminCache = {
 };
 const SERVER_CACHE_TTL = 45 * 1000; // 45 seconds TTL to prevent statement timeout & connection pool exhaustion
 
+const fetchAllRows = async <T = any>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>
+): Promise<T[]> => {
+  const pageSize = 1000;
+  let from = 0;
+  const all: T[] = [];
+  while (true) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    const rows = data || [];
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+};
+
+const getDhakaMonthKey = (dateInput: string | Date): string => {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  const dhakaMs = d.getTime() + 6 * 60 * 60 * 1000;
+  const dhakaDate = new Date(dhakaMs);
+  return `${dhakaDate.getUTCFullYear()}-${String(dhakaDate.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+const isDebitOrRefundTx = (t: any): boolean => {
+  const type = (t?.type || '').toLowerCase();
+  const desc = (t?.description || '').toLowerCase();
+  const txId = (t?.transaction_id || '').toLowerCase();
+  return (
+    type === 'debit' ||
+    desc.includes('refund') ||
+    txId.startsWith('correct_voice_') ||
+    txId.startsWith('refund_')
+  );
+};
+
+const isSubscriptionTx = (t: any): boolean => {
+  if (isDebitOrRefundTx(t)) return false;
+  const mod = (t?.module || '').toLowerCase();
+  if (mod === 'subscription') return true;
+  if (mod === 'sms' || mod === 'voice' || mod === 'payment') return false;
+  const desc = (t?.description || '').toLowerCase();
+  return (
+    desc.includes('subscription') ||
+    desc.includes('package') ||
+    desc.includes('renew') ||
+    desc.includes('প্যাকেজ') ||
+    desc.includes('সাবস্ক্রিপশন') ||
+    desc.includes('মাসিক ফি')
+  );
+};
+
+const isVoiceTx = (t: any): boolean => {
+  if (isDebitOrRefundTx(t)) return false;
+  const mod = (t?.module || '').toLowerCase();
+  if (mod === 'voice') return true;
+  if (mod === 'subscription' || mod === 'sms') return false;
+  const desc = (t?.description || '').toLowerCase();
+  return desc.includes('voice') || desc.includes('ভয়েস');
+};
+
+const isSmsTx = (t: any): boolean => {
+  if (isDebitOrRefundTx(t)) return false;
+  const mod = (t?.module || '').toLowerCase();
+  if (mod === 'sms') return true;
+  if (mod === 'subscription' || mod === 'voice' || mod === 'payment') return false;
+  return !isVoiceTx(t) && !isSubscriptionTx(t);
+};
+
+const parseDhakaDateRange = (params: {
+  filterMode?: string;
+  month?: string;
+  year?: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  const { filterMode, month, year, startDate: customStart, endDate: customEnd } = params;
+  const fallbackMonth = getDhakaMonthKey(new Date());
+
+  if (filterMode === 'monthly') {
+    const safeMonth = (month && /^\d{4}-\d{2}$/.test(month)) ? month : fallbackMonth;
+    const [yStr, mStr] = safeMonth.split('-');
+    const yNum = Number(yStr);
+    const mNum = Number(mStr);
+    const lastDay = new Date(Date.UTC(yNum, mNum, 0)).getUTCDate();
+    const startISO = new Date(`${yStr}-${mStr}-01T00:00:00.000+06:00`).toISOString();
+    const endISO = new Date(`${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}T23:59:59.999+06:00`).toISOString();
+    return { startISO, endISO, monthStr: safeMonth };
+  }
+
+  if (filterMode === 'custom' && customStart && customEnd) {
+    const start = customStart <= customEnd ? customStart : customEnd;
+    const end = customStart <= customEnd ? customEnd : customStart;
+    const startISO = new Date(`${start}T00:00:00.000+06:00`).toISOString();
+    const endISO = new Date(`${end}T23:59:59.999+06:00`).toISOString();
+    return { startISO, endISO, monthStr: null };
+  }
+
+  const safeYear = (year && /^\d{4}$/.test(String(year))) ? String(year) : String(new Date().getUTCFullYear());
+  const startISO = new Date(`${safeYear}-01-01T00:00:00.000+06:00`).toISOString();
+  const endISO = new Date(`${safeYear}-12-31T23:59:59.999+06:00`).toISOString();
+  return { startISO, endISO, monthStr: null };
+};
+
 async function autoFixVoiceRefunds(supabase: any) {
   try {
     const now = Date.now();
@@ -315,63 +420,72 @@ export default async function handler(req, res) {
 
     if (action === 'get_global_stats') {
       const now = Date.now();
-      if (serverAdminCache.globalStats.data && (now - serverAdminCache.globalStats.timestamp < SERVER_CACHE_TTL)) {
+      const forceRefresh = !!body.force;
+      if (!forceRefresh && serverAdminCache.globalStats.data && (now - serverAdminCache.globalStats.timestamp < SERVER_CACHE_TTL)) {
         return res.status(200).json(serverAdminCache.globalStats.data);
       }
 
-      const [studentsRes, classesRes, teachersRes, transactionsRes, instsRes, stockRes, pendingRes] = await Promise.all([
+      const [studentsRes, classesRes, teachersRes, approvedTransactions, instsData, stockRes, pendingRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('teachers').select('*', { count: 'exact', head: true }),
-        supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(2500),
-        supabase.from('institutions').select('sms_balance, balance, is_active, institution_type, config_json').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL'),
-        supabase.from('admin_sms_stock').select('remaining_sms').single(),
+        fetchAllRows((from, to) =>
+          supabase
+            .from('transactions')
+            .select('id, sms_count, amount, type, module, description, transaction_id, created_at')
+            .eq('status', 'approved')
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(from, to)
+        ),
+        fetchAllRows((from, to) =>
+          supabase
+            .from('institutions')
+            .select('id, sms_balance, balance, is_active, institution_type, config_json')
+            .eq('is_super_admin', false)
+            .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(from, to)
+        ),
+        supabase.from('admin_sms_stock').select('remaining_sms').maybeSingle(),
         supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending').not('transaction_id', 'like', 'PENDING_%')
       ]);
 
-      const totalAllocated = transactionsRes.data?.reduce((sum, t) => sum + (Number(t.sms_count) || 0), 0) || 0;
-      
-      const subTransactions = transactionsRes.data?.filter(t => 
-        t.module === 'subscription' || 
-        (t.description?.toLowerCase().includes('subscription')) || 
-        (t.description?.toLowerCase().includes('package')) ||
-        (t.description?.toLowerCase().includes('renew')) ||
-        (t.description?.toLowerCase().includes('প্যাকেজ')) ||
-        (t.description?.toLowerCase().includes('সাবস্ক্রিপশন'))
-      ) || [];
-      const subRev = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-      
-      const totalInWallets = instsRes.data?.reduce((sum, m) => sum + (Number(m.sms_balance) || 0), 0) || 0;
+      const creditTransactions = approvedTransactions.filter(t => !isDebitOrRefundTx(t));
+      const totalAllocated = creditTransactions.reduce((sum, t) => sum + (Number(t.sms_count) || 0), 0);
+
+      const subTransactions = creditTransactions.filter(isSubscriptionTx);
+      const subRev = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+      const totalInWallets = instsData.reduce((sum, m) => sum + (Number(m.sms_balance) || 0), 0);
       const sentCount = Math.max(0, totalAllocated - totalInWallets);
-      
-      const voiceTransactions = transactionsRes.data?.filter(t => t.module === 'voice' || (t.module === 'sms' || !t.module ? (t.description || '').toLowerCase().includes('voice') : false)) || [];
-      const totalVoiceRecharged = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-      const totalVoiceBalance = instsRes.data?.reduce((sum, m) => sum + (Number(m.balance) || 0), 0) || 0;
+
+      const voiceTransactions = creditTransactions.filter(isVoiceTx);
+      const totalVoiceRecharged = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const totalVoiceBalance = instsData.reduce((sum, m) => sum + (Number(m.balance) || 0), 0);
       const spentVoiceTk = Math.max(0, totalVoiceRecharged - totalVoiceBalance);
-      
+
       const smsRev = Math.round(sentCount * 0.10);
       const voiceRev = Math.round((spentVoiceTk / 0.45) * 0.15);
-      
+
       const monthlySubscriptionRevenue = subTransactions.reduce((acc: Record<string, number>, t) => {
-        const date = new Date(t.created_at);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        acc[monthKey] = (acc[monthKey] || 0) + (Number(t.amount) || 0);
+        const monthKey = getDhakaMonthKey(t.created_at);
+        if (monthKey) {
+          acc[monthKey] = (acc[monthKey] || 0) + (Number(t.amount) || 0);
+        }
         return acc;
       }, {});
 
       const totalRevenue = smsRev + voiceRev + subRev;
-      const activeInsts = instsRes.data?.filter(m => m.is_active).length || 0;
+      const activeInsts = instsData.filter(m => m.is_active).length;
       const adminStock = stockRes.data?.remaining_sms || 0;
 
-      const typeBreakdown = instsRes.data?.reduce((acc: any, m) => {
+      const typeBreakdown = instsData.reduce((acc: any, m) => {
         const type = m.institution_type || 'madrasah';
         acc[type] = (acc[type] || 0) + 1;
         return acc;
       }, { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 });
-
-      // Add student/class count aggregation if instsRes includes it
-      // But instsRes currently doesn't have it.
-      // We'll rely on the head:true counts for totals.
 
       const globalStatsResult = {
         totalStudents: studentsRes.count || 0,
@@ -386,7 +500,7 @@ export default async function handler(req, res) {
         monthlySubscriptionRevenue,
         totalRevenue,
         pendingApprovals: pendingRes?.count || 0,
-        totalInstitutions: instsRes.data?.length || 0,
+        totalInstitutions: instsData.length,
         activeInstitutions: activeInsts,
         totalVoiceBalance,
         adminSMSStock: adminStock,
@@ -469,118 +583,99 @@ export default async function handler(req, res) {
     }
 
     if (action === 'get_detailed_report') {
-      const { filterMode, month, year, startDate: customStart, endDate: customEnd } = body;
-      let startDate: Date;
-      let endDate: Date;
-      
-      if (filterMode === 'monthly') {
-        const [y, m] = month.split('-');
-        startDate = new Date(Number(y), Number(m) - 1, 1);
-        endDate = new Date(Number(y), Number(m), 0, 23, 59, 59);
-      } else if (filterMode === 'custom' && customStart && customEnd) {
-        startDate = new Date(customStart);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(customEnd);
-        endDate.setHours(23, 59, 59, 999);
-      } else {
-        startDate = new Date(Number(year), 0, 1);
-        endDate = new Date(Number(year), 11, 31, 23, 59, 59);
-      }
+      const { startISO, endISO, monthStr } = parseDhakaDateRange(body);
 
-      const startISO = startDate.toISOString();
-      const endISO = endDate.toISOString();
-      const monthStr = filterMode === 'monthly' ? month : null; // e.g. "2024-08"
-
-      // 1. Fetch SMS/Voice recharges and usage logs based on creation date
-      const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
-        supabase.from('transactions')
-          .select('id, amount, description, module, metadata, created_at, transaction_id, status, institution_id, institutions(name)')
-          .eq('status', 'approved')
-          .gte('created_at', startISO)
-          .lte('created_at', endISO)
-          .order('created_at', { ascending: false })
-          .limit(10000),
-        supabase.from('sms_logs')
+      const [rangeTransactions, smsLogsRes, voiceBroadcasts, allApprovedForSub] = await Promise.all([
+        fetchAllRows((from, to) =>
+          supabase
+            .from('transactions')
+            .select('id, amount, type, description, module, metadata, created_at, transaction_id, status, institution_id, institutions(name)')
+            .eq('status', 'approved')
+            .gte('created_at', startISO)
+            .lte('created_at', endISO)
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(from, to)
+        ),
+        supabase
+          .from('sms_logs')
           .select('*', { count: 'exact', head: true })
           .gte('created_at', startISO)
           .lte('created_at', endISO),
-        supabase.from('voice_broadcasts')
-          .select('total_numbers')
-          .gte('created_at', startISO)
-          .lte('created_at', endISO)
-          .limit(10000)
+        fetchAllRows((from, to) =>
+          supabase
+            .from('voice_broadcasts')
+            .select('id, total_numbers')
+            .gte('created_at', startISO)
+            .lte('created_at', endISO)
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(from, to)
+        ),
+        monthStr
+          ? fetchAllRows((from, to) =>
+              supabase
+                .from('transactions')
+                .select('id, amount, type, metadata, created_at, module, description, transaction_id')
+                .eq('status', 'approved')
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(from, to)
+            )
+          : Promise.resolve([])
       ]);
 
-      // 2. Fetch Subscription payments specifically if they target this month (even if paid earlier/later)
+      if (smsLogsRes.error) {
+        console.error('sms_logs count error in get_detailed_report:', smsLogsRes.error);
+      }
+
+      const validTransactions = rangeTransactions.filter(t => !isDebitOrRefundTx(t));
+
       let subRechargeTotal = 0;
       if (monthStr) {
-        // Fetch all approved subscription transactions
-        // We fetch ALL to catch multi-month payments made in the past that cover this month
-        const { data: allSubTx } = await supabase.from('transactions')
-          .select('amount, metadata, created_at, module, description')
-          .eq('status', 'approved')
-          .eq('module', 'subscription');
-
-        (allSubTx || []).forEach(t => {
+        const subTxList = allApprovedForSub.filter(isSubscriptionTx);
+        subTxList.forEach(t => {
           const months = t.metadata?.months;
           if (Array.isArray(months) && months.length > 0) {
             if (months.includes(monthStr)) {
-              // Pro-rata: Divide total amount by number of months it covers
               subRechargeTotal += (Number(t.amount) || 0) / months.length;
             }
           } else {
-            // Fallback for legacy: use created_at if monthStr matches transaction's month
-            const tDate = new Date(t.created_at);
-            const tMonthStr = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+            const tMonthStr = getDhakaMonthKey(t.created_at);
             if (tMonthStr === monthStr) {
-              subRechargeTotal += (Number(t.amount) || 0);
+              subRechargeTotal += Number(t.amount) || 0;
             }
           }
         });
       } else {
-        // Yearly mode: just sum subscriptions created in that year
-        const { data: yearlySubTx } = await supabase.from('transactions')
-          .select('amount')
-          .eq('status', 'approved')
-          .eq('module', 'subscription')
-          .gte('created_at', startISO)
-          .lte('created_at', endISO);
-        subRechargeTotal = (yearlySubTx || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        subRechargeTotal = validTransactions
+          .filter(isSubscriptionTx)
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
       }
 
-      const transactions = txRes.data || [];
-      
-      const smsTransactions = transactions.filter(t => {
-        // SMS transactions are those explicitly marked as sms, OR recharges without a module that aren't subscriptions/voice
-        const isSmsModule = t.module === 'sms';
-        const isLegacySms = !t.module && !(t.description || '').toLowerCase().includes('voice') && !(t.description || '').toLowerCase().includes('subscription');
-        return isSmsModule || isLegacySms;
-      });
-      const smsRechargeTotal = smsTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+      const smsTransactions = validTransactions.filter(isSmsTx);
+      const smsRechargeTotal = smsTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-      const voiceTransactions = transactions.filter(t => {
-        const isVoiceModule = t.module === 'voice';
-        const isLegacyVoice = !t.module && (t.description || '').toLowerCase().includes('voice');
-        return isVoiceModule || isLegacyVoice;
-      });
-      const voiceRechargeTotal = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+      const voiceTransactions = validTransactions.filter(isVoiceTx);
+      const voiceRechargeTotal = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
       const smsSentNum = smsLogsRes.count || 0;
-      const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0) || 0;
+      const voiceCallsNum = voiceBroadcasts.reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0);
 
       return res.status(200).json({
-        smsRechargeTotal,
-        voiceRechargeTotal,
-        subRechargeTotal,
+        smsRechargeTotal: Math.round(smsRechargeTotal * 100) / 100,
+        voiceRechargeTotal: Math.round(voiceRechargeTotal * 100) / 100,
+        subRechargeTotal: Math.round(subRechargeTotal * 100) / 100,
         smsSentNum,
         voiceCallsNum,
-        transactions
+        transactions: validTransactions
       });
     }
 
     if (action === 'get_all_institutions') {
       const now = Date.now();
-      if (serverAdminCache.institutions.data && (now - serverAdminCache.institutions.timestamp < SERVER_CACHE_TTL)) {
+      const forceRefresh = !!body.force;
+      if (!forceRefresh && serverAdminCache.institutions.data && (now - serverAdminCache.institutions.timestamp < SERVER_CACHE_TTL)) {
         return res.status(200).json({ institutions: serverAdminCache.institutions.data });
       }
 
@@ -1195,7 +1290,7 @@ export default async function handler(req, res) {
                 subscription_end: newSubEnd,
                 status: 'active'
               })
-              .eq('id', institution_id);
+              .eq('id', targetInstId);
             if (instUpdateError) throw instUpdateError;
           }
         }

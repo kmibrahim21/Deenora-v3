@@ -248,13 +248,25 @@ export const useAuth = () => {
           }
 
           if (singleInstitution) {
-            // Support branch allocated balance with parent fallback if undefined
-            const parentInstId = (singleInstitution.config_json as any)?.parent_institution_id;
+            // Normalize config_json if stored as string
+            if (typeof singleInstitution.config_json === 'string') {
+              try {
+                singleInstitution.config_json = JSON.parse(singleInstitution.config_json);
+              } catch {
+                singleInstitution.config_json = {};
+              }
+            }
+
+            // Support branch allocated balance, signature, logo, and photo module inheritance from parent
+            const branchCfg: any = (singleInstitution.config_json && typeof singleInstitution.config_json === 'object')
+              ? singleInstitution.config_json
+              : {};
+            const parentInstId = branchCfg?.parent_institution_id;
             if (parentInstId && isValidUUID(parentInstId)) {
               try {
                 const { data: parentInst } = await supabase
                   .from('institutions')
-                  .select('sms_balance, balance')
+                  .select('sms_balance, balance, logo_url, config_json')
                   .eq('id', parentInstId)
                   .maybeSingle();
                 if (parentInst) {
@@ -264,9 +276,32 @@ export const useAuth = () => {
                   if (singleInstitution.balance === undefined || singleInstitution.balance === null) {
                     singleInstitution.balance = parentInst.balance || 0;
                   }
+                  if (!singleInstitution.logo_url && parentInst.logo_url) {
+                    singleInstitution.logo_url = parentInst.logo_url;
+                  }
+                  let parentCfg: any = parentInst.config_json;
+                  if (typeof parentCfg === 'string') {
+                    try { parentCfg = JSON.parse(parentCfg); } catch { parentCfg = {}; }
+                  }
+                  parentCfg = (parentCfg && typeof parentCfg === 'object') ? parentCfg : {};
+
+                  const mergedConfig: any = { ...branchCfg };
+                  if (!mergedConfig.signature_url && parentCfg.signature_url) {
+                    mergedConfig.signature_url = parentCfg.signature_url;
+                    if (!mergedConfig.signature_height && parentCfg.signature_height) {
+                      mergedConfig.signature_height = parentCfg.signature_height;
+                    }
+                  }
+                  if (parentCfg.modules?.student_photo === true) {
+                    mergedConfig.modules = {
+                      ...(mergedConfig.modules || {}),
+                      student_photo: true
+                    };
+                  }
+                  singleInstitution.config_json = mergedConfig;
                 }
               } catch (e) {
-                console.error("Error fetching parent institution shared SMS balance:", e);
+                console.error("Error fetching parent institution shared config:", e);
               }
             }
 

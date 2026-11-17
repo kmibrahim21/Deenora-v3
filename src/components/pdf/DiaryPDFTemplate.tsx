@@ -108,6 +108,7 @@ export const DiaryPDFTemplate: React.FC<DiaryPDFTemplateProps> = ({
               src={madrasah.logo_url} 
               alt="Logo" 
               className="w-16 h-16 object-contain rounded-full border border-slate-200 p-1 shadow-sm shrink-0" 
+              crossOrigin="anonymous"
               referrerPolicy="no-referrer"
             />
           ) : (

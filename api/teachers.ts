@@ -275,7 +275,10 @@ export default async function handler(req, res) {
         finalPermissions.raw_password = pin;
       }
 
-      const updateData: any = { teacher_name: name, mobile: phone, designation, basic_salary: basic_salary ? Number(basic_salary) : null, photo_url, is_active, permissions: finalPermissions };
+      const updateData: any = { teacher_name: name, mobile: phone, designation, basic_salary: basic_salary ? Number(basic_salary) : null, is_active, permissions: finalPermissions };
+      if (photo_url !== undefined) {
+        updateData.photo_url = photo_url;
+      }
       if (pin) {
         updateData.password_hash = crypto.createHash('sha256').update(pin).digest('hex');
       }
@@ -329,6 +332,139 @@ export default async function handler(req, res) {
       }
       
       return res.status(200).json({ success: true });
+    }
+
+    if (action === 'update-photo' && req.method === 'POST') {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: 'Unauthorized: Missing token' });
+      const token = authHeader.replace('Bearer ', '').trim();
+      if (!token || token === 'undefined' || token === 'null') {
+        return res.status(401).json({ error: 'Unauthorized: Missing token' });
+      }
+
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      if (userErr || !userData?.user) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      }
+      const caller = userData.user;
+
+      const teacherId = body.id || body.teacher_id;
+      const { imageBase64, contentType, photo_url } = body;
+      if (!teacherId) {
+        return res.status(400).json({ error: 'Teacher ID is required' });
+      }
+      if (!imageBase64 && !photo_url) {
+        return res.status(400).json({ error: 'Image data or photo_url is required' });
+      }
+
+      const { data: targetTeacher, error: fetchTeacherErr } = await supabase
+        .from('teachers')
+        .select('id, institution_id, photo_url')
+        .eq('id', teacherId)
+        .single();
+
+      if (fetchTeacherErr || !targetTeacher) {
+        return res.status(404).json({ error: 'Teacher not found' });
+      }
+
+      const [{ data: callerProfile }, { data: callerInst }, { data: teacherInst }] = await Promise.all([
+        supabase.from('profiles').select('id, role, institution_id, permissions').eq('id', caller.id).maybeSingle(),
+        supabase.from('institutions').select('id, is_super_admin').eq('id', caller.id).maybeSingle(),
+        supabase.from('institutions').select('id, config_json').eq('id', targetTeacher.institution_id).maybeSingle()
+      ]);
+
+      let teacherInstConfig = teacherInst?.config_json || {};
+      if (typeof teacherInstConfig === 'string') {
+        try { teacherInstConfig = JSON.parse(teacherInstConfig); } catch { teacherInstConfig = {}; }
+      }
+      const teacherParentId = teacherInstConfig?.parent_institution_id || null;
+
+      const callerRole = (callerProfile?.role || caller.user_metadata?.role || '').toString().toLowerCase();
+      const isSuperAdmin = callerRole === 'super_admin' || callerRole === 'manager' || !!callerInst?.is_super_admin;
+      const callerInstIds = new Set([caller.id, callerProfile?.institution_id].filter(Boolean));
+      const isDirectInst = callerInstIds.has(targetTeacher.institution_id);
+      const isParentInst = Boolean(teacherParentId && callerInstIds.has(teacherParentId));
+
+      let isAuthorized = isSuperAdmin;
+      if (!isAuthorized && (isDirectInst || isParentInst)) {
+        if (callerRole === 'teacher') {
+          isAuthorized = Boolean(callerProfile?.permissions?.can_manage_teachers || caller.id === targetTeacher.id);
+        } else {
+          isAuthorized = true;
+        }
+      }
+
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden: Not authorized to update this teacher photo' });
+      }
+
+      let finalPhotoUrl = photo_url as string | undefined;
+
+      if (imageBase64 && typeof imageBase64 === 'string') {
+        const base64Match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+        const resolvedContentType = base64Match ? base64Match[1] : (contentType || 'image/webp');
+        const rawBase64 = base64Match ? base64Match[2] : imageBase64;
+        const fileBuffer = Buffer.from(rawBase64, 'base64');
+
+        if (!fileBuffer.length) {
+          return res.status(400).json({ error: 'Invalid image payload' });
+        }
+
+        await supabase.storage.createBucket('madrasah-assets', { public: true }).catch(() => {});
+
+        // Clean up old photo from storage
+        if (targetTeacher.photo_url) {
+          try {
+            const urlWithoutQuery = String(targetTeacher.photo_url).split('?')[0];
+            const marker = 'teacher_photos/';
+            const markerIndex = urlWithoutQuery.indexOf(marker);
+            if (markerIndex !== -1) {
+              const oldStoragePath = urlWithoutQuery.substring(markerIndex);
+              await supabase.storage.from('madrasah-assets').remove([oldStoragePath]);
+            }
+          } catch (cleanupErr) {
+            console.warn('Failed to clean up old teacher photo:', cleanupErr);
+          }
+        }
+
+        const ext = resolvedContentType.includes('png') ? 'png' : resolvedContentType.includes('jpeg') || resolvedContentType.includes('jpg') ? 'jpg' : 'webp';
+        const fileName = `teacher_photo_${teacherId}_${Date.now()}.${ext}`;
+        const filePath = `teacher_photos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('madrasah-assets')
+          .upload(filePath, fileBuffer, {
+            cacheControl: '2592000',
+            contentType: resolvedContentType,
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('madrasah-assets')
+          .getPublicUrl(filePath);
+        finalPhotoUrl = publicUrlData.publicUrl;
+      }
+
+      if (!finalPhotoUrl) {
+        return res.status(400).json({ error: 'Could not resolve photo URL' });
+      }
+
+      const { data: updatedTeacher, error: updateErr } = await supabase
+        .from('teachers')
+        .update({ photo_url: finalPhotoUrl })
+        .eq('id', teacherId)
+        .select('id, photo_url')
+        .single();
+
+      if (updateErr) throw updateErr;
+
+      return res.status(200).json({
+        success: true,
+        photo_url: finalPhotoUrl,
+        teacher: updatedTeacher
+      });
     }
 
     if (action === 'permissions' && req.method === 'POST') {

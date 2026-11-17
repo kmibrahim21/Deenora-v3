@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, User, Phone, Briefcase, Calendar, CheckCircle2, Shield, X, Lock, Edit3, Trash2, ArrowLeft, Mail, MapPin, CreditCard } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Teacher, Language, Institution } from 'types';
@@ -69,10 +69,26 @@ const compressAndResizeImage = (file: File, maxWidth = 450, maxHeight = 450): Pr
   });
 };
 
+const blobToDataUrl = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('Failed to encode image'));
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(blob);
+  });
+};
+
 export const TeacherProfile: React.FC<TeacherProfileProps> = ({ teacher, madrasah, lang, onBack, onTeacherUpdate, onEdit, onDelete }) => {
   const isDark = madrasah?.theme === 'dark';
   const [photoUrl, setPhotoUrl] = useState(teacher.photo_url || '');
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    setPhotoUrl(teacher.photo_url || '');
+  }, [teacher.id, teacher.photo_url]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -81,55 +97,40 @@ export const TeacherProfile: React.FC<TeacherProfileProps> = ({ teacher, madrasa
 
     try {
       const compressedBlob = await compressAndResizeImage(file, 450, 450);
+      const imageBase64 = await blobToDataUrl(compressedBlob);
+      const { data: { session } } = await supabase.auth.getSession();
 
-      try {
-        await supabase.storage.createBucket('madrasah-assets', { public: true });
-      } catch (bucketError) {}
-      
-      // Delete old photo
-      const oldPhotoUrl = teacher.photo_url || photoUrl;
-      if (oldPhotoUrl) {
-        try {
-          const urlWithoutQuery = oldPhotoUrl.split('?')[0];
-          const marker = 'teacher_photos/';
-          const markerIndex = urlWithoutQuery.indexOf(marker);
-          if (markerIndex !== -1) {
-            const storagePath = urlWithoutQuery.substring(markerIndex);
-            await supabase.storage
-              .from('madrasah-assets')
-              .remove([storagePath]);
-          }
-        } catch (storageDelErr) {
-          console.error('Failed to clean up old image from storage:', storageDelErr);
-        }
+      if (!session?.access_token) {
+        throw new Error(lang === 'bn' ? 'লগইন সেশন পাওয়া যায়নি। অনুগ্রহ করে আবার লগইন করুন।' : 'Session expired. Please log in again.');
       }
 
-      const fileName = `teacher_photo_${teacher.id}_${Date.now()}.webp`;
-      const filePath = `teacher_photos/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('madrasah-assets').upload(filePath, compressedBlob, {
-        cacheControl: '2592000',
-        contentType: 'image/webp',
-        upsert: true
+      const res = await fetch('/api/teachers/update-photo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          id: teacher.id,
+          imageBase64,
+          contentType: 'image/webp'
+        })
       });
 
-      if (uploadError) throw uploadError;
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok || !resData.photo_url) {
+        throw new Error(resData.error || 'Failed to upload teacher photo');
+      }
 
-      const { data: publicUrlData } = supabase.storage.from('madrasah-assets').getPublicUrl(filePath);
-      const publicUrl = publicUrlData.publicUrl;
-
-      // Update in db
-      const { error: updateError } = await supabase.from('teachers').update({ photo_url: publicUrl }).eq('id', teacher.id);
-      
-      if (updateError) throw updateError;
-
-      setPhotoUrl(publicUrl);
-      onTeacherUpdate({ ...teacher, photo_url: publicUrl });
+      const displayUrl = `${resData.photo_url}?t=${Date.now()}`;
+      setPhotoUrl(displayUrl);
+      onTeacherUpdate({ ...teacher, photo_url: displayUrl });
 
     } catch (error: any) {
-      alert("Error uploading photo: " + error.message);
+      alert((lang === 'bn' ? 'ছবি আপলোড করতে সমস্যা হয়েছে: ' : 'Error uploading photo: ') + (error.message || 'Unknown error'));
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -184,12 +185,14 @@ export const TeacherProfile: React.FC<TeacherProfileProps> = ({ teacher, madrasa
                 </div>
               )}
             </div>
-            {madrasah?.config_json?.modules?.student_photo && (
-              <label className="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-600 text-white rounded-2xl shadow-xl flex items-center justify-center cursor-pointer hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all z-20 tooltip" data-tip="Change Photo">
-                <Camera size={20} />
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
-              </label>
-            )}
+            <label
+              className="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-600 text-white rounded-2xl shadow-xl flex items-center justify-center cursor-pointer hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all z-20 tooltip"
+              title={lang === 'bn' ? 'ছবি পরিবর্তন করুন' : 'Change Photo'}
+              data-tip="Change Photo"
+            >
+              <Camera size={20} />
+              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
+            </label>
           </div>
 
           <div className="text-center sm:text-left flex-1 pb-2">

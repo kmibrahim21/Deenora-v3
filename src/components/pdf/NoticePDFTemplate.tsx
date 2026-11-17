@@ -94,6 +94,17 @@ export const NoticePDFTemplate: React.FC<NoticePDFTemplateProps> = ({
   const instType = (madrasah?.institution_type as string);
   const isIslamic = instType === 'madrasah' || instType === 'qawmi' || !instType;
 
+  let safeConfig: any = madrasah?.config_json;
+  if (typeof safeConfig === 'string') {
+    try {
+      safeConfig = JSON.parse(safeConfig);
+    } catch {
+      safeConfig = {};
+    }
+  }
+  const signatureUrl: string | undefined = safeConfig?.signature_url;
+  const signatureHeight: number = Number(safeConfig?.signature_height) || 40;
+
   return (
     <div className="pdf-page-container w-[794px] min-h-[1123px] p-12 bg-white text-slate-900 font-noto relative flex flex-col justify-between box-border border border-slate-200 shadow-sm mx-auto my-0">
       
@@ -128,6 +139,7 @@ export const NoticePDFTemplate: React.FC<NoticePDFTemplateProps> = ({
               src={madrasah.logo_url} 
               alt="Logo" 
               className="w-20 h-20 object-contain rounded-full border border-slate-200 p-1 shadow-sm shrink-0" 
+              crossOrigin="anonymous"
               referrerPolicy="no-referrer"
             />
           ) : (
@@ -263,7 +275,16 @@ export const NoticePDFTemplate: React.FC<NoticePDFTemplateProps> = ({
 
           {/* Right Principal / Muhtamim Signature */}
           <div className="space-y-1">
-            <div className="h-12 flex items-end justify-center">
+            <div className="min-h-[48px] flex flex-col items-center justify-end">
+              {signatureUrl && (
+                <img
+                  src={signatureUrl}
+                  alt="Signature"
+                  style={{ height: `${signatureHeight}px` }}
+                  className="object-contain mix-blend-multiply max-w-[140px] mb-1"
+                  crossOrigin="anonymous"
+                />
+              )}
               <div className="w-36 border-b-2 border-slate-800"></div>
             </div>
             <p className="text-xs font-black text-slate-900">

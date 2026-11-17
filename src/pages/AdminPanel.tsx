@@ -360,11 +360,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     adminSMSStock: 0,
     typeBreakdown: { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 }
   });
+  const getDhakaIsoDate = () => new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [detailedFilterMode, setDetailedFilterMode] = useState<'monthly' | 'yearly' | 'custom'>('monthly');
-  const [detailedMonth, setDetailedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [detailedYear, setDetailedYear] = useState(new Date().getFullYear().toString());
-  const [detailedStartDate, setDetailedStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [detailedEndDate, setDetailedEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [detailedMonth, setDetailedMonth] = useState(() => getDhakaIsoDate().slice(0, 7));
+  const [detailedYear, setDetailedYear] = useState(() => getDhakaIsoDate().slice(0, 4));
+  const [detailedStartDate, setDetailedStartDate] = useState(() => getDhakaIsoDate());
+  const [detailedEndDate, setDetailedEndDate] = useState(() => getDhakaIsoDate());
   const [detailedReport, setDetailedReport] = useState({
     smsRechargeTotal: 0,
     voiceRechargeTotal: 0,
@@ -374,6 +375,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     transactions: [] as any[],
     loading: false
   });
+  const detailedReportReqIdRef = useRef(0);
+  const lastDataVersionRef = useRef(dataVersion);
   const [recentInstitutions, setRecentInstitutions] = useState<Institution[]>([]);
   const [selectedUser, setSelectedUser] = useState<InstitutionWithStats | null>(null);
   const [selectedRevMonth, setSelectedRevMonth] = useState<string>('all');
@@ -1199,19 +1202,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const fetchDetailedReport = async (force = false) => {
     const cacheKey = `${detailedFilterMode}_${detailedMonth}_${detailedYear}_${detailedStartDate}_${detailedEndDate}`;
-    if (!force && adminPanelCache.detailedReport[cacheKey]) {
-      setDetailedReport(adminPanelCache.detailedReport[cacheKey]);
+    const cachedEntry = adminPanelCache.detailedReport[cacheKey];
+    const hasFreshCache = !force && cachedEntry && cachedEntry._cachedAt && (Date.now() - cachedEntry._cachedAt < 15000);
+    if (hasFreshCache) {
+      setDetailedReport(cachedEntry);
       return;
     }
 
-    setDetailedReport(prev => ({ ...prev, loading: true }));
+    const reqId = ++detailedReportReqIdRef.current;
+    if (!force && cachedEntry) {
+      // Show cached data immediately while silently fetching fresh data
+      setDetailedReport({ ...cachedEntry, loading: true });
+    } else {
+      setDetailedReport(prev => ({ ...prev, loading: true }));
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Missing session token');
+
       const response = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           action: 'get_detailed_report',
@@ -1219,51 +1232,57 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           month: detailedMonth,
           year: detailedYear,
           startDate: detailedStartDate,
-          endDate: detailedEndDate
+          endDate: detailedEndDate,
+          force
         })
       });
 
       if (!response.ok) throw new Error('Failed to fetch detailed report from API');
       const reportData = await response.json();
-      
-      const fullReport = { ...reportData, loading: false };
+      if (reqId !== detailedReportReqIdRef.current) return;
+
+      const fullReport = { ...reportData, loading: false, _cachedAt: Date.now() };
       adminPanelCache.detailedReport[cacheKey] = fullReport;
       setDetailedReport(fullReport);
     } catch (err) {
       console.error('Error in fetchDetailedReport API call:', err);
-      // Fallback to client-side (might return 0 due to RLS)
-      let startDate: Date;
-      let endDate: Date;
-      
+      // Fallback to client-side (might be limited by RLS - do NOT cache fallback result)
+      let startISO: string;
+      let endISO: string;
+
       if (detailedFilterMode === 'monthly') {
-        const [year, month] = detailedMonth.split('-');
-        startDate = new Date(Number(year), Number(month) - 1, 1);
-        endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
-      } else if (detailedFilterMode === 'custom') {
-        startDate = new Date(detailedStartDate);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(detailedEndDate);
-        endDate.setHours(23, 59, 59, 999);
+        const [yStr, mStr] = detailedMonth.split('-');
+        const lastDay = new Date(Date.UTC(Number(yStr), Number(mStr), 0)).getUTCDate();
+        startISO = new Date(`${yStr}-${mStr}-01T00:00:00.000+06:00`).toISOString();
+        endISO = new Date(`${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}T23:59:59.999+06:00`).toISOString();
+      } else if (detailedFilterMode === 'custom' && detailedStartDate && detailedEndDate) {
+        const start = detailedStartDate <= detailedEndDate ? detailedStartDate : detailedEndDate;
+        const end = detailedStartDate <= detailedEndDate ? detailedEndDate : detailedStartDate;
+        startISO = new Date(`${start}T00:00:00.000+06:00`).toISOString();
+        endISO = new Date(`${end}T23:59:59.999+06:00`).toISOString();
       } else {
-        startDate = new Date(Number(detailedYear), 0, 1);
-        endDate = new Date(Number(detailedYear), 11, 31, 23, 59, 59);
+        startISO = new Date(`${detailedYear}-01-01T00:00:00.000+06:00`).toISOString();
+        endISO = new Date(`${detailedYear}-12-31T23:59:59.999+06:00`).toISOString();
       }
 
-      const startISO = startDate.toISOString();
-      const endISO = endDate.toISOString();
-
       const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
-        supabase.from('transactions').select('id, amount, description, module, metadata, created_at, transaction_id, status, institution_id, institutions(name)').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
+        supabase.from('transactions').select('id, amount, type, description, module, metadata, created_at, transaction_id, status, institution_id, institutions(name)').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(1000),
         supabase.from('sms_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO).lte('created_at', endISO),
-        supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(10000)
+        supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(1000)
       ]);
-      
-      const transactions = txRes.data || [];
-      const subRechargeTotal = transactions.filter(t => t.module === 'subscription').reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-      const smsRechargeTotal = transactions.filter(t => t.module === 'sms').reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-      const voiceRechargeTotal = transactions.filter(t => t.module === 'voice').reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+
+      if (reqId !== detailedReportReqIdRef.current) return;
+
+      const transactions = (txRes.data || []).filter((t: any) => {
+        const type = (t?.type || '').toLowerCase();
+        const desc = (t?.description || '').toLowerCase();
+        return type !== 'debit' && !desc.includes('refund');
+      });
+      const subRechargeTotal = transactions.filter((t: any) => t.module === 'subscription').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0) || 0;
+      const smsRechargeTotal = transactions.filter((t: any) => t.module === 'sms').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0) || 0;
+      const voiceRechargeTotal = transactions.filter((t: any) => t.module === 'voice').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0) || 0;
       const smsSentNum = smsLogsRes.count || 0;
-      const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0) || 0;
+      const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum: number, t: any) => sum + (Number(t.total_numbers) || 0), 0) || 0;
 
       const reportData = {
         smsRechargeTotal,
@@ -1275,7 +1294,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         loading: false
       };
 
-      adminPanelCache.detailedReport[cacheKey] = reportData;
       setDetailedReport(reportData);
     }
   };
@@ -1375,7 +1393,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
-  const fetchGlobalCounts = async () => {
+  const fetchGlobalCounts = async (forceRefresh = false) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch('/api/admin', {
@@ -1384,7 +1402,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ action: 'get_global_stats' })
+        body: JSON.stringify({ action: 'get_global_stats', force: forceRefresh })
       });
 
       if (!response.ok) throw new Error('Failed to fetch global stats from API');
@@ -1438,7 +1456,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
-  const fetchAllMadrasahs = async () => {
+  const fetchAllMadrasahs = async (forceRefresh = false) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -1448,7 +1466,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session?.access_token}`
           },
-          body: JSON.stringify({ action: 'get_all_institutions' })
+          body: JSON.stringify({ action: 'get_all_institutions', force: forceRefresh })
         });
 
         if (response.ok) {
@@ -1721,10 +1739,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
       if (view === 'list' || view === 'dashboard' || view === 'institutions') {
         const [mList, gStats, recent, history] = await Promise.all([
-          fetchAllMadrasahs(),
-          fetchGlobalCounts(),
+          fetchAllMadrasahs(forceRefresh),
+          fetchGlobalCounts(forceRefresh),
           fetchRecentInstitutions(),
-          fetchTransactionHistory(['subscription']) // Dashboard only shows subscriptions
+          fetchTransactionHistory(['subscription']), // Dashboard only shows subscriptions
+          view === 'dashboard' && forceRefresh ? fetchDetailedReport(true) : Promise.resolve()
         ]);
         if (isMounted) {
           const mappedRecent = (recent || []).map(m => ({
@@ -1845,7 +1864,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   };
 
   useEffect(() => { 
-    const cleanup = initData(); 
+    const isDataVersionBump = lastDataVersionRef.current !== dataVersion;
+    lastDataVersionRef.current = dataVersion;
+    const cleanup = initData(isDataVersionBump, isDataVersionBump); 
     return () => { cleanup.then(cb => cb && cb()); };
   }, [dataVersion, view]);
 
