@@ -1605,22 +1605,53 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     
     const currentMonthStr = today.toISOString().slice(0, 7);
     
-    const { data: allActive, error: fetchError } = await supabase
+    const { data: allInstitutions, error: fetchError } = await supabase
       .from('institutions')
-      .select('id, config_json, name')
-      .eq('is_active', true)
+      .select('id, config_json, name, is_active, status')
       .eq('is_super_admin', false)
       .neq('name', 'SYSTEM_GLOBAL_INTERNAL');
       
-    if (fetchError || !allActive) return;
+    if (fetchError || !allInstitutions) return;
+
+    const parseSafeConfig = (cfg: any): Record<string, any> => {
+      if (!cfg) return {};
+      if (typeof cfg === 'string') {
+        try {
+          const parsed = JSON.parse(cfg);
+          return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch {
+          return {};
+        }
+      }
+      return typeof cfg === 'object' ? cfg : {};
+    };
+
+    const instMap = new Map<string, { id: string; is_active: boolean; status?: string; config: Record<string, any> }>();
+    for (const row of allInstitutions) {
+      instMap.set(row.id, {
+        id: row.id,
+        is_active: !!row.is_active,
+        status: row.status,
+        config: parseSafeConfig(row.config_json)
+      });
+    }
     
     const idsToDeactivate: string[] = [];
-    for (const inst of allActive) {
-      const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
-      const paidMonths = config.paid_months || [];
-      const manualActivationMonth = config.manual_activation_month;
+    for (const inst of allInstitutions) {
+      if (!inst.is_active) continue;
+      const entry = instMap.get(inst.id);
+      if (!entry) continue;
+      const config = entry.config;
+      const parentEntry = config.parent_institution_id ? instMap.get(config.parent_institution_id) : undefined;
+      const parentConfig = parentEntry?.config || {};
 
-      // Skip deactivation if manually activated this month
+      const paidMonths = [
+        ...(Array.isArray(config.paid_months) ? config.paid_months : []),
+        ...(Array.isArray(parentConfig.paid_months) ? parentConfig.paid_months : [])
+      ];
+      const manualActivationMonth = config.manual_activation_month || parentConfig.manual_activation_month;
+
+      // Skip deactivation if manually activated this month (on branch or parent)
       if (manualActivationMonth === currentMonthStr) {
          continue;
       }
@@ -5224,7 +5255,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                      const result = await res.json();
                                      if (result.error) throw new Error(result.error);
 
-                                     setEditPaidMonths(Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment])));
+                                     const mergedPaidMonths = Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment])).sort();
+                                     setEditPaidMonths(mergedPaidMonths);
+                                     setEditActive(true);
+                                     setEditStatus('active');
+                                     if (result.subscription_end) {
+                                       setEditSubscriptionEnd(String(result.subscription_end).split('T')[0]);
+                                     }
+                                     setSelectedUser(prev => prev ? {
+                                       ...prev,
+                                       is_active: true,
+                                       status: 'active',
+                                       ...(result.subscription_end ? { subscription_end: result.subscription_end } : {}),
+                                       config_json: {
+                                         ...latestConfig,
+                                         paid_months: mergedPaidMonths,
+                                         package_rate: editPackageRate,
+                                         package_name: editPackageName,
+                                         subscription_note: editSubscriptionNote,
+                                         due_amount: editDueAmount,
+                                         subscription_type: editSubscriptionType
+                                       }
+                                     } : prev);
                                      // Send Notification SMS
                                      if (selectedUser.phone) {
                                        const pkgName = getEnglishPkgName(editPackageName);

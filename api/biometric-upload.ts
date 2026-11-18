@@ -158,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch active students
     const studentRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/students?select=id,student_name,name_en,roll,biometric_id,is_active&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&order=roll.asc&limit=3000`,
+      `${SUPABASE_URL}/rest/v1/students?select=id,student_name,name_en,roll,biometric_id,registration_number,is_active&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&order=roll.asc&limit=3000`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     const students = studentRes.ok ? await studentRes.json() : [];
@@ -189,14 +189,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 1. Map Students
     (students || []).forEach((s: any) => {
-      const bioId = (s.biometric_id || s.roll || '').toString().trim();
+      const bioId = (s.biometric_id || s.roll || s.registration_number || '').toString().trim();
+      if (!bioId) return;
       const numBioId = parseInt(bioId, 10);
       const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
       const rawName = s.name_en || s.student_name;
       const cleanName = banglaToEnglishName(rawName);
       userList.push({
         uid,
-        user_id: bioId || String(uid),
+        user_id: bioId,
         name: cleanName,
         role: 'student'
       });

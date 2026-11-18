@@ -39,6 +39,99 @@ const getDhakaMonthKey = (dateInput: string | Date): string => {
   return `${dhakaDate.getUTCFullYear()}-${String(dhakaDate.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 
+const parseConfigJson = (cfg: any): Record<string, any> => {
+  if (!cfg) return {};
+  if (typeof cfg === 'string') {
+    try {
+      const parsed = JSON.parse(cfg);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof cfg === 'object' ? { ...cfg } : {};
+};
+
+const computeSubscriptionEndFromMonths = (paidMonths: string[]): string | null => {
+  if (!Array.isArray(paidMonths) || paidMonths.length === 0) return null;
+  const sorted = [...paidMonths].filter(Boolean).sort();
+  const lastMonthStr = sorted[sorted.length - 1];
+  const parts = String(lastMonthStr).split('-').map(Number);
+  if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+  const lastDay = new Date(parts[0], parts[1], 0);
+  return isNaN(lastDay.getTime()) ? null : lastDay.toISOString();
+};
+
+const syncChildBranchesWithParentSubscription = async (
+  supabase: any,
+  rootInstId: string,
+  options: {
+    configUpdates?: Record<string, any>;
+    subscription_end?: string | null;
+    is_active?: boolean;
+    status?: string;
+  }
+) => {
+  try {
+    const { data: childBranches, error: branchErr } = await supabase
+      .from('institutions')
+      .select('id, is_active, status, config_json, subscription_end')
+      .filter('config_json->>parent_institution_id', 'eq', rootInstId);
+
+    if (branchErr || !childBranches || childBranches.length === 0) return;
+
+    const sharedKeys = [
+      'paid_months',
+      'manual_activation_month',
+      'package_name',
+      'package_rate',
+      'subscription_type',
+      'subscription_note',
+      'due_amount',
+      'student_limit',
+      'shared_branch_student_limit'
+    ];
+
+    for (const branch of childBranches) {
+      const branchCfg = parseConfigJson(branch.config_json);
+      const isManuallyRestricted =
+        branchCfg.branch_manually_disabled === true || branch.status === 'suspended';
+
+      const nextBranchCfg: Record<string, any> = { ...branchCfg };
+      if (options.configUpdates) {
+        for (const key of sharedKeys) {
+          if (options.configUpdates[key] !== undefined) {
+            nextBranchCfg[key] = options.configUpdates[key];
+          }
+        }
+      }
+
+      const branchPayload: Record<string, any> = {
+        config_json: nextBranchCfg
+      };
+
+      if (options.subscription_end !== undefined) {
+        branchPayload.subscription_end = options.subscription_end;
+      }
+
+      if (options.is_active === false) {
+        branchPayload.is_active = false;
+        if (options.status === 'suspended') {
+          branchPayload.status = 'suspended';
+        }
+      } else if (options.is_active === true && !isManuallyRestricted) {
+        branchPayload.is_active = true;
+        branchPayload.status =
+          options.status && options.status !== 'suspended' ? options.status : 'active';
+      }
+
+      await supabase.from('institutions').update(branchPayload).eq('id', branch.id);
+    }
+  } catch (err) {
+    console.warn('Non-fatal error syncing child branches:', err);
+  }
+};
+
 const isDebitOrRefundTx = (t: any): boolean => {
   const type = (t?.type || '').toLowerCase();
   const desc = (t?.description || '').toLowerCase();
@@ -960,12 +1053,32 @@ export default async function handler(req, res) {
         updateFields.reve_caller_id = updateFields.reve_non_masking_id;
       }
 
+      // Fetch existing record to detect branch vs main institution accurately
+      const { data: existingInst } = await supabase
+        .from('institutions')
+        .select('id, is_active, status, config_json, subscription_end')
+        .eq('id', id)
+        .maybeSingle();
+
+      const existingCfg = parseConfigJson(existingInst?.config_json);
+
       // If updating config_json, ensure it's handled as an object
-      if (updateFields.config_json && typeof updateFields.config_json === 'string') {
-        try {
-          updateFields.config_json = JSON.parse(updateFields.config_json);
-        } catch (e) {
-          // ignore
+      if (updateFields.config_json !== undefined) {
+        updateFields.config_json = parseConfigJson(updateFields.config_json);
+      }
+
+      const effectiveCfg = updateFields.config_json
+        ? { ...existingCfg, ...updateFields.config_json }
+        : { ...existingCfg };
+
+      // Track intentional per-branch manual deactivation vs auto-deactivation
+      if (effectiveCfg.parent_institution_id) {
+        if (updateFields.is_active === false || updateFields.status === 'suspended') {
+          effectiveCfg.branch_manually_disabled = true;
+          updateFields.config_json = effectiveCfg;
+        } else if (updateFields.is_active === true && updateFields.status !== 'suspended') {
+          effectiveCfg.branch_manually_disabled = false;
+          updateFields.config_json = effectiveCfg;
         }
       }
 
@@ -977,6 +1090,25 @@ export default async function handler(req, res) {
         .single();
 
       if (error) throw error;
+
+      const updatedCfg = parseConfigJson(data?.config_json);
+      // If updating a main/root institution, keep child branches' subscription & active status in sync
+      if (!updatedCfg.parent_institution_id) {
+        await syncChildBranchesWithParentSubscription(supabase, id, {
+          configUpdates: updatedCfg,
+          subscription_end:
+            updateFields.subscription_end !== undefined ? data.subscription_end : undefined,
+          is_active:
+            updateFields.is_active !== undefined
+              ? Boolean(data.is_active)
+              : data.is_active
+                ? true
+                : undefined,
+          status: data.status
+        });
+      }
+
+      serverAdminCache.invalidate();
       return res.status(200).json({ success: true, data });
     }
 
@@ -1262,36 +1394,56 @@ export default async function handler(req, res) {
             .single();
           
           if (!instFetchError && instData) {
-            const config = (instData.config_json as any) || {};
-            const currentPaidMonths = config.paid_months || [];
-            const newMonths = metadata?.months || [];
+            const config = parseConfigJson(instData.config_json);
+            const rootId = config.parent_institution_id || targetInstId;
+
+            let rootConfig = config;
+            let rootSubEnd = instData.subscription_end;
+            if (rootId !== targetInstId) {
+              const { data: rootData } = await supabase
+                .from('institutions')
+                .select('config_json, subscription_end')
+                .eq('id', rootId)
+                .maybeSingle();
+              if (rootData) {
+                rootConfig = parseConfigJson(rootData.config_json);
+                rootSubEnd = rootData.subscription_end;
+              }
+            }
+
+            const currentPaidMonths = Array.isArray(rootConfig.paid_months) ? rootConfig.paid_months : [];
+            const newMonths = Array.isArray(metadata?.months) ? metadata.months : [];
             const updatedPaidMonths = Array.from(new Set([...currentPaidMonths, ...newMonths])).sort();
             
             const updatedConfig = {
-              ...config,
+              ...rootConfig,
               paid_months: updatedPaidMonths,
-              package_name: metadata?.package_name || config.package_name,
-              package_rate: metadata?.package_rate || config.package_rate,
-              subscription_type: metadata?.subscription_type || config.subscription_type
+              package_name: metadata?.package_name || rootConfig.package_name,
+              package_rate: metadata?.package_rate || rootConfig.package_rate,
+              subscription_type: metadata?.subscription_type || rootConfig.subscription_type
             };
 
-            let newSubEnd = instData.subscription_end;
-            if (updatedPaidMonths.length > 0) {
-              const lastMonthStr = updatedPaidMonths[updatedPaidMonths.length - 1];
-              const [year, month] = lastMonthStr.split('-').map(Number);
-              const lastDay = new Date(year, month, 0);
-              newSubEnd = lastDay.toISOString();
-            }
+            const computedEnd = computeSubscriptionEndFromMonths(updatedPaidMonths);
+            const newSubEnd = computedEnd || rootSubEnd;
 
             const { error: instUpdateError } = await supabase
               .from('institutions')
               .update({ 
                 config_json: updatedConfig,
                 subscription_end: newSubEnd,
-                status: 'active'
+                status: 'active',
+                is_active: true
               })
-              .eq('id', targetInstId);
+              .eq('id', rootId);
             if (instUpdateError) throw instUpdateError;
+
+            await syncChildBranchesWithParentSubscription(supabase, rootId, {
+              configUpdates: updatedConfig,
+              subscription_end: newSubEnd,
+              is_active: true,
+              status: 'active'
+            });
+            serverAdminCache.invalidate();
           }
         }
       }
@@ -1523,7 +1675,13 @@ export default async function handler(req, res) {
 
     if (action === 'payment_update') {
       const { id, amount, description, payment_method, metadata, updated_config } = body;
-      
+      const parsedUpdatedConfig = parseConfigJson(updated_config);
+      const paidMonths = Array.isArray(parsedUpdatedConfig.paid_months)
+        ? [...parsedUpdatedConfig.paid_months].sort()
+        : [];
+      parsedUpdatedConfig.paid_months = paidMonths;
+      const computedSubEnd = computeSubscriptionEndFromMonths(paidMonths);
+
       // 1. Insert Transaction
       const { error: trError } = await supabase.from('transactions').insert({
         transaction_id: `ADMIN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -1540,15 +1698,63 @@ export default async function handler(req, res) {
       });
       if (trError) throw trError;
 
-      // 2. Update Institution
+      // 2. Update Institution (and ensure active status + subscription_end)
+      const instUpdatePayload: Record<string, any> = {
+        config_json: parsedUpdatedConfig,
+        is_active: true,
+        status: 'active'
+      };
+      if (computedSubEnd) {
+        instUpdatePayload.subscription_end = computedSubEnd;
+      }
+
       const { error: updateError } = await supabase
         .from('institutions')
-        .update({ config_json: updated_config })
+        .update(instUpdatePayload)
         .eq('id', id);
       
       if (updateError) throw updateError;
 
-      return res.status(200).json({ success: true });
+      const rootId = parsedUpdatedConfig.parent_institution_id || id;
+      if (rootId !== id) {
+        const { data: rootInst } = await supabase
+          .from('institutions')
+          .select('config_json, subscription_end')
+          .eq('id', rootId)
+          .maybeSingle();
+        if (rootInst) {
+          const rootCfg = parseConfigJson(rootInst.config_json);
+          const mergedRootMonths = Array.from(
+            new Set([...(Array.isArray(rootCfg.paid_months) ? rootCfg.paid_months : []), ...paidMonths])
+          ).sort();
+          const rootSubEnd = computeSubscriptionEndFromMonths(mergedRootMonths) || computedSubEnd || rootInst.subscription_end;
+          await supabase
+            .from('institutions')
+            .update({
+              is_active: true,
+              status: 'active',
+              ...(rootSubEnd ? { subscription_end: rootSubEnd } : {}),
+              config_json: {
+                ...rootCfg,
+                paid_months: mergedRootMonths,
+                package_name: parsedUpdatedConfig.package_name || rootCfg.package_name,
+                package_rate: parsedUpdatedConfig.package_rate || rootCfg.package_rate,
+                subscription_type: parsedUpdatedConfig.subscription_type || rootCfg.subscription_type
+              }
+            })
+            .eq('id', rootId);
+        }
+      }
+
+      await syncChildBranchesWithParentSubscription(supabase, rootId, {
+        configUpdates: parsedUpdatedConfig,
+        ...(computedSubEnd ? { subscription_end: computedSubEnd } : {}),
+        is_active: true,
+        status: 'active'
+      });
+
+      serverAdminCache.invalidate();
+      return res.status(200).json({ success: true, subscription_end: computedSubEnd });
     }
 
     if (action === 'get_user_stats') {

@@ -183,14 +183,14 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [isUnderline, setIsUnderline] = useState<boolean>(false);
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
 
-  // Initial Sections (matches uploaded screenshot option 3)
+  // Initial Sections (Madrasah & School Exam Paper Default)
   const defaultExamSections: PaperSection[] = useMemo(() => [
     {
       id: 'sec-1',
-      category_type: 'MCQ',
-      title: isBn ? '১. সঠিক উত্তরে টিক দাও' : '1. Tick the Correct Answer',
+      category_type: 'mcq',
+      title: isBn ? 'ক-বিভাগ: ১। সঠিক উত্তরটি বেছে নিয়ে লেখো' : 'Section A: 1. Choose the Correct Answer',
       layout: '2_col',
-      numbering_style: 'bangla_number',
+      numbering_style: 'bangla_letter',
       direction: 'ltr',
       dotted_lines: 0,
       marks_formula: isBn ? '১ × ৬ = ৬' : '1 × 6 = 6',
@@ -198,94 +198,138 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       questions: [
         {
           id: 'q-1-1',
-          category_type: 'MCQ',
-          question_text: isBn ? 'আখলাকের মূল শব্দ ______।' : 'The basic word of Akhlaq is ______.',
+          category_type: 'mcq',
+          question_text: isBn ? 'আরবি হরফ মোট কয়টি?' : 'How many Arabic letters are there?',
           marks: 1,
-          options: isBn ? ['ভালো', 'মন্দ'] : ['Good', 'Bad']
+          options: isBn ? ['২৭ টি', '২৮ টি', '২৯ টি', '৩০ টি'] : ['27', '28', '29', '30'],
+          answer_text: isBn ? '২৯ টি' : '29'
         },
         {
           id: 'q-1-2',
-          category_type: 'MCQ',
-          question_text: isBn ? 'বায়েতের ফল অবলম্বন কি?' : 'What is the outcome of Bayah?',
+          category_type: 'mcq',
+          question_text: isBn ? 'মাখরাজ মোট কয়টি?' : 'How many Makhraj are there in Tajweed?',
           marks: 1,
-          options: isBn ? ['নাজাত', 'কাজ'] : ['Salvation', 'Deed']
+          options: isBn ? ['১৫ টি', '১৬ টি', '১৭ টি', '১৮ টি'] : ['15', '16', '17', '18'],
+          answer_text: isBn ? '১৭ টি' : '17'
         },
         {
           id: 'q-1-3',
-          category_type: 'MCQ',
-          question_text: isBn ? 'পরিষ্কার কাজ থেকে কি মুছে?' : 'What is erased by good clean deeds?',
+          category_type: 'mcq',
+          question_text: isBn ? 'নুন সাকিন ও তানভীনের হুকুম কয়টি?' : 'How many rules of Noon Sakinah and Tanween?',
           marks: 1,
-          options: isBn ? ['গোনাহ', 'ময়লা'] : ['Sins', 'Dirt']
+          options: isBn ? ['৩ টি', '৪ টি', '৫ টি', '৬ টি'] : ['3', '4', '5', '6'],
+          answer_text: isBn ? '৪ টি' : '4'
         },
         {
           id: 'q-1-4',
-          category_type: 'MCQ',
-          question_text: isBn ? 'মাক্কিয় কোন কোনগুলো?' : 'Which ones are Makki Surahs?',
+          category_type: 'mcq',
+          question_text: isBn ? 'কলক্বলাহর হরফ কয়টি?' : 'How many letters of Qalqalah?',
           marks: 1,
-          options: isBn ? ['সূরা ফালাক', 'সূরা নাস'] : ['Surah Falaq', 'Surah Nas']
+          options: isBn ? ['৩ টি', '৪ টি', '৫ টি', '৬ টি'] : ['3', '4', '5', '6'],
+          answer_text: isBn ? '৫ টি' : '5'
         },
         {
           id: 'q-1-5',
-          category_type: 'MCQ',
-          question_text: isBn ? 'ব্যবসায়ীদের সৎ হওয়ার পুরস্কার কি?' : 'What is the reward for honest merchants?',
+          category_type: 'mcq',
+          question_text: isBn ? 'কুরআন মাজীদে মোট পারা কয়টি?' : 'How many Paras are in the Holy Quran?',
           marks: 1,
-          options: isBn ? ['জান্নাত', 'মর্যাদা'] : ['Jannah', 'Dignity']
+          options: isBn ? ['২৫ টি', '২৮ টি', '৩০ টি', '৩২ টি'] : ['25', '28', '30', '32'],
+          answer_text: isBn ? '৩০ টি' : '30'
         },
         {
           id: 'q-1-6',
-          category_type: 'MCQ',
-          question_text: isBn ? 'বৃষ্টির দিনে আমাদের দোয়া পড়তে হয়?' : 'Which prayer is recited during rain?',
+          category_type: 'mcq',
+          question_text: isBn ? 'উত্তম চরিত্রের প্রধান লক্ষণ কোনটি?' : 'What is the main sign of good character?',
           marks: 1,
-          options: isBn ? ['আল্লাহুম্মা সায়্যিবান নাফিআন', 'আলহামদুলিল্লাহ'] : ['Allahumma Sayyiban Nafian', 'Alhamdulillah']
+          options: isBn ? ['সততা ও সত্যবাদিতা', 'অহংকার', 'আলস্য', 'রাগ'] : ['Honesty & Truthfulness', 'Pride', 'Laziness', 'Anger'],
+          answer_text: isBn ? 'সততা ও সত্যবাদিতা' : 'Honesty & Truthfulness'
         }
       ]
     },
     {
       id: 'sec-2',
-      category_type: 'শূন্যস্থান',
-      title: isBn ? '২. শূন্যস্থান পূরণ করো' : '2. Fill in the Blanks',
+      category_type: 'fill_in_the_blanks',
+      title: isBn ? '২। উপযুক্ত শব্দ বসিয়ে শূন্যস্থান পূরণ করো' : '2. Fill in the Blanks with Suitable Words',
       layout: '1_col',
-      numbering_style: 'bangla_number',
+      numbering_style: 'bangla_letter',
       direction: 'ltr',
       dotted_lines: 0,
-      marks_formula: isBn ? '১ × ৬ = ৬' : '1 × 6 = 6',
-      total_marks: 6,
+      marks_formula: isBn ? '১ × ৪ = ৪' : '1 × 4 = 4',
+      total_marks: 4,
       questions: [
         {
           id: 'q-2-1',
-          category_type: 'শূন্যস্থান',
-          question_text: isBn ? 'জনাব্যের ইসলাম ও নৈতিক শিক্ষা।' : 'Learning Islam & Moral Education.',
-          marks: 1
+          category_type: 'fill_in_the_blanks',
+          question_text: isBn ? 'হরকত বলা হয় এক জবর, এক যের, এক ____________ কে।' : 'Harakat refers to one Fatha, one Kasra, and one ____________.',
+          marks: 1,
+          answer_text: isBn ? 'পেশ' : 'Dammah'
         },
         {
           id: 'q-2-2',
-          category_type: 'শূন্যস্থান',
-          question_text: isBn ? '____________ ফলাফল প্রকাশ করো।' : '____________ publish results.',
-          marks: 1
+          category_type: 'fill_in_the_blanks',
+          question_text: isBn ? 'তানভীন বলা হয় দুই জবর, দুই যের, দুই ____________ কে।' : 'Tanween refers to double Fatha, double Kasra, and double ____________.',
+          marks: 1,
+          answer_text: isBn ? 'পেশ' : 'Dammah'
         },
         {
           id: 'q-2-3',
-          category_type: 'শূন্যস্থান',
-          question_text: isBn ? 'নিয়মমাফিক সবকগুলো ____________।' : 'Regular lessons should be ____________.',
-          marks: 1
+          category_type: 'fill_in_the_blanks',
+          question_text: isBn ? 'আমাদের সকলের উচিত বড়দের সম্মান করা এবং ছোটদের ____________ করা।' : 'We should respect elders and ____________ the younger ones.',
+          marks: 1,
+          answer_text: isBn ? 'স্নেহ' : 'love'
         },
         {
           id: 'q-2-4',
-          category_type: 'শূন্যস্থান',
-          question_text: isBn ? 'আন্তরিকতার সাথে ____________।' : 'With sincerity ____________.',
-          marks: 1
+          category_type: 'fill_in_the_blanks',
+          question_text: isBn ? 'সততা মানুষের জীবনে সবচেয়ে বড় ____________।' : 'Honesty is the greatest ____________ in human life.',
+          marks: 1,
+          answer_text: isBn ? 'সম্পদ' : 'asset'
+        }
+      ]
+    },
+    {
+      id: 'sec-3',
+      category_type: 'short_question',
+      title: isBn ? 'খ-বিভাগ: ৩। সংক্ষেপে উত্তর দাও' : 'Section B: 3. Answer Briefly',
+      layout: '1_col',
+      numbering_style: 'bangla_letter',
+      direction: 'ltr',
+      dotted_lines: 0,
+      marks_formula: isBn ? '২ × ৫ = ১০' : '2 × 5 = 10',
+      total_marks: 10,
+      questions: [
+        {
+          id: 'q-3-1',
+          category_type: 'short_question',
+          question_text: isBn ? 'মাখরাজ কাকে বলে? হরফ উচ্চারণের স্থান কয়টি?' : 'What is Makhraj? How many points of articulation are there?',
+          marks: 2,
+          answer_text: isBn ? 'হরফ উচ্চারণের স্থানকে মাখরাজ বলে। মাখরাজ মোট ১৭টি।' : '17 points of articulation.'
         },
         {
-          id: 'q-2-5',
-          category_type: 'শূন্যস্থান',
-          question_text: isBn ? '____________ আগমনপত্র পাঠ করো।' : '____________ recite invitation.',
-          marks: 1
+          id: 'q-3-2',
+          category_type: 'short_question',
+          question_text: isBn ? 'ইযহার ও ইখফা শব্দের অর্থ কী?' : 'What is the meaning of Izhar and Ikhfa?',
+          marks: 2,
+          answer_text: isBn ? 'ইযহার অর্থ স্পষ্ট করে পড়া এবং ইখফা অর্থ গোপন বা গুন্নাহসহ পড়া।' : 'Izhar means clear pronunciation; Ikhfa means nasalized hiding.'
         },
         {
-          id: 'q-2-6',
-          category_type: 'শূন্যস্থান',
-          question_text: isBn ? '____________ অভাব দূর করো।' : '____________ fulfill needs.',
-          marks: 1
+          id: 'q-3-3',
+          category_type: 'short_question',
+          question_text: isBn ? 'কলক্বলাহর পাঁচটি হরফ কী কী?' : 'What are the five letters of Qalqalah?',
+          marks: 2,
+          answer_text: isBn ? 'ক্বাফ (ق), ত্বা (ط), বা (ب), জীম (ج), দাল (د)।' : 'Qaf, Ta, Ba, Jeem, Dal.'
+        },
+        {
+          id: 'q-3-4',
+          category_type: 'short_question',
+          question_text: isBn ? 'তিলাওয়াতের ৪টি আদব লেখো।' : 'Write 4 manners of reciting the Holy Quran.',
+          marks: 2
+        },
+        {
+          id: 'q-3-5',
+          category_type: 'short_question',
+          question_text: isBn ? 'পিতামাতা ও শিক্ষকের প্রতি আমাদের ৪টি কর্তব্য লেখো।' : 'Write 4 duties towards parents and teachers.',
+          marks: 2
         }
       ]
     }
@@ -297,8 +341,8 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
 
-  // Responsive Zoom & Viewport tracking
-  const [paperZoom, setPaperZoom] = useState<'fit' | 'compact' | '100'>('fit');
+  // Responsive Zoom & Viewport tracking (compact by default on mobile to avoid CSS zoom distortion)
+  const [paperZoom, setPaperZoom] = useState<'fit' | 'compact' | '100'>('compact');
   const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 800);
 
   useEffect(() => {
@@ -318,11 +362,12 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   // Auto Generator Modal State
   const [showAutoModal, setShowAutoModal] = useState<boolean>(false);
   const [autoTargetMarks, setAutoTargetMarks] = useState<number>(100);
-  const [autoMcqCount, setAutoMcqCount] = useState<number>(10);
+  const [autoMcqCount, setAutoMcqCount] = useState<number>(15);
   const [autoFillBlankCount, setAutoFillBlankCount] = useState<number>(10);
   const [autoShortCount, setAutoShortCount] = useState<number>(10);
-  const [autoBroadCount, setAutoBroadCount] = useState<number>(6);
-  const [autoArabicCount, setAutoArabicCount] = useState<number>(6);
+  const [autoBroadCount, setAutoBroadCount] = useState<number>(7);
+  const [autoMatchingCount, setAutoMatchingCount] = useState<number>(1);
+  const [autoArabicCount, setAutoArabicCount] = useState<number>(3);
 
   // Load initial books, chapters & saved drafts
   useEffect(() => {
@@ -345,14 +390,25 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     return () => { isMounted = false; };
   }, [madrasah?.id]);
 
-  // Filter books cascading with robust board & class matching
+  // Filter books cascading with robust board & class matching (with automatic resilience fallback if class has 0 books for selected board)
   const filteredBooks = useMemo(() => {
-    return books.filter(b => {
+    const byBoardAndClass = books.filter(b => {
       const matchBoard = doesBoardMatch(b.board, selectedBoardId);
       const matchClass = doesClassMatch(b.class_name, selectedClass);
       return matchBoard && matchClass;
     });
+    if (byBoardAndClass.length > 0) return byBoardAndClass;
+    // Resilience fallback: if current class filter has no books under the new board, show all books for that board
+    const byBoardOnly = books.filter(b => doesBoardMatch(b.board, selectedBoardId));
+    return byBoardOnly.length > 0 ? byBoardOnly : books;
   }, [books, selectedBoardId, selectedClass]);
+
+  // Ensure selectedBookId is always valid within filteredBooks
+  useEffect(() => {
+    if (filteredBooks.length > 0 && selectedBookId !== 'all' && !filteredBooks.some(b => b.id === selectedBookId)) {
+      setSelectedBookId(filteredBooks[0].id);
+    }
+  }, [filteredBooks, selectedBookId]);
 
   // When selected book or filtered books change, fetch chapters & questions
   useEffect(() => {
@@ -388,12 +444,12 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       }
 
       // Update paper header subject info
-      const currBook = books.find(b => b.id === selectedBookId);
+      const currBook = books.find(b => b.id === selectedBookId) || filteredBooks[0];
       if (currBook) {
         if (isBn) {
-          setClassSubLineText(`শ্রেণি: ${currBook.class_name}  |  বিষয়: ${currBook.title}  |  বোর্ড: ${currBook.board}`);
+          setClassSubLineText(`শ্রেণি: ${currBook.class_name}  |  বিষয়: ${currBook.title}`);
         } else {
-          setClassSubLineText(`Class: ${currBook.class_name}  |  Subject: ${currBook.title}  |  Board: ${currBook.board}`);
+          setClassSubLineText(`Class: ${currBook.class_name}  |  Subject: ${currBook.title}`);
         }
       }
     });
@@ -425,19 +481,22 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
     setOpenAccordionCats(acc);
   };
 
-  // Filter questions for Left Pane
+  // Filter questions for Left Pane (Guaranteed non-empty when books are available)
   const filteredQuestions = useMemo(() => {
     const validBookIds = new Set(filteredBooks.map(b => b.id));
     let list = allQuestions.filter(q => validBookIds.has(q.book_id));
 
     if (selectedBookId !== 'all') {
-      list = list.filter(q => q.book_id === selectedBookId);
+      const bookFiltered = list.filter(q => q.book_id === selectedBookId);
+      if (bookFiltered.length > 0) list = bookFiltered;
     }
     if (selectedChapterId !== 'all') {
-      list = list.filter(q => q.chapter_id === selectedChapterId);
+      const chFiltered = list.filter(q => q.chapter_id === selectedChapterId);
+      if (chFiltered.length > 0) list = chFiltered;
     }
     if (selectedCategory !== 'all') {
-      list = list.filter(q => q.category_type === selectedCategory);
+      const catFiltered = list.filter(q => q.category_type === selectedCategory);
+      if (catFiltered.length > 0) list = catFiltered;
     }
     if (searchQuery.trim()) {
       const qLower = searchQuery.toLowerCase().trim();
@@ -580,50 +639,90 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   };
 
   // Fast preset quick-section adding
-  const addQuickSection = (type: 'short' | 'fill' | 'mcq' | 'matching') => {
+  const addQuickSection = (type: 'short' | 'fill' | 'mcq' | 'matching' | 'broad' | 'arabic') => {
     let title = '';
     let category = '';
     let layout: PaperSection['layout'] = '1_col';
     let direction: 'ltr' | 'rtl' = 'ltr';
     let numbering: PaperSection['numbering_style'] = isBn ? 'bangla_letter' : 'english_number';
+    let dotted = 0;
 
     const secNum = sections.length + 1;
 
     switch (type) {
       case 'short':
         title = isBn ? `${toBnNum(secNum)}। সংক্ষেপে উত্তর দাও:` : `${secNum}. Answer the following short questions:`;
-        category = isBn ? 'সংক্ষিপ্ত প্রশ্ন' : 'Short Questions';
+        category = 'short_question';
         layout = '1_col';
         break;
       case 'fill':
         title = isBn ? `${toBnNum(secNum)}। উপযুক্ত শব্দ দিয়ে শূন্যস্থান পূরণ করো:` : `${secNum}. Fill in the blanks with appropriate words:`;
-        category = isBn ? 'শূন্যস্থান পূরণ করো' : 'Fill in the Blanks';
+        category = 'fill_in_the_blanks';
         layout = '1_col';
         break;
       case 'mcq':
         title = isBn ? `${toBnNum(secNum)}। সঠিক উত্তরটির পাশে টিক (✔) চিহ্ন দাও:` : `${secNum}. Choose the correct answer:`;
-        category = isBn ? 'সঠিক উত্তরটি বেছে নাও (এমসিকিউ)' : 'Multiple Choice Questions';
+        category = 'mcq';
         layout = '2_col';
         break;
       case 'matching':
         title = isBn ? `${toBnNum(secNum)}। ডান পাশের সাথে বাম পাশ মিল করো:` : `${secNum}. Match the items from left to right:`;
-        category = isBn ? 'ডান-বাম মিলকরণ টেবিল' : 'Matching Table';
+        category = 'matching';
         layout = '1_col';
+        break;
+      case 'broad':
+        title = isBn ? `${toBnNum(secNum)}। নিচের প্রশ্নগুলোর বিস্তারিত উত্তর লেখো:` : `${secNum}. Answer the following broad questions in detail:`;
+        category = 'broad_question';
+        layout = '1_col';
+        numbering = isBn ? 'bangla_number' : 'english_number';
+        break;
+      case 'arabic':
+        title = isBn ? `${toBnNum(secNum)}। আরবি হরফ ও আয়াত সুন্দর হস্তাক্ষরে লেখো:` : `${secNum}. Write the following Arabic verses in clear calligraphy:`;
+        category = 'arabic_writing';
+        layout = '1_col';
+        direction = 'rtl';
+        numbering = 'arabic_number';
+        dotted = 2;
         break;
     }
 
-    const defaultQs: PaperQuestion[] = type === 'matching' ? [{
-      id: `match-${Date.now()}`,
-      category_type: category,
-      question_text: isBn ? 'বাম পাশের সাথে ডান পাশ মিলকরণ টেবিল:' : 'Match the items in Column A with Column B:',
-      left_items: isBn
-        ? ['১. সূর্য পূর্ব দিকে', '২. শিক্ষাই জাতির', '৩. আমাদের মাতৃভাষা', '৪. সততা সর্বোৎকৃষ্ট']
-        : ['1. The sun rises in', '2. Education is the backbone of', '3. Our mother language is', '4. Honesty is the best'],
-      right_items: isBn
-        ? ['মেরুদণ্ড।', 'উঠে থাকে।', 'পন্থা।', 'বাংলা।']
-        : ['the east.', 'a nation.', 'Bengali.', 'policy.'],
-      marks: 4
-    }] : [];
+    const defaultQs: PaperQuestion[] =
+      type === 'matching'
+        ? [
+            {
+              id: `match-${Date.now()}`,
+              category_type: category,
+              question_text: isBn ? 'বাম পাশের সাথে ডান পাশ মিলকরণ টেবিল:' : 'Match the items in Column A with Column B:',
+              left_items: isBn
+                ? ['১. সূর্য পূর্ব দিকে', '২. শিক্ষাই জাতির', '৩. আমাদের মাতৃভাষা', '৪. সততা সর্বোৎকৃষ্ট']
+                : ['1. The sun rises in', '2. Education is the backbone of', '3. Our mother language is', '4. Honesty is the best'],
+              right_items: isBn
+                ? ['মেরুদণ্ড।', 'উঠে থাকে।', 'পন্থা।', 'বাংলা।']
+                : ['the east.', 'a nation.', 'Bengali.', 'policy.'],
+              marks: 4
+            }
+          ]
+        : type === 'arabic'
+        ? [
+            {
+              id: `ar-${Date.now()}`,
+              category_type: category,
+              question_text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ۝ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
+              marks: 5
+            }
+          ]
+        : type === 'broad'
+        ? [
+            {
+              id: `bq-${Date.now()}`,
+              category_type: category,
+              question_text: isBn
+                ? 'নুন সাকিন ও তানভীনের চারটি হুকুম উদাহরণসহ বিস্তারিত আলোচনা করো।'
+                : 'Discuss the four rules of Noon Sakinah and Tanween with examples.',
+              marks: 5
+            }
+          ]
+        : [];
 
     const newSec: PaperSection = {
       id: `sec-${Date.now()}`,
@@ -632,14 +731,20 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       layout,
       numbering_style: numbering,
       direction,
-      dotted_lines: 0,
-      marks_formula: isBn ? (type === 'matching' ? '১ × ৪ = ৪' : '১ × ৫ = ৫') : (type === 'matching' ? '1 × 4 = 4' : '1 × 5 = 5'),
+      dotted_lines: dotted,
+      marks_formula: isBn
+        ? type === 'matching'
+          ? '১ × ৪ = ৪'
+          : '১ × ৫ = ৫'
+        : type === 'matching'
+        ? '1 × 4 = 4'
+        : '1 × 5 = 5',
       total_marks: type === 'matching' ? 4 : 5,
       questions: defaultQs
     };
 
     setSections(prev => [...prev, newSec]);
-    triggerToast(isBn ? `"${category}" বিভাগ যুক্ত হয়েছে` : `"${category}" section added`);
+    triggerToast(isBn ? '✓ নতুন বিভাগ প্রশ্নপত্রে যুক্ত হয়েছে' : '✓ New section added to paper');
   };
 
   // Section manipulation
@@ -781,7 +886,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
     const paperElement = document.getElementById('paperSheet');
     if (!paperElement) {
-      alert(isBn ? 'প্রশ্নপত্রের কনটেন্ট পাওয়া যায়নি' : 'Question paper content not found');
+      triggerToast(isBn ? 'প্রশ্নপত্রের কনটেন্ট পাওয়া যায়নি' : 'Question paper content not found');
       return;
     }
 
@@ -837,26 +942,38 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
   // Run Auto Generator
   const executeAutoGenerator = async () => {
-    if (!selectedBookId || selectedBookId === 'all') {
-      alert(isBn ? 'অনুগ্রহ করে প্রথমে একটি পাঠ্যবই নির্বাচন করুন' : 'Please select a book first');
+    const targetBook =
+      selectedBookId && selectedBookId !== 'all'
+        ? selectedBookId
+        : filteredBooks[0]?.id || books[0]?.id;
+
+    if (!targetBook) {
+      triggerToast(isBn ? 'অনুগ্রহ করে প্রথমে একটি পাঠ্যবই নির্বাচন করুন' : 'Please select a book first');
       return;
     }
 
+    if (selectedBookId === 'all') {
+      setSelectedBookId(targetBook);
+    }
+
     const generated = await QuestionBankService.autoGenerateExam({
-      bookId: selectedBookId,
+      bookId: targetBook,
       chapterIds: selectedChapterId === 'all' ? undefined : [selectedChapterId],
       mcqCount: autoMcqCount,
       fillBlankCount: autoFillBlankCount,
       shortCount: autoShortCount,
       broadCount: autoBroadCount,
+      matchingCount: autoMatchingCount,
       arabicCount: autoArabicCount,
       targetMarks: autoTargetMarks
     });
 
     setSections(generated);
-    setExamMarksText(locNum(autoTargetMarks));
+    const calcTotal = generated.reduce((acc, s) => acc + (s.total_marks || 0), 0);
+    setExamMarksText(locNum(calcTotal || autoTargetMarks));
     setShowAutoModal(false);
-    triggerToast(isBn ? 'সম্পূর্ণ প্রশ্নপত্র অটোমেটিক তৈরি হয়েছে!' : 'Complete question paper generated automatically!');
+    setMobilePane('paper');
+    triggerToast(isBn ? 'সম্পূর্ণ প্রশ্নপত্র স্বয়ংক্রিয়ভাবে তৈরি হয়েছে!' : 'Complete question paper generated automatically!');
   };
 
   // Load a saved draft
@@ -879,9 +996,52 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] w-full bg-[#f1f5f9] dark:bg-[#090d16] font-noto overflow-hidden select-none">
-      
-      {/* ================= OPTION 3: CLASSIC MADRASAH MS WORD UI - 2-ROW RIBBON ================= */}
-      <header className="bg-white dark:bg-[#111827] border-b border-slate-300 dark:border-slate-800 z-30 shrink-0 shadow-xs">
+
+      {/* ================= MOBILE SLEEK TOUCH HEADER (< 768px) ================= */}
+      <div className="md:hidden no-print bg-[#2b579a] text-white px-2.5 py-2 flex items-center justify-between gap-2 border-b border-blue-900 shadow-sm shrink-0 z-30">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={onBack}
+            className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 active:scale-95 touch-manipulation transition shrink-0"
+            title={isBn ? 'ফিরে যান' : 'Back'}
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black tracking-tight truncate">
+                {isBn ? 'প্রশ্ন মেকার স্টুডিও' : 'Question Studio'}
+              </span>
+              <span className="px-1.5 py-0.5 bg-blue-900/80 border border-blue-400/30 rounded text-[10px] font-bold whitespace-nowrap">
+                {isBn ? `প্রশ্ন: ${locNum(totalQuestionsCount)} | মান: ${locNum(totalCalculatedMarks)}` : `Qs: ${totalQuestionsCount} | Marks: ${totalCalculatedMarks}`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowAutoModal(true)}
+            className="min-h-[34px] px-2.5 py-1 bg-[#107c41] hover:bg-[#0e6b37] text-white rounded-lg text-[11px] font-black shadow-xs flex items-center gap-1 active:scale-95 touch-manipulation border border-emerald-400/40"
+          >
+            <span>🪄</span>
+            <span>{isBn ? 'অটো প্রশ্ন' : 'Auto'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={printPaper}
+            className="min-h-[34px] px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation border border-white/20"
+          >
+            <span>🖨️</span>
+            <span>{isBn ? 'প্রিন্ট' : 'Print'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ================= DESKTOP: CLASSIC MADRASAH MS WORD UI - 2-ROW RIBBON (>= 768px) ================= */}
+      <header className="hidden md:block no-print bg-white dark:bg-[#111827] border-b border-slate-300 dark:border-slate-800 z-30 shrink-0 shadow-xs">
         
         {/* ================= TOP TITLE BAR: WINDOWS & WORD QUICK ACCESS ================= */}
         <div className="h-8 bg-[#2b579a] text-white flex items-center justify-between px-3 text-xs select-none border-b border-[#1f4277]">
@@ -1121,20 +1281,29 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
           {/* গ্রুপ ২: ফন্ট (Font Group) */}
           <div className="flex flex-col justify-between px-2.5 py-0.5 border-r border-slate-300 dark:border-slate-700 shrink-0">
-            {/* Line 1: Font dropdown, size dropdown, A^, Av */}
+            {/* Line 1: Bangla Font, Arabic Font, Size dropdown, A^, Av */}
             <div className="flex items-center gap-1">
               <select
                 value={banglaFont}
                 onChange={e => setBanglaFont(e.target.value)}
                 className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200 h-6"
-                title={isBn ? 'ফন্ট নির্বাচন' : 'Font Family'}
+                title={isBn ? 'বাংলা ফন্ট নির্বাচন' : 'Bangla Font'}
               >
-                <option value="SolaimanLipi">{isBn ? 'ফন্ট: সোলায়মান লিপি' : 'Font: SolaimanLipi'}</option>
-                <option value="Kalpurush">{isBn ? 'কালপুরুষ' : 'Kalpurush'}</option>
-                <option value="Noto Serif Bengali">{isBn ? 'নোটো সেরিফ বাংলা' : 'Noto Serif Bengali'}</option>
-                <option value="Amiri">{isBn ? 'আমিরি (আরবি/উর্দু)' : 'Amiri (Arabic/Urdu)'}</option>
-                <option value="Arial">Arial</option>
+                <option value="SolaimanLipi">{isBn ? 'বাংলা: সোলায়মান লিপি' : 'Bangla: SolaimanLipi'}</option>
+                <option value="Kalpurush">{isBn ? 'বাংলা: কালপুরুষ' : 'Bangla: Kalpurush'}</option>
+                <option value="Noto Serif Bengali">{isBn ? 'বাংলা: নোটো সেরিফ' : 'Bangla: Noto Serif'}</option>
                 <option value="Times New Roman">Times New Roman</option>
+              </select>
+
+              <select
+                value={arabicFont}
+                onChange={e => setArabicFont(e.target.value)}
+                className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200 h-6"
+                title={isBn ? 'আরবি ক্যালিগ্রাফি ফন্ট নির্বাচন' : 'Arabic Calligraphy Font'}
+              >
+                <option value="Amiri">{isBn ? 'আরবি: আমিরি (Amiri)' : 'Arabic: Amiri'}</option>
+                <option value="Scheherazade New">{isBn ? 'আরবি: শেহেরজাদ (Scheherazade)' : 'Arabic: Scheherazade'}</option>
+                <option value="Lateef">{isBn ? 'আরবি: লতিফ (Lateef)' : 'Arabic: Lateef'}</option>
               </select>
 
               <select
@@ -1535,11 +1704,25 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   const newBoard = e.target.value;
                   setSelectedBoardId(newBoard);
                   setSelectedChapterId('all');
-                  const newFiltered = books.filter(b => doesBoardMatch(b.board, newBoard) && doesClassMatch(b.class_name, selectedClass));
+                  const validBoardClasses = getClassesForBoard(newBoard, lang);
+                  const booksWithOldClass = books.filter(
+                    b => doesBoardMatch(b.board, newBoard) && doesClassMatch(b.class_name, selectedClass)
+                  );
+                  const isClassStillValid =
+                    selectedClass === 'all' ||
+                    (validBoardClasses.includes(selectedClass) && booksWithOldClass.length > 0);
+                  const nextClass = isClassStillValid ? selectedClass : 'all';
+                  if (!isClassStillValid) {
+                    setSelectedClass('all');
+                  }
+                  const newFiltered = books.filter(
+                    b => doesBoardMatch(b.board, newBoard) && doesClassMatch(b.class_name, nextClass)
+                  );
                   if (newFiltered.length > 0) {
                     setSelectedBookId(newFiltered[0].id);
                   } else {
-                    setSelectedBookId('all');
+                    const boardOnly = books.filter(b => doesBoardMatch(b.board, newBoard));
+                    setSelectedBookId(boardOnly[0]?.id || 'all');
                   }
                 }}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
@@ -1561,13 +1744,14 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   const newClass = e.target.value;
                   setSelectedClass(newClass);
                   setSelectedChapterId('all');
-                  const newFiltered = books.filter(b => doesBoardMatch(b.board, selectedBoardId) && doesClassMatch(b.class_name, newClass));
+                  const newFiltered = books.filter(
+                    b => doesBoardMatch(b.board, selectedBoardId) && doesClassMatch(b.class_name, newClass)
+                  );
                   if (newFiltered.length > 0) {
-                    if (!newFiltered.some(b => b.id === selectedBookId)) {
-                      setSelectedBookId(newFiltered[0].id);
-                    }
+                    setSelectedBookId(newFiltered[0].id);
                   } else {
-                    setSelectedBookId('all');
+                    const boardOnly = books.filter(b => doesBoardMatch(b.board, selectedBoardId));
+                    setSelectedBookId(boardOnly[0]?.id || 'all');
                   }
                 }}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-1.5 text-slate-800 dark:text-slate-100"
@@ -1820,98 +2004,65 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
           }`}
           onDragOver={e => e.preventDefault()}
         >
-          {/* Mobile Viewport Scale & Action Bar */}
-          <div className="md:hidden w-full max-w-md mb-2 flex items-center justify-between gap-1.5 no-print">
-            <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg p-0.5 border border-slate-300 dark:border-slate-700 shadow-xs">
+          {/* Mobile Quick Section Bar (Zero CSS Zoom Distortion) */}
+          <div className="md:hidden w-full mb-2 flex items-center justify-between gap-1.5 no-print overflow-x-auto pb-0.5">
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={() => setPaperZoom('fit')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
-                  paperZoom === 'fit'
-                    ? 'bg-[#2b579a] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300'
-                }`}
+                onClick={() => addQuickSection('mcq')}
+                className="min-h-[32px] px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 touch-manipulation"
               >
-                {isBn ? 'ফিট' : 'Fit'}
+                {isBn ? '+ এমসিকিউ' : '+ MCQ'}
               </button>
               <button
                 type="button"
-                onClick={() => setPaperZoom('compact')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
-                  paperZoom === 'compact'
-                    ? 'bg-[#2b579a] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300'
-                }`}
+                onClick={() => addQuickSection('short')}
+                className="min-h-[32px] px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 touch-manipulation"
               >
-                {isBn ? 'কমপ্যাক্ট' : 'Compact'}
+                {isBn ? '+ সংক্ষিপ্ত' : '+ Short'}
               </button>
               <button
                 type="button"
-                onClick={() => setPaperZoom('100')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-md transition ${
-                  paperZoom === '100'
-                    ? 'bg-[#2b579a] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300'
-                }`}
+                onClick={() => addQuickSection('broad')}
+                className="min-h-[32px] px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 touch-manipulation"
               >
-                {locNum(100)}%
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700">
-                {isBn ? 'মোট:' : 'Total:'} {locNum(totalCalculatedMarks)}
-              </span>
-              <button
-                type="button"
-                onClick={exportToWordDoc}
-                className="px-2.5 py-1 bg-[#2b579a] hover:bg-[#20447c] text-white text-[11px] font-black rounded-lg shadow-xs flex items-center gap-1 active:scale-95"
-              >
-                <FileDown size={12} />
-                <span>Word</span>
+                {isBn ? '+ রচনামূলক' : '+ Broad'}
               </button>
               <button
                 type="button"
-                onClick={printPaper}
-                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-xs flex items-center gap-1 active:scale-95"
+                onClick={() => addQuickSection('matching')}
+                className="min-h-[32px] px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 touch-manipulation"
               >
-                <Printer size={12} />
-                <span>{isBn ? 'প্রিন্ট' : 'Print'}</span>
+                {isBn ? '+ মিলকরণ' : '+ Match'}
+              </button>
+              <button
+                type="button"
+                onClick={() => addQuickSection('arabic')}
+                className="min-h-[32px] px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 touch-manipulation"
+              >
+                {isBn ? '+ আরবি' : '+ Arabic'}
               </button>
             </div>
           </div>
 
-          {/* Responsive Paper Viewport Container */}
-          <div
-            className={`paper-viewport-wrapper w-full flex justify-center ${
-              viewportWidth < 768 && paperZoom === '100' ? 'overflow-x-auto pb-6' : ''
-            }`}
-          >
-            <div
-              className="paper-scale-container origin-top transition-all duration-200"
-              style={
-                viewportWidth < 768 && paperZoom === 'fit'
-                  ? {
-                      zoom: Math.min(1, Math.max(0.35, (viewportWidth - 18) / (paperSize === 'Legal' ? 816 : 794)))
-                    }
-                  : undefined
-              }
-            >
+          {/* Responsive Paper Viewport Container (Zero CSS Zoom Distortion on < 768px) */}
+          <div className="paper-viewport-wrapper w-full flex justify-center">
+            <div className="paper-scale-container w-full md:w-auto origin-top transition-all duration-200">
               {/* White A4 / Legal Canvas Sheet (#paperSheet) */}
               <div
                 id="paperSheet"
                 style={{
-                  width: viewportWidth < 768 && paperZoom === 'compact' ? '100%' : (paperSize === 'Legal' ? '216mm' : '210mm'),
-                  minHeight: paperSize === 'Legal' ? '356mm' : '297mm',
-                  padding: viewportWidth < 768 && paperZoom === 'compact'
-                    ? '14px 16px'
+                  width: viewportWidth < 768 ? '100%' : (paperSize === 'Legal' ? '216mm' : '210mm'),
+                  minHeight: viewportWidth < 768 ? 'auto' : (paperSize === 'Legal' ? '356mm' : '297mm'),
+                  padding: viewportWidth < 768
+                    ? '14px 14px'
                     : paperMargin === 'narrow'
                     ? '10mm 12mm'
                     : paperMargin === 'wide'
                     ? '22mm 22mm'
                     : '16mm 16mm',
                   fontFamily: `'${banglaFont}', '${englishFont}', serif`,
-                  fontSize: viewportWidth < 768 && paperZoom === 'compact' ? `${Math.max(12, fontSize - 2)}px` : `${fontSize}px`,
+                  fontSize: viewportWidth < 768 ? `${Math.max(13, fontSize - 1)}px` : `${fontSize}px`,
                   lineHeight: lineHeight,
                   textAlign: textAlign,
                   fontWeight: isBold ? 'bold' : 'normal',
@@ -2080,7 +2231,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                         }}
                         className="q-section relative group/sec pb-2 border-b border-slate-200 last:border-b-0 break-inside-avoid"
                       >
-                        {/* Per-Section Floating Controls (Hidden on Print) */}
+                        {/* Per-Section Floating Controls (Hidden on Print, Touch-Friendly min 32px targets) */}
                         <div className="sec-toolbar no-print flex md:hidden group-hover/sec:flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-md shadow-lg z-20 text-[11px] mb-1.5 md:mb-0 md:absolute md:-top-4 md:right-0 flex-wrap">
                           {/* Layout */}
                           <select
@@ -2089,7 +2240,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                               const val = e.target.value as PaperSection['layout'];
                               setSections(prev => prev.map(s => s.id === section.id ? { ...s, layout: val } : s));
                             }}
-                            className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
+                            className="min-h-[32px] bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium touch-manipulation"
                           >
                             <option value="1_col">{isBn ? '১ কলাম' : '1 Column'}</option>
                             <option value="2_col">{isBn ? '২ কলাম' : '2 Columns'}</option>
@@ -2104,7 +2255,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                               const val = e.target.value as PaperSection['numbering_style'];
                               setSections(prev => prev.map(s => s.id === section.id ? { ...s, numbering_style: val } : s));
                             }}
-                            className="bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium"
+                            className="min-h-[32px] bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium touch-manipulation"
                           >
                             <option value="bangla_letter">ক, খ, গ...</option>
                             <option value="bangla_number">১, ২, ৩...</option>
@@ -2114,12 +2265,28 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                             <option value="none">{isBn ? 'নাম্বার ছাড়া' : 'None'}</option>
                           </select>
 
+                          {/* Dotted Lines Toggle */}
+                          <select
+                            value={section.dotted_lines || 0}
+                            onChange={e => {
+                              const val = parseInt(e.target.value) || 0;
+                              setSections(prev => prev.map(s => s.id === section.id ? { ...s, dotted_lines: val } : s));
+                            }}
+                            className="min-h-[32px] bg-slate-800 text-white text-[10.5px] rounded px-1.5 py-0.5 border border-slate-700 font-medium touch-manipulation"
+                            title={isBn ? 'হাতের লেখার ডটেড লাইন' : 'Dotted writing lines'}
+                          >
+                            <option value={0}>{isBn ? 'লাইন: ০' : 'Lines: 0'}</option>
+                            <option value={1}>{isBn ? 'ডটেড: ১ লাইন' : 'Dotted: 1'}</option>
+                            <option value={2}>{isBn ? 'ডটেড: ২ লাইন' : 'Dotted: 2'}</option>
+                            <option value={3}>{isBn ? 'ডটেড: ৩ লাইন' : 'Dotted: 3'}</option>
+                          </select>
+
                           {/* Move Up/Down */}
                           <button
                             type="button"
                             disabled={sIdx === 0}
                             onClick={() => moveSection(sIdx, 'up')}
-                            className="p-1 hover:bg-slate-800 rounded disabled:opacity-30"
+                            className="min-w-[32px] min-h-[32px] flex items-center justify-center hover:bg-slate-800 rounded disabled:opacity-30 active:scale-95 touch-manipulation"
                             title={isBn ? 'বিভাগ উপরে নিন' : 'Move Up'}
                           >
                             ▲
@@ -2128,7 +2295,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                             type="button"
                             disabled={sIdx === sections.length - 1}
                             onClick={() => moveSection(sIdx, 'down')}
-                            className="p-1 hover:bg-slate-800 rounded disabled:opacity-30"
+                            className="min-w-[32px] min-h-[32px] flex items-center justify-center hover:bg-slate-800 rounded disabled:opacity-30 active:scale-95 touch-manipulation"
                             title={isBn ? 'বিভাগ নিচে নিন' : 'Move Down'}
                           >
                             ▼
@@ -2138,7 +2305,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => addCustomQuestion(section.id)}
-                            className="px-1.5 py-0.5 bg-blue-700 hover:bg-blue-600 rounded text-[10.5px] font-bold"
+                            className="min-h-[32px] px-2.5 py-1 bg-blue-700 hover:bg-blue-600 rounded text-[10.5px] font-bold active:scale-95 touch-manipulation"
                           >
                             {isBn ? '+ প্রশ্ন' : '+ Question'}
                           </button>
@@ -2147,7 +2314,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => deleteSection(section.id)}
-                            className="p-1 hover:bg-red-700 text-red-300 hover:text-white rounded"
+                            className="min-w-[32px] min-h-[32px] flex items-center justify-center hover:bg-red-700 text-red-300 hover:text-white rounded active:scale-95 touch-manipulation"
                             title={isBn ? 'বিভাগ মুছুন' : 'Delete Section'}
                           >
                             🗑
@@ -2329,13 +2496,13 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                                 </div>
                               )}
 
-                              {/* Touch-Friendly Up, Down, Delete Actions */}
-                              <div className="no-print absolute top-0.5 right-0.5 flex md:hidden group-hover/q:flex items-center gap-0.5 bg-white border border-slate-300 rounded shadow-xs text-[11px] p-0.5 z-10">
+                              {/* Touch-Friendly Up, Down, Delete Actions (min 32px targets) */}
+                              <div className="no-print mt-1 md:mt-0 md:absolute md:top-0.5 md:right-0.5 flex md:hidden group-hover/q:flex items-center justify-end gap-1 bg-white/95 border border-slate-300 rounded-lg shadow-xs text-xs p-0.5 z-10 self-end">
                                 <button
                                   type="button"
                                   disabled={qIdx === 0}
                                   onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'up'); }}
-                                  className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
+                                  className="min-w-[32px] min-h-[32px] flex items-center justify-center hover:bg-slate-100 rounded-md disabled:opacity-25 text-slate-700 font-bold active:scale-95 touch-manipulation"
                                   title={isBn ? 'উপরে নিন' : 'Move Up'}
                                 >
                                   ↑
@@ -2344,7 +2511,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                                   type="button"
                                   disabled={qIdx === section.questions.length - 1}
                                   onClick={(e) => { e.stopPropagation(); moveQuestion(sIdx, qIdx, 'down'); }}
-                                  className="w-5 h-5 flex items-center justify-center hover:bg-slate-100 rounded disabled:opacity-20 text-slate-700 font-bold active:scale-90"
+                                  className="min-w-[32px] min-h-[32px] flex items-center justify-center hover:bg-slate-100 rounded-md disabled:opacity-25 text-slate-700 font-bold active:scale-95 touch-manipulation"
                                   title={isBn ? 'নিচে নিন' : 'Move Down'}
                                 >
                                   ↓
@@ -2352,7 +2519,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); deleteQuestion(section.id, question.id); }}
-                                  className="w-5 h-5 flex items-center justify-center hover:bg-red-50 rounded text-red-600 font-bold active:scale-90"
+                                  className="min-w-[32px] min-h-[32px] flex items-center justify-center hover:bg-red-50 rounded-md text-red-600 font-bold active:scale-95 touch-manipulation"
                                   title={isBn ? 'প্রশ্ন মুছুন' : 'Delete Question'}
                                 >
                                   ×
@@ -2426,12 +2593,115 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               </div>
             )}
 
-            {/* Typography & Slider Controls */}
+            {/* Typography & Layout Controls in Right Pane */}
             <div className="space-y-3">
               <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                 <Type size={14} className="text-[#2b579a]" />
-                <span>{isBn ? 'ফন্ট ও স্পেসিং কন্ট্রোল:' : 'Font & Spacing Controls:'}</span>
+                <span>{isBn ? 'ফন্ট ও লেআউট সেটিংস:' : 'Font & Layout Settings:'}</span>
               </h4>
+
+              {/* Bangla Font Selector */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                  {isBn ? 'বাংলা ফন্ট:' : 'Bangla Font:'}
+                </label>
+                <select
+                  value={banglaFont}
+                  onChange={e => setBanglaFont(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-bold text-slate-800 dark:text-slate-200"
+                >
+                  <option value="SolaimanLipi">{isBn ? 'সোলায়মান লিপি (SolaimanLipi)' : 'SolaimanLipi'}</option>
+                  <option value="Kalpurush">{isBn ? 'কালপুরুষ (Kalpurush)' : 'Kalpurush'}</option>
+                  <option value="Noto Serif Bengali">{isBn ? 'নোটো সেরিফ বাংলা' : 'Noto Serif Bengali'}</option>
+                </select>
+              </div>
+
+              {/* Arabic Calligraphy Font Selector */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                  {isBn ? 'আরবি ক্যালিগ্রাফি ফন্ট:' : 'Arabic Calligraphy Font:'}
+                </label>
+                <select
+                  value={arabicFont}
+                  onChange={e => setArabicFont(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-bold text-slate-800 dark:text-slate-200"
+                >
+                  <option value="Amiri">{isBn ? 'আমিরি কুরআনিক (Amiri)' : 'Amiri (Quranic)'}</option>
+                  <option value="Scheherazade New">{isBn ? 'শেহেরজাদ নাসখ (Scheherazade)' : 'Scheherazade New'}</option>
+                  <option value="Lateef">{isBn ? 'লতিফ ক্যালিগ্রাফি (Lateef)' : 'Lateef'}</option>
+                </select>
+              </div>
+
+              {/* Columns & Border Style */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                    {isBn ? 'পেজ কলাম:' : 'Columns:'}
+                  </label>
+                  <select
+                    value={paperColumns}
+                    onChange={e => setPaperColumns(e.target.value as '1_col' | '2_col')}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-bold"
+                  >
+                    <option value="1_col">{isBn ? '১ কলাম' : '1 Column'}</option>
+                    <option value="2_col">{isBn ? '২ কলাম' : '2 Columns'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                    {isBn ? 'পেজ বর্ডার:' : 'Border:'}
+                  </label>
+                  <select
+                    value={borderStyle}
+                    onChange={e => setBorderStyle(e.target.value as 'none' | 'single' | 'double')}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-bold"
+                  >
+                    <option value="double">{isBn ? 'ডাবল বর্ডার' : 'Double'}</option>
+                    <option value="single">{isBn ? 'সিঙ্গেল বর্ডার' : 'Single'}</option>
+                    <option value="none">{isBn ? 'বর্ডার ছাড়া' : 'None'}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Header Toggles */}
+              <div className="space-y-1.5 pt-1">
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    {isBn ? 'বিসমিল্লাহির রাহমানির রাহিম' : 'Show Bismillah'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showBismillah}
+                    onChange={e => setShowBismillah(e.target.checked)}
+                    className="rounded accent-[#2b579a] w-4 h-4"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    {isBn ? 'পরীক্ষার্থীর নাম ও রোল বক্স' : 'Student Name & Roll Box'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showStudentInfo}
+                    onChange={e => setShowStudentInfo(e.target.checked)}
+                    className="rounded accent-[#2b579a] w-4 h-4"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    {isBn ? 'উত্তরমালা (Answer Sheet) প্রদর্শন' : 'Show Answer Key'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showAnswerSheet}
+                    onChange={e => setShowAnswerSheet(e.target.checked)}
+                    className="rounded accent-[#2b579a] w-4 h-4"
+                  />
+                </label>
+              </div>
 
               {/* Font Size Slider */}
               <div>
@@ -2513,7 +2783,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         </aside>
       </div>
 
-      {/* ================= 1-CLICK MAGIC QUESTION GENERATOR MODAL ================= */}
+      {/* ================= 1-CLICK SMART AUTO QUESTION PAPER GENERATOR MODAL ================= */}
       {showAutoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white dark:bg-[#111827] rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[92vh] overflow-y-auto">
@@ -2522,123 +2792,207 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                 <span className="text-xl">🪄</span>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100">
-                    {isBn ? '১-ক্লিক প্রশ্নপত্র তৈরি' : '1-Click Auto Paper Generator'}
+                    {isBn ? 'স্মার্ট অটো প্রশ্ন তৈরি (১-ক্লিক)' : 'Smart 1-Click Auto Exam Paper Generator'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    {isBn ? 'বোর্ড, শ্রেণি ও সিলেবাস অনুযায়ী অটোমেটিক ব্যালান্সড প্রশ্ন সাজান' : 'Automatically create a balanced question paper'}
+                    {isBn ? 'পূর্ণমান ও প্রশ্নের অনুপাত নির্ধারণ করে ১-ক্লিকে সম্পূর্ণ প্রশ্নপত্র তৈরি করুন' : 'Select target marks and adjust question sliders'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAutoModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Target Marks Selector */}
+            {/* Target Marks Selector: 20, 50, 75, 100 */}
             <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {isBn ? 'টার্গেট পূর্ণমান নির্বাচন করুন:' : 'Select Target Marks:'}
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                {isBn ? 'টার্গেট পূর্ণমান নির্বাচন করুন (২০, ৫০, ৭৫ অথবা ১০০ নম্বর):' : 'Select Target Marks (20, 50, 75, or 100):'}
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoTargetMarks(50);
-                    setAutoMcqCount(5);
-                    setAutoFillBlankCount(5);
-                    setAutoShortCount(5);
-                    setAutoBroadCount(3);
-                    setAutoArabicCount(3);
-                  }}
-                  className={`py-2 px-3 rounded-xl border text-xs font-black transition ${
-                    autoTargetMarks === 50
-                      ? 'bg-[#2b579a] text-white border-[#2b579a] shadow-xs'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
-                  }`}
-                >
-                  {isBn ? '৫০ নম্বর (অর্ধবার্ষিক / সাময়িক)' : '50 Marks (Term Exam)'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoTargetMarks(100);
-                    setAutoMcqCount(10);
-                    setAutoFillBlankCount(10);
-                    setAutoShortCount(10);
-                    setAutoBroadCount(6);
-                    setAutoArabicCount(6);
-                  }}
-                  className={`py-2 px-3 rounded-xl border text-xs font-black transition ${
-                    autoTargetMarks === 100
-                      ? 'bg-[#2b579a] text-white border-[#2b579a] shadow-xs'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
-                  }`}
-                >
-                  {isBn ? '১০০ নম্বর (বার্ষিক / ফাইনাল)' : '100 Marks (Annual Exam)'}
-                </button>
-              </div>
-            </div>
-
-            {/* Board Selector */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {isBn ? 'বোর্ড:' : 'Board:'}
-              </label>
-              <select
-                value={selectedBoardId}
-                onChange={e => {
-                  setSelectedBoardId(e.target.value);
-                  const newFiltered = books.filter(b => doesBoardMatch(b.board, e.target.value) && doesClassMatch(b.class_name, selectedClass));
-                  if (newFiltered.length > 0) setSelectedBookId(newFiltered[0].id);
-                }}
-                className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 rounded-lg p-2 font-medium"
-              >
-                {supportedBoardsList.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { marks: 20, labelBn: '২০ নম্বর', subBn: 'ক্লাস টেস্ট', mcq: 5, fb: 5, sq: 2, bq: 1, match: 0, ar: 0 },
+                  { marks: 50, labelBn: '৫০ নম্বর', subBn: 'সাময়িক', mcq: 10, fb: 6, sq: 5, bq: 2, match: 1, ar: 2 },
+                  { marks: 75, labelBn: '৭৫ নম্বর', subBn: 'অর্ধবার্ষিক', mcq: 15, fb: 6, sq: 8, bq: 4, match: 1, ar: 2 },
+                  { marks: 100, labelBn: '১০০ নম্বর', subBn: 'বার্ষিক', mcq: 15, fb: 6, sq: 10, bq: 6, match: 1, ar: 3 },
+                ].map(preset => (
+                  <button
+                    key={preset.marks}
+                    type="button"
+                    onClick={() => {
+                      setAutoTargetMarks(preset.marks);
+                      setAutoMcqCount(preset.mcq);
+                      setAutoFillBlankCount(preset.fb);
+                      setAutoShortCount(preset.sq);
+                      setAutoBroadCount(preset.bq);
+                      setAutoMatchingCount(preset.match);
+                      setAutoArabicCount(preset.ar);
+                    }}
+                    className={`py-2 px-2 rounded-xl border text-center transition active:scale-95 touch-manipulation ${
+                      autoTargetMarks === preset.marks
+                        ? 'bg-[#2b579a] text-white border-[#2b579a] shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-black">{isBn ? preset.labelBn : `${preset.marks} Marks`}</div>
+                    <div className={`text-[10px] ${autoTargetMarks === preset.marks ? 'text-blue-100' : 'text-slate-400'}`}>
+                      {isBn ? preset.subBn : 'Preset'}
+                    </div>
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
-            {/* Book Selector */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {isBn ? 'পাঠ্যবই:' : 'Book:'}
-              </label>
-              <select
-                value={selectedBookId}
-                onChange={e => setSelectedBookId(e.target.value)}
-                className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 rounded-lg p-2 font-medium truncate"
-              >
-                {filteredBooks.map(b => (
-                  <option key={b.id} value={b.id}>{b.title} ({b.class_name})</option>
-                ))}
-              </select>
+            {/* Board & Book Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {isBn ? 'বোর্ড:' : 'Board:'}
+                </label>
+                <select
+                  value={selectedBoardId}
+                  onChange={e => {
+                    const newBoard = e.target.value;
+                    setSelectedBoardId(newBoard);
+                    setSelectedClass('all');
+                    const newFiltered = books.filter(b => doesBoardMatch(b.board, newBoard));
+                    if (newFiltered.length > 0) setSelectedBookId(newFiltered[0].id);
+                  }}
+                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium"
+                >
+                  {supportedBoardsList.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {isBn ? 'পাঠ্যবই:' : 'Book:'}
+                </label>
+                <select
+                  value={selectedBookId}
+                  onChange={e => setSelectedBookId(e.target.value)}
+                  className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-medium truncate"
+                >
+                  {filteredBooks.map(b => (
+                    <option key={b.id} value={b.id}>{b.title} ({b.class_name})</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Counts Breakdown Preview */}
-            <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-1.5">
-              <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {isBn ? 'স্বয়ংক্রিয় বিভাগ বণ্টন:' : 'Automatic Distribution:'}
+            {/* Interactive Question Balance Sliders */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="font-black text-slate-800 dark:text-slate-200">
+                  {isBn ? 'প্রশ্নের ধরন ও সংখ্যা স্লাইডার:' : 'Question Balance Sliders:'}
+                </span>
+                <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 rounded-full font-black text-[11px]">
+                  {isBn
+                    ? `হিসাবকৃত মোট মান: ${locNum(autoMcqCount * 1 + autoFillBlankCount * 1 + autoShortCount * 2 + autoBroadCount * 5 + autoMatchingCount * 4 + autoArabicCount * 5)}`
+                    : `Calculated Marks: ${autoMcqCount * 1 + autoFillBlankCount * 1 + autoShortCount * 2 + autoBroadCount * 5 + autoMatchingCount * 4 + autoArabicCount * 5}`}
+                </span>
               </div>
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>{isBn ? '১. সঠিক উত্তর (এমসিকিউ):' : '1. Multiple Choice (MCQ):'}</span>
-                <span className="font-bold">{locNum(autoMcqCount)} {isBn ? 'টি প্রশ্ন' : 'Questions'}</span>
+
+              {/* 1. MCQ Slider */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  <span>{isBn ? '১. সঠিক উত্তর (MCQ - প্রতি প্রশ্ন ১ মান):' : '1. MCQ (1 mark each):'}</span>
+                  <span className="text-[#2b579a] dark:text-blue-400">{locNum(autoMcqCount)} {isBn ? 'টি' : 'Qs'} ({locNum(autoMcqCount)} {isBn ? 'নম্বর' : 'M'})</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={30}
+                  value={autoMcqCount}
+                  onChange={e => setAutoMcqCount(parseInt(e.target.value) || 0)}
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
+                />
               </div>
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>{isBn ? '২. শূন্যস্থান পূরণ:' : '2. Fill in the Blanks:'}</span>
-                <span className="font-bold">{locNum(autoFillBlankCount)} {isBn ? 'টি প্রশ্ন' : 'Questions'}</span>
+
+              {/* 2. Fill in the blanks Slider */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  <span>{isBn ? '২. শূন্যস্থান পূরণ (প্রতি প্রশ্ন ১ মান):' : '2. Fill in the Blanks (1 mark each):'}</span>
+                  <span className="text-[#2b579a] dark:text-blue-400">{locNum(autoFillBlankCount)} {isBn ? 'টি' : 'Qs'} ({locNum(autoFillBlankCount)} {isBn ? 'নম্বর' : 'M'})</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  value={autoFillBlankCount}
+                  onChange={e => setAutoFillBlankCount(parseInt(e.target.value) || 0)}
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
+                />
               </div>
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>{isBn ? '৩. সংক্ষিপ্ত প্রশ্নোত্তর:' : '3. Short Questions:'}</span>
-                <span className="font-bold">{locNum(autoShortCount)} {isBn ? 'টি প্রশ্ন' : 'Questions'}</span>
+
+              {/* 3. Short Questions Slider */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  <span>{isBn ? '৩. সংক্ষিপ্ত প্রশ্ন (প্রতি প্রশ্ন ২ মান):' : '3. Short Questions (2 marks each):'}</span>
+                  <span className="text-[#2b579a] dark:text-blue-400">{locNum(autoShortCount)} {isBn ? 'টি' : 'Qs'} ({locNum(autoShortCount * 2)} {isBn ? 'নম্বর' : 'M'})</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  value={autoShortCount}
+                  onChange={e => setAutoShortCount(parseInt(e.target.value) || 0)}
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
+                />
               </div>
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>{isBn ? '৪. রচনামূলক / বড় প্রশ্ন:' : '4. Descriptive Questions:'}</span>
-                <span className="font-bold">{locNum(autoBroadCount)} {isBn ? 'টি প্রশ্ন' : 'Questions'}</span>
+
+              {/* 4. Broad Questions Slider */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  <span>{isBn ? '৪. বর্ণনামূলক / রচনামূলক (প্রতি প্রশ্ন ৫ মান):' : '4. Broad Questions (5 marks each):'}</span>
+                  <span className="text-[#2b579a] dark:text-blue-400">{locNum(autoBroadCount)} {isBn ? 'টি' : 'Qs'} ({locNum(autoBroadCount * 5)} {isBn ? 'নম্বর' : 'M'})</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={12}
+                  value={autoBroadCount}
+                  onChange={e => setAutoBroadCount(parseInt(e.target.value) || 0)}
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
+                />
+              </div>
+
+              {/* 5. Matching Table Slider */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  <span>{isBn ? '৫. ডান-বাম মিলকরণ টেবিল (প্রতি টেবিল ৪ মান):' : '5. Matching Table (4 marks each):'}</span>
+                  <span className="text-[#2b579a] dark:text-blue-400">{locNum(autoMatchingCount)} {isBn ? 'টি' : 'Tables'} ({locNum(autoMatchingCount * 4)} {isBn ? 'নম্বর' : 'M'})</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={4}
+                  value={autoMatchingCount}
+                  onChange={e => setAutoMatchingCount(parseInt(e.target.value) || 0)}
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
+                />
+              </div>
+
+              {/* 6. Arabic Writing Slider */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  <span>{isBn ? '৬. আরবি হরফ ও ইবারত লিখন (প্রতি প্রশ্ন ৫ মান):' : '6. Arabic Calligraphy & Verses (5 marks each):'}</span>
+                  <span className="text-[#2b579a] dark:text-blue-400">{locNum(autoArabicCount)} {isBn ? 'টি' : 'Qs'} ({locNum(autoArabicCount * 5)} {isBn ? 'নম্বর' : 'M'})</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={8}
+                  value={autoArabicCount}
+                  onChange={e => setAutoArabicCount(parseInt(e.target.value) || 0)}
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#2b579a]"
+                />
               </div>
             </div>
 
@@ -2653,7 +3007,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               <button
                 type="button"
                 onClick={executeAutoGenerator}
-                className="flex-1 py-2.5 bg-[#2b579a] hover:bg-[#20447c] text-white font-black rounded-xl text-xs shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 bg-[#107c41] hover:bg-[#0e6b37] text-white font-black rounded-xl text-xs shadow-md active:scale-95 flex items-center justify-center gap-1.5"
               >
                 <Sparkles size={14} />
                 <span>{isBn ? 'প্রশ্নপত্র তৈরি করুন' : 'Generate Paper'}</span>
@@ -2819,13 +3173,14 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             margin: 0 !important;
             padding: 0 !important;
           }
-          header, aside, .no-print, button, nav, .custom-scrollbar {
+          aside, .no-print, button, nav {
             display: none !important;
           }
-          main {
+          main, main.custom-scrollbar {
             padding: 0 !important;
             background: #fff !important;
             display: block !important;
+            overflow: visible !important;
           }
           .paper-viewport-wrapper, .paper-scale-container {
             width: 100% !important;
@@ -2847,8 +3202,12 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             transform: none !important;
             zoom: 1 !important;
           }
+          #paperSheet header {
+            display: block !important;
+          }
           .q-section {
             page-break-inside: avoid;
+            break-inside: avoid;
           }
           @page {
             size: ${paperSize === 'Legal' ? 'legal portrait' : 'A4 portrait'};

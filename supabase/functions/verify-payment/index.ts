@@ -308,12 +308,36 @@ serve(async (req) => {
       resultMessage = `Voice balance recharge approved: ৳${parsedAmount} credits added.`
     } else if (trxModule === 'subscription') {
       // Subscription Update
+      const parseCfg = (cfg: any) => {
+        if (!cfg) return {};
+        if (typeof cfg === 'string') {
+          try { return JSON.parse(cfg) || {}; } catch { return {}; }
+        }
+        return typeof cfg === 'object' ? { ...cfg } : {};
+      };
+
+      const instConfig = parseCfg(institution.config_json);
+      const rootId = instConfig.parent_institution_id || instId;
+      let targetRootInst = institution;
+      let targetRootConfig = instConfig;
+
+      if (rootId !== instId) {
+        const { data: rootData } = await supabase
+          .from('institutions')
+          .select('*')
+          .eq('id', rootId)
+          .maybeSingle();
+        if (rootData) {
+          targetRootInst = rootData;
+          targetRootConfig = parseCfg(rootData.config_json);
+        }
+      }
+
       const metadata = pendingTrx.metadata || {}
-      const months = metadata.months || []
+      const months = Array.isArray(metadata.months) ? metadata.months : []
       
       if (months.length > 0) {
-        const config = institution.config_json || {}
-        const currentPaidMonths = config.paid_months || []
+        const currentPaidMonths = Array.isArray(targetRootConfig.paid_months) ? targetRootConfig.paid_months : []
         const updatedPaidMonths = Array.from(new Set([...currentPaidMonths, ...months])).sort()
         
         // Calculate new subscription end date (last day of the furthest month)
@@ -322,20 +346,25 @@ serve(async (req) => {
         const lastDay = new Date(year, month, 0)
         
         institutionUpdate.config_json = {
-          ...config,
+          ...targetRootConfig,
           paid_months: updatedPaidMonths,
-          package_name: metadata.package_name || config.package_name,
-          package_rate: metadata.package_rate || config.package_rate,
-          subscription_type: metadata.subscription_type || config.subscription_type
+          package_name: metadata.package_name || targetRootConfig.package_name,
+          package_rate: metadata.package_rate || targetRootConfig.package_rate,
+          subscription_type: metadata.subscription_type || targetRootConfig.subscription_type
         }
         institutionUpdate.subscription_end = lastDay.toISOString()
         institutionUpdate.status = 'active'
+        institutionUpdate.is_active = true
         resultMessage = `Subscription approved until ${lastMonthStr}.`
       } else {
         // Fallback for subscription if metadata is missing
         institutionUpdate.status = 'active'
+        institutionUpdate.is_active = true
         resultMessage = `Subscription status activated.`
       }
+
+      // Attach resolved rootId for post-update branch sync
+      (institutionUpdate as any).__rootId = rootId;
     }
 
     // 5. Execute Updates (Atomic Sequential)
@@ -351,17 +380,66 @@ serve(async (req) => {
       throw updateTrError;
     }
 
+    const syncRootId = (institutionUpdate as any).__rootId || instId;
+    delete (institutionUpdate as any).__rootId;
+
     if (Object.keys(institutionUpdate).length > 0) {
       const { error: updateInstError } = await supabase
         .from('institutions')
         .update(institutionUpdate)
-        .eq('id', instId)
+        .eq('id', syncRootId)
       
       if (updateInstError) {
         console.error(`[Payment Verification] Failed to update institution:`, updateInstError);
         // Rollback transaction update
         await supabase.from('transactions').update({ status: 'pending', approved_at: null }).eq('id', trId)
         throw updateInstError;
+      }
+
+      // Synchronize child branches when a subscription payment completes
+      if (trxModule === 'subscription') {
+        try {
+          const { data: childBranches } = await supabase
+            .from('institutions')
+            .select('id, is_active, status, config_json')
+            .filter('config_json->>parent_institution_id', 'eq', syncRootId);
+
+          if (childBranches && childBranches.length > 0) {
+            const parentCfg = (institutionUpdate.config_json && typeof institutionUpdate.config_json === 'object')
+              ? institutionUpdate.config_json
+              : {};
+
+            for (const branch of childBranches) {
+              let bCfg: any = branch.config_json;
+              if (typeof bCfg === 'string') {
+                try { bCfg = JSON.parse(bCfg) || {}; } catch { bCfg = {}; }
+              }
+              bCfg = (bCfg && typeof bCfg === 'object') ? { ...bCfg } : {};
+
+              const isManuallyRestricted = bCfg.branch_manually_disabled === true || branch.status === 'suspended';
+              const nextBranchCfg = {
+                ...bCfg,
+                ...(parentCfg.paid_months ? { paid_months: parentCfg.paid_months } : {}),
+                ...(parentCfg.package_name ? { package_name: parentCfg.package_name } : {}),
+                ...(parentCfg.package_rate ? { package_rate: parentCfg.package_rate } : {}),
+                ...(parentCfg.subscription_type ? { subscription_type: parentCfg.subscription_type } : {})
+              };
+
+              const branchUpdate: any = {
+                config_json: nextBranchCfg,
+                ...(institutionUpdate.subscription_end ? { subscription_end: institutionUpdate.subscription_end } : {})
+              };
+              if (!isManuallyRestricted) {
+                branchUpdate.is_active = true;
+                branchUpdate.status = 'active';
+              }
+
+              await supabase.from('institutions').update(branchUpdate).eq('id', branch.id);
+            }
+          }
+        } catch (branchSyncErr) {
+          console.warn('[Payment Verification] Non-fatal child branch sync error:', branchSyncErr);
+        }
       }
     }
 

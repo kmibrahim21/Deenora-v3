@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const { data: students } = await supabase
         .from('students')
-        .select('id, student_name, name_en, roll, biometric_id, is_active')
+        .select('id, student_name, name_en, roll, biometric_id, registration_number, is_active')
         .eq('institution_id', institutionId)
         .order('roll', { ascending: true });
 
@@ -123,16 +123,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return autoUid;
       };
 
-      (students || []).forEach((st: any, idx: number) => {
+      (students || []).forEach((st: any) => {
         if (st.is_active === false) return;
-        const bioId = (st.biometric_id || st.roll || String(idx + 1)).toString().trim();
+        const bioId = (st.biometric_id || st.roll || st.registration_number || '').toString().trim();
+        if (!bioId) return;
         const uid = allocateUid();
         const rawName = st.name_en || st.student_name || 'STUDENT';
         const cleanName = transliterateBnToEn(rawName).substring(0, 23);
 
         userList.push({
           uid,
-          user_id: bioId || String(uid),
+          user_id: bioId,
           name: cleanName,
           role: 'student'
         });
@@ -584,6 +585,7 @@ Show-MsgBox ($msgDonePopup + $successCount + " / " + $users.Count) $msgDoneTitle
   if (action === 'get_sync_script') {
     const b64 = (s: string) => Buffer.from(s, 'utf-8').toString('base64');
     const instNameB64 = b64(institutionName);
+    const syncSelfUrl = `${serverUrl}/api/pc-agent?institution_id=${institutionId}&device_ip=${encodeURIComponent(deviceIp)}&action=get_sync_script`;
 
     const ps1SyncScript = `param([switch]$BackgroundMode)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -597,6 +599,7 @@ $institutionId = "${institutionId}"
 $instName = Decode-B64 "${instNameB64}"
 $deviceIp = "${deviceIp}"
 $serverUrl = "${serverUrl}"
+$syncScriptUrl = "${syncSelfUrl}"
 
 function Calculate-ZKChecksum([byte[]]$buf) {
     [uint32]$chk = 0
@@ -662,6 +665,191 @@ function Build-ZKPacket([uint16]$cmd, [uint16]$session, [uint16]$reply, [byte[]]
     return $full
 }
 
+function Send-ZKTcpPacket($stream, [byte[]]$zkPkt) {
+    $frame = New-Object byte[] (8 + $zkPkt.Length)
+    $frame[0] = 0x50; $frame[1] = 0x50; $frame[2] = 0x82; $frame[3] = 0x7D
+    $lenB = [System.BitConverter]::GetBytes([uint32]$zkPkt.Length)
+    $frame[4] = $lenB[0]; $frame[5] = $lenB[1]; $frame[6] = $lenB[2]; $frame[7] = $lenB[3]
+    [System.Buffer]::BlockCopy($zkPkt, 0, $frame, 8, $zkPkt.Length)
+    $stream.Write($frame, 0, $frame.Length)
+    $stream.Flush()
+}
+
+function Read-ZKTcpExact($stream, [int]$count) {
+    $buf = New-Object byte[] $count
+    $read = 0
+    while ($read -lt $count) {
+        $n = $stream.Read($buf, $read, $count - $read)
+        if ($n -le 0) { return $null }
+        $read += $n
+    }
+    return $buf
+}
+
+function Recv-ZKTcpPacket($stream) {
+    $hdr = Read-ZKTcpExact $stream 8
+    if (-not $hdr -or $hdr.Length -lt 8) { return $null }
+    if ($hdr[0] -ne 0x50 -or $hdr[1] -ne 0x50 -or $hdr[2] -ne 0x82 -or $hdr[3] -ne 0x7D) {
+        return $null
+    }
+    $pktLen = [System.BitConverter]::ToInt32($hdr, 4)
+    if ($pktLen -lt 8 -or $pktLen -gt 10485760) { return $null }
+    return Read-ZKTcpExact $stream $pktLen
+}
+
+function Read-ZKTcpAttendance([string]$ip, [int]$port) {
+    $res = @{ Success = $false; Data = $null }
+    $tcp = $null
+    $stream = $null
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $iar = $tcp.BeginConnect($ip, $port, $null, $null)
+        if (-not $iar.AsyncWaitHandle.WaitOne(1500, $false)) {
+            try { $tcp.Close() } catch {}
+            return $res
+        }
+        $tcp.EndConnect($iar)
+        $tcp.ReceiveTimeout = 3000
+        $tcp.SendTimeout = 2000
+        $tcp.ReceiveBufferSize = 262144
+        $stream = $tcp.GetStream()
+
+        # CMD_CONNECT = 1000
+        Send-ZKTcpPacket $stream (Build-ZKPacket 1000 0 0 $null)
+        $recv = Recv-ZKTcpPacket $stream
+        if (-not $recv -or $recv.Length -lt 8) { return $res }
+
+        $code = [System.BitConverter]::ToUInt16($recv, 0)
+        $ses  = [System.BitConverter]::ToUInt16($recv, 4)
+        $rep  = [System.BitConverter]::ToUInt16($recv, 6)
+
+        if ($code -eq 2005) {
+            $authKey = Make-ZKCommKey 0 $ses
+            $nextRep = [uint16](([int]$rep + 1) -band 0xFFFF)
+            Send-ZKTcpPacket $stream (Build-ZKPacket 1102 $ses $nextRep $authKey)
+            $recvAuth = Recv-ZKTcpPacket $stream
+            if (-not $recvAuth -or $recvAuth.Length -lt 8) { return $res }
+            $code = [System.BitConverter]::ToUInt16($recvAuth, 0)
+            $rep  = [System.BitConverter]::ToUInt16($recvAuth, 6)
+        }
+
+        if ($code -ne 2000 -and $code -ne 1000) { return $res }
+        $rep = [uint16](([int]$rep + 1) -band 0xFFFF)
+
+        # ZK6 Buffered Read: CMD_DATA_WRRQ (1503) for ATTLOG (13)
+        [byte[]]$wrrqPayload = @(1, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        Send-ZKTcpPacket $stream (Build-ZKPacket 1503 $ses $rep $wrrqPayload)
+        $rep = [uint16](([int]$rep + 1) -band 0xFFFF)
+
+        $first = Recv-ZKTcpPacket $stream
+        if (-not $first -or $first.Length -lt 8) {
+            try { Send-ZKTcpPacket $stream (Build-ZKPacket 1001 $ses $rep $null) } catch {}
+            return $res
+        }
+
+        $fCode = [System.BitConverter]::ToUInt16($first, 0)
+        $rawStream = New-Object System.IO.MemoryStream
+
+        if ($fCode -eq 1501) {
+            if ($first.Length -gt 8) {
+                $rawStream.Write($first, 8, $first.Length - 8)
+            }
+            $res.Success = $true
+        } elseif ($fCode -eq 2000 -or $fCode -eq 1500) {
+            [uint32]$totalSize = 0
+            if ($fCode -eq 2000) {
+                if ($first.Length -ge 13) {
+                    $totalSize = [System.BitConverter]::ToUInt32($first, 9)
+                }
+                if ($totalSize -eq 0 -and $first.Length -ge 12) {
+                    $totalSize = [System.BitConverter]::ToUInt32($first, 8)
+                }
+            } else {
+                if ($first.Length -ge 13 -and $first[8] -eq 1) {
+                    $s9 = [System.BitConverter]::ToUInt32($first, 9)
+                    if (($s9 -ge 40 -and (($s9 - 4) % 40 -eq 0 -or ($s9 % 40 -eq 0)))) {
+                        $totalSize = $s9
+                    }
+                }
+                if ($totalSize -eq 0 -and $first.Length -ge 12) {
+                    $totalSize = [System.BitConverter]::ToUInt32($first, 8)
+                }
+                if ($totalSize -eq 0 -and $first.Length -ge 13) {
+                    $totalSize = [System.BitConverter]::ToUInt32($first, 9)
+                }
+            }
+
+            if ($totalSize -gt 0 -and $totalSize -lt 52428800) {
+                [uint32]$offsetPos = 0
+                [uint32]$maxChunk = 65472
+                while ($offsetPos -lt $totalSize) {
+                    [uint32]$remSize = $totalSize - $offsetPos
+                    [uint32]$chunkReq = if ($remSize -gt $maxChunk) { $maxChunk } else { $remSize }
+                    $rdyPayload = New-Object byte[] 8
+                    $offB = [System.BitConverter]::GetBytes($offsetPos)
+                    $lenB = [System.BitConverter]::GetBytes($chunkReq)
+                    [System.Buffer]::BlockCopy($offB, 0, $rdyPayload, 0, 4)
+                    [System.Buffer]::BlockCopy($lenB, 0, $rdyPayload, 4, 4)
+
+                    Send-ZKTcpPacket $stream (Build-ZKPacket 1504 $ses $rep $rdyPayload)
+                    $rep = [uint16](([int]$rep + 1) -band 0xFFFF)
+
+                    $cPkt = Recv-ZKTcpPacket $stream
+                    if (-not $cPkt -or $cPkt.Length -lt 8) { break }
+                    $cCode = [System.BitConverter]::ToUInt16($cPkt, 0)
+
+                    if ($cCode -eq 1501) {
+                        if ($cPkt.Length -le 8) { break }
+                        $rawStream.Write($cPkt, 8, $cPkt.Length - 8)
+                        $offsetPos += [uint32]($cPkt.Length - 8)
+                    } elseif ($cCode -eq 1500) {
+                        while ($true) {
+                            $dPkt = Recv-ZKTcpPacket $stream
+                            if (-not $dPkt -or $dPkt.Length -lt 8) { break }
+                            $dCode = [System.BitConverter]::ToUInt16($dPkt, 0)
+                            if ($dCode -eq 1501) {
+                                if ($dPkt.Length -gt 8) {
+                                    $rawStream.Write($dPkt, 8, $dPkt.Length - 8)
+                                    $offsetPos += [uint32]($dPkt.Length - 8)
+                                }
+                            } elseif ($dCode -eq 2000) {
+                                break
+                            } else {
+                                break
+                            }
+                        }
+                    } elseif ($cCode -eq 2000) {
+                        break
+                    } else {
+                        break
+                    }
+                }
+                # CMD_FREE_DATA = 1502
+                try {
+                    Send-ZKTcpPacket $stream (Build-ZKPacket 1502 $ses $rep $null)
+                    $rep = [uint16](([int]$rep + 1) -band 0xFFFF)
+                    [void](Recv-ZKTcpPacket $stream)
+                } catch {}
+            }
+            $res.Success = $true
+        }
+
+        # CMD_EXIT = 1001
+        try {
+            Send-ZKTcpPacket $stream (Build-ZKPacket 1001 $ses $rep $null)
+        } catch {}
+
+        $res.Data = $rawStream.ToArray()
+        $rawStream.Dispose()
+    } catch {
+        # Fallback to UDP in caller
+    } finally {
+        try { if ($stream) { $stream.Close() } } catch {}
+        try { if ($tcp) { $tcp.Close() } } catch {}
+    }
+    return $res
+}
+
 function Decode-ZKTime([uint32]$t) {
     $second = $t % 60; $t = [Math]::Floor($t / 60)
     $minute = $t % 60; $t = [Math]::Floor($t / 60)
@@ -678,27 +866,88 @@ Write-Host "================================================================" -F
 Write-Host ("Institution : " + $instName) -ForegroundColor Yellow
 Write-Host ("Server URL  : " + $serverUrl) -ForegroundColor Gray
 
-# Register silent background runner in Windows Startup folder so sync starts automatically on PC boot
+# Bulletproof 1-time setup: space-free permanent dir + self-updating runner + 3-layer Windows boot registration
 try {
-    $appDir = Join-Path $env:LOCALAPPDATA "DeenoraBiometric"
-    if (-not (Test-Path $appDir)) {
-        New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+    $appDir = $null
+    if ($env:PUBLIC -and (Test-Path $env:PUBLIC)) {
+        try {
+            $tryDir = Join-Path $env:PUBLIC "DeenoraBiometric"
+            if (-not (Test-Path $tryDir)) {
+                New-Item -ItemType Directory -Path $tryDir -Force -ErrorAction Stop | Out-Null
+            }
+            $probeFile = Join-Path $tryDir ".write_test"
+            [System.IO.File]::WriteAllText($probeFile, "ok")
+            Remove-Item $probeFile -Force -ErrorAction SilentlyContinue
+            $appDir = $tryDir
+        } catch {
+            $appDir = $null
+        }
     }
+    if (-not $appDir) {
+        $appDir = Join-Path $env:LOCALAPPDATA "DeenoraBiometric"
+        if (-not (Test-Path $appDir)) {
+            New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+        }
+    }
+
     $savedPs1 = Join-Path $appDir "deenora_sync_attendance.ps1"
     if ($MyInvocation.MyCommand.Path -and (Test-Path $MyInvocation.MyCommand.Path) -and ($MyInvocation.MyCommand.Path -ne $savedPs1)) {
         Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $savedPs1 -Force -ErrorAction SilentlyContinue
     }
+
+    $runCmd = Join-Path $appDir "run_deenora_sync.cmd"
+    $cmdUrlSafe = $syncScriptUrl -replace '%', '%%'
+    $cmdLines = @(
+        '@echo off',
+        ('set "PS_FILE=' + $savedPs1 + '"'),
+        ('set "TMP_FILE=' + $savedPs1 + '.tmp"'),
+        ('set "SYNC_URL=' + $cmdUrlSafe + '"'),
+        'del /f /q "%TMP_FILE%" >nul 2>&1',
+        'curl.exe -fsSL --connect-timeout 8 --max-time 20 "%SYNC_URL%" -o "%TMP_FILE%" >nul 2>&1',
+        'if not exist "%TMP_FILE%" (',
+        '  powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "try { [System.Net.ServicePointManager]::SecurityProtocol = 3072; (New-Object System.Net.WebClient).DownloadFile($env:SYNC_URL, $env:TMP_FILE) } catch {}" >nul 2>&1',
+        ')',
+        'if exist "%TMP_FILE%" (',
+        '  for %%A in ("%TMP_FILE%") do if %%~zA GTR 1000 (',
+        '    move /y "%TMP_FILE%" "%PS_FILE%" >nul 2>&1',
+        '  )',
+        ')',
+        'del /f /q "%TMP_FILE%" >nul 2>&1',
+        'if exist "%PS_FILE%" (',
+        '  powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%PS_FILE%" -BackgroundMode',
+        ')'
+    )
+    [System.IO.File]::WriteAllLines($runCmd, $cmdLines, [System.Text.Encoding]::ASCII)
+
+    # Layer 1: Windows Startup folder .vbs (fixed VBScript quoting)
     $startupVbs = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DeenoraAutoSync.vbs"
     $vbsLines = @(
         'Set WshShell = CreateObject("WScript.Shell")',
-        ('WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """"' + $savedPs1 + '"""" -BackgroundMode", 0, False')
+        ('WshShell.Run """' + $runCmd + '""", 0, False')
     )
     [System.IO.File]::WriteAllLines($startupVbs, $vbsLines, [System.Text.Encoding]::ASCII)
+
+    # Layer 2: Windows Registry HKCU Run
+    try {
+        $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        if (-not (Test-Path $regPath)) {
+            New-Item -Path $regPath -Force | Out-Null
+        }
+        $regCmd = 'wscript.exe //B //Nologo "' + $startupVbs + '"'
+        Set-ItemProperty -Path $regPath -Name "DeenoraBiometricAutoSync" -Value $regCmd -Force
+    } catch {}
+
+    # Layer 3: Windows Task Scheduler ONLOGON
+    try {
+        $trEsc = 'wscript.exe //B //Nologo \\"' + $startupVbs + '\\"'
+        $schArgs = '/Create /TN "DeenoraBiometricAutoSync" /TR "' + $trEsc + '" /SC ONLOGON /RL LIMITED /F'
+        Start-Process -FilePath "schtasks.exe" -ArgumentList $schArgs -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+    } catch {}
 
     if (-not $BackgroundMode) {
         try {
             Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
-                Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like "*deenora_sync_attendance.ps1*-BackgroundMode*" } |
+                Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like "*deenora_sync_attendance.ps1*" } |
                 ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         } catch {}
 
@@ -706,7 +955,8 @@ try {
             Start-Process "wscript.exe" -ArgumentList ('"' + $startupVbs + '"') -WindowStyle Hidden -ErrorAction SilentlyContinue
         } catch {}
 
-        Write-Host "[OK] Background Auto-Sync Service is ACTIVE! Even if you close (X) this window, attendance sync will keep running 24/7 in the background." -ForegroundColor Green
+        Write-Host ("[OK] Background Auto-Sync installed permanently in: " + $appDir) -ForegroundColor Green
+        Write-Host "[OK] 3-Layer Boot Auto-Start registered (Startup + Registry + Task Scheduler). Sync will run 24/7 even after closing this window or restarting PC." -ForegroundColor Green
     }
 } catch {}
 
@@ -717,12 +967,17 @@ Write-Host ""
 $syncedKeys = New-Object System.Collections.Generic.HashSet[string]
 $port = 4370
 $lastConnectedIp = $null
+$scanCycle = 0
 
 while ($true) {
+    $scanCycle++
     $candidateIps = New-Object System.Collections.Generic.List[string]
+    $activeSubnets = New-Object System.Collections.Generic.List[string]
+
     if ($lastConnectedIp) { $candidateIps.Add($lastConnectedIp) }
     if ($deviceIp -and -not $candidateIps.Contains($deviceIp)) { $candidateIps.Add($deviceIp) }
 
+    # Check Windows ARP table for ZKTeco MAC prefix (00-17-61)
     try {
         $arpLines = arp -a
         foreach ($line in $arpLines) {
@@ -736,22 +991,66 @@ while ($true) {
         }
     } catch {}
 
+    # Inspect all active IPv4 NICs for /24 subnets and add standard ZKTeco host IPs
+    try {
+        $nics = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()
+        foreach ($nic in $nics) {
+            if ($nic.OperationalStatus -eq [System.Net.NetworkInformation.OperationalStatus]::Up) {
+                foreach ($ipInfo in $nic.GetIPProperties().UnicastAddresses) {
+                    if ($ipInfo.Address.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork) {
+                        $ipStr = $ipInfo.Address.ToString()
+                        if (-not $ipStr.StartsWith("127.") -and -not $ipStr.StartsWith("169.254.")) {
+                            $parts = $ipStr.Split('.')
+                            if ($parts.Length -eq 4) {
+                                $sub = "" + $parts[0] + "." + $parts[1] + "." + $parts[2]
+                                if (-not $activeSubnets.Contains($sub)) {
+                                    $activeSubnets.Add($sub)
+                                }
+                                foreach ($hostNum in @(201, 202, 100, 200, 101)) {
+                                    $genIp = "" + $sub + "." + $hostNum
+                                    if (-not $candidateIps.Contains($genIp)) {
+                                        $candidateIps.Add($genIp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch {}
+
     foreach ($tip in @("192.168.0.201", "192.168.1.201", "192.168.0.202", "192.168.1.202")) {
         if (-not $candidateIps.Contains($tip)) { $candidateIps.Add($tip) }
     }
 
     $activeIp = $null
-    $activeSession = [uint16]0
-    $activeReply = [uint16]0
-    $udp = New-Object System.Net.Sockets.UdpClient
-    $udp.Client.ReceiveTimeout = 1800
-    $udp.Client.SendTimeout = 1800
+    $raw = $null
 
     foreach ($tip in $candidateIps) {
+        # 1. Try TCP Buffered Reader first (supports unlimited >25 punches)
+        $tcpRes = Read-ZKTcpAttendance $tip $port
+        if ($tcpRes.Success) {
+            $activeIp = $tip
+            $raw = $tcpRes.Data
+            if ($lastConnectedIp -ne $activeIp) {
+                Write-Host ("[OK] Connected to ZKTeco " + $activeIp + " (TCP Buffered)") -ForegroundColor Green
+                $lastConnectedIp = $activeIp
+            }
+            break
+        }
+
+        # 2. Fallback to UDP Reader on Port 4370
+        $udp = $null
         try {
+            $udp = New-Object System.Net.Sockets.UdpClient
+            $udp.Client.ReceiveTimeout = 1800
+            $udp.Client.SendTimeout = 1800
+            $udp.Client.ReceiveBufferSize = 262144
+
             $ep = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($tip), $port)
             $pkt = Build-ZKPacket 1000 0 0 $null
-            $udp.Send($pkt, $pkt.Length, $ep) | Out-Null
+            [void]$udp.Send($pkt, $pkt.Length, $ep)
             $rem = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
             $recv = $udp.Receive([ref]$rem)
             if ($recv -and $recv.Length -ge 8) {
@@ -763,7 +1062,7 @@ while ($true) {
                     $authKey = Make-ZKCommKey 0 $ses
                     $nextRep = [uint16](([int]$rep + 1) -band 0xFFFF)
                     $authPkt = Build-ZKPacket 1102 $ses $nextRep $authKey
-                    $udp.Send($authPkt, $authPkt.Length, $ep) | Out-Null
+                    [void]$udp.Send($authPkt, $authPkt.Length, $ep)
                     $recvAuth = $udp.Receive([ref]$rem)
                     if ($recvAuth -and $recvAuth.Length -ge 8) {
                         $code = [System.BitConverter]::ToUInt16($recvAuth, 0)
@@ -776,121 +1075,131 @@ while ($true) {
                     $activeSession = $ses
                     $activeReply = [uint16](([int]$rep + 1) -band 0xFFFF)
                     if ($lastConnectedIp -ne $activeIp) {
-                        Write-Host ("[OK] Connected to ZKTeco " + $activeIp) -ForegroundColor Green
+                        Write-Host ("[OK] Connected to ZKTeco " + $activeIp + " (UDP)") -ForegroundColor Green
                         $lastConnectedIp = $activeIp
                     }
-                    break
-                }
-            }
-        } catch {}
-    }
 
-    if ($activeIp) {
-        try {
-            $ep = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($activeIp), $port)
-            $udp.Client.ReceiveTimeout = 2500
+                    $udp.Client.ReceiveTimeout = 2500
+                    $rrqPkt = Build-ZKPacket 13 $activeSession $activeReply $null
+                    $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
+                    [void]$udp.Send($rrqPkt, $rrqPkt.Length, $ep)
 
-            # CMD_ATTLOG_RRQ = 13
-            $rrqPkt = Build-ZKPacket 13 $activeSession $activeReply $null
-            $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
-            $udp.Send($rrqPkt, $rrqPkt.Length, $ep) | Out-Null
-
-            $rem = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
-            $first = $udp.Receive([ref]$rem)
-            $rawStream = New-Object System.IO.MemoryStream
-
-            if ($first -and $first.Length -ge 8) {
-                $fCode = [System.BitConverter]::ToUInt16($first, 0)
-                if ($fCode -eq 2000 -and $first.Length -gt 8) {
-                    $rawStream.Write($first, 8, $first.Length - 8)
-                } elseif ($fCode -eq 1500) {
-                    # CMD_PREPARE_DATA (1500) -> Read 1501 data chunks until CMD_ACK_OK (2000)
-                    while ($true) {
-                        try {
-                            $chunk = $udp.Receive([ref]$rem)
-                            if (-not $chunk -or $chunk.Length -lt 8) { break }
-                            $cCode = [System.BitConverter]::ToUInt16($chunk, 0)
-                            if ($cCode -eq 1501 -and $chunk.Length -gt 8) {
-                                $rawStream.Write($chunk, 8, $chunk.Length - 8)
-                            } elseif ($cCode -eq 2000) {
-                                break
-                            }
-                        } catch {
-                            break
-                        }
-                    }
-                }
-            }
-
-            try {
-                $exitPkt = Build-ZKPacket 1001 $activeSession $activeReply $null
-                $udp.Send($exitPkt, $exitPkt.Length, $ep) | Out-Null
-            } catch {}
-            $udp.Close()
-
-            $raw = $rawStream.ToArray()
-            $rawStream.Dispose()
-
-            if ($raw -and $raw.Length -ge 40) {
-                $offset = if (($raw.Length - 4) % 40 -eq 0) { 4 } else { 0 }
-                $cutoffDate = (Get-Date).AddDays(-3).ToString("yyyy-MM-dd")
-                $newLogs = @()
-
-                for ($pos = $offset; ($pos + 40) -le $raw.Length; $pos += 40) {
-                    $idEnd = $pos + 2
-                    while ($idEnd -lt ($pos + 26) -and $raw[$idEnd] -ne 0) {
-                        $idEnd++
-                    }
-                    $userIdStr = ""
-                    if ($idEnd -gt ($pos + 2)) {
-                        $userIdStr = [System.Text.Encoding]::ASCII.GetString($raw, $pos + 2, $idEnd - ($pos + 2)).Trim()
-                    }
-                    if ([string]::IsNullOrWhiteSpace($userIdStr)) {
-                        $uidFallback = [System.BitConverter]::ToUInt16($raw, $pos)
-                        if ($uidFallback -gt 0) { $userIdStr = "" + $uidFallback }
-                    }
-
-                    $timeVal = [System.BitConverter]::ToUInt32($raw, $pos + 27)
-                    if ($userIdStr -and $timeVal -gt 0) {
-                        $dtStr = Decode-ZKTime $timeVal
-                        if ($dtStr.Length -ge 10 -and $dtStr.Substring(0, 10) -ge $cutoffDate) {
-                            $syncKey = $userIdStr + "_" + $dtStr
-                            if (-not $syncedKeys.Contains($syncKey)) {
-                                $newLogs += @{
-                                    userId = $userIdStr
-                                    checkTime = $dtStr
+                    $first = $udp.Receive([ref]$rem)
+                    $rawStream = New-Object System.IO.MemoryStream
+                    if ($first -and $first.Length -ge 8) {
+                        $fCode = [System.BitConverter]::ToUInt16($first, 0)
+                        if (($fCode -eq 2000 -or $fCode -eq 1501 -or $fCode -eq 2002) -and $first.Length -gt 8) {
+                            $rawStream.Write($first, 8, $first.Length - 8)
+                        } elseif ($fCode -eq 1500) {
+                            while ($true) {
+                                try {
+                                    $chunk = $udp.Receive([ref]$rem)
+                                    if (-not $chunk -or $chunk.Length -lt 8) { break }
+                                    $cCode = [System.BitConverter]::ToUInt16($chunk, 0)
+                                    if (($cCode -eq 1501 -or $cCode -eq 2002) -and $chunk.Length -gt 8) {
+                                        $rawStream.Write($chunk, 8, $chunk.Length - 8)
+                                    } elseif ($cCode -eq 2000) {
+                                        break
+                                    }
+                                } catch {
+                                    break
                                 }
                             }
                         }
                     }
+
+                    try {
+                        $exitPkt = Build-ZKPacket 1001 $activeSession $activeReply $null
+                        [void]$udp.Send($exitPkt, $exitPkt.Length, $ep)
+                    } catch {}
+
+                    $raw = $rawStream.ToArray()
+                    $rawStream.Dispose()
+                    $udp.Close()
+                    break
+                }
+            }
+            $udp.Close()
+        } catch {
+            try { if ($udp) { $udp.Close() } } catch {}
+        }
+    }
+
+    if ($activeIp) {
+        if ($raw -and $raw.Length -ge 40) {
+            $declaredSize = [System.BitConverter]::ToUInt32($raw, 0)
+            $offset = if ((($raw.Length - 4) % 40 -eq 0) -or ($declaredSize -ge 40 -and $declaredSize -le ($raw.Length + 40) -and ($declaredSize % 40 -eq 0))) { 4 } else { 0 }
+            $cutoffDate = (Get-Date).AddDays(-7).ToString("yyyy-MM-dd")
+            $newLogs = New-Object System.Collections.ArrayList
+
+            for ($pos = $offset; ($pos + 40) -le $raw.Length; $pos += 40) {
+                $idEnd = $pos + 2
+                while ($idEnd -lt ($pos + 26) -and $raw[$idEnd] -ne 0) {
+                    $idEnd++
+                }
+                $userIdStr = ""
+                if ($idEnd -gt ($pos + 2)) {
+                    $userIdStr = [System.Text.Encoding]::ASCII.GetString($raw, $pos + 2, $idEnd - ($pos + 2)).Trim()
+                }
+                if ([string]::IsNullOrWhiteSpace($userIdStr)) {
+                    $uidFallback = [System.BitConverter]::ToUInt16($raw, $pos)
+                    if ($uidFallback -gt 0) { $userIdStr = "" + $uidFallback }
                 }
 
-                if ($newLogs.Count -gt 0) {
-                    try {
-                        $postUrl = $serverUrl + "/api/iclock?sn=PC_AGENT_" + $institutionId + "&institution_id=" + $institutionId
-                        $bodyObj = @{
-                            institution_id = $institutionId
-                            sn = ("PC_AGENT_" + $institutionId)
-                            logs = $newLogs
+                $timeVal = [System.BitConverter]::ToUInt32($raw, $pos + 27)
+                if ($userIdStr -and $timeVal -gt 0) {
+                    $dtStr = Decode-ZKTime $timeVal
+                    if ($dtStr.Length -ge 10 -and $dtStr.Substring(0, 10) -ge $cutoffDate) {
+                        $syncKey = $userIdStr + "_" + $dtStr
+                        if (-not $syncedKeys.Contains($syncKey)) {
+                            [void]$newLogs.Add(@{
+                                userId = $userIdStr
+                                checkTime = $dtStr
+                            })
                         }
-                        $jsonBody = ConvertTo-Json $bodyObj -Depth 5 -Compress
-                        $resp = Invoke-RestMethod -Uri $postUrl -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($jsonBody)) -TimeoutSec 15
-                        foreach ($item in $newLogs) {
-                            $k = $item.userId + "_" + $item.checkTime
-                            [void]$syncedKeys.Add($k)
-                            Write-Host ("[PUNCH SYNCED] ID: " + $item.userId + " | Time: " + $item.checkTime + " -> Uploaded to Deenora!") -ForegroundColor Green
-                        }
-                    } catch {
-                        Write-Host ("[!] Cloud upload retry pending: " + $_.Exception.Message) -ForegroundColor Yellow
                     }
                 }
             }
-        } catch {
-            try { $udp.Close() } catch {}
+
+            if ($newLogs.Count -gt 0) {
+                try {
+                    $postUrl = $serverUrl + "/api/iclock?sn=PC_AGENT_" + $institutionId + "&institution_id=" + $institutionId
+                    $bodyObj = @{
+                        institution_id = $institutionId
+                        sn = ("PC_AGENT_" + $institutionId)
+                        logs = @($newLogs.ToArray())
+                    }
+                    $jsonBody = ConvertTo-Json $bodyObj -Depth 5 -Compress
+                    $resp = Invoke-RestMethod -Uri $postUrl -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($jsonBody)) -TimeoutSec 15
+                    foreach ($item in $newLogs) {
+                        $k = $item.userId + "_" + $item.checkTime
+                        [void]$syncedKeys.Add($k)
+                        Write-Host ("[PUNCH SYNCED] ID: " + $item.userId + " | Time: " + $item.checkTime + " -> Uploaded to Deenora!") -ForegroundColor Green
+                    }
+                } catch {
+                    Write-Host ("[!] Cloud upload retry pending: " + $_.Exception.Message) -ForegroundColor Yellow
+                }
+            }
         }
     } else {
-        try { $udp.Close() } catch {}
-        Write-Host "[*] Scanning for ZKTeco machine on local network (4370/UDP)..." -ForegroundColor DarkGray
+        Write-Host "[*] Scanning for ZKTeco machine on local network (4370 TCP/UDP)..." -ForegroundColor DarkGray
+        if (($scanCycle -eq 1 -or ($scanCycle % 3 -eq 0)) -and $activeSubnets.Count -gt 0) {
+            try {
+                $probeUdp = New-Object System.Net.Sockets.UdpClient
+                $probePkt = Build-ZKPacket 1000 0 0 $null
+                foreach ($sub in $activeSubnets) {
+                    for ($h = 2; $h -le 254; $h++) {
+                        try {
+                            $probeIp = $sub + "." + $h
+                            $probeEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($probeIp), $port)
+                            [void]$probeUdp.Send($probePkt, $probePkt.Length, $probeEp)
+                        } catch {}
+                    }
+                }
+                $probeUdp.Close()
+                Start-Sleep -Milliseconds 400
+            } catch {}
+        }
     }
 
     Start-Sleep -Seconds 4
@@ -916,11 +1225,16 @@ while ($true) {
       'echo       DEENORA - ZKTECO K40/K14 LIVE ATTENDANCE SYNC ENGINE',
       'echo ================================================================',
       'echo [*] Connecting to Deenora Cloud Server...',
-      'set "PS_FILE=%TEMP%\\deenora_sync_attendance.ps1"',
+      'set "APP_DIR=%PUBLIC%\\DeenoraBiometric"',
+      'if not exist "%APP_DIR%" mkdir "%APP_DIR%" >nul 2>&1',
+      'if not exist "%APP_DIR%" set "APP_DIR=%LOCALAPPDATA%\\DeenoraBiometric"',
+      'if not exist "%APP_DIR%" mkdir "%APP_DIR%" >nul 2>&1',
+      'set "PS_FILE=%APP_DIR%\\deenora_sync_attendance.ps1"',
+      `set "SYNC_URL=${syncScriptUrl}"`,
       'del /f /q "%PS_FILE%" >nul 2>&1',
-      `curl.exe -sSL "${syncScriptUrl}" -o "%PS_FILE%"`,
+      'curl.exe -fsSL "%SYNC_URL%" -o "%PS_FILE%"',
       'if not exist "%PS_FILE%" (',
-      `  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; (New-Object System.Net.WebClient).DownloadFile('${syncScriptUrl}', '%PS_FILE%')"`,
+      '  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; (New-Object System.Net.WebClient).DownloadFile($env:SYNC_URL, $env:PS_FILE)"',
       ')',
       'if exist "%PS_FILE%" (',
       '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_FILE%"',

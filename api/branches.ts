@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check current institution to determine root
       const { data: currentInst, error: currErr } = await supabase
         .from('institutions')
-        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
+        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance, subscription_end')
         .eq('id', institutionId)
         .single();
 
@@ -34,12 +34,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: 'Institution not found' });
       }
 
-      const rootId = (currentInst.config_json as any)?.parent_institution_id || currentInst.id;
+      const parseCfg = (cfg: any): Record<string, any> => {
+        if (!cfg) return {};
+        if (typeof cfg === 'string') {
+          try { return JSON.parse(cfg) || {}; } catch { return {}; }
+        }
+        return typeof cfg === 'object' ? { ...cfg } : {};
+      };
+
+      const rootId = parseCfg(currentInst.config_json)?.parent_institution_id || currentInst.id;
 
       // Fetch Root Institution
       const { data: rootInst } = await supabase
         .from('institutions')
-        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
+        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance, subscription_end')
         .eq('id', rootId)
         .single();
 
@@ -50,12 +58,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fetch Child Branches
       const { data: childBranches } = await supabase
         .from('institutions')
-        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance')
+        .select('id, name, address, phone, contact_email, logo_url, institution_type, theme, status, is_active, config_json, created_at, sms_balance, balance, subscription_end')
         .filter('config_json->>parent_institution_id', 'eq', rootId);
+
+      // Auto-heal any child branches that remain deactivated or in trial while the main account is active
+      const rootCfg = parseCfg(rootInst.config_json);
+      const isRootActive = rootInst.is_active === true && rootInst.status !== 'suspended';
+      const healedChildBranches = await Promise.all(
+        (childBranches || []).map(async (b: any) => {
+          const bCfg = parseCfg(b.config_json);
+          const isManuallyRestricted = bCfg.branch_manually_disabled === true || b.status === 'suspended';
+          const needsActivation = isRootActive && !isManuallyRestricted && (!b.is_active || b.status === 'trial');
+
+          if (needsActivation) {
+            const syncedCfg = {
+              ...bCfg,
+              ...(rootCfg.paid_months ? { paid_months: rootCfg.paid_months } : {}),
+              ...(rootCfg.manual_activation_month ? { manual_activation_month: rootCfg.manual_activation_month } : {}),
+              ...(rootCfg.package_name ? { package_name: rootCfg.package_name } : {}),
+              ...(rootCfg.package_rate ? { package_rate: rootCfg.package_rate } : {}),
+              ...(rootCfg.subscription_type ? { subscription_type: rootCfg.subscription_type } : {})
+            };
+            const healPayload: Record<string, any> = {
+              is_active: true,
+              status: 'active',
+              config_json: syncedCfg,
+              ...(rootInst.subscription_end ? { subscription_end: rootInst.subscription_end } : {})
+            };
+            try {
+              await supabase.from('institutions').update(healPayload).eq('id', b.id);
+              return { ...b, ...healPayload };
+            } catch (healErr) {
+              console.warn('Non-fatal branch auto-heal error:', healErr);
+              return { ...b, is_active: true, status: 'active', config_json: syncedCfg };
+            }
+          }
+          return b;
+        })
+      );
 
       const allBranchRecords = [
         { ...rootInst, isMain: true },
-        ...(childBranches || []).map(b => ({ ...b, isMain: false }))
+        ...healedChildBranches.map(b => ({ ...b, isMain: false }))
       ];
 
       const allIds = allBranchRecords.map(b => b.id);
@@ -100,6 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         theme: b.theme || 'default',
         status: b.status || 'active',
         is_active: b.is_active,
+        subscription_end: b.subscription_end || null,
         config_json: b.config_json || {},
         studentCount: studentCountMap[b.id] || 0,
         teacherCount: teacherCountMap[b.id] || 0,

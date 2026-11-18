@@ -215,6 +215,7 @@ export const useAuth = () => {
                       institution_type: found.institution_type,
                       status: found.status,
                       is_active: found.is_active,
+                      subscription_end: found.subscription_end || null,
                       balance: found.balance,
                       sms_balance: found.sms_balance,
                       voice_sender_id: found.voice_sender_id,
@@ -257,7 +258,7 @@ export const useAuth = () => {
               }
             }
 
-            // Support branch allocated balance, signature, logo, and photo module inheritance from parent
+            // Support branch allocated balance, signature, logo, photo module, and subscription inheritance from parent
             const branchCfg: any = (singleInstitution.config_json && typeof singleInstitution.config_json === 'object')
               ? singleInstitution.config_json
               : {};
@@ -266,7 +267,7 @@ export const useAuth = () => {
               try {
                 const { data: parentInst } = await supabase
                   .from('institutions')
-                  .select('sms_balance, balance, logo_url, config_json')
+                  .select('sms_balance, balance, logo_url, config_json, is_active, status, subscription_end')
                   .eq('id', parentInstId)
                   .maybeSingle();
                 if (parentInst) {
@@ -285,12 +286,41 @@ export const useAuth = () => {
                   }
                   parentCfg = (parentCfg && typeof parentCfg === 'object') ? parentCfg : {};
 
+                  const isBranchManuallyRestricted =
+                    branchCfg.branch_manually_disabled === true || singleInstitution.status === 'suspended';
+
+                  if (parentInst.is_active === true && parentInst.status !== 'suspended' && !isBranchManuallyRestricted) {
+                    singleInstitution.is_active = true;
+                    if (singleInstitution.status !== 'active') {
+                      singleInstitution.status = 'active';
+                    }
+                    if (parentInst.subscription_end) {
+                      singleInstitution.subscription_end = singleInstitution.subscription_end || parentInst.subscription_end;
+                    }
+                  }
+
                   const mergedConfig: any = { ...branchCfg };
                   if (!mergedConfig.signature_url && parentCfg.signature_url) {
                     mergedConfig.signature_url = parentCfg.signature_url;
                     if (!mergedConfig.signature_height && parentCfg.signature_height) {
                       mergedConfig.signature_height = parentCfg.signature_height;
                     }
+                  }
+                  if (Array.isArray(parentCfg.paid_months) && parentCfg.paid_months.length > 0) {
+                    const branchPaid = Array.isArray(mergedConfig.paid_months) ? mergedConfig.paid_months : [];
+                    mergedConfig.paid_months = Array.from(new Set([...branchPaid, ...parentCfg.paid_months])).sort();
+                  }
+                  if (parentCfg.manual_activation_month && !mergedConfig.manual_activation_month) {
+                    mergedConfig.manual_activation_month = parentCfg.manual_activation_month;
+                  }
+                  if (parentCfg.package_name && !mergedConfig.package_name) {
+                    mergedConfig.package_name = parentCfg.package_name;
+                  }
+                  if (parentCfg.package_rate !== undefined && mergedConfig.package_rate === undefined) {
+                    mergedConfig.package_rate = parentCfg.package_rate;
+                  }
+                  if (parentCfg.subscription_type && !mergedConfig.subscription_type) {
+                    mergedConfig.subscription_type = parentCfg.subscription_type;
                   }
                   if (parentCfg.modules?.student_photo === true) {
                     mergedConfig.modules = {

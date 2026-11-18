@@ -146,7 +146,7 @@ async function generateAndQueueCommandsForDevice(instId: string, sn: string): Pr
   ]);
 
   const commands: string[] = [];
-  (students || []).forEach((st: any, idx: number) => {
+  (students || []).forEach((st: any) => {
     if (st.is_active === false) return;
     let rawBio = (st.biometric_id || '').toString().trim();
     if (!rawBio && st.notes) {
@@ -155,9 +155,10 @@ async function generateAndQueueCommandsForDevice(instId: string, sn: string): Pr
         rawBio = (parsed?.biometric_id || '').toString().trim();
       } catch (e) {}
     }
-    if (!rawBio) {
-      rawBio = (st.roll !== null && st.roll !== undefined) ? String(st.roll).trim() : String(idx + 1);
+    if (!rawBio && st.roll !== null && st.roll !== undefined) {
+      rawBio = String(st.roll).trim();
     }
+    if (!rawBio) return;
     const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
     if (!cleanBioId) return;
 
@@ -1002,12 +1003,24 @@ export default async function handler(req: any, res: any) {
       res.setHeader('Content-Type', 'text/plain');
 
       let rawData = req.body;
+      if (Buffer.isBuffer(rawData)) {
+        rawData = rawData.toString('utf-8');
+      }
+      if (typeof rawData === 'string') {
+        const trimmed = rawData.trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          try {
+            rawData = JSON.parse(trimmed);
+          } catch {
+            // keep as plain text
+          }
+        }
+      }
+      const parsedBodyObj: any = (typeof rawData === 'object' && rawData !== null) ? rawData : null;
 
-      // Handle JSON payload, Buffer, or form-urlencoded text lines
+      // Handle JSON payload, Array, single-object logs, or form-urlencoded text lines
       if (typeof rawData === 'object' && rawData !== null) {
-        if (Buffer.isBuffer(rawData)) {
-          rawData = rawData.toString('utf-8');
-        } else if (Array.isArray(rawData)) {
+        if (Array.isArray(rawData)) {
           rawData = rawData.map((item: any) => {
             const uId = item.userId || item.user_id || item.pin || item.id || '';
             const cTime = item.checkTime || item.check_time || item.time || item.timestamp || '';
@@ -1019,6 +1032,11 @@ export default async function handler(req: any, res: any) {
             const cTime = item.checkTime || item.check_time || item.time || item.timestamp || '';
             return `${uId}\t${cTime}`;
           }).join('\n');
+        } else if (rawData.logs && typeof rawData.logs === 'object' && rawData.logs !== null) {
+          const item = rawData.logs;
+          const uId = item.userId || item.user_id || item.pin || item.id || '';
+          const cTime = item.checkTime || item.check_time || item.time || item.timestamp || '';
+          rawData = `${uId}\t${cTime}`;
         } else if (rawData.userId || rawData.user_id || rawData.pin) {
           const uId = rawData.userId || rawData.user_id || rawData.pin || '';
           const cTime = rawData.checkTime || rawData.check_time || rawData.time || rawData.timestamp || '';
@@ -1030,8 +1048,6 @@ export default async function handler(req: any, res: any) {
           const keys = Object.keys(rawData);
           rawData = keys.join('\n');
         }
-      } else if (Buffer.isBuffer(rawData)) {
-        rawData = rawData.toString('utf-8');
       }
 
       if (!rawData || typeof rawData !== 'string') {
@@ -1053,7 +1069,7 @@ export default async function handler(req: any, res: any) {
       const reqInstId = (
         query.institution_id || query.institutionId || query.inst ||
         req.headers['x-institution-id'] || req.headers['institution-id'] ||
-        (typeof req.body === 'object' && req.body !== null && (req.body.institution_id || req.body.institutionId || req.body.inst))
+        (parsedBodyObj && (parsedBodyObj.institution_id || parsedBodyObj.institutionId || parsedBodyObj.inst))
       )?.toString().trim();
 
       if (reqInstId) {

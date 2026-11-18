@@ -106,13 +106,17 @@ export interface QBSavedPaper {
 // BOARDS & PRESETS
 // ----------------------------------------------------
 export const SUPPORTED_BOARDS = [
-  { id: 'all', name: 'সকল বোর্ড (সকল ৩৮৫টি বই)' },
-  { id: 'nctb', name: 'NCTB প্রাথমিক ও মাধ্যমিক স্কুল (সরকারি)' },
+  { id: 'all', name: 'সকল বোর্ড (সকল পাঠ্যবই)' },
   { id: 'noorani_ctg', name: 'নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ (চট্টগ্রাম)' },
   { id: 'noorani_jatrabari', name: "নূরানী তা'লিমুল কুরআন বোর্ড বাংলাদেশ (যাত্রাবাড়ী)" },
-  { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (কওমি)' },
+  { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (বেফাক)' },
+  { id: 'hayatul_ulya', name: 'আল-হাইআতুল উলইয়া লিল-জামি‘আতিল কওমিয়্যাহ' },
   { id: 'alia', name: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড (ইবতেদায়ী ও দাখিল)' },
-  { id: 'jamjam', name: 'জমজম নুরানী তালিমুল কুরআন বোর্ড বাংলাদেশ' },
+  { id: 'nctb', name: 'এনসিটিবি সাধারণ স্কুল ও কিন্ডারগার্টেন (NCTB)' },
+  { id: 'kawmi', name: 'কওমি মাদ্রাসা শিক্ষা বোর্ড (দারুল উলুম নিসাব)' },
+  { id: 'hafizi', name: 'হাফিজি ও তাহফিজুল কুরআন শিক্ষা বোর্ড' },
+  { id: 'english_medium', name: 'ইংলিশ মিডিয়াম ও ক্যাডেট মাদ্রাসা কারিকুলাম' },
+  { id: 'jamjam', name: 'জমজম নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ' },
   { id: 'salsabil_jamjam', name: 'সালসাবিল, ইতমিনান ও অন্যান্য নূরানী বোর্ড' },
 ];
 
@@ -137,6 +141,7 @@ export const SUPPORTED_CLASSES = [
   'মারহালাতুল মুতাওয়াসসিতাহ (Mutawassitah)',
   'মারহালাতুল সানাবিয়্যাহ আম্মাহ (Sanawiyyah)',
   'মারহালাতুল ফযীলত ও তাকমীল',
+  'দাওরায়ে হাদিস (তাকমীল)',
   'ইবতেদায়ী ১ম শ্রেণি',
   'ইবতেদায়ী ২য় শ্রেণি',
   'ইবতেদায়ী ৩য় শ্রেণি',
@@ -152,24 +157,32 @@ export const SUPPORTED_CLASSES = [
 export const getSupportedBoards = (lang: string = 'bn') => {
   if (lang === 'en') {
     return [
-      { id: 'all', name: 'All Boards (All 385 Books)' },
-      { id: 'nctb', name: 'NCTB Primary & Secondary School (Govt)' },
-      { id: 'noorani_ctg', name: 'Noorani Talimul Quran Board (Chittagong)' },
+      { id: 'all', name: 'All Boards (Complete Library)' },
+      { id: 'noorani_ctg', name: 'Noorani Talimul Quran Board (Chattogram)' },
       { id: 'noorani_jatrabari', name: 'Noorani Talimul Quran Board (Jatrabari)' },
-      { id: 'befaq', name: 'Befaqul Madarisil Arabia Bangladesh (Qawmi)' },
+      { id: 'befaq', name: 'Befaqul Madarisil Arabia Bangladesh (Befaq)' },
+      { id: 'hayatul_ulya', name: 'Al-Haiatul Ulya Lil-Jamiatil Qawmia' },
       { id: 'alia', name: 'Madrasah Education Board (Ibtedayi & Dakhil)' },
+      { id: 'nctb', name: 'NCTB General School & Kindergarten' },
+      { id: 'kawmi', name: 'Kawmi Madrasah Curriculum (Darse Nizami)' },
+      { id: 'hafizi', name: 'Hafizi & Tahfizul Quran Board' },
+      { id: 'english_medium', name: 'English Medium & Cadet Madrasah' },
       { id: 'jamjam', name: 'Jamjam Noorani Talimul Quran Board' },
       { id: 'salsabil_jamjam', name: 'Salsabil, Itminan & Other Noorani Boards' },
     ];
   }
   return [
-    { id: 'all', name: 'সকল বোর্ড (সকল ৩৮৫টি বই)' },
-    { id: 'nctb', name: 'এনসিটিবি প্রাথমিক ও মাধ্যমিক স্কুল (সরকারি)' },
+    { id: 'all', name: 'সকল বোর্ড (সকল পাঠ্যবই)' },
     { id: 'noorani_ctg', name: 'নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ (চট্টগ্রাম)' },
     { id: 'noorani_jatrabari', name: "নূরানী তা'লিমুল কুরআন বোর্ড বাংলাদেশ (যাত্রাবাড়ী)" },
-    { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (কওমি)' },
+    { id: 'befaq', name: 'বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ (বেফাক)' },
+    { id: 'hayatul_ulya', name: 'আল-হাইআতুল উলইয়া লিল-জামি‘আতিল কওমিয়্যাহ' },
     { id: 'alia', name: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড (ইবতেদায়ী ও দাখিল)' },
-    { id: 'jamjam', name: 'জমজম নুরানী তালিমুল কুরআন বোর্ড বাংলাদেশ' },
+    { id: 'nctb', name: 'এনসিটিবি সাধারণ স্কুল ও কিন্ডারগার্টেন (NCTB)' },
+    { id: 'kawmi', name: 'কওমি মাদ্রাসা শিক্ষা বোর্ড (দারুল উলুম নিসাব)' },
+    { id: 'hafizi', name: 'হাফিজি ও তাহফিজুল কুরআন শিক্ষা বোর্ড' },
+    { id: 'english_medium', name: 'ইংলিশ মিডিয়াম ও ক্যাডেট মাদ্রাসা কারিকুলাম' },
+    { id: 'jamjam', name: 'জমজম নূরানী তালিমুল কুরআন বোর্ড বাংলাদেশ' },
     { id: 'salsabil_jamjam', name: 'সালসাবিল, ইতমিনান ও অন্যান্য নূরানী বোর্ড' },
   ];
 };
@@ -214,6 +227,74 @@ export const getClassesForBoard = (boardId: string, lang: string = 'bn'): string
       'মারহালাতুল মুতাওয়াসসিতাহ',
       'মারহালাতুল সানাবিয়্যাহ আম্মাহ',
       'মারহালাতুল ফযীলত ও তাকমীল'
+    ];
+  }
+  if (norm === 'hayatul_ulya') {
+    return isEn ? [
+      'Dawra-e-Hadith (Takmil)',
+      'Ulumul Hadith & Tafsir',
+      'Ifta & Fiqh Department'
+    ] : [
+      'দাওরায়ে হাদিস (তাকমীল)',
+      'উলুমুল হাদিস ও তাফসীর',
+      'ইফতা ও ফিকহ বিভাগ'
+    ];
+  }
+  if (norm === 'kawmi') {
+    return isEn ? [
+      'Tahfizul Quran',
+      'Ibtedaiyyah (Class 1-5)',
+      'Mizan & Nahbemir (Mutawassitah)',
+      'Hedayatun Nahw & Kafia (Sanawiyyah)',
+      'Sharhe Jami & Jalalain (Fazilat)',
+      'Dawra-e-Hadith (Takmil)'
+    ] : [
+      'তাহফিজুল কুরআন',
+      'ইবতেদাইয়্যাহ (১ম-৫ম)',
+      'মিযান ও নাহবেমীর (মুতাওয়াসসিতাহ)',
+      'হেদায়াতুন নাহু ও কাফিয়া (সানাবিয়্যাহ)',
+      'শরহে জামি ও জালালাইন (ফযীলত)',
+      'দাওরায়ে হাদিস (তাকমীল)'
+    ];
+  }
+  if (norm === 'hafizi') {
+    return isEn ? [
+      'Noorani Qaida & Makhraj',
+      'Ampara & Nazera Group',
+      'Hifzul Quran (Para 1-10)',
+      'Hifzul Quran (Para 11-20)',
+      'Hifzul Quran (Complete 30 Para)',
+      'Tajweed & Masnoon Dua'
+    ] : [
+      'নূরানী কায়দা ও মাখরাজ',
+      'আমপারা ও নাজেরা বিভাগ',
+      'হিফজুল কুরআন (১ম-১০ম পারা)',
+      'হিফজুল কুরআন (১১তম-২০তম পারা)',
+      'হিফজুল কুরআন (পূর্ণ ৩০ পারা)',
+      'তাজবীদ ও মাসনূন দোয়া'
+    ];
+  }
+  if (norm === 'english_medium') {
+    return isEn ? [
+      'Playgroup',
+      'Nursery / KG',
+      'Grade 1 (Standard 1)',
+      'Grade 2 (Standard 2)',
+      'Grade 3 (Standard 3)',
+      'Grade 4 (Standard 4)',
+      'Grade 5 (Standard 5)',
+      'Grade 6 - 8 (Junior Secondary)',
+      'O-Level / IGCSE Islamic & General'
+    ] : [
+      'Playgroup (প্লে-গ্রুপ)',
+      'Nursery / KG (নার্সারি)',
+      'Grade 1 (প্রথম শ্রেণি)',
+      'Grade 2 (দ্বিতীয় শ্রেণি)',
+      'Grade 3 (তৃতীয় শ্রেণি)',
+      'Grade 4 (চতুর্থ শ্রেণি)',
+      'Grade 5 (পঞ্চম শ্রেণি)',
+      'Grade 6-8 (জুনিয়র সেকেন্ডারি)',
+      'O-Level / IGCSE (ও-লেভেল)'
     ];
   }
   if (norm === 'alia') {
@@ -270,7 +351,7 @@ export const getClassesForBoard = (boardId: string, lang: string = 'bn'): string
   }
   return isEn ? [
     'Play', 'Nursery', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
-    'Class 6', 'Class 7', 'Class 8', 'Class 9-10', 'Tahfizul Quran', 'Dakhil'
+    'Class 6', 'Class 7', 'Class 8', 'Class 9-10', 'Tahfizul Quran', 'Dakhil', 'Dawra-e-Hadith'
   ] : SUPPORTED_CLASSES;
 };
 
@@ -806,10 +887,348 @@ export const SEED_BOOKS: QBBook[] = [
     board: 'salsabil_jamjam',
     class_name: 'প্লে (Play)',
     title: 'ছোটদের দ্বীন শিক্ষা ও হরফ পরিচিতি',
-    subject_code: '০০১',
+    subject_code: 'S-001',
     source_type: 'qawmi',
-    total_chapters: 3,
-    total_questions: 35,
+    total_chapters: 4,
+    total_questions: 36,
+  },
+  {
+    id: 'b-salsabil-nursery-qaida',
+    board: 'salsabil_jamjam',
+    class_name: 'নার্সারি (Nursery)',
+    title: 'সালসাবিল নূরানী কায়দা ও মাসনূন দোয়া',
+    subject_code: 'S-002',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 40,
+  },
+  {
+    id: 'b-salsabil-class1-quran',
+    board: 'salsabil_jamjam',
+    class_name: 'প্রথম শ্রেণি (Class 1)',
+    title: 'সালসাবিল কুরআন শিক্ষা ও তাজবীদ ১ম শ্রেণি',
+    subject_code: 'S-101',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 44,
+  },
+  {
+    id: 'b-jamjam-play-qaida',
+    board: 'jamjam',
+    class_name: 'প্লে (Play)',
+    title: 'জমজম নূরানী হরফ ও কায়দা শিক্ষা (প্লে)',
+    subject_code: 'JM-001',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 36,
+  },
+  {
+    id: 'b-jamjam-nursery-ampara',
+    board: 'jamjam',
+    class_name: 'নার্সারি (Nursery)',
+    title: 'জমজম নূরানী আমপারা ও আদব শিক্ষা (নার্সারি)',
+    subject_code: 'JM-002',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 40,
+  },
+  {
+    id: 'b-befaq-fazilat-mishkat',
+    board: 'befaq',
+    class_name: 'মারহালাতুল ফযীলত ও তাকমীল',
+    title: 'মিশকাতুল মাসাবীহ ও তাফসীরে জালালাইন',
+    subject_code: 'B-801',
+    source_type: 'qawmi',
+    total_chapters: 6,
+    total_questions: 80,
+  },
+  {
+    id: 'b-befaq-fazilat-hidaya',
+    board: 'befaq',
+    class_name: 'মারহালাতুল ফযীলত ও তাকমীল',
+    title: 'আল-হিদায়া (ফিকহ) ও সহীহ বুখারী শরীফ',
+    subject_code: 'B-802',
+    source_type: 'qawmi',
+    total_chapters: 6,
+    total_questions: 80,
+  },
+
+  // --- 7. AL-HAIATUL ULYA (আল-হাইআতুল উলইয়া) ---
+  {
+    id: 'b-hayat-bukhari-1',
+    board: 'hayatul_ulya',
+    class_name: 'দাওরায়ে হাদিস (তাকমীল)',
+    title: 'সহীহ আল-বুখারী শরীফ (১ম ও ২য় খণ্ড)',
+    subject_code: 'H-101',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 60,
+  },
+  {
+    id: 'b-hayat-muslim-1',
+    board: 'hayatul_ulya',
+    class_name: 'দাওরায়ে হাদিস (তাকমীল)',
+    title: 'সহীহ মুসলিম শরীফ ও জামে তিরমিযী শরীফ',
+    subject_code: 'H-102',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 60,
+  },
+  {
+    id: 'b-hayat-abudawud-1',
+    board: 'hayatul_ulya',
+    class_name: 'দাওরায়ে হাদিস (তাকমীল)',
+    title: 'সুনানে আবু দাউদ, নাসায়ী ও ইবনে মাজাহ শরীফ',
+    subject_code: 'H-103',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 56,
+  },
+  {
+    id: 'b-hayat-tahabi-1',
+    board: 'hayatul_ulya',
+    class_name: 'উলুমুল হাদিস ও তাফসীর',
+    title: 'শরহে মাআনিল আছার (তাহাবী শরীফ) ও মুওয়াত্তা ইমাম মালিক',
+    subject_code: 'H-201',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 54,
+  },
+  {
+    id: 'b-hayat-ifta-1',
+    board: 'hayatul_ulya',
+    class_name: 'ইফতা ও ফিকহ বিভাগ',
+    title: 'উসূলুল ইফতা, রদ্দুল মুহতার (শামী) ও ফিকহী মাসায়েল',
+    subject_code: 'H-301',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 52,
+  },
+
+  // --- 8. KAWMI MADRASAH BOARD (কওমি মাদ্রাসা নিসাব) ---
+  {
+    id: 'b-kawmi-tahfiz-1',
+    board: 'kawmi',
+    class_name: 'তাহফিজুল কুরআন',
+    title: 'তাহফিজুল কুরআন তাজবীদ ও মাসনূন দোয়া',
+    subject_code: 'K-001',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 48,
+  },
+  {
+    id: 'b-kawmi-ibte-1',
+    board: 'kawmi',
+    class_name: 'ইবতেদাইয়্যাহ (১ম-৫ম)',
+    title: 'তা‘লীমুল ইসলাম, বেহেশতী জেওর ও এসো আরবি শিখি',
+    subject_code: 'K-101',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 56,
+  },
+  {
+    id: 'b-kawmi-mizan-1',
+    board: 'kawmi',
+    class_name: 'মিযান ও নাহবেমীর (মুতাওয়াসসিতাহ)',
+    title: 'মিযানুস সরফ, নাহবেমীর ও রওযাতুল আদব',
+    subject_code: 'K-201',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 60,
+  },
+  {
+    id: 'b-kawmi-kafia-1',
+    board: 'kawmi',
+    class_name: 'হেদায়াতুন নাহু ও কাফিয়া (সানাবিয়্যাহ)',
+    title: 'হেদায়াতুন নাহু, আল-কাফিয়া ও মুখতাসারুল কুদূরী',
+    subject_code: 'K-301',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 60,
+  },
+  {
+    id: 'b-kawmi-jalalain-1',
+    board: 'kawmi',
+    class_name: 'শরহে জামি ও জালালাইন (ফযীলত)',
+    title: 'শরহে জামী, তাফসীরে জালালাইন ও আল-হিদায়া',
+    subject_code: 'K-401',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 64,
+  },
+  {
+    id: 'b-kawmi-dawra-1',
+    board: 'kawmi',
+    class_name: 'দাওরায়ে হাদিস (তাকমীল)',
+    title: 'সিহাহ সিত্তাহ: বুখারী, মুসলিম ও তিরমিযী শরীফ',
+    subject_code: 'K-501',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 64,
+  },
+
+  // --- 9. HAFIZI & TAHFIZUL QURAN BOARD (হাফিজি বোর্ড) ---
+  {
+    id: 'b-hafizi-qaida-1',
+    board: 'hafizi',
+    class_name: 'নূরানী কায়দা ও মাখরাজ',
+    title: 'নূরানী কায়দা, মাখরাজ ও সিফাত শিক্ষা',
+    subject_code: 'HF-101',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 48,
+  },
+  {
+    id: 'b-hafizi-nazera-1',
+    board: 'hafizi',
+    class_name: 'আমপারা ও নাজেরা বিভাগ',
+    title: 'আমপারা (৩০তম পারা) ও বিশুদ্ধ নাজেরা তিলাওয়াত',
+    subject_code: 'HF-102',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 52,
+  },
+  {
+    id: 'b-hafizi-para-10',
+    board: 'hafizi',
+    class_name: 'হিফজুল কুরআন (১ম-১০ম পারা)',
+    title: 'হিফজুল কুরআন মুসাবাকাহ ও ইয়াদ (১ম-১০ম পারা)',
+    subject_code: 'HF-201',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 50,
+  },
+  {
+    id: 'b-hafizi-para-20',
+    board: 'hafizi',
+    class_name: 'হিফজুল কুরআন (১১তম-২০তম পারা)',
+    title: 'হিফজুল কুরআন মুসাবাকাহ ও ইয়াদ (১১তম-২০তম পারা)',
+    subject_code: 'HF-202',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 50,
+  },
+  {
+    id: 'b-hafizi-para-30',
+    board: 'hafizi',
+    class_name: 'হিফজুল কুরআন (পূর্ণ ৩০ পারা)',
+    title: 'খতমে কুরআন, মুতাশাবিহাত ও হিফজ সমাপনী সনদ পরীক্ষা',
+    subject_code: 'HF-301',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 60,
+  },
+  {
+    id: 'b-hafizi-tajweed-1',
+    board: 'hafizi',
+    class_name: 'তাজবীদ ও মাসনূন দোয়া',
+    title: 'জামালুল কুরআন (তাজবীদ), মাসনূন দোয়া ও নামাজ শিক্ষা',
+    subject_code: 'HF-401',
+    source_type: 'qawmi',
+    total_chapters: 4,
+    total_questions: 54,
+  },
+
+  // --- 10. ENGLISH MEDIUM & CADET MADRASAH BOARD ---
+  {
+    id: 'b-engmed-play-1',
+    board: 'english_medium',
+    class_name: 'Playgroup (প্লে-গ্রুপ)',
+    title: ' Cambridge Phonics, Alphabet & Arabic Huruf (Playgroup)',
+    subject_code: 'EM-001',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 40,
+  },
+  {
+    id: 'b-engmed-nursery-1',
+    board: 'english_medium',
+    class_name: 'Nursery / KG (নার্সারি)',
+    title: 'Radiant Way, Early Math & Islamic Manners (KG)',
+    subject_code: 'EM-002',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 44,
+  },
+  {
+    id: 'b-engmed-grade1-eng',
+    board: 'english_medium',
+    class_name: 'Grade 1 (প্রথম শ্রেণি)',
+    title: 'Oxford Progressive English & Grammar (Grade 1)',
+    subject_code: 'EM-101',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 48,
+  },
+  {
+    id: 'b-engmed-grade1-islam',
+    board: 'english_medium',
+    class_name: 'Grade 1 (প্রথম শ্রেণি)',
+    title: 'Islamic Studies & Quranic Arabic (Grade 1)',
+    subject_code: 'EM-102',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 48,
+  },
+  {
+    id: 'b-engmed-grade2-eng',
+    board: 'english_medium',
+    class_name: 'Grade 2 (দ্বিতীয় শ্রেণি)',
+    title: 'Cambridge Primary English & Mathematics (Grade 2)',
+    subject_code: 'EM-201',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 50,
+  },
+  {
+    id: 'b-engmed-grade3-eng',
+    board: 'english_medium',
+    class_name: 'Grade 3 (তৃতীয় শ্রেণি)',
+    title: 'Junior English Grammar, Science & Islamic Studies (Grade 3)',
+    subject_code: 'EM-301',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 52,
+  },
+  {
+    id: 'b-engmed-grade4-eng',
+    board: 'english_medium',
+    class_name: 'Grade 4 (চতুর্থ শ্রেণি)',
+    title: 'Cambridge Primary Science, Math & English (Grade 4)',
+    subject_code: 'EM-401',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 54,
+  },
+  {
+    id: 'b-engmed-grade5-eng',
+    board: 'english_medium',
+    class_name: 'Grade 5 (পঞ্চম শ্রেণি)',
+    title: 'Cadet Batch English, Math & General Knowledge (Grade 5)',
+    subject_code: 'EM-501',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 60,
+  },
+  {
+    id: 'b-engmed-grade68-eng',
+    board: 'english_medium',
+    class_name: 'Grade 6-8 (জুনিয়র সেকেন্ডারি)',
+    title: 'Cambridge Lower Secondary English, Math & Islamiyat (Grade 6-8)',
+    subject_code: 'EM-601',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 64,
+  },
+  {
+    id: 'b-engmed-olevel-1',
+    board: 'english_medium',
+    class_name: 'O-Level / IGCSE (ও-লেভেল)',
+    title: 'Cambridge O-Level / IGCSE Islamiyat, English & Arabic',
+    subject_code: 'EM-901',
+    source_type: 'nctb',
+    total_chapters: 4,
+    total_questions: 70,
   },
 ];
 
@@ -1448,11 +1867,35 @@ export const normalizeBoardId = (boardInput?: string): string => {
   const str = normalizeBengaliText(boardInput);
   if (str === 'all' || str === 'সকল' || str.includes('সকল বোর্ড')) return 'all';
 
+  if (str === 'hayatul_ulya' || str.includes('হাইআতুল') || str.includes('হাইয়াতুল') || str.includes('hayat')) {
+    return 'hayatul_ulya';
+  }
+  if (str === 'kawmi' || str.includes('দারুল উলুম') || str.includes('darse nizami')) {
+    return 'kawmi';
+  }
+  if (str === 'hafizi' || str.includes('হাফিজি') || str.includes('হাফেজী') || str.includes('তাহফিজুল কুরআন শিক্ষা বোর্ড')) {
+    return 'hafizi';
+  }
+  if (str === 'english_medium' || str.includes('ইংলিশ মিডিয়াম') || str.includes('ইংলিশ মিডিয়াম') || str.includes('english medium') || str.includes('ক্যাডেট')) {
+    return 'english_medium';
+  }
   if (str.includes('chattogram') || str.includes('ctg') || str.includes('চট্টগ্রাম')) {
     return 'noorani_ctg';
   }
   if (str.includes('jatrabari') || str.includes('যাত্রাবাড়ী') || str.includes('যাত্রাবাড়ি')) {
     return 'noorani_jatrabari';
+  }
+  if (str.includes('jamjam') || str.includes('জমজম')) {
+    return 'jamjam';
+  }
+  if (
+    str.includes('salsabil') ||
+    str.includes('সালসাবিল') ||
+    str.includes('ইতমিনান') ||
+    str.includes('আন-নূর') ||
+    str.includes('আন নূর')
+  ) {
+    return 'salsabil_jamjam';
   }
   if (str.includes('noorani') || str.includes('নূরানী') || str.includes('নুরানী') || str.includes('তাঈলিমুল') || str.includes('তালিমুল')) {
     return 'noorani_ctg';
@@ -1479,18 +1922,6 @@ export const normalizeBoardId = (boardInput?: string): string => {
   ) {
     return 'nctb';
   }
-  if (str.includes('jamjam') || str.includes('জমজম')) {
-    return 'jamjam';
-  }
-  if (
-    str.includes('salsabil') ||
-    str.includes('সালসাবিল') ||
-    str.includes('ইতমিনান') ||
-    str.includes('আন-নূর') ||
-    str.includes('আন নূর')
-  ) {
-    return 'salsabil_jamjam';
-  }
 
   return str;
 };
@@ -1503,6 +1934,9 @@ export const doesBoardMatch = (bookBoard?: string, targetBoard?: string): boolea
   const bookNorm = normalizeBoardId(bookBoard);
 
   if (targetNorm === bookNorm) return true;
+
+  // Allow Kawmi board filter to include Befaq & Kawmi books so teachers see the full Qawmi library
+  if (targetNorm === 'kawmi' && (bookNorm === 'befaq' || bookNorm === 'hayatul_ulya')) return true;
 
   // Direct string equality after text normalization
   const cleanTarget = normalizeBengaliText(targetBoard);
@@ -1531,23 +1965,23 @@ export const doesClassMatch = (bookClass?: string, targetClass?: string): boolea
   if (normBook === normTarget) return true;
   if (normBook.includes(normTarget) || normTarget.includes(normBook)) return true;
 
-  // Keyword / Number matching
+  // Precise Keyword / Number matching without false-matching '১' with '১০' or 'দাখিল' with 'দাখিল ৬ষ্ঠ'
   const classKeywords = [
-    { keys: ['প্লে', 'play'], id: 'play' },
-    { keys: ['নার্সারী', 'নার্সারি', 'nursery'], id: 'nursery' },
-    { keys: ['প্রথম', '১', 'class 1', '১ম', 'ibte 1'], id: 'c1' },
-    { keys: ['দ্বিতীয়', 'দ্বিতিয়', '২', 'class 2', '২য়', 'ibte 2'], id: 'c2' },
-    { keys: ['তৃতীয়', 'তৃতিয়', '৩', 'class 3', '৩য়', 'ibte 3'], id: 'c3' },
-    { keys: ['চতুর্থ', '৪', 'class 4', '৪র্থ', 'ibte 4'], id: 'c4' },
-    { keys: ['পঞ্চম', '৫', 'class 5', '৫ম', 'ibte 5', 'সমাপনী'], id: 'c5' },
-    { keys: ['ষষ্ঠ', '৬', 'class 6', '৬ষ্ঠ', 'দাখিল ৬'], id: 'c6' },
-    { keys: ['সপ্তম', '৭', 'class 7', '৭ম', 'দাখিল ৭'], id: 'c7' },
-    { keys: ['অষ্টম', '৮', 'class 8', '৮ম', 'দাখিল ৮'], id: 'c8' },
-    { keys: ['দাখিল', 'নবম', 'দশম', '৯', '১০', 'class 9', 'class 10', 'দাখিল ৯', 'দাখিল ১০', 'ssc'], id: 'c910' },
-    { keys: ['তাহফিজ', 'হিফজ', 'হাদিস ও হিফজ', 'tahfiz'], id: 'tahfiz' },
-    { keys: ['মুতাওয়াসসিতাহ', 'মুতাওয়াসসিতাহ', 'mutawassitah'], id: 'befaq_mut' },
-    { keys: ['সানাবিয়্যাহ', 'সানাবিয়্যাহ', 'সানিয়াহ', 'sanawiyyah'], id: 'befaq_san' },
-    { keys: ['ফযীলত', 'তাকমীল', 'তাকমিল', 'দাওরা'], id: 'befaq_tak' },
+    { keys: ['প্লে', 'play', 'playgroup', 'প্রাক-প্রাথমিক', 'pre-primary'], id: 'play' },
+    { keys: ['নার্সারী', 'নার্সারি', 'nursery', 'kg'], id: 'nursery' },
+    { keys: ['প্রথম', 'class 1', 'grade 1', 'standard 1', '১ম', 'ibte 1', '1st year', '১ম-৫ম'], id: 'c1' },
+    { keys: ['দ্বিতীয়', 'দ্বিতিয়', 'class 2', 'grade 2', 'standard 2', '২য়', '২য়', 'ibte 2', '2nd year'], id: 'c2' },
+    { keys: ['তৃতীয়', 'তৃতিয়', 'class 3', 'grade 3', 'standard 3', '৩য়', '৩য়', 'ibte 3', '3rd year'], id: 'c3' },
+    { keys: ['চতুর্থ', 'class 4', 'grade 4', 'standard 4', '৪র্থ', 'ibte 4', '4th year'], id: 'c4' },
+    { keys: ['পঞ্চম', 'class 5', 'grade 5', 'standard 5', '৫ম', 'ibte 5', 'সমাপনী', '5th year'], id: 'c5' },
+    { keys: ['ষষ্ঠ', 'class 6', 'grade 6', '৬ষ্ঠ', 'দাখিল ৬'], id: 'c6' },
+    { keys: ['সপ্তম', 'class 7', 'grade 7', '৭ম', 'দাখিল ৭'], id: 'c7' },
+    { keys: ['অষ্টম', 'class 8', 'grade 8', '৮ম', 'দাখিল ৮'], id: 'c8' },
+    { keys: ['নবম', 'দশম', '৯ম', '১০ম', 'class 9', 'class 10', 'দাখিল ৯', 'দাখিল ১০', 'ssc', 'o-level', 'igcse'], id: 'c910' },
+    { keys: ['তাহফিজ', 'হিফজ', 'হাদিস ও হিফজ', 'tahfiz', 'হীফজ'], id: 'tahfiz' },
+    { keys: ['মুতাওয়াসসিতাহ', 'মুতাওয়াসসিতাহ', 'mutawassitah', 'মিযান', 'নাহবেমীর'], id: 'befaq_mut' },
+    { keys: ['সানাবিয়্যাহ', 'সানাবিয়্যাহ', 'সানিয়াহ', 'sanawiyyah', 'কাফিয়া', 'কাফিয়া'], id: 'befaq_san' },
+    { keys: ['ফযীলত', 'তাকমীল', 'তাকমিল', 'দাওরা', 'dawra', 'fazilat', 'জালালাইন'], id: 'befaq_tak' },
   ];
 
   for (const group of classKeywords) {
@@ -1743,33 +2177,37 @@ export const questionBankService = {
       }
     });
 
-    // Auto-generate rich question templates for any book in 385 books library if not already loaded
-    if (targetBookIds && targetBookIds.length > 0) {
-      targetBookIds.forEach((bId) => {
-        const hasQuestions = Array.from(qMap.values()).some((q) => q.book_id === bId);
-        if (!hasQuestions) {
-          const bookObj = ALL_385_BOOKS.find((b) => b.id === bId) || SEED_BOOKS.find((b) => b.id === bId) || {
-            id: bId,
-            board: '',
-            class_name: '',
-            title: 'পাঠ্যবই',
-            source_type: 'easyqbd',
-            total_chapters: 4,
-            total_questions: 24
-          };
-          const generated = generateQuestionsForBook(bookObj as QBBook);
-          generated.forEach((q) => {
-            if (filter.chapterId && filter.chapterId !== 'all' && q.chapter_id !== filter.chapterId) {
-              return;
-            }
-            if (filter.categoryType && filter.categoryType !== 'all' && q.category_type !== filter.categoryType) {
-              return;
-            }
-            qMap.set(q.id, q);
-          });
+    // Auto-generate rich question templates for any book in the library using its actual chapters so no chapter/category is ever empty
+    const booksToSynthesize =
+      targetBookIds && targetBookIds.length > 0
+        ? targetBookIds
+        : SEED_BOOKS.slice(0, 8).map((b) => b.id);
+
+    booksToSynthesize.forEach((bId) => {
+      const bookObj = ALL_385_BOOKS.find((b) => b.id === bId) || SEED_BOOKS.find((b) => b.id === bId) || {
+        id: bId,
+        board: '',
+        class_name: '',
+        title: 'পাঠ্যবই',
+        source_type: 'easyqbd',
+        total_chapters: 4,
+        total_questions: 32
+      };
+      const seedChs = SEED_CHAPTERS.filter((c) => c.book_id === bId);
+      const bookChapters = seedChs.length > 0 ? seedChs : generateChaptersForBook(bId, bookObj.title || '');
+      const generated = generateQuestionsForBook(bookObj as QBBook, bookChapters);
+      generated.forEach((q) => {
+        if (filter.chapterId && filter.chapterId !== 'all' && q.chapter_id !== filter.chapterId) {
+          return;
+        }
+        if (filter.categoryType && filter.categoryType !== 'all' && q.category_type !== filter.categoryType) {
+          return;
+        }
+        if (!qMap.has(q.id)) {
+          qMap.set(q.id, q);
         }
       });
-    }
+    });
 
     let results = Array.from(qMap.values());
 
@@ -1904,7 +2342,7 @@ export const questionBankService = {
   },
 
   /**
-   * 1-Click Auto Question Paper Generator (Supports 50 and 100 marks balanced distribution)
+   * 1-Click Auto Question Paper Generator (Supports 20, 50, 75, and 100 marks balanced distribution)
    */
   async autoGenerateExam(criteria: {
     bookId: string;
@@ -1913,6 +2351,7 @@ export const questionBankService = {
     fillBlankCount?: number;
     shortCount?: number;
     broadCount?: number;
+    matchingCount?: number;
     arabicCount?: number;
     targetMarks?: number;
   }): Promise<PaperSection[]> {
@@ -1937,51 +2376,76 @@ export const questionBankService = {
 
     // Determine target marks & counts
     const target = criteria.targetMarks || 100;
-    const hasArabicQs = chapterFiltered.some(q => q.category_type === 'arabic_writing');
+    const hasArabicQs = allQuestions.some(q => q.category_type === 'arabic_writing');
 
-    // Default distribution for 50 or 100 marks
     let mcqTarget = criteria.mcqCount;
     let fbTarget = criteria.fillBlankCount;
     let sqTarget = criteria.shortCount;
     let bqTarget = criteria.broadCount;
+    let matchTarget = criteria.matchingCount;
     let arTarget = criteria.arabicCount;
 
-    if (mcqTarget === undefined && fbTarget === undefined && sqTarget === undefined && bqTarget === undefined && arTarget === undefined) {
-      if (target === 50) {
+    if (
+      mcqTarget === undefined &&
+      fbTarget === undefined &&
+      sqTarget === undefined &&
+      bqTarget === undefined &&
+      matchTarget === undefined &&
+      arTarget === undefined
+    ) {
+      if (target === 20) {
         mcqTarget = 5;
         fbTarget = 5;
+        sqTarget = 2;
+        bqTarget = 1;
+        matchTarget = 0;
+        arTarget = 0;
+      } else if (target === 50) {
+        mcqTarget = 10;
+        fbTarget = 5;
         sqTarget = 5;
-        bqTarget = hasArabicQs ? 3 : 5;
-        arTarget = hasArabicQs ? 3 : 0;
+        bqTarget = 3;
+        matchTarget = 1;
+        arTarget = hasArabicQs ? 2 : 0;
+      } else if (target === 75) {
+        mcqTarget = 15;
+        fbTarget = 10;
+        sqTarget = 8;
+        bqTarget = 5;
+        matchTarget = 1;
+        arTarget = hasArabicQs ? 2 : 0;
       } else {
         // 100 marks
-        mcqTarget = 10;
+        mcqTarget = 15;
         fbTarget = 10;
         sqTarget = 10;
-        bqTarget = hasArabicQs ? 6 : 10;
-        arTarget = hasArabicQs ? 6 : 0;
+        bqTarget = 7;
+        matchTarget = 1;
+        arTarget = hasArabicQs ? 3 : 0;
       }
     } else {
-      mcqTarget = mcqTarget ?? (target === 50 ? 5 : 10);
-      fbTarget = fbTarget ?? (target === 50 ? 5 : 10);
-      sqTarget = sqTarget ?? (target === 50 ? 5 : 10);
-      bqTarget = bqTarget ?? (target === 50 ? 3 : 6);
-      arTarget = arTarget ?? (hasArabicQs ? (target === 50 ? 3 : 6) : 0);
+      mcqTarget = mcqTarget ?? 10;
+      fbTarget = fbTarget ?? 5;
+      sqTarget = sqTarget ?? 5;
+      bqTarget = bqTarget ?? 4;
+      matchTarget = matchTarget ?? 1;
+      arTarget = arTarget ?? (hasArabicQs ? 2 : 0);
     }
 
     const sections: PaperSection[] = [];
     let secCounter = 1;
 
-    // 1. MCQ Section
+    // 1. MCQ Section (ক-বিভাগ)
     if (mcqTarget > 0) {
       const avail = chapterFiltered.filter((q) => q.category_type === 'mcq');
-      const mcqQs = pickRandom(avail.length > 0 ? avail : allQuestions.filter(q => q.category_type === 'mcq'), mcqTarget);
+      const pool = avail.length >= mcqTarget ? avail : allQuestions.filter((q) => q.category_type === 'mcq');
+      const mcqQs = pickRandom(pool, mcqTarget);
       if (mcqQs.length > 0) {
         const marks = mcqQs.reduce((acc, q) => acc + (q.default_marks || 1), 0);
         sections.push({
           id: 'sec-' + Date.now() + '-1',
           category_type: 'mcq',
-          title: `${toBnNum(secCounter++)}। সঠিক উত্তরটি বেছে নিয়ে লেখো:`,
+          title: `ক-বিভাগ: ${toBnNum(secCounter++)}। সঠিক উত্তরটি বেছে নিয়ে লেখো:`,
           layout: '2_col',
           numbering_style: 'bangla_letter',
           direction: 'ltr',
@@ -2004,7 +2468,8 @@ export const questionBankService = {
     // 2. Fill in the blanks
     if (fbTarget > 0) {
       const avail = chapterFiltered.filter((q) => q.category_type === 'fill_in_the_blanks');
-      const fbQs = pickRandom(avail.length > 0 ? avail : allQuestions.filter(q => q.category_type === 'fill_in_the_blanks'), fbTarget);
+      const pool = avail.length >= fbTarget ? avail : allQuestions.filter((q) => q.category_type === 'fill_in_the_blanks');
+      const fbQs = pickRandom(pool, fbTarget);
       if (fbQs.length > 0) {
         const marks = fbQs.reduce((acc, q) => acc + (q.default_marks || 1), 0);
         sections.push({
@@ -2029,16 +2494,47 @@ export const questionBankService = {
       }
     }
 
-    // 3. Short Questions
-    if (sqTarget > 0) {
-      const avail = chapterFiltered.filter((q) => q.category_type === 'short_question' || q.category_type === 'one_word');
-      const sqQs = pickRandom(avail.length > 0 ? avail : allQuestions.filter(q => q.category_type === 'short_question' || q.category_type === 'one_word'), sqTarget);
-      if (sqQs.length > 0) {
-        const marks = sqQs.reduce((acc, q) => acc + (q.default_marks || 2), 0);
+    // 3. Matching Table
+    if (matchTarget > 0) {
+      const avail = chapterFiltered.filter((q) => q.category_type === 'matching');
+      const pool = avail.length >= matchTarget ? avail : allQuestions.filter((q) => q.category_type === 'matching');
+      const matchQs = pickRandom(pool, matchTarget);
+      if (matchQs.length > 0) {
+        const marks = matchQs.reduce((acc, q) => acc + (q.default_marks || 4), 0);
         sections.push({
           id: 'sec-' + Date.now() + '-3',
+          category_type: 'matching',
+          title: `${toBnNum(secCounter++)}। বাম পাশের অংশের সাথে ডান পাশের অংশ মিল করো:`,
+          layout: '1_col',
+          numbering_style: 'bangla_number',
+          direction: 'ltr',
+          dotted_lines: 0,
+          marks_formula: `৪ × ${toBnNum(matchQs.length)} = ${toBnNum(marks)}`,
+          total_marks: marks,
+          questions: matchQs.map((q) => ({
+            id: 'q-' + Math.random().toString(36).substring(2, 9),
+            original_id: q.id,
+            question_text: q.question_text,
+            category_type: 'matching',
+            left_items: q.left_items || ['কলাম ১', 'কলাম ২', 'কলাম ৩', 'কলাম ৪'],
+            right_items: q.right_items || ['মিল ১', 'মিল ২', 'মিল ৩', 'মিল ৪'],
+            marks: q.default_marks || 4,
+          })),
+        });
+      }
+    }
+
+    // 4. Short Questions (খ-বিভাগ)
+    if (sqTarget > 0) {
+      const avail = chapterFiltered.filter((q) => q.category_type === 'short_question' || q.category_type === 'one_word');
+      const pool = avail.length >= sqTarget ? avail : allQuestions.filter((q) => q.category_type === 'short_question' || q.category_type === 'one_word');
+      const sqQs = pickRandom(pool, sqTarget);
+      if (sqQs.length > 0) {
+        const marks = sqQs.length * 2;
+        sections.push({
+          id: 'sec-' + Date.now() + '-4',
           category_type: 'short_question',
-          title: `${toBnNum(secCounter++)}। সংক্ষেপে উত্তর দাও:`,
+          title: `খ-বিভাগ: ${toBnNum(secCounter++)}। সংক্ষেপে উত্তর দাও:`,
           layout: '1_col',
           numbering_style: 'bangla_letter',
           direction: 'ltr',
@@ -2051,20 +2547,21 @@ export const questionBankService = {
             question_text: q.question_text,
             category_type: q.category_type,
             answer_text: q.answer_text,
-            marks: q.default_marks || 2,
+            marks: 2,
           })),
         });
       }
     }
 
-    // 4. Broad Questions
+    // 5. Broad Questions
     if (bqTarget > 0) {
       const avail = chapterFiltered.filter((q) => q.category_type === 'broad_question');
-      const bqQs = pickRandom(avail.length > 0 ? avail : allQuestions.filter(q => q.category_type === 'broad_question'), bqTarget);
+      const pool = avail.length >= bqTarget ? avail : allQuestions.filter((q) => q.category_type === 'broad_question');
+      const bqQs = pickRandom(pool, bqTarget);
       if (bqQs.length > 0) {
-        const marks = bqQs.reduce((acc, q) => acc + (q.default_marks || 5), 0);
+        const marks = bqQs.length * 5;
         sections.push({
-          id: 'sec-' + Date.now() + '-4',
+          id: 'sec-' + Date.now() + '-5',
           category_type: 'broad_question',
           title: `${toBnNum(secCounter++)}। নিচের প্রশ্নগুলোর বিস্তারিত উত্তর লেখো:`,
           layout: '1_col',
@@ -2079,26 +2576,27 @@ export const questionBankService = {
             question_text: q.question_text,
             category_type: q.category_type,
             answer_text: q.answer_text,
-            marks: q.default_marks || 5,
+            marks: 5,
           })),
         });
       }
     }
 
-    // 5. Arabic Writing (if available)
-    if (arTarget > 0 && hasArabicQs) {
+    // 6. Arabic Writing (if requested)
+    if (arTarget > 0) {
       const avail = chapterFiltered.filter((q) => q.category_type === 'arabic_writing');
-      const arQs = pickRandom(avail.length > 0 ? avail : allQuestions.filter(q => q.category_type === 'arabic_writing'), arTarget);
+      const pool = avail.length >= arTarget ? avail : allQuestions.filter((q) => q.category_type === 'arabic_writing');
+      const arQs = pickRandom(pool, arTarget);
       if (arQs.length > 0) {
-        const marks = arQs.reduce((acc, q) => acc + (q.default_marks || 5), 0);
+        const marks = arQs.length * 5;
         sections.push({
-          id: 'sec-' + Date.now() + '-5',
+          id: 'sec-' + Date.now() + '-6',
           category_type: 'arabic_writing',
-          title: `${toBnNum(secCounter++)}। আরবি হরফ ও আয়াত সুন্দর করে খাতায় লেখো:`,
+          title: `${toBnNum(secCounter++)}। আরবি হরফ, ইবারত ও আয়াত সুন্দর হস্তাক্ষরে লেখো:`,
           layout: '1_col',
           numbering_style: 'arabic_number',
           direction: 'rtl',
-          dotted_lines: 0,
+          dotted_lines: 2,
           marks_formula: `৫ × ${toBnNum(arQs.length)} = ${toBnNum(marks)}`,
           total_marks: marks,
           questions: arQs.map((q) => ({
@@ -2107,7 +2605,7 @@ export const questionBankService = {
             question_text: q.question_text,
             category_type: q.category_type,
             answer_text: q.answer_text,
-            marks: q.default_marks || 5,
+            marks: 5,
           })),
         });
       }
@@ -2126,6 +2624,7 @@ export const questionBankService = {
     fillBlankCount?: number;
     shortCount?: number;
     broadCount?: number;
+    matchingCount?: number;
     arabicCount?: number;
     targetMarks?: number;
   }): Promise<PaperSection[]> {
