@@ -10,6 +10,7 @@ import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { extractStudentExtraFields, packStudentNotesWithExtra } from 'utils/studentExtraFields';
+import { filterAndRankStudents } from 'utils/studentSearch';
 import { isValidUUID } from 'utils/validation';
 import { useVoiceCall } from '../context/CallContext';
 
@@ -513,8 +514,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       const targetYearId = selectedYear?.id || activeYearId || activeYear?.id;
       const isAdvanceOrHistorical = Boolean(activeYear && activeYear.status !== 'active') || Boolean(selectedYear && selectedYear.status !== 'active');
 
-      // 2. Fetch via RequestManager (Cache key includes page, class, search, sessionFilter, and target year)
-      const cacheKey = `v8_students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}:${showInactive}:${sessionFilter}:${targetYearId || 'default'}`;
+      const hasSearch = Boolean(searchQuery.trim());
+      const queryFrom = hasSearch ? 0 : from;
+      const queryTo = hasSearch ? 499 : to;
+
+      // 2. Fetch via RequestManager (Cache key includes page, class, search pool, sessionFilter, and target year)
+      const cacheKey = hasSearch
+        ? `v9_students:${selectedClass.id}:search_pool:${showInactive}:${sessionFilter}:${targetYearId || 'default'}`
+        : `v8_students:${selectedClass.id}:p${currentPage}:all:${showInactive}:${sessionFilter}:${targetYearId || 'default'}`;
       
       const { data, error } = await requestManager.cachedFetch(
         'students',
@@ -524,7 +531,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             .eq('class_id', selectedClass.id)
             .order('roll', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true })
-            .range(from, to);
+            .range(queryFrom, queryTo);
 
           const advanceYears = academicYears.filter(y => y.id !== activeYearId && y.status !== 'archived');
           const advanceIds = advanceYears.map(y => y.id).filter(isValidUUID);
@@ -551,31 +558,6 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             query = query.eq('is_active', true);
           }
 
-          if (searchQuery.trim()) {
-            const rawSearch = searchQuery.trim();
-            const cleanSearch = rawSearch.replace(/[,()]/g, '').trim();
-            const bengaliToEnglish: Record<string, string> = {
-              '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
-              '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
-            };
-            const englishSearch = cleanSearch.replace(/[০-৯]/g, match => bengaliToEnglish[match] || match);
-            const rollMatch = englishSearch.match(/^(?:roll|রোল|no|নং)?\s*[:#-]?\s*(\d+)$/i);
-
-            if (rollMatch) {
-              const rollNum = parseInt(rollMatch[1], 10);
-              if ((window as any)._hasNameEn !== false) {
-                query = query.or(`student_name.ilike.%${cleanSearch}%,name_en.ilike.%${cleanSearch}%,roll.eq.${rollNum}`);
-              } else {
-                query = query.or(`student_name.ilike.%${cleanSearch}%,roll.eq.${rollNum}`);
-              }
-            } else {
-              if ((window as any)._hasNameEn !== false) {
-                query = query.or(`student_name.ilike.%${cleanSearch}%,name_en.ilike.%${cleanSearch}%`);
-              } else {
-                query = query.ilike('student_name', `%${cleanSearch}%`);
-              }
-            }
-          }
           return query;
         },
         cacheKey,
@@ -643,10 +625,17 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           const rollB = b.roll != null ? Number(b.roll) : 999999;
           return rollA - rollB;
         });
-        
-        setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
-        setHasMore(data.length === PAGE_SIZE);
-        setPage(currentPage + 1);
+
+        if (hasSearch) {
+          const matched = filterAndRankStudents(formattedData, searchQuery);
+          setStudents(matched);
+          setHasMore(false);
+          setPage(1);
+        } else {
+          setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
+          setHasMore(data.length === PAGE_SIZE);
+          setPage(currentPage + 1);
+        }
       } else if (!isOnline && reset) {
          setStudents([]);
       }

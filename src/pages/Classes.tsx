@@ -1,11 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, ChevronRight, BookOpen, Users, Edit3, Trash2, X, Check, Loader2, AlertCircle, AlertTriangle, Hash } from 'lucide-react';
+import { Plus, ChevronRight, BookOpen, Users, Edit3, Trash2, X, Check, Loader2, AlertCircle, AlertTriangle, Hash, Search, Phone } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
-import { Class, Language, Institution, Profile } from 'types';
+import { Class, Student, Language, Institution, Profile } from 'types';
 import { t } from 'translations';
 import { requestManager } from 'services/RequestManager';
+import { isValidUUID } from 'utils/validation';
+import { filterAndRankStudents } from 'utils/studentSearch';
+import { extractStudentExtraFields } from 'utils/studentExtraFields';
 
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
@@ -30,6 +33,7 @@ export const sortMadrasahClasses = (classes: any[]) => {
 
 interface ClassesProps {
   onClassClick: (cls: Class) => void;
+  onStudentClick?: (student: Student) => void;
   lang: Language;
   madrasah: Institution | null;
   dataVersion: number;
@@ -40,7 +44,7 @@ interface ClassesProps {
   selectedYear?: any;
 }
 
-const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVersion, triggerRefresh, readOnly, profile, activeYear, selectedYear }) => {
+const Classes: React.FC<ClassesProps> = ({ onClassClick, onStudentClick, lang, madrasah, dataVersion, triggerRefresh, readOnly, profile, activeYear, selectedYear }) => {
   const effectiveInstitutionId = madrasah?.id;
   const [classes, setClasses] = useState<(Class & { student_count?: number })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +54,13 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<(Class & { student_count?: number }) | null>(null);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Student[]>([]);
+  const [searchingStudents, setSearchingStudents] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [openingStudentId, setOpeningStudentId] = useState<string | null>(null);
+  const searchRequestIdRef = useRef(0);
+  const searchIndexRef = useRef<{ key: string; students: Student[]; cachedAt: number } | null>(null);
   const isDark = madrasah?.theme === 'dark';
   const isDeleteClassEnabled = React.useMemo(() => {
     if (!madrasah?.config_json) return false;
@@ -88,6 +99,164 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       fetchClasses(); 
     }
   }, [dataVersion, madrasah?.id, activeYearId]);
+
+  const allowedClassesKey = Array.isArray(profile?.permissions?.allowed_classes)
+    ? profile.permissions.allowed_classes.join(',')
+    : '';
+
+  useEffect(() => {
+    const trimmed = studentSearchQuery.trim();
+    if (!trimmed || !effectiveInstitutionId) {
+      searchRequestIdRef.current += 1;
+      setSearchResults([]);
+      setSearchingStudents(false);
+      setSearchError(null);
+      return;
+    }
+
+    const indexKey = `${effectiveInstitutionId}:${targetYear?.id || activeYearId || 'all'}:${targetYear?.status || 'active'}:${allowedClassesKey}:v${dataVersion}`;
+    const now = Date.now();
+
+    // Instant client-side search if the index for this institution/year is warm (< 5 min)
+    if (
+      searchIndexRef.current &&
+      searchIndexRef.current.key === indexKey &&
+      now - searchIndexRef.current.cachedAt < 5 * 60 * 1000
+    ) {
+      setSearchResults(filterAndRankStudents(searchIndexRef.current.students, trimmed).slice(0, 60));
+      setSearchingStudents(false);
+      setSearchError(null);
+      return;
+    }
+
+    const reqId = ++searchRequestIdRef.current;
+    setSearchingStudents(true);
+    setSearchError(null);
+
+    const timer = setTimeout(async () => {
+      const loadSearchIndex = async (): Promise<Student[]> => {
+        const CHUNK_SIZE = 1000;
+        const MAX_PAGES = 5;
+        const collected: Student[] = [];
+
+        for (let pageIdx = 0; pageIdx < MAX_PAGES; pageIdx++) {
+          const from = pageIdx * CHUNK_SIZE;
+          const to = from + CHUNK_SIZE - 1;
+
+          const baseFields = `id, institution_id, student_name, name_en, guardian_phone, roll, guardian_name, class_id, section, is_active, photo_url, academic_year_id, classes(class_name)`;
+          let selectFields = baseFields;
+          if ((window as any)._hasSection === false) selectFields = selectFields.replace('section, ', '');
+          if ((window as any)._hasIsActive === false) selectFields = selectFields.replace('is_active, ', '');
+          if ((window as any)._hasNameEn === false) selectFields = selectFields.replace('name_en, ', '');
+
+          let query = supabase
+            .from('students')
+            .select(selectFields)
+            .eq('institution_id', effectiveInstitutionId)
+            .order('roll', { ascending: true, nullsFirst: false })
+            .order('id', { ascending: true })
+            .range(from, to);
+
+          if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes && profile.permissions.allowed_classes.length > 0) {
+            query = query.in('class_id', profile.permissions.allowed_classes);
+          }
+
+          if (targetYear?.id && isValidUUID(targetYear.id)) {
+            if (targetYear.status === 'active') {
+              query = query.or(`academic_year_id.eq.${targetYear.id},academic_year_id.is.null`);
+            } else {
+              query = query.eq('academic_year_id', targetYear.id);
+            }
+          } else if (activeYearId && isValidUUID(activeYearId)) {
+            query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          }
+
+          const { data, error } = await query;
+
+          if (error) {
+            if ((window as any)._hasSection === undefined && (error.code === 'PGRST204' || error.message?.includes('section'))) {
+              (window as any)._hasSection = false;
+              return loadSearchIndex();
+            }
+            if ((window as any)._hasNameEn === undefined && (error.code === 'PGRST204' || error.message?.includes('name_en'))) {
+              (window as any)._hasNameEn = false;
+              return loadSearchIndex();
+            }
+            if ((window as any)._hasIsActive === undefined && (error.code === 'PGRST204' || error.message?.includes('is_active'))) {
+              (window as any)._hasIsActive = false;
+              return loadSearchIndex();
+            }
+            throw error;
+          }
+
+          const rows = ((data as unknown as any[]) || []).map((s) => ({
+            ...s,
+            classes: Array.isArray(s.classes) ? s.classes[0] : s.classes,
+          })) as Student[];
+
+          collected.push(...rows);
+          if (rows.length < CHUNK_SIZE) break;
+        }
+
+        return collected;
+      };
+
+      try {
+        const allStudents = await loadSearchIndex();
+        if (reqId !== searchRequestIdRef.current) return;
+        searchIndexRef.current = { key: indexKey, students: allStudents, cachedAt: Date.now() };
+        setSearchResults(filterAndRankStudents(allStudents, trimmed).slice(0, 60));
+        setSearchingStudents(false);
+      } catch (err: any) {
+        if (reqId !== searchRequestIdRef.current) return;
+        console.error('Student search error in Classes:', err);
+        setSearchError(lang === 'bn' ? 'শিক্ষার্থী খুঁজতে সমস্যা হয়েছে' : 'Failed to search students');
+        setSearchingStudents(false);
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [studentSearchQuery, effectiveInstitutionId, activeYearId, targetYear?.id, targetYear?.status, dataVersion, profile?.role, allowedClassesKey, lang]);
+
+  const handleOpenSearchedStudent = async (student: Student, matchedClass?: Class) => {
+    if (!onStudentClick) {
+      if (matchedClass) onClassClick(matchedClass);
+      return;
+    }
+    if (openingStudentId === student.id) return;
+    setOpeningStudentId(student.id);
+    try {
+      const extraFieldsStr = 'gender, nationality, religion, father_name, father_occupation, mother_occupation, guardian_relation, permanent_address, previous_institution, previous_class, ';
+      const baseFields = `id, institution_id, student_name, name_en, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, section, is_active, photo_url, notes, ${(window as any)._hasExtraCols !== false ? extraFieldsStr : ''}classes(class_name)`;
+      let selectFields = (window as any)._hasMotherName === false ? baseFields.replace('mother_name, ', '') : baseFields;
+      if ((window as any)._hasSection === false) selectFields = selectFields.replace('section, ', '');
+      if ((window as any)._hasIsActive === false) selectFields = selectFields.replace('is_active, ', '');
+      if ((window as any)._hasNameEn === false) selectFields = selectFields.replace('name_en, ', '');
+
+      const { data, error } = await supabase
+        .from('students')
+        .select(selectFields)
+        .eq('id', student.id)
+        .maybeSingle();
+
+      if (!error && data) {
+        const row: any = data;
+        const extra = extractStudentExtraFields(row);
+        const fullStudent: Student = {
+          ...row,
+          ...extra,
+          classes: Array.isArray(row.classes) ? row.classes[0] : row.classes,
+        };
+        onStudentClick(fullStudent);
+        return;
+      }
+    } catch (err) {
+      console.warn('Could not load full student record, opening cached preview:', err);
+    } finally {
+      setOpeningStudentId(null);
+    }
+    onStudentClick(student);
+  };
 
   const fetchClasses = async () => {
     if (!madrasah?.id) return;
@@ -345,6 +514,144 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
             <button onClick={() => { setNewClassName(''); setNewSortOrder(''); setEditingClass(null); setShowModal(true); }} className="bg-[#2563EB] text-white px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium">
               <Plus size={16} strokeWidth={4} /> {t('new_class', lang, madrasah?.institution_type)}
             </button>
+          )}
+        </div>
+
+        {/* Student Search Bar above Class List */}
+        <div className="relative">
+          <div className={`relative flex items-center ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200/80'} border rounded-[1.6rem] shadow-sm focus-within:border-[#2563EB] focus-within:ring-2 focus-within:ring-[#2563EB]/15 transition-all`}>
+            <Search size={18} className={`ml-4 shrink-0 ${isDark ? 'text-slate-400' : 'text-slate-400'}`} />
+            <input
+              type="text"
+              value={studentSearchQuery}
+              onChange={(e) => setStudentSearchQuery(e.target.value)}
+              placeholder={lang === 'bn' ? 'শিক্ষার্থীর নাম লিখে খুঁজুন...' : 'Search student by name...'}
+              aria-label={lang === 'bn' ? 'শিক্ষার্থীর নাম লিখে খুঁজুন' : 'Search student by name'}
+              className={`w-full px-3 py-3.5 bg-transparent outline-none text-sm font-noto font-bold ${isDark ? 'text-white placeholder:text-slate-500' : 'text-slate-800 placeholder:text-slate-400'}`}
+            />
+            {searchingStudents && (
+              <Loader2 size={18} className="mr-3 shrink-0 animate-spin text-[#2563EB]" />
+            )}
+            {studentSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setStudentSearchQuery('')}
+                aria-label={lang === 'bn' ? 'অনুসন্ধান মুছুন' : 'Clear search'}
+                className={`mr-3 p-1.5 rounded-full transition-colors shrink-0 ${isDark ? 'text-slate-400 hover:bg-slate-700 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* Search Results */}
+          {studentSearchQuery.trim() !== '' && (
+            <div className="mt-4 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between px-2">
+                <p className={`text-xs font-black font-noto ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {lang === 'bn' ? 'খুঁজে পাওয়া শিক্ষার্থী' : 'Matching Students'}
+                  {!searchingStudents && !searchError ? ` (${searchResults.length})` : ''}
+                </p>
+                {searchResults.length === 60 && (
+                  <span className="text-[10px] font-bold text-slate-400 font-noto">
+                    {lang === 'bn' ? 'সর্বোচ্চ ৬০টি ফলাফল' : 'Top 60 results'}
+                  </span>
+                )}
+              </div>
+
+              {searchError ? (
+                <div className={`${isDark ? 'bg-red-950/30 border-red-900/50 text-red-300' : 'bg-red-50 border-red-100 text-red-600'} border rounded-2xl p-4 text-xs font-bold flex items-center gap-2 font-noto`}>
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{searchError}</span>
+                </div>
+              ) : searchingStudents && searchResults.length === 0 ? (
+                <div className={`${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-400' : 'bg-white border-slate-100 text-slate-500'} border rounded-2xl p-6 text-center text-xs font-bold flex items-center justify-center gap-2 font-noto`}>
+                  <Loader2 size={16} className="animate-spin text-[#2563EB]" />
+                  <span>{lang === 'bn' ? 'শিক্ষার্থী খোঁজা হচ্ছে...' : 'Searching students...'}</span>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className={`${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-400' : 'bg-white border-slate-100 text-slate-500'} border rounded-2xl p-6 text-center text-xs font-bold font-noto`}>
+                  {lang === 'bn' ? `"${studentSearchQuery.trim()}" নামে কোনো শিক্ষার্থী পাওয়া যায়নি` : `No students found matching "${studentSearchQuery.trim()}"`}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {searchResults.map((student) => {
+                    const matchedClass = classes.find((c) => c.id === student.class_id);
+                    const className = student.classes?.class_name || matchedClass?.class_name || (lang === 'bn' ? 'শ্রেণি নির্ধারিত নয়' : 'Unassigned');
+                    return (
+                      <div
+                        key={student.id}
+                        onClick={() => handleOpenSearchedStudent(student, matchedClass)}
+                        className={`${isDark ? 'bg-slate-800 border-slate-700 hover:border-blue-500/50' : 'bg-white border-slate-100 hover:border-blue-200'} p-3.5 rounded-[1.8rem] border flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] transition-all shadow-sm group`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {student.photo_url ? (
+                            <img
+                              src={student.photo_url}
+                              alt={student.student_name}
+                              className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-600"
+                            />
+                          ) : (
+                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-base shrink-0 ${isDark ? 'bg-slate-700 text-blue-400' : 'bg-[#EAF4FF] text-[#2563EB]'}`}>
+                              {student.student_name?.charAt(0) || 'শ'}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className={`font-black text-sm font-noto truncate ${isDark ? 'text-white' : 'text-[#1E293B]'}`}>
+                                {student.student_name}
+                              </h4>
+                              {student.is_active === false && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-black rounded bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300 font-noto">
+                                  {lang === 'bn' ? 'নিষ্ক্রিয়' : 'Inactive'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg font-noto ${isDark ? 'bg-slate-700 text-blue-300' : 'bg-[#EAF4FF] text-[#2563EB]'}`}>
+                                {className}
+                              </span>
+                              {student.roll != null && (
+                                <span className={`text-[10px] font-bold font-noto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  {lang === 'bn' ? `রোল: ${student.roll}` : `Roll: ${student.roll}`}
+                                </span>
+                              )}
+                              {student.section && (
+                                <span className={`text-[10px] font-bold font-noto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  ({student.section})
+                                </span>
+                              )}
+                            </div>
+                            {(student.guardian_name || student.guardian_phone) && (
+                              <p className={`text-[10px] font-semibold mt-0.5 truncate flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {student.guardian_name && <span className="truncate">{student.guardian_name}</span>}
+                                {student.guardian_name && student.guardian_phone && <span>•</span>}
+                                {student.guardian_phone && (
+                                  <span className="inline-flex items-center gap-0.5 shrink-0">
+                                    <Phone size={9} /> {student.guardian_phone}
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {openingStudentId === student.id ? (
+                          <Loader2 size={17} className="animate-spin text-[#2563EB] shrink-0" />
+                        ) : (
+                          <ChevronRight size={17} strokeWidth={3} className={`${isDark ? 'text-slate-600 group-hover:text-blue-400' : 'text-blue-200 group-hover:text-[#2563EB]'} shrink-0 transition-colors`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 px-2">
+                <p className={`text-xs font-black font-noto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {t('classes_title', lang, madrasah?.institution_type)}
+                </p>
+              </div>
+            </div>
           )}
         </div>
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ADMISSION_T } from './constants';
 import { AdmissionFormData, AdmissionFormLang } from './types';
 import { Eye, Camera, RotateCcw, UserPlus, Save, Download, Sparkles, CheckCircle2 } from 'lucide-react';
@@ -20,6 +20,40 @@ interface Props {
   onResetData?: () => void;
 }
 
+interface AdmissionFormInputProps {
+  label: string;
+  name: keyof AdmissionFormData;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  type?: string;
+  placeholder?: string;
+  required?: boolean;
+}
+
+const AdmissionFormInput: React.FC<AdmissionFormInputProps> = ({
+  label,
+  name,
+  value,
+  onChange,
+  type = 'text',
+  placeholder = '',
+  required = false,
+}) => (
+  <div className="space-y-1">
+    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 font-noto block">
+      {label} {required && <span className="text-rose-500">*</span>}
+    </label>
+    <input
+      type={type}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs font-bold dark:text-slate-100"
+    />
+  </div>
+);
+
 const AdmissionForm: React.FC<Props> = ({
   formData,
   setFormData,
@@ -37,12 +71,12 @@ const AdmissionForm: React.FC<Props> = ({
 }) => {
   const t = ADMISSION_T[lang];
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  }, [setFormData]);
 
-  const handleCheckboxChange = (doc: string) => {
+  const handleCheckboxChange = useCallback((doc: string) => {
     setFormData((prev) => {
       const currentDocs = prev.documentsChecked || [];
       const docs = currentDocs.includes(doc)
@@ -50,35 +84,12 @@ const AdmissionForm: React.FC<Props> = ({
         : [...currentDocs, doc];
       return { ...prev, documentsChecked: docs };
     });
-  };
+  }, [setFormData]);
 
-  const Input = ({
-    label,
-    name,
-    type = 'text',
-    placeholder = '',
-    required = false,
-  }: {
-    label: string;
-    name: keyof AdmissionFormData;
-    type?: string;
-    placeholder?: string;
-    required?: boolean;
-  }) => (
-    <div className="space-y-1">
-      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 font-noto block">
-        {label} {required && <span className="text-rose-500">*</span>}
-      </label>
-      <input
-        type={type}
-        name={name}
-        value={formData[name] !== undefined && formData[name] !== null ? String(formData[name]) : ''}
-        onChange={handleChange}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs font-bold dark:text-slate-100"
-      />
-    </div>
-  );
+  const getFieldValue = (name: keyof AdmissionFormData): string => {
+    const val = formData[name];
+    return val !== undefined && val !== null ? String(val) : '';
+  };
 
   return (
     <div className="space-y-5 bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800">
@@ -200,10 +211,10 @@ const AdmissionForm: React.FC<Props> = ({
 
       {/* A. Institutional & Metadata */}
       <div className="grid grid-cols-2 gap-3">
-        <Input label={t.formNumber} name="formNumber" placeholder="ADM-2026-001" />
-        <Input label={t.admissionDate} name="admissionDate" type="date" />
-        <Input label={t.academicYear} name="academicYear" placeholder="২০২৬" />
-        <Input label={t.session} name="session" placeholder="২০২৬-২০২৭" />
+        <AdmissionFormInput label={t.formNumber} name="formNumber" value={getFieldValue('formNumber')} onChange={handleChange} placeholder="ADM-2026-001" />
+        <AdmissionFormInput label={t.admissionDate} name="admissionDate" value={getFieldValue('admissionDate')} onChange={handleChange} type="date" />
+        <AdmissionFormInput label={t.academicYear} name="academicYear" value={getFieldValue('academicYear')} onChange={handleChange} placeholder="২০২৬" />
+        <AdmissionFormInput label={t.session} name="session" value={getFieldValue('session')} onChange={handleChange} placeholder="২০২৬-২০২৭" />
       </div>
 
       <hr className="border-slate-100 dark:border-slate-800" />
@@ -269,26 +280,30 @@ const AdmissionForm: React.FC<Props> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
-            <Input
+            <AdmissionFormInput
               label={lang === 'bn' ? 'ফরমে প্রদর্শিত শ্রেণির নাম' : 'Displayed Class Name'}
               name="admissionClass"
+              value={getFieldValue('admissionClass')}
+              onChange={handleChange}
               placeholder="হিফজ / প্রথম শ্রেণি"
             />
-            <Input
+            <AdmissionFormInput
               label={lang === 'bn' ? 'ক্লাস রোল নম্বর' : 'Class Roll No'}
               name="roll"
+              value={getFieldValue('roll')}
+              onChange={handleChange}
               placeholder="01"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input label={t.studentName} name="studentName" required placeholder="শিক্ষার্থীর বাংলা নাম" />
-          <Input label={t.studentNameEn} name="studentNameEn" placeholder="STUDENT NAME (ENGLISH)" />
-          <Input label={t.username} name="username" placeholder="ST-2026-01" />
-          <Input label={t.biometricId} name="biometricId" placeholder="101" />
+          <AdmissionFormInput label={t.studentName} name="studentName" value={getFieldValue('studentName')} onChange={handleChange} required placeholder="শিক্ষার্থীর বাংলা নাম" />
+          <AdmissionFormInput label={t.studentNameEn} name="studentNameEn" value={getFieldValue('studentNameEn')} onChange={handleChange} placeholder="STUDENT NAME (ENGLISH)" />
+          <AdmissionFormInput label={t.username} name="username" value={getFieldValue('username')} onChange={handleChange} placeholder="ST-2026-01" />
+          <AdmissionFormInput label={t.biometricId} name="biometricId" value={getFieldValue('biometricId')} onChange={handleChange} placeholder="101" />
           <div className="sm:col-span-2">
-            <Input label={t.birthRegNo} name="birthRegNo" placeholder="১৭-ডিজিট জন্ম নিবন্ধন নম্বর" />
+            <AdmissionFormInput label={t.birthRegNo} name="birthRegNo" value={getFieldValue('birthRegNo')} onChange={handleChange} placeholder="১৭-ডিজিট জন্ম নিবন্ধন নম্বর" />
           </div>
           <DobPicker
             label={t.dateOfBirth}
@@ -309,12 +324,12 @@ const AdmissionForm: React.FC<Props> = ({
               <option value="other">{t.other}</option>
             </select>
           </div>
-          <Input label={t.bloodGroup} name="blood_group" placeholder="O+" />
-          <Input label={t.religion} name="religion" placeholder="ইসলাম" />
-          <Input label={t.nationality} name="nationality" placeholder="বাংলাদেশী" />
-          <Input label={t.department} name="department" placeholder="নূরানী / নাজেরা / হিফজ / কিতাব" />
+          <AdmissionFormInput label={t.bloodGroup} name="blood_group" value={getFieldValue('blood_group')} onChange={handleChange} placeholder="O+" />
+          <AdmissionFormInput label={t.religion} name="religion" value={getFieldValue('religion')} onChange={handleChange} placeholder="ইসলাম" />
+          <AdmissionFormInput label={t.nationality} name="nationality" value={getFieldValue('nationality')} onChange={handleChange} placeholder="বাংলাদেশী" />
+          <AdmissionFormInput label={t.department} name="department" value={getFieldValue('department')} onChange={handleChange} placeholder="নূরানী / নাজেরা / হিফজ / কিতাব" />
           <div className="sm:col-span-2">
-            <Input label={t.residentialStatus} name="residentialStatus" placeholder="আবাসিক / অনাবাসিক / ডে-কেয়ার" />
+            <AdmissionFormInput label={t.residentialStatus} name="residentialStatus" value={getFieldValue('residentialStatus')} onChange={handleChange} placeholder="আবাসিক / অনাবাসিক / ডে-কেয়ার" />
           </div>
         </div>
       </section>
@@ -328,22 +343,22 @@ const AdmissionForm: React.FC<Props> = ({
           <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto uppercase">{t.parentInfo}</h4>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input label={t.fatherName} name="fatherName" />
-          <Input label={t.fatherOccupation} name="fatherOccupation" />
+          <AdmissionFormInput label={t.fatherName} name="fatherName" value={getFieldValue('fatherName')} onChange={handleChange} />
+          <AdmissionFormInput label={t.fatherOccupation} name="fatherOccupation" value={getFieldValue('fatherOccupation')} onChange={handleChange} />
           <div className="sm:col-span-2">
-            <Input label={t.fatherNid} name="fatherNid" />
+            <AdmissionFormInput label={t.fatherNid} name="fatherNid" value={getFieldValue('fatherNid')} onChange={handleChange} />
           </div>
-          <Input label={t.motherName} name="motherName" />
-          <Input label={t.motherOccupation} name="motherOccupation" />
+          <AdmissionFormInput label={t.motherName} name="motherName" value={getFieldValue('motherName')} onChange={handleChange} />
+          <AdmissionFormInput label={t.motherOccupation} name="motherOccupation" value={getFieldValue('motherOccupation')} onChange={handleChange} />
           <div className="sm:col-span-2">
-            <Input label={t.motherNid} name="motherNid" />
+            <AdmissionFormInput label={t.motherNid} name="motherNid" value={getFieldValue('motherNid')} onChange={handleChange} />
           </div>
-          <Input label={t.guardianName} name="guardian_name" required />
-          <Input label={t.guardianRelation} name="guardianRelation" />
-          <Input label={t.guardianPhone} name="guardian_phone" required placeholder="017XXXXXXXX" />
-          <Input label={t.whatsappNumber} name="whatsappNumber" placeholder="017XXXXXXXX" />
+          <AdmissionFormInput label={t.guardianName} name="guardian_name" value={getFieldValue('guardian_name')} onChange={handleChange} required />
+          <AdmissionFormInput label={t.guardianRelation} name="guardianRelation" value={getFieldValue('guardianRelation')} onChange={handleChange} />
+          <AdmissionFormInput label={t.guardianPhone} name="guardian_phone" value={getFieldValue('guardian_phone')} onChange={handleChange} required placeholder="017XXXXXXXX" />
+          <AdmissionFormInput label={t.whatsappNumber} name="whatsappNumber" value={getFieldValue('whatsappNumber')} onChange={handleChange} placeholder="017XXXXXXXX" />
           <div className="sm:col-span-2">
-            <Input label={t.emergencyPhone} name="emergencyPhone" placeholder="018XXXXXXXX" />
+            <AdmissionFormInput label={t.emergencyPhone} name="emergencyPhone" value={getFieldValue('emergencyPhone')} onChange={handleChange} placeholder="018XXXXXXXX" />
           </div>
         </div>
       </section>
@@ -358,15 +373,15 @@ const AdmissionForm: React.FC<Props> = ({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">
-            <Input label={t.presentAddress} name="presentAddress" />
+            <AdmissionFormInput label={t.presentAddress} name="presentAddress" value={getFieldValue('presentAddress')} onChange={handleChange} />
           </div>
           <div className="sm:col-span-2">
-            <Input label={t.permanentAddress} name="permanentAddress" />
+            <AdmissionFormInput label={t.permanentAddress} name="permanentAddress" value={getFieldValue('permanentAddress')} onChange={handleChange} />
           </div>
-          <Input label={t.previousInstitution} name="previousInstitution" />
-          <Input label={t.previousClass} name="previousClass" />
+          <AdmissionFormInput label={t.previousInstitution} name="previousInstitution" value={getFieldValue('previousInstitution')} onChange={handleChange} />
+          <AdmissionFormInput label={t.previousClass} name="previousClass" value={getFieldValue('previousClass')} onChange={handleChange} />
           <div className="sm:col-span-2">
-            <Input label={t.tcNumber} name="tcNumber" />
+            <AdmissionFormInput label={t.tcNumber} name="tcNumber" value={getFieldValue('tcNumber')} onChange={handleChange} />
           </div>
         </div>
       </section>
@@ -380,9 +395,9 @@ const AdmissionForm: React.FC<Props> = ({
           <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 font-noto uppercase">{t.financialInfo}</h4>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Input label={t.admissionFee} name="admissionFee" placeholder="৳ ২০০০" />
-          <Input label={t.monthlyFee} name="monthlyFee" placeholder="৳ ১২০০" />
-          <Input label={t.receiptNumber} name="receiptNumber" placeholder="MR-1001" />
+          <AdmissionFormInput label={t.admissionFee} name="admissionFee" value={getFieldValue('admissionFee')} onChange={handleChange} placeholder="৳ ২০০০" />
+          <AdmissionFormInput label={t.monthlyFee} name="monthlyFee" value={getFieldValue('monthlyFee')} onChange={handleChange} placeholder="৳ ১২০০" />
+          <AdmissionFormInput label={t.receiptNumber} name="receiptNumber" value={getFieldValue('receiptNumber')} onChange={handleChange} placeholder="MR-1001" />
         </div>
       </section>
 

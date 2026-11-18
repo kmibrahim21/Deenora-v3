@@ -713,6 +713,11 @@ const App: React.FC = () => {
               setSelectedClass(cls);
               setView("students");
             }}
+            onStudentClick={(student) => {
+              setSelectedClass(null);
+              setSelectedStudent(student);
+              setView("student-details");
+            }}
             lang={lang}
             madrasah={madrasah}
             dataVersion={dataVersion}
@@ -802,7 +807,7 @@ const App: React.FC = () => {
               setIsEditing(true);
               setView("student-form");
             }}
-            onBack={() => handleBack("students")}
+            onBack={() => handleBack(selectedClass ? "students" : "classes")}
             lang={lang}
             readOnly={
               role !== "madrasah_admin" &&
