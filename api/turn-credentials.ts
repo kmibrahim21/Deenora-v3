@@ -63,25 +63,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const turnServerIp = (process.env.TURN_SERVER_IP || '').trim().replace(/^<|>$/g, '');
     const turnStaticSecret = process.env.TURN_STATIC_SECRET;
 
-    const fallbackRelayServer = {
-      urls: [
-        'turn:a.relay.metered.ca:80',
-        'turn:a.relay.metered.ca:80?transport=tcp',
-        'turn:a.relay.metered.ca:443',
-        'turns:a.relay.metered.ca:443?transport=tcp',
-      ],
-      username: 'e8dd65b92f6dde1c83e2b6b9',
-      credential: '2y+7/3R6c9p4x1K8',
-    };
-
     if (!turnServerIp || !turnStaticSecret) {
-      return res.status(200).json({
-        urls: fallbackRelayServer.urls,
-        username: fallbackRelayServer.username,
-        credential: fallbackRelayServer.credential,
-        iceServers: [fallbackRelayServer],
-        ttl: 3600,
-      });
+      return res.status(500).json({ error: 'TURN server configuration missing' });
     }
 
     // Generate time-limited credential (coturn use-auth-secret / REST-style)
@@ -89,10 +72,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const expiry = Math.floor(Date.now() / 1000) + ttl;
     const username = `${expiry}:${userId}`;
     const cleanSecret = turnStaticSecret.trim().replace(/^<|>$/g, '');
-    const bracketedSecret = `<${cleanSecret}>`;
 
-    const passwordClean = crypto.createHmac('sha1', cleanSecret).update(username).digest('base64');
-    const passwordBracketed = crypto.createHmac('sha1', bracketedSecret).update(username).digest('base64');
+    const password = crypto
+      .createHmac('sha1', cleanSecret)
+      .update(username)
+      .digest('base64');
 
     const turnUrls = [
       `turn:${turnServerIp}:3478?transport=udp`,
@@ -102,19 +86,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       urls: turnUrls,
       username,
-      credential: passwordClean,
+      credential: password,
       iceServers: [
         {
           urls: turnUrls,
           username,
-          credential: passwordClean,
+          credential: password,
         },
-        {
-          urls: turnUrls,
-          username,
-          credential: passwordBracketed,
-        },
-        fallbackRelayServer,
       ],
       ttl,
     });
