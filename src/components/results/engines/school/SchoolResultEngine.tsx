@@ -3570,44 +3570,53 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                                         <X size={10} strokeWidth={4} />
                                       </button>
                                       
-                                      <div className="relative group/date p-1 border border-white/10 rounded-lg">
-                                        {/* Hidden Date Picker overlay */}
-                                        <input 
-                                          type="date"
-                                          value={col.isoDate || ''}
-                                          onChange={(e) => {
-                                            const selectedDate = e.target.value;
-                                            if (!selectedDate) return;
-                                            
-                                            const d = new Date(selectedDate);
-                                            const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                            const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
-                                            
-                                            const updated = [...routineData];
-                                            updated[idx].isoDate = selectedDate;
-                                            updated[idx].date = formattedDate;
-                                            updated[idx].day = formattedDay;
-                                            setRoutineData(updated);
-                                          }}
-                                          className="absolute inset-0 opacity-0 cursor-pointer w-full z-20"
-                                        />
+                                      <SmartDatePicker
+                                        value={col.isoDate || ''}
+                                        onChange={(selectedDate) => {
+                                          if (!selectedDate) return;
+                                          const [y, m, dayNum] = selectedDate.split('-').map(Number);
+                                          const d = new Date(y, m - 1, dayNum);
+                                          const dd = String(dayNum).padStart(2, '0');
+                                          const mm = String(m).padStart(2, '0');
+                                          const yyyy = String(y);
+                                          const toBnDigits = (s: string) => s.replace(/\d/g, ch => '০১২৩৪৫৬৭৮৯'[Number(ch)]);
+                                          const formattedDate = lang === 'bn' ? toBnDigits(`${dd}/${mm}/${yyyy}`) : `${mm}/${dd}/${yyyy}`;
+                                          const bnDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+                                          const enDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                          const formattedDay = lang === 'bn' ? bnDays[d.getDay()] : enDays[d.getDay()];
 
-                                        <input 
-                                          type="text"
-                                          value={col.day}
-                                          onChange={(e) => {
-                                            const updated = [...routineData];
-                                            updated[idx].day = e.target.value;
-                                            setRoutineData(updated);
-                                          }}
-                                          style={{ fontSize: `${Math.round(12 * fontScale)}px` }}
-                                          className={`bg-transparent font-black leading-tight text-white w-full text-center border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none relative z-10`}
-                                        />
-                                        <div className="flex items-center justify-center gap-1 mt-0.5 opacity-90 relative z-10">
-                                          <Calendar size={10} style={{ color: rtTheme.accent }} />
-                                          <span className="font-bold" style={{ color: rtTheme.accent, fontSize: `${Math.round(11 * fontScale)}px` }}>{col.date}</span>
-                                        </div>
-                                      </div>
+                                          setRoutineData(prev => prev.map((item, i) => i === idx ? {
+                                            ...item,
+                                            isoDate: selectedDate,
+                                            date: formattedDate,
+                                            day: formattedDay
+                                          } : item));
+                                        }}
+                                        lang={lang}
+                                        isDark={madrasah?.theme === 'dark'}
+                                        label={lang === 'bn' ? 'পরীক্ষার তারিখ ও বার নির্বাচন' : 'Select Exam Date & Day'}
+                                        renderTrigger={(openPicker) => (
+                                          <button
+                                            type="button"
+                                            onClick={openPicker}
+                                            title={lang === 'bn' ? 'তারিখ ও বার পরিবর্তন করতে ক্লিক করুন' : 'Click to change date & day'}
+                                            className="w-full p-1 border border-white/15 hover:border-white/50 hover:bg-white/10 rounded-lg transition-all cursor-pointer flex flex-col items-center justify-center"
+                                          >
+                                            <span
+                                              style={{ fontSize: `${Math.round(12 * fontScale)}px` }}
+                                              className="font-black leading-tight text-white text-center block select-none"
+                                            >
+                                              {col.day}
+                                            </span>
+                                            <div className="flex items-center justify-center gap-1 mt-0.5 opacity-90">
+                                              <Calendar size={10} style={{ color: rtTheme.accent }} />
+                                              <span className="font-bold select-none" style={{ color: rtTheme.accent, fontSize: `${Math.round(11 * fontScale)}px` }}>
+                                                {col.date}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        )}
+                                      />
                                     </th>
                                   ))}
                                 </tr>
@@ -3798,36 +3807,49 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                                             >
                                               <Trash2 size={12} />
                                             </button>
-                                            <div className="relative group/date border rounded-lg p-0.5 transition-colors" style={{ borderColor: `${rtTheme.primary}26` }}>
-                                              <input 
-                                                type="date" 
-                                                value={row.isoDate || ''}
-                                                onChange={(e) => {
-                                                  const selectedDate = e.target.value;
-                                                  if (!selectedDate) return;
-                                                  
-                                                  const d = new Date(selectedDate);
-                                                  const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                                  const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
-                                                  
-                                                  const updated = [...routineData];
-                                                  updated[idx].isoDate = selectedDate;
-                                                  updated[idx].date = formattedDate;
-                                                  updated[idx].day = formattedDay;
-                                                  setRoutineData(updated);
-                                                }}
-                                                className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
-                                              />
-                                              <div className="flex flex-col items-center">
-                                                <p className="font-black leading-none mb-0.5 font-solaiman" style={{ color: rtTheme.primary, fontSize: `${Math.round((numSingleDays >= 10 ? 10.5 : 12) * fontScale)}px` }}>
-                                                  {row.day}
-                                                </p>
-                                                <p className="font-bold text-slate-500 flex items-center gap-1 font-solaiman" style={{ fontSize: `${Math.round((numSingleDays >= 10 ? 9 : 10.5) * fontScale)}px` }}>
-                                                  <Calendar size={9} />
-                                                  {row.date}
-                                                </p>
-                                              </div>
-                                            </div>
+                                            <SmartDatePicker
+                                              value={row.isoDate || ''}
+                                              onChange={(selectedDate) => {
+                                                if (!selectedDate) return;
+                                                const [y, m, dayNum] = selectedDate.split('-').map(Number);
+                                                const d = new Date(y, m - 1, dayNum);
+                                                const dd = String(dayNum).padStart(2, '0');
+                                                const mm = String(m).padStart(2, '0');
+                                                const yyyy = String(y);
+                                                const toBnDigits = (s: string) => s.replace(/\d/g, ch => '০১২৩৪৫৬৭৮৯'[Number(ch)]);
+                                                const formattedDate = lang === 'bn' ? toBnDigits(`${dd}/${mm}/${yyyy}`) : `${mm}/${dd}/${yyyy}`;
+                                                const bnDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+                                                const enDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                                const formattedDay = lang === 'bn' ? bnDays[d.getDay()] : enDays[d.getDay()];
+
+                                                setRoutineData(prev => prev.map((item, i) => i === idx ? {
+                                                  ...item,
+                                                  isoDate: selectedDate,
+                                                  date: formattedDate,
+                                                  day: formattedDay
+                                                } : item));
+                                              }}
+                                              lang={lang}
+                                              isDark={madrasah?.theme === 'dark'}
+                                              label={lang === 'bn' ? 'পরীক্ষার তারিখ ও বার নির্বাচন' : 'Select Exam Date & Day'}
+                                              renderTrigger={(openPicker) => (
+                                                <button
+                                                  type="button"
+                                                  onClick={openPicker}
+                                                  title={lang === 'bn' ? 'তারিখ ও বার পরিবর্তন করতে ক্লিক করুন' : 'Click to change date & day'}
+                                                  className="w-full border rounded-lg p-1 transition-all cursor-pointer hover:bg-white/60 flex flex-col items-center justify-center"
+                                                  style={{ borderColor: `${rtTheme.primary}26` }}
+                                                >
+                                                  <p className="font-black leading-none mb-0.5 font-solaiman select-none" style={{ color: rtTheme.primary, fontSize: `${Math.round((numSingleDays >= 10 ? 10.5 : 12) * fontScale)}px` }}>
+                                                    {row.day}
+                                                  </p>
+                                                  <p className="font-bold text-slate-500 flex items-center gap-1 font-solaiman select-none" style={{ fontSize: `${Math.round((numSingleDays >= 10 ? 9 : 10.5) * fontScale)}px` }}>
+                                                    <Calendar size={9} />
+                                                    {row.date}
+                                                  </p>
+                                                </button>
+                                              )}
+                                            />
                                           </td>
                                           
                                           {/* Morning subject for selected class */}

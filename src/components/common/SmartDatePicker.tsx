@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, X, Sparkles } from 'lucide-react';
 import { MONTH_DEFINITIONS } from '../../utils/feeCategoryHelper';
 
@@ -12,6 +13,7 @@ interface SmartDatePickerProps {
   maxDate?: string;
   placeholder?: string;
   className?: string;
+  renderTrigger?: (openPicker: () => void) => React.ReactNode;
 }
 
 export const SmartDatePicker: React.FC<SmartDatePickerProps> = ({
@@ -23,7 +25,8 @@ export const SmartDatePicker: React.FC<SmartDatePickerProps> = ({
   minDate,
   maxDate,
   placeholder,
-  className
+  className,
+  renderTrigger
 }) => {
   const isBangla = lang === 'bn';
 
@@ -128,39 +131,19 @@ export const SmartDatePicker: React.FC<SmartDatePickerProps> = ({
     setIsOpen(false);
   };
 
-  return (
-    <div className={`w-full ${className || ''}`}>
-      {label && (
-        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
-          {label}
-        </label>
-      )}
-
-      {/* Trigger Button */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className={`w-full h-14 pl-12 pr-4 flex items-center justify-between border-2 rounded-2xl font-black text-sm transition-all cursor-pointer relative ${
+  const modalNode = isOpen ? (
+    <div
+      onClick={() => setIsOpen(false)}
+      className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full max-w-xs sm:max-w-sm rounded-3xl p-5 shadow-2xl border space-y-4 animate-in zoom-in-95 duration-200 ${
           isDark
-            ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-600'
-            : 'bg-slate-50 border-slate-100 text-[#1E3A8A] hover:border-[#2563EB]/40 shadow-xs'
+            ? 'bg-slate-900 border-slate-700 text-slate-100'
+            : 'bg-white border-slate-100 text-slate-900'
         }`}
       >
-        <CalendarIcon className="absolute left-4 top-4 text-[#2563EB]" size={20} />
-        <span className="truncate">{displayLabel}</span>
-        <span className="text-xs text-slate-400 font-bold ml-2 shrink-0">▼</span>
-      </button>
-
-      {/* Centered Modal Popup */}
-      {isOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-          <div
-            className={`w-full max-w-xs sm:max-w-sm rounded-3xl p-5 shadow-2xl border space-y-4 animate-in zoom-in-95 duration-200 ${
-              isDark
-                ? 'bg-slate-900 border-slate-700 text-slate-100'
-                : 'bg-white border-slate-100 text-slate-900'
-            }`}
-          >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -313,9 +296,48 @@ export const SmartDatePicker: React.FC<SmartDatePickerProps> = ({
                 {isBangla ? 'বাতিল' : 'Cancel'}
               </button>
             </div>
-          </div>
-        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const portaledModal = modalNode && typeof document !== 'undefined'
+    ? createPortal(modalNode, document.body)
+    : modalNode;
+
+  if (renderTrigger) {
+    return (
+      <>
+        {renderTrigger(() => setIsOpen(true))}
+        {portaledModal}
+      </>
+    );
+  }
+
+  return (
+    <div className={`w-full ${className || ''}`}>
+      {label && (
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+          {label}
+        </label>
       )}
+
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className={`w-full h-14 pl-12 pr-4 flex items-center justify-between border-2 rounded-2xl font-black text-sm transition-all cursor-pointer relative ${
+          isDark
+            ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-600'
+            : 'bg-slate-50 border-slate-100 text-[#1E3A8A] hover:border-[#2563EB]/40 shadow-xs'
+        }`}
+      >
+        <CalendarIcon className="absolute left-4 top-4 text-[#2563EB]" size={20} />
+        <span className="truncate">{displayLabel}</span>
+        <span className="text-xs text-slate-400 font-bold ml-2 shrink-0">▼</span>
+      </button>
+
+      {/* Centered Modal Popup */}
+      {portaledModal}
     </div>
   );
 };
