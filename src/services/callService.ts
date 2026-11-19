@@ -59,6 +59,16 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun4.l.google.com:19302' },
     {
       urls: [
+        'turn:a.relay.metered.ca:80',
+        'turn:a.relay.metered.ca:80?transport=tcp',
+        'turn:a.relay.metered.ca:443',
+        'turns:a.relay.metered.ca:443?transport=tcp',
+      ],
+      username: 'e8dd65b92f6dde1c83e2b6b9',
+      credential: '2y+7/3R6c9p4x1K8',
+    },
+    {
+      urls: [
         'turn:openrelay.metered.ca:80',
         'turn:openrelay.metered.ca:443',
         'turn:openrelay.metered.ca:443?transport=tcp',
@@ -636,6 +646,11 @@ export class VoiceCallService {
           await this.handleRemoteCandidate(payload);
           return true;
         }
+      } else if (cleanEvent === 'call:offer') {
+        if (this.activeCallData && (!targetCallId || this.activeCallData.callId === targetCallId) && !this.isCaller) {
+          await this.handleIceRestartOffer(payload);
+          return true;
+        }
       }
       return false;
     } catch (e) {
@@ -970,6 +985,12 @@ export class VoiceCallService {
         if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
           console.log('[VoiceCall] Re-sending offer for missed call:', payload.callId);
           this.broadcastSignaling('call:initiate', this.activeCallData);
+        }
+      })
+      .on('broadcast', { event: 'call:offer' }, async ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCaller) {
+          console.log('[VoiceCall] Callee received ICE restart call:offer from caller:', payload.callId);
+          await this.handleIceRestartOffer(payload);
         }
       });
   }
@@ -1670,8 +1691,7 @@ export class VoiceCallService {
 
   /**
    * Fetches fresh time-limited TURN credentials from /api/turn-credentials.
-   * If successful, appends TURN server to RTCConfiguration iceServers.
-   * If it fails or is unavailable, falls back gracefully to RTC_CONFIG without interrupting the call.
+   * Works for both Supabase Auth users (Admin/Teachers) and Parent Portal users (phone/student session).
    */
   private async getRtcConfiguration(): Promise<RTCConfiguration> {
     const config: RTCConfiguration = {
@@ -1680,33 +1700,46 @@ export class VoiceCallService {
     };
 
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (!token) {
-        console.warn('[VoiceCall] TURN unavailable, STUN-only');
-        return config;
-      }
+      let token = '';
+      try {
+        const { data } = await supabase.auth.getSession();
+        token = data?.session?.access_token || '';
+      } catch {}
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-      const res = await fetch('/api/turn-credentials', {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const phoneOrId = this.currentPhone || this.currentUserId || '';
+      if (phoneOrId) {
+        headers['X-Parent-Phone'] = phoneOrId;
+      }
+
+      const queryUrl = `/api/turn-credentials?phone=${encodeURIComponent(phoneOrId)}&callId=${encodeURIComponent(this.activeCallData?.callId || '')}`;
+      const res = await fetch(queryUrl, {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        console.warn('[VoiceCall] TURN unavailable, STUN-only');
+        console.warn('[VoiceCall] TURN endpoint returned status:', res.status);
         return config;
       }
 
       const turnData = await res.json();
-      if (turnData?.urls && turnData?.username && turnData?.credential) {
+      if (Array.isArray(turnData?.iceServers) && turnData.iceServers.length > 0) {
+        config.iceServers = [
+          ...(config.iceServers || []),
+          ...turnData.iceServers,
+        ];
+        console.log('[VoiceCall] TURN configured with iceServers count:', turnData.iceServers.length);
+      } else if (turnData?.urls && turnData?.username && turnData?.credential) {
         config.iceServers = [
           ...(config.iceServers || []),
           {
@@ -1717,13 +1750,55 @@ export class VoiceCallService {
         ];
         console.log('[VoiceCall] TURN configured');
       } else {
-        console.warn('[VoiceCall] TURN unavailable, STUN-only');
+        console.warn('[VoiceCall] TURN unavailable, using fallback ICE servers');
       }
-    } catch {
-      console.warn('[VoiceCall] TURN unavailable, STUN-only');
+    } catch (err) {
+      console.warn('[VoiceCall] TURN fetch notice, using fallback ICE servers:', err);
     }
 
     return config;
+  }
+
+  /**
+   * Attaches local audio track to existing audio transceiver or adds a new track,
+   * ensuring transceiver direction is always 'sendrecv' on both Caller and Callee.
+   */
+  private async attachLocalStreamToPeerConnection(pc: RTCPeerConnection, stream: MediaStream | null) {
+    const audioTracks = stream ? stream.getAudioTracks() : [];
+    const primaryTrack = audioTracks[0] || null;
+    if (primaryTrack) {
+      primaryTrack.enabled = true;
+    }
+
+    const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+    const audioTransceiver = transceivers.find(
+      (t) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
+    );
+
+    if (audioTransceiver) {
+      audioTransceiver.direction = 'sendrecv';
+      if (primaryTrack) {
+        try {
+          await audioTransceiver.sender.replaceTrack(primaryTrack);
+        } catch {
+          if (stream) pc.addTrack(primaryTrack, stream);
+        }
+      }
+    } else if (primaryTrack && stream) {
+      pc.addTrack(primaryTrack, stream);
+    } else {
+      try {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+      } catch {}
+    }
+
+    if (pc.getTransceivers) {
+      for (const t of pc.getTransceivers()) {
+        if (t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio') {
+          t.direction = 'sendrecv';
+        }
+      }
+    }
   }
 
   /**
@@ -1742,11 +1817,13 @@ export class VoiceCallService {
     const pc = new RTCPeerConnection(rtcConfig);
     this.peerConnection = pc;
 
-    // Explicitly enforce bidirectional audio transceiver ('sendrecv') so callee audio is never dropped or marked recvonly
-    try {
-      pc.addTransceiver('audio', { direction: 'sendrecv' });
-    } catch (e) {
-      console.warn('[VoiceCall] addTransceiver notice:', e);
+    // Only pre-create audio transceiver on Caller; on Callee, setRemoteDescription(offer) creates the mid:0 transceiver
+    if (this.isCaller) {
+      try {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+      } catch (e) {
+        console.warn('[VoiceCall] addTransceiver notice:', e);
+      }
     }
 
     // Zero-latency hangup & control DataChannel
@@ -1967,16 +2044,13 @@ export class VoiceCallService {
       const stream = await this.acquireLocalStream();
       const pc = await this.createPeerConnection(callId);
 
-      if (stream) {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-      }
+      await this.attachLocalStreamToPeerConnection(pc, stream);
 
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: false,
-      });
+      const offer = await pc.createOffer();
       if (offer.sdp) {
-        offer.sdp = optimizeOpusSdp(offer.sdp);
+        offer.sdp = optimizeOpusSdp(offer.sdp)
+          .replace(/a=recvonly/g, 'a=sendrecv')
+          .replace(/a=inactive/g, 'a=sendrecv');
       }
       await pc.setLocalDescription(offer);
 
@@ -2451,22 +2525,19 @@ export class VoiceCallService {
       if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
         try { window.AndroidInterface.stopRinging(); } catch {}
       }
+      if (typeof window !== 'undefined' && window.AndroidInterface?.callStarted) {
+        try { window.AndroidInterface.callStarted(); } catch {}
+      }
       const callId = this.activeCallData.callId;
 
       // Ensure dedicated call room channel is actively subscribed
       this.subscribeCallRoom(callId);
 
       const pc = await this.createPeerConnection(callId);
+      await pc.setRemoteDescription(new RTCSessionDescription(this.activeCallData.offer));
 
       const stream = await this.acquireLocalStream();
-      if (stream) {
-        stream.getAudioTracks().forEach((track) => {
-          track.enabled = true;
-          pc.addTrack(track, stream);
-        });
-      }
-
-      await pc.setRemoteDescription(new RTCSessionDescription(this.activeCallData.offer));
+      await this.attachLocalStreamToPeerConnection(pc, stream);
 
       // Process buffered ICE candidates
       while (this.pendingCandidates.length > 0) {
@@ -2476,11 +2547,11 @@ export class VoiceCallService {
         }
       }
 
-      const answer = await pc.createAnswer({
-        offerToReceiveAudio: true,
-      });
+      const answer = await pc.createAnswer();
       if (answer.sdp) {
-        answer.sdp = optimizeOpusSdp(answer.sdp);
+        answer.sdp = optimizeOpusSdp(answer.sdp)
+          .replace(/a=recvonly/g, 'a=sendrecv')
+          .replace(/a=inactive/g, 'a=sendrecv');
       }
       await pc.setLocalDescription(answer);
 
@@ -2599,6 +2670,39 @@ export class VoiceCallService {
       }
     } catch (e) {
       console.error('[VoiceCall] Failed setting remote answer:', e);
+    }
+  }
+
+  /**
+   * Callee handles incoming ICE restart offer during an active call
+   */
+  private async handleIceRestartOffer(payload: CallPayload) {
+    if (!this.peerConnection || !payload.offer || this.isCaller) return;
+    try {
+      console.log('[VoiceCall] Callee applying ICE restart offer for call:', payload.callId);
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.offer));
+      await this.attachLocalStreamToPeerConnection(this.peerConnection, this.localStream);
+      const answer = await this.peerConnection.createAnswer();
+      if (answer.sdp) {
+        answer.sdp = optimizeOpusSdp(answer.sdp)
+          .replace(/a=recvonly/g, 'a=sendrecv')
+          .replace(/a=inactive/g, 'a=sendrecv');
+      }
+      await this.peerConnection.setLocalDescription(answer);
+      const acceptPayload = {
+        callId: payload.callId,
+        answer: { type: answer.type, sdp: answer.sdp },
+        senderId: this.currentUserId,
+        institutionId: this.activeCallData?.institutionId,
+        timestamp: Date.now(),
+      };
+      await Promise.all([
+        this.broadcastSignaling('call:accept', acceptPayload),
+        this.broadcastSignaling('call:answer', acceptPayload),
+      ]);
+      console.log('[VoiceCall] Callee sent ICE restart answer');
+    } catch (err) {
+      console.warn('[VoiceCall] Failed handling ICE restart offer:', err);
     }
   }
 

@@ -6,7 +6,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS handling
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Parent-Phone');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -17,79 +17,105 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Unauthorized: Missing token' });
-    }
-
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!token || token === 'undefined' || token === 'null') {
-      return res.status(401).json({ error: 'Unauthorized: Missing token' });
-    }
-
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
-      return res.status(500).json({ error: 'Database service unavailable' });
-    }
-
-    let user: any = null;
     let userId = '';
+    const authHeader = req.headers.authorization;
+    const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
 
-    // 1. Verify token with Supabase auth.getUser(token)
-    try {
-      const { data: userData, error: userError } = await supabase.auth.getUser(token);
-      if (userData?.user && !userError) {
-        user = userData.user;
-        userId = user.id;
-      }
-    } catch (e) {
-      console.warn('[TURN Credentials] supabase.auth.getUser notice:', e);
-    }
-
-    // 2. Fallback: Parse JWT payload directly if getUser fails
-    if (!user) {
-      try {
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-          if (payload && (payload.sub || payload.id)) {
-            userId = payload.sub || payload.id;
-            user = { id: userId };
+    if (token && token !== 'undefined' && token !== 'null') {
+      const supabase = getSupabaseAdmin();
+      // 1. Verify token with Supabase auth.getUser(token) if available
+      if (supabase) {
+        try {
+          const { data: userData, error: userError } = await supabase.auth.getUser(token);
+          if (userData?.user && !userError) {
+            userId = userData.user.id;
           }
+        } catch (e) {
+          console.warn('[TURN Credentials] supabase.auth.getUser notice:', e);
         }
-      } catch (jwtErr) {
-        console.warn('[TURN Credentials] JWT parse notice:', jwtErr);
+      }
+
+      // 2. Fallback: Parse JWT payload directly if getUser fails
+      if (!userId) {
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+            if (payload && (payload.sub || payload.id)) {
+              userId = String(payload.sub || payload.id);
+            }
+          }
+        } catch (jwtErr) {
+          console.warn('[TURN Credentials] JWT parse notice:', jwtErr);
+        }
       }
     }
 
-    if (!user || !userId) {
-      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    // 3. Parent Portal / Guardian fallback (no Supabase JWT session)
+    if (!userId) {
+      const queryPhone = typeof req.query.phone === 'string' ? req.query.phone.trim() : '';
+      const headerPhone = typeof req.headers['x-parent-phone'] === 'string' ? req.headers['x-parent-phone'].trim() : '';
+      const queryCallId = typeof req.query.callId === 'string' ? req.query.callId.trim() : '';
+      const rawIdentifier = queryPhone || headerPhone || queryCallId || `guest_${Date.now()}`;
+      userId = rawIdentifier.replace(/[^a-zA-Z0-9_-]/g, '') || `guest_${Date.now()}`;
     }
 
-    const turnServerIp = process.env.TURN_SERVER_IP;
+    const turnServerIp = (process.env.TURN_SERVER_IP || '').trim().replace(/^<|>$/g, '');
     const turnStaticSecret = process.env.TURN_STATIC_SECRET;
 
+    const fallbackRelayServer = {
+      urls: [
+        'turn:a.relay.metered.ca:80',
+        'turn:a.relay.metered.ca:80?transport=tcp',
+        'turn:a.relay.metered.ca:443',
+        'turns:a.relay.metered.ca:443?transport=tcp',
+      ],
+      username: 'e8dd65b92f6dde1c83e2b6b9',
+      credential: '2y+7/3R6c9p4x1K8',
+    };
+
     if (!turnServerIp || !turnStaticSecret) {
-      return res.status(500).json({ error: 'TURN server configuration missing' });
+      return res.status(200).json({
+        urls: fallbackRelayServer.urls,
+        username: fallbackRelayServer.username,
+        credential: fallbackRelayServer.credential,
+        iceServers: [fallbackRelayServer],
+        ttl: 3600,
+      });
     }
 
     // Generate time-limited credential (coturn use-auth-secret / REST-style)
     const ttl = 3600;
     const expiry = Math.floor(Date.now() / 1000) + ttl;
     const username = `${expiry}:${userId}`;
-    const password = crypto
-      .createHmac('sha1', turnStaticSecret)
-      .update(username)
-      .digest('base64');
+    const cleanSecret = turnStaticSecret.trim().replace(/^<|>$/g, '');
+    const bracketedSecret = `<${cleanSecret}>`;
+
+    const passwordClean = crypto.createHmac('sha1', cleanSecret).update(username).digest('base64');
+    const passwordBracketed = crypto.createHmac('sha1', bracketedSecret).update(username).digest('base64');
+
+    const turnUrls = [
+      `turn:${turnServerIp}:3478?transport=udp`,
+      `turn:${turnServerIp}:3478?transport=tcp`,
+    ];
 
     return res.status(200).json({
-      urls: [
-        `turn:${turnServerIp}:3478?transport=udp`,
-        `turn:${turnServerIp}:3478?transport=tcp`,
-        `turns:${turnServerIp}:5349?transport=tcp`,
-      ],
+      urls: turnUrls,
       username,
-      credential: password,
+      credential: passwordClean,
+      iceServers: [
+        {
+          urls: turnUrls,
+          username,
+          credential: passwordClean,
+        },
+        {
+          urls: turnUrls,
+          username,
+          credential: passwordBracketed,
+        },
+        fallbackRelayServer,
+      ],
       ttl,
     });
   } catch (error: any) {
