@@ -567,58 +567,68 @@ export const generateAdmitCardPDF = async (
   onProgress?.(5);
   const isAdmission = templateId === 'admission';
   
-  // Render all cards as HTML string
-  const cardsHtml = students.map((student, i) => {
-    const cardHtml = renderToString(
-      <AdmitCardTemplate 
-        exam={exam} 
-        student={student} 
-        madrasah={madrasah} 
-        templateId={templateId} 
-        lang={lang} 
-      />
-    );
-    
-    // Determine layout properties based on templateId
-    let cardsPerPage = 2;
-    let cardWidth = '190mm';
-    let cardHeight = '135mm';
-    let margin = '5mm auto';
-    let scale = 1;
+  // Determine layout properties based on templateId
+  let cardsPerPage = 2;
+  let cardWidth = '190mm';
+  let cardHeight = '135mm';
+  let scale = 1;
+  let gridStyle = 'grid-template-columns: 190mm; grid-template-rows: 135mm 135mm; row-gap: 8mm;';
 
-    if (templateId === 'modern') {
-      // 4 cards per page, A4 Landscape
-      cardsPerPage = 4;
-      cardWidth = '140mm';
-      cardHeight = '92mm';
-      margin = '4mm 3mm';
-      scale = 0.62; // 140mm = 529.13px, 529.13 / 850px = 0.6225
-    } else if (templateId === 'classic') {
-      // 6 cards per page, A4 Portrait
-      cardsPerPage = 6;
-      cardWidth = '95mm'; // Need to fit 2 side-by-side on A4 portrait (210mm)
-      cardHeight = '65mm'; // 600px * 0.40 = 240px = 63.5mm
-      margin = '10mm 4mm';
-      scale = 0.40; // 900px * 0.40 = 360px = 95.25mm
-    }
-
-    const isLastCardOnPage = (i + 1) % cardsPerPage === 0;
-    const isLastCardOverall = i === students.length - 1;
-    
-    // Wrap card to maintain sizes and optionally add page break
-    return `
-      <div style="display: inline-block; width: ${cardWidth}; height: ${cardHeight}; margin: ${margin}; vertical-align: top; box-sizing: border-box; position: relative; overflow: hidden; page-break-inside: avoid;">
-        <div style="position: absolute; top: 0; left: 0; transform-origin: top left; transform: scale(${scale});">
-          ${cardHtml}
-        </div>
-      </div>
-      ${(isLastCardOnPage && !isLastCardOverall) ? '<div style="page-break-after: always;"></div>' : ''}
-    `;
-  }).join('');
-
-  onProgress?.(30);
+  if (templateId === 'modern') {
+    // 4 cards per page (2x2), A4 Landscape (297mm x 210mm)
+    cardsPerPage = 4;
+    cardWidth = '140mm';
+    cardHeight = '92mm';
+    scale = 0.62; // 850px * 0.62 = 527px (~139.4mm), 550px * 0.62 = 341px (~90.2mm)
+    gridStyle = 'grid-template-columns: 140mm 140mm; grid-template-rows: 92mm 92mm; column-gap: 6mm; row-gap: 8mm;';
+  } else if (templateId === 'classic') {
+    // 6 cards per page (2x3), A4 Portrait (210mm x 297mm)
+    cardsPerPage = 6;
+    cardWidth = '95mm';
+    cardHeight = '65mm';
+    scale = 0.398; // 900px * 0.398 = 358.2px (~94.8mm), 600px * 0.398 = 238.8px (~63.2mm)
+    gridStyle = 'grid-template-columns: 95mm 95mm; grid-template-rows: repeat(3, 65mm); column-gap: 8mm; row-gap: 20mm;';
+  }
 
   const isPortrait = templateId === 'admission' || templateId === 'classic';
+  const pageWidth = isPortrait ? '210mm' : '297mm';
+  const pageHeight = isPortrait ? '296mm' : '209mm';
+
+  // Render cards grouped into explicit A4 pages so Chromium PDF compositor never drops bottom-row layers
+  const pages: string[] = [];
+  for (let p = 0; p < students.length; p += cardsPerPage) {
+    const pageStudents = students.slice(p, p + cardsPerPage);
+    const pageCardsHtml = pageStudents.map((student) => {
+      const cardHtml = renderToString(
+        <AdmitCardTemplate 
+          exam={exam} 
+          student={student} 
+          madrasah={madrasah} 
+          templateId={templateId} 
+          lang={lang} 
+        />
+      );
+      return `
+        <div style="width: ${cardWidth}; height: ${cardHeight}; box-sizing: border-box; position: relative; overflow: hidden; page-break-inside: avoid; break-inside: avoid;">
+          <div style="${scale !== 1 ? `zoom: ${scale};` : ''}">
+            ${cardHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const isLastPage = p + cardsPerPage >= students.length;
+    pages.push(`
+      <div style="width: ${pageWidth}; height: ${pageHeight}; box-sizing: border-box; display: grid; ${gridStyle} justify-content: center; align-content: center; overflow: hidden; ${isLastPage ? '' : 'page-break-after: always; break-after: page;'}">
+        ${pageCardsHtml}
+      </div>
+    `);
+  }
+
+  const cardsHtml = pages.join('');
+  onProgress?.(30);
+
+  const baseOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
   // Wrap in a full HTML document with Tailwind and custom fonts
   const fullHtml = `
@@ -628,7 +638,7 @@ export const generateAdmitCardPDF = async (
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Admit Cards</title>
-      <base href="\${window.location.origin}/">
+      ${baseOrigin ? `<base href="${baseOrigin}/">` : ''}
       <script src="https://cdn.tailwindcss.com"></script>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Hind+Siliguri:wght@400;600;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
@@ -639,11 +649,13 @@ export const generateAdmitCardPDF = async (
           font-style: normal;
           font-display: swap;
         }
-        body {
+        * {
+          box-sizing: border-box;
+        }
+        html, body {
           margin: 0;
           padding: 0;
           background-color: white;
-          text-align: center;
         }
         @page {
           size: ${isPortrait ? 'a4 portrait' : 'a4 landscape'};
@@ -652,9 +664,7 @@ export const generateAdmitCardPDF = async (
       </style>
     </head>
     <body>
-      <div style="display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; padding: 2mm;">
-        ${cardsHtml}
-      </div>
+      ${cardsHtml}
     </body>
     </html>
   `;
