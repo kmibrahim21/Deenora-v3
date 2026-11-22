@@ -648,6 +648,24 @@ export default async function handler(req, res) {
         console.warn('Error fetching notifications in parents API:', notifErr);
       }
 
+      // 7. Hifz & Sabaq Records (Strictly scoped to verified student & institution)
+      let hifzRecords: any[] = [];
+      try {
+        const { data: hifzData } = await supabase
+          .from('hifz_records')
+          .select('*')
+          .eq('student_id', studentId)
+          .eq('institution_id', student.institution_id)
+          .order('record_date', { ascending: false })
+          .limit(180);
+
+        if (hifzData && Array.isArray(hifzData)) {
+          hifzRecords = hifzData;
+        }
+      } catch (hifzErr) {
+        console.warn('Error fetching hifz_records in parents API:', hifzErr);
+      }
+
       return res.status(200).json({
         student,
         children,
@@ -660,7 +678,8 @@ export default async function handler(req, res) {
         events: upcomingEvents || [],
         classTotal: classTotal || 0,
         institution: student.institutions,
-        notifications: notifications || []
+        notifications: notifications || [],
+        hifz_records: hifzRecords || []
       });
     }
 

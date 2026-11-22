@@ -38,6 +38,7 @@ import {
   HifzReportPeriod,
   SABQI_LABELS,
 } from 'utils/hifzReportPdf';
+import { NotificationService } from '../services/NotificationService';
 
 interface HifzTrackerProps {
   madrasah: Institution | null;
@@ -788,14 +789,33 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
       if (error) throw error;
 
+      const isUpdate = Boolean(dailyRecordsMap[activeStudent.id]);
       const savedRecord = (data || { ...basePayload, id: `${activeStudent.id}_${selectedDate}` }) as HifzRecord;
+      const notifiedStudent = activeStudent;
       setDailyRecordsMap((prev) => ({ ...prev, [activeStudent.id]: savedRecord }));
       setActiveStudent(null);
       showToast(
         isBn
-          ? `${activeStudent.student_name}-এর সবক সংরক্ষিত হয়েছে`
-          : `Saved Sabaq for ${activeStudent.student_name}`
+          ? `${notifiedStudent.student_name}-এর সবক সংরক্ষিত হয়েছে`
+          : `Saved Sabaq for ${notifiedStudent.student_name}`
       );
+
+      // Fire-and-forget Parent Portal in-app & FCM push notification
+      NotificationService.sendHifzNotification({
+        institutionId: madrasah.id,
+        institutionName: madrasah.name,
+        institutionConfig: madrasah.config_json,
+        student: {
+          id: notifiedStudent.id,
+          student_name: notifiedStudent.student_name,
+          name_en: notifiedStudent.name_en,
+          roll: notifiedStudent.roll,
+          guardian_phone: notifiedStudent.guardian_phone,
+          guardian_phone_2: (notifiedStudent as any).guardian_phone_2,
+        },
+        record: savedRecord,
+        isUpdate,
+      }).catch((pushErr) => console.warn('[HifzTracker] Parent notification notice:', pushErr));
     } catch (err: any) {
       console.error('[HifzTracker] Save error:', err);
       setEntryError(

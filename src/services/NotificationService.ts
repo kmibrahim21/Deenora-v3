@@ -20,7 +20,7 @@ export interface AppNotification {
   guardian_phone?: string | null;
   title: string;
   message: string;
-  type: 'attendance' | 'fee' | 'general';
+  type: 'attendance' | 'fee' | 'hifz' | 'general';
   is_read: boolean;
   created_at: string;
 }
@@ -491,6 +491,181 @@ export const NotificationService = {
       return { success: true };
     } catch (err: any) {
       console.error('[NotificationService] sendFeeNotification error:', err);
+      return { success: false, message: err.message };
+    }
+  },
+
+  /**
+   * Triggers Hifz & Sabaq in-app & push notification when a teacher saves a student's daily sabaq
+   */
+  sendHifzNotification: async (params: {
+    institutionId: string;
+    institutionName?: string;
+    institutionConfig?: any;
+    student: {
+      id: string;
+      student_name?: string;
+      name_en?: string;
+      roll?: string | number;
+      guardian_phone?: string;
+      guardian_phone_2?: string;
+    };
+    record: {
+      record_date: string;
+      department: 'hifz' | 'nazera' | 'qaida';
+      para_no?: number | null;
+      surah_name?: string | null;
+      page_from?: number | null;
+      page_to?: number | null;
+      lines_count?: number | null;
+      sabqi_status?: 'done' | 'partial' | 'missed' | null;
+      sabqi_pages?: number | null;
+      amukhta_para?: string | number | null;
+      amukhta_amount?: string | null;
+      mistakes_lokma?: number | null;
+      mistakes_tajweed?: number | null;
+      grade?: 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada' | null;
+      remarks?: string | null;
+    };
+    isUpdate?: boolean;
+  }): Promise<{ success: boolean; message?: string }> => {
+    const { institutionId, student, record, institutionConfig, isUpdate = false } = params;
+    if (!institutionId || !student?.id || !record) {
+      return { success: false, message: 'Missing parameters' };
+    }
+
+    // STRICT CHECK: Push & in-app notifications are only active if Parent Portal is enabled
+    const isPortalActive = await NotificationService.isParentPortalEnabled(institutionId, institutionConfig);
+    if (!isPortalActive) {
+      return { success: true, message: 'Parent Portal module is not enabled for this institution' };
+    }
+
+    try {
+      const deptMap: Record<string, string> = {
+        hifz: 'হিফজ',
+        nazera: 'নাজেরা',
+        qaida: 'কায়দা',
+      };
+      const gradeMap: Record<string, string> = {
+        mumtaz: 'মুমতাজ',
+        jayyid_jiddan: 'জায়্যিদ জিদ্দান',
+        jayyid: 'জায়্যিদ',
+        iada: "ই'আদাহ",
+      };
+      const sabqiMap: Record<string, string> = {
+        done: 'শোনা হয়েছে',
+        partial: 'আংশিক',
+        missed: 'হয়নি',
+      };
+
+      const deptLabel = deptMap[record.department] || 'হিফজ';
+      const studentName = student.student_name || student.name_en || 'শিক্ষার্থী';
+      const dateBn = toBanglaDigits(record.record_date);
+
+      const sabaqParts: string[] = [];
+      if (record.para_no != null) {
+        sabaqParts.push(`পারা ${toBanglaDigits(record.para_no)}`);
+      }
+      if (record.surah_name) {
+        sabaqParts.push(record.surah_name);
+      }
+      if (record.page_from != null) {
+        const pageRange =
+          record.page_to != null && record.page_to !== record.page_from
+            ? `${toBanglaDigits(record.page_from)}–${toBanglaDigits(record.page_to)}`
+            : `${toBanglaDigits(record.page_from)}`;
+        sabaqParts.push(`পৃষ্ঠা ${pageRange}`);
+      }
+      if (record.lines_count != null && record.lines_count > 0) {
+        sabaqParts.push(`${toBanglaDigits(record.lines_count)} লাইন`);
+      }
+
+      const detailSegments: string[] = [];
+      if (sabaqParts.length > 0) {
+        detailSegments.push(`সবক: ${sabaqParts.join(', ')}`);
+      }
+      if (record.sabqi_status && sabqiMap[record.sabqi_status]) {
+        const sabqiExtra =
+          record.sabqi_pages != null && record.sabqi_pages > 0
+            ? ` (${toBanglaDigits(record.sabqi_pages)} পৃঃ)`
+            : '';
+        detailSegments.push(`সবকী: ${sabqiMap[record.sabqi_status]}${sabqiExtra}`);
+      }
+      if (record.amukhta_para || record.amukhta_amount) {
+        const amukhtaParts = [
+          record.amukhta_para ? `পারা ${toBanglaDigits(record.amukhta_para)}` : '',
+          record.amukhta_amount ? toBanglaDigits(record.amukhta_amount) : '',
+        ].filter(Boolean);
+        if (amukhtaParts.length > 0) {
+          detailSegments.push(`আমুখতা: ${amukhtaParts.join(' · ')}`);
+        }
+      }
+      if (record.grade && gradeMap[record.grade]) {
+        detailSegments.push(`মান: ${gradeMap[record.grade]}`);
+      }
+
+      const lokma = Number(record.mistakes_lokma || 0);
+      const tajweed = Number(record.mistakes_tajweed || 0);
+      if (lokma > 0 || tajweed > 0) {
+        const errParts: string[] = [];
+        if (lokma > 0) errParts.push(`লোকমা ${toBanglaDigits(lokma)}`);
+        if (tajweed > 0) errParts.push(`তাজভীদ ${toBanglaDigits(tajweed)}`);
+        detailSegments.push(`ভুল: ${errParts.join(', ')}`);
+      }
+
+      const remarksText = record.remarks?.trim() ? ` মন্তব্য: ${record.remarks.trim()}` : '';
+      const notifTitle = isUpdate
+        ? `${deptLabel} সবক আপডেট (সংশোধিত)`
+        : `আজকের ${deptLabel} সবক আপডেট`;
+      const notifBody = `আস-সালামু আলাইকুম, ${studentName} (${dateBn}) — ${detailSegments.join(' | ')}।${remarksText}`;
+
+      const phone = (student.guardian_phone || student.guardian_phone_2 || '').trim();
+      const targetPhones = [student.guardian_phone, student.guardian_phone_2]
+        .map((p) => (p || '').trim())
+        .filter(Boolean);
+
+      // 1. Save In-App Notification to app_notifications
+      const { error: insertErr } = await supabase
+        .from('app_notifications')
+        .insert([{
+          institution_id: institutionId,
+          student_id: student.id,
+          guardian_phone: phone || null,
+          title: notifTitle,
+          message: notifBody,
+          type: 'hifz',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        }]);
+
+      if (insertErr) {
+        console.warn('[NotificationService] Hifz in-app notification insert warning:', insertErr);
+      }
+
+      // 2. Dispatch FCM Push Notification via backend
+      try {
+        await fetch('/api/call?action=send_notification_push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            institution_id: institutionId,
+            title: notifTitle,
+            body: notifBody,
+            type: 'hifz',
+            target: {
+              type: 'students',
+              student_ids: [student.id],
+              phones: targetPhones,
+            },
+          }),
+        });
+      } catch (fcmErr) {
+        console.warn('[NotificationService] Hifz FCM push dispatch notice:', fcmErr);
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[NotificationService] sendHifzNotification error:', err);
       return { success: false, message: err.message };
     }
   },

@@ -73,10 +73,11 @@ import {
 } from '../lib/pushNotifications';
 import { getBengaliDate, getHijriDate } from '../utils/calendarUtils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Attendance, Fee, Language, Institution } from 'types';
+import { Attendance, Fee, HifzRecord, Language, Institution } from 'types';
 import { hardReload } from 'utils/reloadUtils';
 import { generateResultPDF } from 'utils/pdfGenerator';
 import { NotificationService, AppNotification } from '../services/NotificationService';
+import { DEPT_LABELS, GRADE_LABELS, SABQI_LABELS } from '../utils/hifzReportPdf';
 
 const toBanglaNum = (num: any): string => {
   if (num === null || num === undefined) return '';
@@ -196,7 +197,7 @@ interface ParentPortalProps {
 const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'chat' | 'profile'>('home');
   const [isMobileChatActive, setIsMobileChatActive] = useState(false);
-  const [activeNoticeTab, setActiveNoticeTab] = useState<'notice' | 'diary' | 'syllabus' | 'suggestion' | 'routine'>('notice');
+  const [activeNoticeTab, setActiveNoticeTab] = useState<'notice' | 'diary' | 'hifz' | 'syllabus' | 'suggestion' | 'routine'>('notice');
 
   // Pre-load cached data synchronously to eliminate the double loading screen on launch
   const initialCache = useMemo(() => {
@@ -323,6 +324,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [results, setResults] = useState<any[]>(() => initialCache?.examResults || []);
   const [notices, setNotices] = useState<any[]>(() => initialCache?.notices || []);
   const [events, setEvents] = useState<any[]>(() => initialCache?.events || []);
+  const [hifzRecords, setHifzRecords] = useState<HifzRecord[]>(() => initialCache?.hifz_records || []);
+  const [hifzDeptFilter, setHifzDeptFilter] = useState<'all' | 'hifz' | 'nazera' | 'qaida'>('all');
   const [classTotal, setClassTotal] = useState<number>(() => initialCache?.classTotal || 0);
   const [loading, setLoading] = useState<boolean>(() => !initialCache?.student);
   const [error, setError] = useState<string | null>(null);
@@ -341,7 +344,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
   const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false);
-  const [notifFilter, setNotifFilter] = useState<'all' | 'attendance' | 'fee' | 'unread'>('all');
+  const [notifFilter, setNotifFilter] = useState<'all' | 'attendance' | 'fee' | 'hifz' | 'unread'>('all');
   const [markingAllRead, setMarkingAllRead] = useState<boolean>(false);
 
   const unreadNotifCount = useMemo(() => {
@@ -553,6 +556,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     setResults(data.examResults || []);
     setNotices(data.notices || []);
     setEvents(data.events || []);
+    setHifzRecords(Array.isArray(data.hifz_records) ? data.hifz_records : []);
     setClassTotal(data.classTotal || 0);
     if (data.notifications && Array.isArray(data.notifications)) {
       setAppNotifications(data.notifications);
@@ -616,6 +620,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             playNotificationSound();
             setNotifToast(newNotif.title || 'নতুন নোটিফিকেশন এসেছে 🔔');
             setTimeout(() => setNotifToast(null), 4000);
+            if (newNotif.type === 'hifz') {
+              fetchData();
+            }
           }
         }
       )
@@ -977,8 +984,77 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return totalFull > 0 ? Math.round((totalObtained / totalFull) * 100) : 85;
   }, [results]);
 
+  const showHifzDiary = useMemo(() => {
+    return Boolean(modules.hifz_tracker === true || hifzRecords.length > 0);
+  }, [modules.hifz_tracker, hifzRecords.length]);
+
+  const hifzParaProgress = useMemo(() => {
+    const latestWithPara = hifzRecords.find(
+      (r) => r.para_no != null && Number(r.para_no) >= 1 && Number(r.para_no) <= 30
+    );
+    const currentPara = latestWithPara ? Number(latestWithPara.para_no) : null;
+
+    const paraMaxPage: Record<number, number> = {};
+    const paraVisited = new Set<number>();
+
+    for (const rec of hifzRecords) {
+      const p = Number(rec.para_no);
+      if (p >= 1 && p <= 30) {
+        paraVisited.add(p);
+        const pg = Math.max(Number(rec.page_to || 0), Number(rec.page_from || 0));
+        if (pg > (paraMaxPage[p] || 0)) {
+          paraMaxPage[p] = pg;
+        }
+      }
+    }
+
+    const paras = Array.from({ length: 30 }, (_, idx) => {
+      const paraNo = idx + 1;
+      let status: 'completed' | 'current' | 'remaining' = 'remaining';
+      if (currentPara !== null) {
+        if (paraNo === currentPara) {
+          status = 'current';
+        } else if (paraVisited.has(paraNo)) {
+          status = 'completed';
+        } else if (paraNo < currentPara && currentPara <= 28) {
+          status = 'completed';
+        }
+      }
+      return {
+        paraNo,
+        status,
+        maxPage: paraMaxPage[paraNo] || 0,
+      };
+    });
+
+    const completedParasCount = paras.filter((p) => p.status === 'completed').length;
+    return {
+      paras,
+      currentPara,
+      completedParasCount,
+      currentParaPage: currentPara ? paraMaxPage[currentPara] || 0 : 0,
+      latestRecord: hifzRecords[0] || null,
+    };
+  }, [hifzRecords]);
+
   const recentActivities = useMemo(() => {
+    const latestHifz = hifzRecords[0];
     return [
+      ...(showHifzDiary && latestHifz ? [{
+        icon: BookOpen,
+        id: 'hifz',
+        title: `${DEPT_LABELS[latestHifz.department]?.bn || 'হিফজ'} সবক ডায়েরি`,
+        sub: [
+          latestHifz.para_no != null ? `পারা ${toBanglaNum(latestHifz.para_no)}` : '',
+          latestHifz.page_from != null
+            ? `পৃঃ ${toBanglaNum(latestHifz.page_from)}${latestHifz.page_to != null && latestHifz.page_to !== latestHifz.page_from ? `–${toBanglaNum(latestHifz.page_to)}` : ''}`
+            : '',
+          latestHifz.record_date ? toBanglaNum(latestHifz.record_date) : '',
+        ].filter(Boolean).join(' · '),
+        trail: latestHifz.grade ? (GRADE_LABELS[latestHifz.grade]?.bn || 'সংরক্ষিত') : 'সংরক্ষিত',
+        color: 'emerald',
+        timestamp: new Date(latestHifz.updated_at || latestHifz.created_at || latestHifz.record_date).getTime() || Date.now()
+      }] : []),
       ...(modules.attendance !== false && attendance.length > 0 ? [{
         icon: CheckCircle2,
         id: 'att',
@@ -1016,7 +1092,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         timestamp: new Date(notices[0].created_at).getTime()
       }] : [])
     ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 4);
-  }, [attendance, fees, results, notices, modules]);
+  }, [attendance, fees, results, notices, modules, showHifzDiary, hifzRecords]);
 
   const currentExam = useMemo(() => {
     return results.find(e => e.id === selectedExamId) || results[0] || null;
@@ -1315,6 +1391,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
                     {[
                       { id: 'all', label: 'সবগুলো', count: appNotifications.length },
+                      ...(showHifzDiary || appNotifications.some(n => n.type === 'hifz')
+                        ? [{ id: 'hifz', label: 'হিফজ ও সবক', count: appNotifications.filter(n => n.type === 'hifz').length }]
+                        : []),
                       { id: 'attendance', label: 'হাজিরা', count: appNotifications.filter(n => n.type === 'attendance').length },
                       { id: 'fee', label: 'ফি আদায়', count: appNotifications.filter(n => n.type === 'fee').length },
                       { id: 'unread', label: 'অপঠিত', count: unreadNotifCount },
@@ -1359,6 +1438,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       if (notifFilter === 'unread') return !n.is_read;
                       if (notifFilter === 'attendance') return n.type === 'attendance';
                       if (notifFilter === 'fee') return n.type === 'fee';
+                      if (notifFilter === 'hifz') return n.type === 'hifz';
                       return true;
                     });
 
@@ -1373,7 +1453,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                               {notifFilter === 'unread' ? 'কোনো অপঠিত নোটিফিকেশন নেই' : 'কোনো নোটিফিকেশন পাওয়া যায়নি'}
                             </p>
                             <p className="text-xs text-slate-400 font-noto mt-0.5">
-                              হাজিরা অনুপস্থিতি বা ফি আদায়ের সকল বার্তা এখানে সংরক্ষিত থাকবে।
+                              হাজিরা অনুপস্থিতি, ফি আদায় বা সবকের সকল বার্তা এখানে সংরক্ষিত থাকবে।
                             </p>
                           </div>
                         </div>
@@ -1384,12 +1464,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       const isUnread = !notif.is_read;
                       const isAttendance = notif.type === 'attendance';
                       const isFee = notif.type === 'fee';
+                      const isHifz = notif.type === 'hifz';
 
                       return (
                         <div
                           key={notif.id}
                           onClick={() => {
                             if (isUnread) handleMarkAsRead(notif.id);
+                            if (isHifz) {
+                              setShowNotificationCenter(false);
+                              setActiveTab('notices');
+                              setActiveNoticeTab('hifz');
+                            }
                           }}
                           className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
                             isUnread
@@ -1400,13 +1486,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           <div className="flex items-start gap-3">
                             {/* Icon badge */}
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              isAttendance
+                              isHifz
+                                ? 'bg-teal-100 text-teal-700 border border-teal-200'
+                                : isAttendance
                                 ? 'bg-amber-100 text-amber-700 border border-amber-200'
                                 : isFee
                                 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                                 : 'bg-blue-100 text-blue-700 border border-blue-200'
                             }`}>
-                              {isAttendance ? (
+                              {isHifz ? (
+                                <BookOpen size={18} />
+                              ) : isAttendance ? (
                                 <AlertTriangle size={18} />
                               ) : isFee ? (
                                 <ReceiptText size={18} />
@@ -1423,13 +1513,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                     {notif.title}
                                   </h4>
                                   <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                                    isAttendance 
+                                    isHifz
+                                      ? 'bg-teal-100 text-teal-800'
+                                      : isAttendance 
                                       ? 'bg-amber-100 text-amber-800' 
                                       : isFee 
                                       ? 'bg-emerald-100 text-emerald-800' 
                                       : 'bg-blue-100 text-blue-800'
                                   }`}>
-                                    {isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
+                                    {isHifz ? 'হিফজ ও সবক' : isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
                                   </span>
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-400 font-noto shrink-0">
@@ -1445,7 +1537,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 <div className="mt-2 flex items-center gap-1.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                                   <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider font-noto">
-                                    অপঠিত (ক্লিক করে পঠিত করুন)
+                                    {isHifz ? 'অপঠিত (ট্যাপ করে সবক ডায়েরি দেখুন)' : 'অপঠিত (ক্লিক করে পঠিত করুন)'}
                                   </span>
                                 </div>
                               )}
@@ -1616,6 +1708,134 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         <AnimatePresence mode="wait">
           {activeTab === 'home' && (
             <motion.div key="home" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8 mt-8 pb-4">
+              {/* Latest Hifz & Sabaq Summary Card (Shown only when enabled or records exist) */}
+              {showHifzDiary && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                      <BookOpen size={14} className="text-emerald-600" /> হিফজ ও সবক ডায়েরি
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('notices');
+                        setActiveNoticeTab('hifz');
+                      }}
+                      className="text-[11px] font-black text-emerald-600 hover:text-emerald-700 font-noto flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>সম্পূর্ণ ডায়েরি</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+
+                  {hifzParaProgress.latestRecord ? (() => {
+                    const rec = hifzParaProgress.latestRecord!;
+                    const gradeLabel = rec.grade ? (GRADE_LABELS[rec.grade]?.bn || rec.grade) : '';
+                    const gradeBadgeClass =
+                      rec.grade === 'mumtaz'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : rec.grade === 'jayyid_jiddan'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : rec.grade === 'jayyid'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200';
+                    const pageStr =
+                      rec.page_from != null
+                        ? `${toBanglaNum(rec.page_from)}${rec.page_to != null && rec.page_to !== rec.page_from ? `–${toBanglaNum(rec.page_to)}` : ''}`
+                        : '';
+                    return (
+                      <div
+                        onClick={() => {
+                          setActiveTab('notices');
+                          setActiveNoticeTab('hifz');
+                        }}
+                        className="bg-white border border-emerald-100 p-5 rounded-[2rem] shadow-soft hover:shadow-premium transition-all cursor-pointer space-y-3 text-left"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black font-noto">
+                              {DEPT_LABELS[rec.department]?.bn || 'হিফজ'}
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-400 font-noto">
+                              {toBanglaNum(rec.record_date)}
+                            </span>
+                          </div>
+                          {gradeLabel && (
+                            <span className={`px-2.5 py-1 rounded-xl border text-[10px] font-black font-noto ${gradeBadgeClass}`}>
+                              {gradeLabel}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 font-noto">সবক (নতুন)</p>
+                            <p className="text-xs font-black text-slate-900 font-noto mt-0.5">
+                              {[
+                                rec.para_no != null ? `পারা ${toBanglaNum(rec.para_no)}` : '',
+                                pageStr ? `পৃঃ ${pageStr}` : '',
+                                rec.lines_count != null ? `${toBanglaNum(rec.lines_count)} লাইন` : '',
+                              ].filter(Boolean).join(' · ') || 'রেকর্ড সংরক্ষিত'}
+                            </p>
+                            {rec.surah_name && (
+                              <p className="text-[10px] font-bold text-slate-500 font-noto mt-0.5 truncate">
+                                সূরা: {rec.surah_name}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 font-noto">সবকী ও আমুখতা</p>
+                            <p className="text-xs font-black text-slate-800 font-noto mt-0.5">
+                              সবকী: {rec.sabqi_status ? (SABQI_LABELS[rec.sabqi_status]?.bn || rec.sabqi_status) : '—'}
+                              {rec.sabqi_pages != null && rec.sabqi_pages > 0 ? ` (${toBanglaNum(rec.sabqi_pages)} পৃঃ)` : ''}
+                            </p>
+                            {(rec.amukhta_para || rec.amukhta_amount) && (
+                              <p className="text-[10px] font-bold text-slate-500 font-noto mt-0.5 truncate">
+                                আমুখতা: {[rec.amukhta_para ? `পারা ${toBanglaNum(rec.amukhta_para)}` : '', rec.amukhta_amount ? toBanglaNum(rec.amukhta_amount) : ''].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] font-bold text-emerald-700/80 font-noto">৩০ পারা অগ্রগতি</p>
+                              <p className="text-xs font-black text-emerald-900 font-noto mt-0.5">
+                                {hifzParaProgress.completedParasCount > 0 || hifzParaProgress.currentPara
+                                  ? `${toBanglaNum(hifzParaProgress.completedParasCount)} / ৩০ পারা সম্পন্ন`
+                                  : `মোট ${toBanglaNum(hifzRecords.length)} দিন`}
+                              </p>
+                              {hifzParaProgress.currentPara && (
+                                <p className="text-[10px] font-bold text-emerald-600 font-noto mt-0.5">
+                                  চলমান: পারা {toBanglaNum(hifzParaProgress.currentPara)}
+                                </p>
+                              )}
+                            </div>
+                            <ChevronRight size={16} className="text-emerald-500 shrink-0" />
+                          </div>
+                        </div>
+
+                        {rec.remarks && (
+                          <div className="px-3.5 py-2.5 rounded-xl bg-amber-50/70 border border-amber-100 text-[11px] font-bold text-amber-900 font-noto">
+                            উস্তাদের মন্তব্য: {rec.remarks}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <div
+                      onClick={() => {
+                        setActiveTab('notices');
+                        setActiveNoticeTab('hifz');
+                      }}
+                      className="bg-white/60 border border-dashed border-emerald-200 p-5 rounded-3xl text-center text-xs font-bold text-slate-500 font-noto cursor-pointer hover:bg-emerald-50/30 transition-colors"
+                    >
+                      এখনও কোনো সবক রেকর্ড যুক্ত হয়নি। উস্তাদ সবক যুক্ত করলে এখানে দেখা যাবে।
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Upcoming Events */}
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -3089,6 +3309,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   {[
                     { id: 'notice', label: 'নোটিশ', icon: Bell },
                     { id: 'diary', label: 'ডায়েরি', icon: BookOpen },
+                    ...(showHifzDiary ? [{ id: 'hifz', label: 'হিফজ ও সবক', icon: BookOpen }] : []),
                     { id: 'syllabus', label: 'সিলেবাস', icon: FileText },
                     { id: 'suggestion', label: 'সাজেশন', icon: BookOpen },
                     { id: 'routine', label: 'রুটিন', icon: Calendar }
@@ -3096,7 +3317,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                     <button
                       key={tab.id}
                       onClick={() => setActiveNoticeTab(tab.id as any)}
-                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 min-w-[30%] sm:min-w-0 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 min-w-[30%] sm:min-w-0 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap cursor-pointer ${
                         activeNoticeTab === tab.id 
                           ? 'bg-white text-blue-600 shadow-soft border border-blue-50/50' 
                           : 'text-slate-400 hover:text-slate-600'
@@ -3109,7 +3330,275 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 </div>
               </div>
 
-              {activeNoticeTab === 'routine' ? (() => {
+              {activeNoticeTab === 'hifz' ? (() => {
+                const availableDepts = Array.from(new Set(hifzRecords.map((r) => r.department).filter(Boolean)));
+                const filteredHifz =
+                  hifzDeptFilter === 'all'
+                    ? hifzRecords
+                    : hifzRecords.filter((r) => r.department === hifzDeptFilter);
+                const todayStr = new Date().toISOString().split('T')[0];
+                const yObj = new Date();
+                yObj.setDate(yObj.getDate() - 1);
+                const yesterdayStr = yObj.toISOString().split('T')[0];
+
+                const getGradeClass = (grade?: HifzRecord['grade']) => {
+                  switch (grade) {
+                    case 'mumtaz':
+                      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    case 'jayyid_jiddan':
+                      return 'bg-blue-50 text-blue-700 border-blue-200';
+                    case 'jayyid':
+                      return 'bg-amber-50 text-amber-700 border-amber-200';
+                    case 'iada':
+                      return 'bg-rose-50 text-rose-700 border-rose-200';
+                    default:
+                      return 'bg-slate-100 text-slate-600 border-slate-200';
+                  }
+                };
+
+                return (
+                  <div className="space-y-5 font-noto text-left">
+                    {/* Summary KPI Cards */}
+                    <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+                      <div className="bg-white border border-slate-100 rounded-3xl p-3.5 sm:p-4 shadow-soft text-center">
+                        <p className="text-[10px] font-bold text-slate-400">চলমান পারা</p>
+                        <p className="text-base sm:text-xl font-black text-blue-600 mt-0.5 tabular-nums">
+                          {hifzParaProgress.currentPara != null
+                            ? `পারা ${toBanglaNum(hifzParaProgress.currentPara)}`
+                            : '—'}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                          {hifzParaProgress.currentParaPage > 0
+                            ? `পৃষ্ঠা ${toBanglaNum(hifzParaProgress.currentParaPage)}`
+                            : 'সর্বশেষ অবস্থা'}
+                        </p>
+                      </div>
+
+                      <div className="bg-white border border-slate-100 rounded-3xl p-3.5 sm:p-4 shadow-soft text-center">
+                        <p className="text-[10px] font-bold text-slate-400">সম্পন্ন পারা</p>
+                        <p className="text-base sm:text-xl font-black text-emerald-600 mt-0.5 tabular-nums">
+                          {toBanglaNum(hifzParaProgress.completedParasCount)} / ৩০
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">৩০ পারা লক্ষ্য</p>
+                      </div>
+
+                      <div className="bg-white border border-slate-100 rounded-3xl p-3.5 sm:p-4 shadow-soft text-center">
+                        <p className="text-[10px] font-bold text-slate-400">মোট সবক</p>
+                        <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5 tabular-nums">
+                          {toBanglaNum(hifzRecords.length)} দিন
+                        </p>
+                        <p className="text-[10px] font-bold text-emerald-600 mt-0.5 truncate">
+                          {hifzParaProgress.latestRecord?.grade
+                            ? GRADE_LABELS[hifzParaProgress.latestRecord.grade]?.bn || ''
+                            : 'ডায়েরি লগ'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 30-Para Visual Progress Grid */}
+                    {hifzRecords.some((r) => r.para_no != null) && (
+                      <div className="bg-white border border-slate-100 rounded-[2rem] p-4 sm:p-5 shadow-soft space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                            <BookOpen size={16} className="text-emerald-600" />
+                            ৩০ পারা হিফজ অগ্রগতি
+                          </h3>
+                          <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> সম্পন্ন
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> চলমান
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-slate-200" /> বাকি
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-6 sm:grid-cols-10 gap-1.5 sm:gap-2">
+                          {hifzParaProgress.paras.map((p) => (
+                            <div
+                              key={p.paraNo}
+                              className={`h-10 rounded-xl border flex flex-col items-center justify-center text-xs font-black tabular-nums transition-all ${
+                                p.status === 'completed'
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                  : p.status === 'current'
+                                  ? 'bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-600/20'
+                                  : 'bg-slate-50 border-slate-100 text-slate-400'
+                              }`}
+                            >
+                              <span>{toBanglaNum(p.paraNo)}</span>
+                              {p.status === 'current' && p.maxPage > 0 && (
+                                <span className="text-[8px] font-bold text-blue-100 leading-none">
+                                  পৃঃ {toBanglaNum(p.maxPage)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional Department Filter Pills */}
+                    {availableDepts.length > 1 && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                        {[
+                          { id: 'all', label: 'সবগুলো' },
+                          { id: 'hifz', label: 'হিফজ' },
+                          { id: 'nazera', label: 'নাজেরা' },
+                          { id: 'qaida', label: 'কায়দা' },
+                        ]
+                          .filter((d) => d.id === 'all' || availableDepts.includes(d.id as any))
+                          .map((d) => (
+                            <button
+                              key={d.id}
+                              type="button"
+                              onClick={() => setHifzDeptFilter(d.id as any)}
+                              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 ${
+                                hifzDeptFilter === d.id
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {d.label}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Daily Sabaq Timeline */}
+                    {filteredHifz.length === 0 ? (
+                      <div className="bg-white/60 border border-dashed border-slate-200 p-12 rounded-[2.5rem] text-center space-y-3">
+                        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto border border-emerald-100">
+                          <BookOpen size={30} className="text-emerald-400" />
+                        </div>
+                        <p className="text-sm font-black text-slate-700">এখনও কোনো সবক রেকর্ড পাওয়া যায়নি</p>
+                        <p className="text-xs font-bold text-slate-400">
+                          উস্তাদ দৈনিক সবক এন্ট্রি করলে সাথে সাথে এখানে ও নোটিফিকেশনে দেখা যাবে।
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredHifz.map((rec) => {
+                          const isToday = rec.record_date === todayStr;
+                          const isYesterday = rec.record_date === yesterdayStr;
+                          let formattedDate = toBanglaNum(rec.record_date);
+                          try {
+                            const dObj = new Date(rec.record_date + 'T00:00:00');
+                            if (!isNaN(dObj.getTime())) {
+                              formattedDate = dObj.toLocaleDateString('bn-BD', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                              });
+                            }
+                          } catch {}
+
+                          const pageStr =
+                            rec.page_from != null
+                              ? `${toBanglaNum(rec.page_from)}${rec.page_to != null && rec.page_to !== rec.page_from ? `–${toBanglaNum(rec.page_to)}` : ''}`
+                              : '';
+                          const lokma = Number(rec.mistakes_lokma || 0);
+                          const tajweed = Number(rec.mistakes_tajweed || 0);
+
+                          return (
+                            <div
+                              key={rec.id}
+                              className="bg-white border border-slate-100 rounded-3xl p-4 sm:p-5 shadow-soft space-y-3"
+                            >
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs sm:text-sm font-black text-slate-900">
+                                    {formattedDate}
+                                  </span>
+                                  {isToday && (
+                                    <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[9px] font-black">
+                                      আজ
+                                    </span>
+                                  )}
+                                  {isYesterday && (
+                                    <span className="px-2 py-0.5 rounded-lg bg-slate-200 text-slate-700 text-[9px] font-black">
+                                      গতকাল
+                                    </span>
+                                  )}
+                                  <span className="px-2 py-0.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-100 text-[10px] font-black">
+                                    {DEPT_LABELS[rec.department]?.bn || 'হিফজ'}
+                                  </span>
+                                </div>
+                                {rec.grade && (
+                                  <span className={`px-2.5 py-1 rounded-xl border text-[10px] font-black ${getGradeClass(rec.grade)}`}>
+                                    {GRADE_LABELS[rec.grade]?.bn || rec.grade}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                  <p className="text-[10px] font-bold text-slate-400">সবক (নতুন)</p>
+                                  <p className="text-xs font-black text-slate-900 mt-0.5">
+                                    {[
+                                      rec.para_no != null ? `পারা ${toBanglaNum(rec.para_no)}` : '',
+                                      pageStr ? `পৃষ্ঠা ${pageStr}` : '',
+                                      rec.lines_count != null ? `${toBanglaNum(rec.lines_count)} লাইন` : '',
+                                    ].filter(Boolean).join(' · ') || '—'}
+                                  </p>
+                                  {rec.surah_name && (
+                                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                                      সূরা: {rec.surah_name}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                  <p className="text-[10px] font-bold text-slate-400">সবকী (সাত সবক)</p>
+                                  <p className="text-xs font-black text-slate-800 mt-0.5">
+                                    {rec.sabqi_status ? (SABQI_LABELS[rec.sabqi_status]?.bn || rec.sabqi_status) : '—'}
+                                    {rec.sabqi_pages != null && rec.sabqi_pages > 0
+                                      ? ` · ${toBanglaNum(rec.sabqi_pages)} পৃষ্ঠা`
+                                      : ''}
+                                  </p>
+                                </div>
+
+                                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                  <p className="text-[10px] font-bold text-slate-400">আমুখতা (দোহরানি)</p>
+                                  <p className="text-xs font-black text-slate-800 mt-0.5">
+                                    {[
+                                      rec.amukhta_para ? `পারা ${toBanglaNum(rec.amukhta_para)}` : '',
+                                      rec.amukhta_amount ? toBanglaNum(rec.amukhta_amount) : '',
+                                    ].filter(Boolean).join(' · ') || '—'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {(lokma > 0 || tajweed > 0) && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {lokma > 0 && (
+                                    <span className="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-black">
+                                      লোকমা: {toBanglaNum(lokma)} টি
+                                    </span>
+                                  )}
+                                  {tajweed > 0 && (
+                                    <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black">
+                                      তাজভীদ: {toBanglaNum(tajweed)} টি
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {rec.remarks && (
+                                <div className="px-3.5 py-2.5 rounded-2xl bg-amber-50/70 border border-amber-100 text-xs font-bold text-amber-900">
+                                  উস্তাদের মন্তব্য: {rec.remarks}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : activeNoticeTab === 'routine' ? (() => {
                 const studentClassName = (student?.classes?.class_name || student?.class_name || student?.class || '').trim().toLowerCase();
                 const studentClassId = String(student?.class_id || student?.classes?.id || '').trim().toLowerCase();
 
