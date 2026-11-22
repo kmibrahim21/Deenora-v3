@@ -82,6 +82,7 @@ const QuestionBuilderStudio = React.lazy(() =>
 const MarketerPortal = React.lazy(() =>
   import("pages/MarketerPortal").then((m) => ({ default: m.MarketerPortal }))
 );
+const HifzTracker = React.lazy(() => import("pages/HifzTracker"));
 
 const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
   // Academic Documents sub-views -> parent is academic-documents
@@ -102,6 +103,7 @@ const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
   "admin-voice-service": "account",
   "admin-tutorials": "account",
   "messages": "account",
+  "hifz-tracker": "account",
 
   // Students & Classes hierarchy
   "student-form": "students",
@@ -1064,6 +1066,46 @@ const App: React.FC = () => {
             }}
           />
         );
+      case "hifz-tracker": {
+        const isSuperAdminOrManager = role === 'super_admin' || role === 'manager';
+        let configObj: any = madrasah?.config_json;
+        if (typeof configObj === 'string') {
+          try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
+        }
+        const hasHifzTrackerAccess = isSuperAdminOrManager || configObj?.modules?.hifz_tracker === true;
+        if (!hasHifzTrackerAccess) {
+          return (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[420px]">
+              <div className="w-16 h-16 bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center mb-4">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">
+                {lang === 'bn' ? 'হিফজ ও সবক ট্র্যাকার পারমিশন প্রয়োজন' : 'Hifz & Sabaq Tracker Access Required'}
+              </h2>
+              <p className="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
+                {lang === 'bn'
+                  ? 'আপনার প্রতিষ্ঠানে হিফজ ও সবক ট্র্যাকার মডিউলটি এখনো সক্রিয় করা হয়নি। এটি সক্রিয় করতে সুপার অ্যাডমিনের সাথে যোগাযোগ করুন।'
+                  : 'Hifz & Sabaq Tracker is not enabled for your institution. Please contact the super admin.'}
+              </p>
+              <button
+                onClick={() => handleBack("account")}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-all"
+              >
+                {lang === 'bn' ? 'ফিরে যান' : 'Go Back'}
+              </button>
+            </div>
+          );
+        }
+        return (
+          <HifzTracker
+            madrasah={madrasah}
+            onBack={() => handleBack("account")}
+            lang={lang}
+            activeYear={selectedYear || activeYear}
+            teacherInfo={profile?.role === "teacher" ? profile : null}
+          />
+        );
+      }
       case "question-builder": {
         const isSuperAdminOrManager = role === 'super_admin' || role === 'manager';
         let configObj: any = madrasah?.config_json;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff, UserCheck, Banknote, Settings, Edit3 } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff, UserCheck, Banknote, Settings, Edit3, BookOpen } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
@@ -143,6 +143,7 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
       class_routine: configObj.modules?.class_routine ?? false,
       messages: configObj.modules?.messages ?? true,
       live_chat: configObj.modules?.live_chat === true,
+      hifz_tracker: configObj.modules?.hifz_tracker === true,
       teacher_attendance: configObj.teacher_attendance || {}
     };
   }, [madrasah?.config_json]);
@@ -888,6 +889,18 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                     onClick={() => setView('academic-calendar')}
                     dark={isDark}
                   />
+
+                  {/* Hifz & Sabaq Tracker Card (Conditional) */}
+                  {modules.hifz_tracker && (
+                    <ActionCard
+                      icon={BookOpen}
+                      title={lang === 'bn' ? 'হিফজ ও সবক ট্র্যাকার' : 'Hifz & Sabaq Tracker'}
+                      subtitle={lang === 'bn' ? 'দৈনিক সবক ও রিপোর্ট' : 'Daily Sabaq & Reports'}
+                      colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                      onClick={() => setView('hifz-tracker')}
+                      dark={isDark}
+                    />
+                  )}
 
                   {/* Teacher Management Card for permitted staff */}
                   {teacherInfo?.permissions?.can_manage_teachers && (

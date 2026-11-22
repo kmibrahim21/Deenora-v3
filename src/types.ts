@@ -59,6 +59,7 @@ export interface Institution {
       backup_restore?: boolean;
       biometric_device_sync?: boolean;
       question_bank?: boolean;
+      hifz_tracker?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     class_result_engines?: Record<string, 'gpa' | 'befaq' | 'high_school' | 'school'>;
@@ -569,7 +570,34 @@ export type View =
   | 'donations'
   | 'question-builder'
   | 'chat'
-  | 'marketer-portal';
+  | 'marketer-portal'
+  | 'hifz-tracker';
+
+export interface HifzRecord {
+  id: string;
+  institution_id: string;
+  student_id: string;
+  class_id: string;
+  academic_year_id?: string | null;
+  teacher_id?: string | null;
+  record_date: string; // YYYY-MM-DD
+  department: 'hifz' | 'nazera' | 'qaida';
+  para_no?: number | null;
+  surah_name?: string | null;
+  page_from?: number | null;
+  page_to?: number | null;
+  lines_count?: number | null;
+  sabqi_status?: 'done' | 'partial' | 'missed' | null;
+  sabqi_pages?: number | null;
+  amukhta_para?: string | number | null;
+  amukhta_amount?: string | null;
+  mistakes_lokma?: number | null;
+  mistakes_tajweed?: number | null;
+  grade?: 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada' | null;
+  remarks?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export type ConversationType = 'direct' | 'class_group' | 'announcement' | 'teacher_staff' | 'custom_group';
 

@@ -406,7 +406,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     backup_restore: false,
     biometric_device_sync: false,
     live_chat: false,
-    question_bank: false
+    question_bank: false,
+    hifz_tracker: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -526,6 +527,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       biometric_device_sync: false,
       live_chat: false,
       question_bank: false,
+      hifz_tracker: false,
     };
 
     // 10. Ultimate package: Attendance, exam, Accounting, sms, voice, certificate, students photo, ID card, class routine, parent portal, messages
@@ -675,6 +677,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (fStr.includes('বার্তা') || fStr.includes('মেসেজ') || fStr.includes('message')) dynamicModules.messages = true;
       if (fStr.includes('বায়োমেট্রিক') || fStr.includes('biometric')) dynamicModules.biometric_device_sync = true;
       if (fStr.includes('ব্যাকআপ') || fStr.includes('backup')) dynamicModules.backup_restore = true;
+      if (fStr.includes('হিফজ') || fStr.includes('সবক') || fStr.includes('hifz')) dynamicModules.hifz_tracker = true;
       return dynamicModules;
     }
 
@@ -2212,6 +2215,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         biometric_device_sync: userModules.biometric_device_sync ?? false,
         live_chat: userModules.live_chat ?? false,
         question_bank: userModules.question_bank ?? false,
+        hifz_tracker: userModules.hifz_tracker ?? false,
         ...userModules
       });
     } else {
@@ -2234,6 +2238,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         biometric_device_sync: false,
         live_chat: false,
         question_bank: false,
+        hifz_tracker: false,
       });
     }
 
@@ -4863,6 +4868,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       backup_restore: 'Backup & Restore',
                                       biometric_device_sync: 'Biometric Device',
                                       question_bank: 'Question Bank',
+                                      hifz_tracker: 'Hifz & Sabaq Tracker',
                                     };
 
                                     return (

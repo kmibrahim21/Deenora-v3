@@ -87,6 +87,7 @@ const Layout: React.FC<LayoutProps> = ({
         donations: configObj.modules?.donations === true,
         live_chat: configObj.modules?.live_chat === true || isSuperAdmin,
         question_bank: configObj.modules?.question_bank === true || isSuperAdmin,
+        hifz_tracker: configObj.modules?.hifz_tracker === true || isSuperAdmin,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',
