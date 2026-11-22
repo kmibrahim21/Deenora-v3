@@ -28,6 +28,7 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { getTodayDateString, toBnDigit } from 'utils/calendarUtils';
 import { isValidUUID } from 'utils/validation';
 import { useBackHandler } from 'utils/backHandler';
+import { extractStudentExtraFields } from 'utils/studentExtraFields';
 import {
   DEPT_LABELS,
   generateHifzReportPdf,
@@ -261,7 +262,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       if (!madrasah?.id) return [];
       let query = supabase
         .from('students')
-        .select('id, institution_id, class_id, student_name, roll, guardian_phone, department, photo_url, is_active')
+        .select('id, institution_id, class_id, student_name, roll, guardian_phone, section, notes, photo_url, is_active')
         .eq('institution_id', madrasah.id);
 
       if (classId && classId !== 'all') {
@@ -280,7 +281,15 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
       const { data, error } = await query.order('roll', { ascending: true });
       if (error) throw error;
-      return ((data || []) as Student[]).filter((s) => s.is_active !== false);
+      return ((data || []) as any[])
+        .filter((s) => s.is_active !== false)
+        .map((s) => {
+          const extra = extractStudentExtraFields(s);
+          return {
+            ...s,
+            department: extra?.department || s.section || '',
+          } as Student;
+        });
     },
     [madrasah?.id, madrasah?.config_json, activeYear?.id, classes]
   );
