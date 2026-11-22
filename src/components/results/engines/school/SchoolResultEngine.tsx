@@ -3766,6 +3766,19 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                             </table>
                           ) : (
                             /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
+                            <>
+                              {(() => {
+                                const selectedPreviewClass = classes.find(c => c.id === selectedRoutineClassId) || classes[0];
+                                return selectedPreviewClass?.class_name ? (
+                                  <div
+                                    className="mb-2 py-1.5 px-4 rounded-xl border text-center font-black font-solaiman flex items-center justify-center gap-2 shrink-0"
+                                    style={{ backgroundColor: rtTheme.light, borderColor: `${rtTheme.primary}40`, color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}
+                                  >
+                                    <span>{lang === 'bn' ? 'শ্রেণি :' : 'Class :'}</span>
+                                    <span>{selectedPreviewClass.class_name}</span>
+                                  </div>
+                                ) : null;
+                              })()}
                                 <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: rtTheme.primary }}>
                                   <thead>
                                     <tr className={`text-white ${singleHeaderH}`} style={{ backgroundColor: rtTheme.primary }}>
@@ -3918,6 +3931,7 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                                 })()}
                               </tbody>
                             </table>
+                            </>
                           )}
 
                           {/* Natural Watermark stamp */}

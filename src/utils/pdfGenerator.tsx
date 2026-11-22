@@ -2105,19 +2105,28 @@ export const generateExamRoutinePDF = async (
     });
     onProgress?.(40);
 
-    const examRoutineFileName = `${(madrasah?.name || 'Madrasah').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_Exam_Routine.pdf`;
+    const selectedClassObj = options?.routineSelectionMode === 'class' && options?.selectedRoutineClassId
+        ? options?.classesList?.find((c: any) => c.id === options.selectedRoutineClassId)
+        : null;
+    const classFileSuffix = selectedClassObj?.class_name
+        ? `_${selectedClassObj.class_name.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}`
+        : '';
+    const examRoutineFileName = `${(madrasah?.name || 'Madrasah').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}${classFileSuffix}_Exam_Routine.pdf`;
     const wrapper = container.querySelector('#pdf-wrapper');
 
     // Try server-side generation first with SolaimanLipi font
     if (wrapper) {
         try {
             const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, examRoutineFileName, 'landscape');
+            const modeKey = options?.routineSelectionMode === 'class'
+                ? `class_${options?.selectedRoutineClassId || 'default'}`
+                : 'all';
             const serverSuccess = await downloadServerPdf({
                 html: fullHtml,
                 format: 'a4',
                 orientation: 'landscape',
                 entity_type: 'exam_routine',
-                entity_id: `${madrasah?.id || 'madrasah'}_${examName || 'exam'}_routine`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                entity_id: `${madrasah?.id || 'madrasah'}_${examName || 'exam'}_${modeKey}_routine`.replace(/[^a-zA-Z0-9_-]/g, '_'),
                 filename: examRoutineFileName
             });
             if (serverSuccess) {

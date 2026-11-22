@@ -101,11 +101,22 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     { id: '3', class_name: isBn ? 'তৃতীয় শ্রেণি' : 'Class 3' }
   ];
 
+  const fallbackClassFromData = React.useMemo(() => {
+    if (!selectedRoutineClassId) return null;
+    for (const day of routineData || []) {
+      const allSlots = [...(day?.morning?.subjects || []), ...(day?.afternoon?.subjects || [])];
+      const match = allSlots.find((s: any) => s?.classId === selectedRoutineClassId && s?.className);
+      if (match) return { id: selectedRoutineClassId, class_name: match.className };
+    }
+    return null;
+  }, [routineData, selectedRoutineClassId]);
+
   const displayClasses = routineSelectionMode === 'class'
     ? (classesList.filter(c => c.id === selectedRoutineClassId).length > 0 
         ? classesList.filter(c => c.id === selectedRoutineClassId)
-        : [classesList[0] || defaultClasses[2]])
+        : [fallbackClassFromData || classesList[0] || defaultClasses[2]])
     : (classesList.length > 0 ? classesList : defaultClasses);
+  const activeClassName = displayClasses[0]?.class_name || '';
 
   // Helper check for subjects
   const getSubjectForClassAndDayAndShift = (cls: any, dayIdx: number, shift: 'morning' | 'afternoon') => {
@@ -550,7 +561,22 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
               </table>
             ) : (
               /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
-              <table className="w-full border-collapse border-2 rounded-lg overflow-hidden shadow-xs text-center font-solaiman table-fixed" style={{ borderColor: primary }}>
+              <>
+                {activeClassName && (
+                  <div
+                    className="mb-1.5 py-1 px-3 rounded-lg border text-center font-black font-solaiman flex items-center justify-center gap-1.5 shrink-0"
+                    style={{
+                      backgroundColor: light,
+                      borderColor: `${primary}40`,
+                      color: primary,
+                      fontSize: `${Math.max(12, classNameFontSizePx)}px`
+                    }}
+                  >
+                    <span>{isBn ? 'শ্রেণি :' : 'Class :'}</span>
+                    <span>{activeClassName}</span>
+                  </div>
+                )}
+                <table className="w-full border-collapse border-2 rounded-lg overflow-hidden shadow-xs text-center font-solaiman table-fixed" style={{ borderColor: primary }}>
                 <thead className="shrink-0">
                   <tr className="text-white" style={{ backgroundColor: primary }}>
                     <th className="border-r p-1.5 font-black w-28 align-middle" style={{ borderColor: `${primary}cc`, fontSize: `${headerDayFontPx}px` }}>
@@ -610,6 +636,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                   })}
                 </tbody>
               </table>
+              </>
             )}
 
             {/* Natural Watermark stamp */}
