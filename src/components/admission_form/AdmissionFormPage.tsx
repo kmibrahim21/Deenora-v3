@@ -392,6 +392,17 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
         };
       });
       setStudentsInClass(formatted);
+
+      if (!selectedStudent && !customFormData.roll) {
+        const maxRoll = formatted.reduce((max, s) => {
+          const r = Number(s.roll);
+          return Number.isFinite(r) && r > max ? r : max;
+        }, 0);
+        setCustomFormData(prev => {
+          if (prev.roll) return prev;
+          return { ...prev, roll: maxRoll + 1 };
+        });
+      }
     } catch (err) {
       console.error('Error fetching students by class:', err);
     } finally {
@@ -458,7 +469,15 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
     setSelectedStudent(null);
     setIsPreviewingBlank(false);
     const activeCls = classes.find(c => c.id === selectedClassId);
-    setCustomFormData(getBlankEditableFormData(lang, activeYear, selectedClassId || '', activeCls?.class_name || ''));
+    const blankData = getBlankEditableFormData(lang, activeYear, selectedClassId || '', activeCls?.class_name || '');
+    if (selectedClassId) {
+      const maxRoll = studentsInClass.reduce((max, s) => {
+        const r = Number(s.roll);
+        return Number.isFinite(r) && r > max ? r : max;
+      }, 0);
+      blankData.roll = maxRoll + 1;
+    }
+    setCustomFormData(blankData);
     setActiveTab('edit');
     showToast(lang === 'bn' ? 'নতুন শিক্ষার্থী ভর্তির জন্য খালি ফরম প্রস্তুত করা হয়েছে' : 'New student admission form ready');
   };
@@ -554,6 +573,20 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
       const existingNotes = isEditing ? (selectedStudent?.notes || '') : '';
       const packedNotes = packStudentNotesWithExtra(existingNotes, extraFields);
 
+      const dbExtraColumns: any = {
+        gender: extraFields.gender,
+        nationality: extraFields.nationality,
+        religion: extraFields.religion,
+        father_name: extraFields.father_name,
+        father_occupation: extraFields.father_occupation,
+        mother_occupation: extraFields.mother_occupation,
+        guardian_relation: extraFields.guardian_relation,
+        permanent_address: extraFields.permanent_address,
+        previous_institution: extraFields.previous_institution,
+        previous_class: extraFields.previous_class,
+        biometric_id: extraFields.biometric_id,
+      };
+
       const payload: any = {
         student_name: studentName,
         name_en: (customFormData.studentNameEn || '').trim() || null,
@@ -573,17 +606,52 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
         academic_year_id: (targetAcademicYearId && isValidUUID(targetAcademicYearId)) ? targetAcademicYearId : null,
         photo_url: customFormData.photoUrl || selectedStudent?.photo_url || null,
         notes: packedNotes || null,
-        ...extraFields,
+        ...dbExtraColumns,
       };
 
       let finalStudent: any = null;
       const currentPayload = { ...payload };
-      const extraFieldKeys = Object.keys(extraFields).concat(['photo_url']);
+      const extraFieldKeys = Object.keys(dbExtraColumns).concat(['photo_url']);
+      let effectiveIsEditing = isEditing;
+      let effectiveStudentId = selectedStudent?.id;
 
-      for (let attempt = 0; attempt < 4; attempt++) {
+      // Pre-check roll collision in targetClassId for new admissions
+      if (!effectiveIsEditing && currentPayload.roll !== null) {
+        const { data: existingWithRoll } = await supabase
+          .from('students')
+          .select('id, student_name, roll')
+          .eq('class_id', targetClassId)
+          .eq('roll', currentPayload.roll)
+          .maybeSingle();
+
+        if (existingWithRoll) {
+          if (
+            existingWithRoll.student_name &&
+            existingWithRoll.student_name.trim().toLowerCase() === studentName.toLowerCase()
+          ) {
+            effectiveIsEditing = true;
+            effectiveStudentId = existingWithRoll.id;
+          } else {
+            const { data: maxRollRow } = await supabase
+              .from('students')
+              .select('roll')
+              .eq('class_id', targetClassId)
+              .not('roll', 'is', null)
+              .order('roll', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const nextRoll = (Number(maxRollRow?.roll) || 0) + 1;
+            currentPayload.roll = nextRoll;
+            payload.roll = nextRoll;
+            setCustomFormData(prev => ({ ...prev, roll: nextRoll }));
+          }
+        }
+      }
+
+      for (let attempt = 0; attempt < 6; attempt++) {
         try {
-          if (isEditing && selectedStudent?.id) {
-            finalStudent = await OfflineService.safeUpdate('students', selectedStudent.id, currentPayload);
+          if (effectiveIsEditing && effectiveStudentId) {
+            finalStudent = await OfflineService.safeUpdate('students', effectiveStudentId, currentPayload);
           } else {
             finalStudent = await OfflineService.safeInsert('students', currentPayload);
           }
@@ -595,12 +663,33 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
             continue;
           }
           if (innerErr.code === 'PGRST204' || innerErr.message?.includes('does not exist') || innerErr.message?.includes('column')) {
-            const missingColumn = innerErr.message?.match(/column "(.*?)"/)?.[1];
+            const missingColumn =
+              innerErr.message?.match(/column ['"](.*?)['"]/)?.[1] ||
+              innerErr.message?.match(/Could not find the '(.*?)' column/)?.[1];
             if (missingColumn && Object.prototype.hasOwnProperty.call(currentPayload, missingColumn)) {
               delete currentPayload[missingColumn];
             } else {
               extraFieldKeys.forEach(k => delete currentPayload[k]);
             }
+            continue;
+          }
+          if (
+            innerErr.code === '23505' ||
+            innerErr.message?.includes('students_class_id_roll_key') ||
+            innerErr.message?.includes('duplicate key')
+          ) {
+            const { data: maxRollRow } = await supabase
+              .from('students')
+              .select('roll')
+              .eq('class_id', targetClassId)
+              .not('roll', 'is', null)
+              .order('roll', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const nextRoll = (Number(maxRollRow?.roll) || 0) + 1;
+            currentPayload.roll = currentPayload.roll === nextRoll ? null : nextRoll;
+            payload.roll = currentPayload.roll;
+            setCustomFormData(prev => ({ ...prev, roll: currentPayload.roll ?? undefined }));
             continue;
           }
           throw innerErr;
@@ -615,7 +704,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
         ...mergedStudent,
         ...extraFields,
         notes: packedNotes || mergedStudent.notes || null,
-        id: mergedStudent.id || selectedStudent?.id || payload.id || '',
+        id: mergedStudent.id || effectiveStudentId || payload.id || '',
         classes: matchedClass ? { class_name: matchedClass.class_name } : (selectedStudent as any)?.classes,
       };
 
@@ -631,7 +720,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
       setSelectedStudent(enrichedStudent);
 
       showToast(
-        isEditing
+        effectiveIsEditing
           ? lang === 'bn'
             ? `${studentName}-এর তথ্য সফলভাবে আপডেট করা হয়েছে!`
             : `Updated ${studentName} successfully!`
@@ -641,7 +730,8 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
       );
 
       if (andDownloadPdf) {
-        await handleDownloadDataPdf(enrichedStudent, customFormData);
+        const updatedFormData = { ...customFormData, roll: mergedStudent.roll ?? currentPayload.roll ?? customFormData.roll };
+        await handleDownloadDataPdf(enrichedStudent, updatedFormData);
       }
     } catch (err: any) {
       console.error('Error saving student from Admission Form:', err);
