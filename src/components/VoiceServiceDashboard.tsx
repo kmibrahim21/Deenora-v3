@@ -45,6 +45,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
   // Filters
   const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
+  const [voiceScopeFilter, setVoiceScopeFilter] = useState<'deenora' | 'all'>('deenora');
   const [voiceStatusFilter, setVoiceStatusFilter] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [assignedVoiceSearchQuery, setAssignedVoiceSearchQuery] = useState('');
   const [broadcastSearchQuery, setBroadcastSearchQuery] = useState('');
@@ -52,11 +53,28 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   // Upload Voice to Awaj Digital State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadName, setUploadName] = useState('');
+  const [uploadClientCode, setUploadClientCode] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const cleanUploadClientCode = useMemo(
+    () => uploadClientCode.trim().replace(/[^a-zA-Z0-9]/g, ''),
+    [uploadClientCode]
+  );
+
+  const finalUploadVoiceName = useMemo(() => {
+    const trimmedName = uploadName.trim();
+    if (!trimmedName) return '';
+    if (/^DNRA/i.test(trimmedName)) {
+      return trimmedName;
+    }
+    return cleanUploadClientCode
+      ? `DNRA${cleanUploadClientCode}_${trimmedName}`
+      : `DNRA_${trimmedName}`;
+  }, [uploadName, cleanUploadClientCode]);
 
   // Assign Modal State
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -162,8 +180,10 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       setUploadError('ভয়েসের নাম দেওয়া আবশ্যক (1-255 অক্ষরের মধ্যে)');
       return;
     }
-    if (trimmedName.length > 255) {
-      setUploadError('ভয়েসের নাম ২৫৫ অক্ষরের বেশি হতে পারবে না');
+
+    const finalName = finalUploadVoiceName || trimmedName;
+    if (finalName.length > 255) {
+      setUploadError('ভয়েসের পূর্ণ নাম ২৫৫ অক্ষরের বেশি হতে পারবে না');
       return;
     }
     if (!uploadFile) {
@@ -181,7 +201,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         reader.readAsDataURL(uploadFile);
       });
 
-      const encodedName = encodeURIComponent(trimmedName);
+      const encodedName = encodeURIComponent(finalName);
       const response = await fetch(`/api/voices/upload?name=${encodedName}`, {
         method: 'POST',
         headers: {
@@ -189,9 +209,9 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           'X-Voice-Name': encodedName
         },
         body: JSON.stringify({
-          name: trimmedName,
-          voice_name: trimmedName,
-          title: trimmedName,
+          name: finalName,
+          voice_name: finalName,
+          title: finalName,
           audio_base64: base64Audio,
           filename: uploadFile.name
         })
@@ -211,7 +231,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           }
         }
         if (response.status === 409) {
-          msg = `"${trimmedName}" নামের ভয়েস ইতিমধ্যে অ্যাকাউন্টে বিদ্যমান। অন্য একটি নাম দিন।`;
+          msg = `"${finalName}" নামের ভয়েস ইতিমধ্যে অ্যাকাউন্টে বিদ্যমান। অন্য একটি নাম দিন।`;
         } else if (response.status === 413) {
           msg = 'ফাইল সাইজ ১০MB এর বেশি হতে পারবে না।';
         } else if (response.status === 415) {
@@ -221,7 +241,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       }
 
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
-      const providerVoiceName = resData.name || resData.title || trimmedName;
+      const providerVoiceName = resData.name || resData.title || finalName;
 
       // Success
       setStatusModal({
@@ -234,6 +254,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       // Reset
       setShowUploadModal(false);
       setUploadName('');
+      setUploadClientCode('');
       setUploadFile(null);
       if (uploadPreviewUrl) {
         URL.revokeObjectURL(uploadPreviewUrl);
@@ -258,6 +279,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     setShowUploadModal(false);
     setUploadError(null);
     setUploadName('');
+    setUploadClientCode('');
     setUploadFile(null);
     if (uploadPreviewUrl) {
       URL.revokeObjectURL(uploadPreviewUrl);
@@ -604,15 +626,43 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     };
   }, [voices, broadcasts]);
 
+  // Scope-filtered voice list (hide CM_ voices when Deenora Voices is active)
+  const deenoraVoicesCount = useMemo(() => {
+    return voices.filter(v => !/^CM[_-]/i.test(String(v.name || '').trim())).length;
+  }, [voices]);
+
+  const scopedVoices = useMemo(() => {
+    if (voiceScopeFilter === 'deenora') {
+      return voices.filter(v => !/^CM[_-]/i.test(String(v.name || '').trim()));
+    }
+    return voices;
+  }, [voices, voiceScopeFilter]);
+
+  const { scopedApprovedCount, scopedPendingCount, scopedRejectedCount } = useMemo(() => {
+    let approved = 0;
+    let pending = 0;
+    let rejected = 0;
+    for (let i = 0; i < scopedVoices.length; i++) {
+      if (scopedVoices[i].status === 'approved') approved++;
+      else if (scopedVoices[i].status === 'pending') pending++;
+      else if (scopedVoices[i].status === 'rejected') rejected++;
+    }
+    return {
+      scopedApprovedCount: approved,
+      scopedPendingCount: pending,
+      scopedRejectedCount: rejected
+    };
+  }, [scopedVoices]);
+
   // Filtered voice list
   const filteredVoices = useMemo(() => {
     const queryLower = voiceSearchQuery.toLowerCase();
-    return voices.filter(v => {
+    return scopedVoices.filter(v => {
       const matchesSearch = String(v.name || '').toLowerCase().includes(queryLower);
       const matchesStatus = voiceStatusFilter === 'all' || v.status === voiceStatusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [voices, voiceSearchQuery, voiceStatusFilter]);
+  }, [scopedVoices, voiceSearchQuery, voiceStatusFilter]);
 
   const filteredAssignedVoices = useMemo(() => {
     const q = assignedVoiceSearchQuery.toLowerCase();
@@ -913,10 +963,10 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                   isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
                 }`}>
                   {[
-                    { id: 'all', label: 'All', count: voices.length, dot: 'bg-blue-500' },
-                    { id: 'approved', label: 'Approved', count: approvedVoicesCount, dot: 'bg-emerald-500' },
-                    { id: 'pending', label: 'Pending', count: pendingVoicesCount, dot: 'bg-amber-500' },
-                    { id: 'rejected', label: 'Rejected', count: voices.filter(v => v.status === 'rejected').length, dot: 'bg-rose-500' },
+                    { id: 'all', label: 'All', count: scopedVoices.length, dot: 'bg-blue-500' },
+                    { id: 'approved', label: 'Approved', count: scopedApprovedCount, dot: 'bg-emerald-500' },
+                    { id: 'pending', label: 'Pending', count: scopedPendingCount, dot: 'bg-amber-500' },
+                    { id: 'rejected', label: 'Rejected', count: scopedRejectedCount, dot: 'bg-rose-500' },
                   ].map((filter) => {
                     const isSelected = voiceStatusFilter === filter.id;
                     return (
@@ -946,21 +996,59 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                 </div>
               </div>
 
-              {/* Direct API Notice */}
-              <div className={`p-3.5 sm:p-4 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
-                isDark 
-                  ? 'bg-blue-950/20 border-blue-800/40 text-blue-300' 
-                  : 'bg-blue-50/60 border-blue-100 text-blue-800'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  <Info size={18} className="shrink-0 text-blue-500" />
-                  <span className="font-bold">
-                    Awaj Digital গেটওয়েতে সংরক্ষিত সকল ভয়েস ({filteredVoices.length}টি) প্রদর্শিত হচ্ছে।
+              {/* Scope Filter Pills & Direct API Notice */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className={`inline-flex p-1 rounded-xl border self-start ${
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+                }`}>
+                  {[
+                    { id: 'deenora', label: 'Deenora Voices', count: deenoraVoicesCount },
+                    { id: 'all', label: 'All Voices', count: voices.length },
+                  ].map((scope) => {
+                    const isSelected = voiceScopeFilter === scope.id;
+                    return (
+                      <button
+                        key={scope.id}
+                        type="button"
+                        onClick={() => setVoiceScopeFilter(scope.id as 'deenora' | 'all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : isDark
+                              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{scope.label}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-200/80 text-slate-700'
+                        }`}>
+                          {scope.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className={`flex-1 p-3 sm:px-4 sm:py-2.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+                  isDark 
+                    ? 'bg-blue-950/20 border-blue-800/40 text-blue-300' 
+                    : 'bg-blue-50/60 border-blue-100 text-blue-800'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <Info size={16} className="shrink-0 text-blue-500" />
+                    <span className="font-bold">
+                      {voiceScopeFilter === 'deenora'
+                        ? `Deenora-র ${filteredVoices.length}টি ভয়েস প্রদর্শিত হচ্ছে (CM_ হাইড)।`
+                        : `Awaj Digital গেটওয়েতে সংরক্ষিত সকল ভয়েস (${filteredVoices.length}টি) প্রদর্শিত হচ্ছে।`}
+                    </span>
+                  </div>
+                  <span className="hidden md:inline-flex px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-900/60 dark:text-blue-200 shrink-0">
+                    মোট {filteredVoices.length}টি ভয়েস
                   </span>
                 </div>
-                <span className="hidden md:inline-flex px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-900/60 dark:text-blue-200 shrink-0">
-                  মোট {filteredVoices.length}টি ভয়েস
-                </span>
               </div>
 
               {/* Voices Cards Grid */}
@@ -1517,14 +1605,71 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
             )}
 
             <form onSubmit={handleUploadVoice} className="space-y-4">
+              {/* Client / Institution Code (Optional) */}
+              <div>
+                <div className="flex justify-between items-center px-1 mb-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    ক্লায়েন্ট / প্রতিষ্ঠান কোড (ঐচ্ছিক)
+                  </label>
+                  {uploadClientCode && (
+                    <button
+                      type="button"
+                      onClick={() => setUploadClientCode('')}
+                      disabled={isUploading}
+                      className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors"
+                    >
+                      ক্লিয়ার
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                  <select
+                    value={institutions.find(m => String(m.config_json?.institute_code || '').trim().replace(/[^a-zA-Z0-9]/g, '') === cleanUploadClientCode && cleanUploadClientCode !== '')?.id || ''}
+                    onChange={(e) => {
+                      const selected = institutions.find(m => m.id === e.target.value);
+                      const code = selected?.config_json?.institute_code;
+                      setUploadClientCode(code ? String(code) : '');
+                    }}
+                    disabled={isUploading}
+                    className={`sm:col-span-3 h-11 px-3 rounded-xl border font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                      isDark 
+                        ? 'bg-slate-800 border-slate-700 text-white' 
+                        : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    <option value="">প্রতিষ্ঠান থেকে কোড নিন (ঐচ্ছিক)...</option>
+                    {institutions
+                      .filter(m => m.config_json?.institute_code)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          [{m.config_json.institute_code}] {m.name}
+                        </option>
+                      ))}
+                  </select>
+                  <input
+                    type="text"
+                    maxLength={20}
+                    value={uploadClientCode}
+                    onChange={(e) => setUploadClientCode(e.target.value)}
+                    placeholder="কোড (যেমন: 0184)"
+                    disabled={isUploading}
+                    className={`sm:col-span-2 h-11 px-3.5 rounded-xl border font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                      isDark 
+                        ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' 
+                        : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                    }`}
+                  />
+                </div>
+              </div>
+
               {/* Voice Name Field */}
               <div>
                 <div className="flex justify-between items-center px-1 mb-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     ভয়েসের নাম (Voice Name) <span className="text-red-500">*</span>
                   </label>
-                  <span className={`text-[10px] font-bold ${uploadName.length > 255 ? 'text-red-500' : 'text-slate-400'}`}>
-                    {uploadName.length}/255
+                  <span className={`text-[10px] font-bold ${(finalUploadVoiceName.length || uploadName.length) > 255 ? 'text-red-500' : 'text-slate-400'}`}>
+                    {finalUploadVoiceName.length || uploadName.length}/255
                   </span>
                 </div>
                 <input
@@ -1533,7 +1678,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                   maxLength={255}
                   value={uploadName}
                   onChange={(e) => setUploadName(e.target.value)}
-                  placeholder="যেমন: chuti_notice_2026 বা ছুটির নোটিশ"
+                  placeholder="যেমন: মাসিক বেতন পরিশোধ করুন"
                   disabled={isUploading}
                   className={`w-full h-12 px-4 rounded-xl border font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
                     isDark 
@@ -1541,8 +1686,20 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                       : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
                   }`}
                 />
+                {/* Live Preview Badge */}
+                <div className={`mt-2 px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
+                  isDark
+                    ? 'bg-blue-950/30 border-blue-800/50 text-blue-300'
+                    : 'bg-blue-50/80 border-blue-200/80 text-blue-800'
+                }`}>
+                  <Sparkles size={13} className="shrink-0 text-blue-500" />
+                  <span className="font-bold shrink-0">Awaj-এ সেভ হবে:</span>
+                  <span className="font-mono font-black truncate">
+                    {finalUploadVoiceName || (cleanUploadClientCode ? `DNRA${cleanUploadClientCode}_...` : 'DNRA_...')}
+                  </span>
+                </div>
                 <p className="text-[10px] text-slate-400 mt-1 px-1">
-                  ইউনিক নাম দিন (Case-insensitive, 1-255 অক্ষর)।
+                  ম্যানুয়ালি DNRA লেখার প্রয়োজন নেই — অটো প্রিফিক্স যুক্ত হবে।
                 </p>
               </div>
 
