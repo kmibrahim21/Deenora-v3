@@ -113,6 +113,9 @@ export interface Institution {
       teacher_attendance_deduction?: boolean;
       teacher_salary_sms?: boolean;
     };
+    hifz_settings?: {
+      class_departments?: Record<string, 'hifz' | 'nazera' | 'qaida' | 'off'>;
+    };
   };
   theme: string;
   status: 'active' | 'suspended' | 'trial';

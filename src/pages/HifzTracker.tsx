@@ -15,7 +15,9 @@ import {
   Loader2,
   Minus,
   Plus,
+  RefreshCw,
   Search,
+  Settings,
   Sparkles,
   User,
   X,
@@ -46,8 +48,29 @@ interface HifzTrackerProps {
 }
 
 type DeptType = 'hifz' | 'nazera' | 'qaida';
+type ClassDeptSetting = DeptType | 'off';
 type SabqiType = 'done' | 'partial' | 'missed';
 type GradeType = 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada';
+
+const detectDefaultClassDepartment = (className?: string | null): DeptType => {
+  const name = className || '';
+  if (/নাজেরা|nazera/i.test(name)) return 'nazera';
+  if (/কায়দা|কায়দা|নূরানী|নুরানী|qaida|noorani|আমপারা/i.test(name)) return 'qaida';
+  return 'hifz';
+};
+
+const parseConfigJson = (raw: any): Record<string, any> => {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === 'object' ? raw : {};
+};
 
 interface EntryFormState {
   department: DeptType;
@@ -122,7 +145,27 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   const isBn = lang === 'bn';
   const fmtNum = useCallback((val: number | string) => (isBn ? toBnDigit(val) : String(val)), [isBn]);
 
-  const [activeTab, setActiveTab] = useState<'daily' | 'progress'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'report'>('daily');
+  const [activeDeptTab, setActiveDeptTab] = useState<DeptType>('hifz');
+  const [refreshTick, setRefreshTick] = useState<number>(0);
+
+  // Hifz Settings (per-class department mapping stored in institutions.config_json.hifz_settings)
+  const [classDeptMap, setClassDeptMap] = useState<Record<string, ClassDeptSetting>>(() => {
+    const cfg = parseConfigJson(madrasah?.config_json);
+    return cfg?.hifz_settings?.class_departments && typeof cfg.hifz_settings.class_departments === 'object'
+      ? { ...cfg.hifz_settings.class_departments }
+      : {};
+  });
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [draftClassDeptMap, setDraftClassDeptMap] = useState<Record<string, ClassDeptSetting>>({});
+  const [savingSettings, setSavingSettings] = useState<boolean>(false);
+
+  useEffect(() => {
+    const cfg = parseConfigJson(madrasah?.config_json);
+    if (cfg?.hifz_settings?.class_departments && typeof cfg.hifz_settings.class_departments === 'object') {
+      setClassDeptMap({ ...cfg.hifz_settings.class_departments });
+    }
+  }, [madrasah?.config_json]);
 
   // Classes & Students
   const [classes, setClasses] = useState<Class[]>([]);
@@ -162,18 +205,19 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   const [savingEntry, setSavingEntry] = useState<boolean>(false);
   const [entryError, setEntryError] = useState<string | null>(null);
 
-  // 30-Para Progress Tab state
+  // 30-Para Progress (inside Report tab) state
+  const [progressClassId, setProgressClassId] = useState<string>('');
+  const [progressClassStudents, setProgressClassStudents] = useState<Student[]>([]);
   const [progressStudentId, setProgressStudentId] = useState<string>('');
   const [studentHistory, setStudentHistory] = useState<HifzRecord[]>([]);
   const [loadingProgress, setLoadingProgress] = useState<boolean>(false);
 
-  // Report PDF Modal state
-  const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  // Inline Report PDF state (inside Report tab)
   const [reportPeriod, setReportPeriod] = useState<HifzReportPeriod>('weekly');
   const [reportWeekEnd, setReportWeekEnd] = useState<string>(() => getTodayDateString());
   const [reportMonth, setReportMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState<number>(() => new Date().getFullYear());
-  const [reportClassId, setReportClassId] = useState<string>('');
+  const [reportClassId, setReportClassId] = useState<string>('all');
   const [reportStudentId, setReportStudentId] = useState<string>('all');
   const [reportClassStudents, setReportClassStudents] = useState<Student[]>([]);
   const [generatingPdf, setGeneratingPdf] = useState<boolean>(false);
@@ -193,17 +237,139 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   );
 
   useBackHandler(
-    'hifz-report-modal',
+    'hifz-settings-modal',
     () => {
-      if (showReportModal && !generatingPdf) {
-        setShowReportModal(false);
+      if (showSettingsModal && !savingSettings) {
+        setShowSettingsModal(false);
         return true;
       }
       return false;
     },
-    showReportModal,
+    showSettingsModal,
     15
   );
+
+  // Effective department per class (saved setting or smart auto-detect fallback)
+  const getEffectiveClassDept = useCallback(
+    (cls: Class): ClassDeptSetting => {
+      const saved = classDeptMap[cls.id];
+      if (saved === 'hifz' || saved === 'nazera' || saved === 'qaida' || saved === 'off') {
+        return saved;
+      }
+      return detectDefaultClassDepartment(cls.class_name);
+    },
+    [classDeptMap]
+  );
+
+  const activeTrackedClasses = useMemo(
+    () => classes.filter((c) => getEffectiveClassDept(c) !== 'off'),
+    [classes, getEffectiveClassDept]
+  );
+
+  const filteredClasses = useMemo(
+    () => classes.filter((c) => getEffectiveClassDept(c) === activeDeptTab),
+    [classes, activeDeptTab, getEffectiveClassDept]
+  );
+
+  const reportSelectableClasses = useMemo(
+    () => (activeTrackedClasses.length > 0 ? activeTrackedClasses : classes),
+    [activeTrackedClasses, classes]
+  );
+
+  // Auto-select first class in filteredClasses when switching department tabs or updating settings
+  useEffect(() => {
+    if (loadingClasses) return;
+    if (filteredClasses.length === 0) {
+      setSelectedClassId('');
+      setStudents([]);
+      setDailyRecordsMap({});
+      return;
+    }
+    setSelectedClassId((prev) =>
+      prev && filteredClasses.some((c) => c.id === prev) ? prev : filteredClasses[0].id
+    );
+  }, [filteredClasses, loadingClasses]);
+
+  // Keep Report tab's 30-Para Progress class initialized cleanly
+  useEffect(() => {
+    if (loadingClasses) return;
+    if (reportSelectableClasses.length === 0) {
+      setProgressClassId('');
+      setProgressClassStudents([]);
+      setProgressStudentId('');
+      return;
+    }
+    setProgressClassId((prev) => {
+      if (prev && reportSelectableClasses.some((c) => c.id === prev)) return prev;
+      if (selectedClassId && reportSelectableClasses.some((c) => c.id === selectedClassId)) {
+        return selectedClassId;
+      }
+      return reportSelectableClasses[0].id;
+    });
+  }, [reportSelectableClasses, selectedClassId, loadingClasses]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshTick((t) => t + 1);
+  }, []);
+
+  const handleOpenSettingsModal = () => {
+    const initialDraft: Record<string, ClassDeptSetting> = {};
+    classes.forEach((cls) => {
+      initialDraft[cls.id] = getEffectiveClassDept(cls);
+    });
+    setDraftClassDeptMap(initialDraft);
+    setShowSettingsModal(true);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!madrasah?.id) return;
+    setSavingSettings(true);
+    try {
+      // Fetch latest config_json to preserve all existing keys cleanly
+      let latestConfig = parseConfigJson(madrasah.config_json);
+      const { data: instRow } = await supabase
+        .from('institutions')
+        .select('config_json')
+        .eq('id', madrasah.id)
+        .maybeSingle();
+
+      if (instRow?.config_json) {
+        latestConfig = parseConfigJson(instRow.config_json);
+      }
+
+      const updatedConfig = {
+        ...latestConfig,
+        hifz_settings: {
+          ...(latestConfig.hifz_settings || {}),
+          class_departments: { ...draftClassDeptMap },
+        },
+      };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+
+      // Sync local state & in-memory madrasah config_json
+      setClassDeptMap({ ...draftClassDeptMap });
+      if (madrasah) {
+        (madrasah as any).config_json = updatedConfig;
+      }
+
+      setShowSettingsModal(false);
+      showToast(isBn ? 'হিফজ সেটিংস সংরক্ষিত হয়েছে' : 'Hifz settings saved');
+    } catch (err: any) {
+      console.error('[HifzTracker] Error saving settings:', err);
+      showToast(
+        err?.message || (isBn ? 'সেটিংস সংরক্ষণ করতে সমস্যা হয়েছে' : 'Failed to save settings'),
+        'error'
+      );
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // 1. Load classes on mount
   useEffect(() => {
@@ -230,16 +396,6 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
         if (cancelled) return;
         setClasses(list);
-
-        if (list.length > 0) {
-          const hifzMatch = list.find((c) =>
-            /হিফজ|হিবজ|হেফজ|hifz|নাজেরা|nazera|নূরানী|নুরানী|noorani|কায়দা|কায়দা|qaida|আমপারা|ampara/i.test(
-              c.class_name || ''
-            )
-          );
-          const initialClassId = hifzMatch?.id || list[0].id;
-          setSelectedClassId((prev) => (prev && list.some((c) => c.id === prev) ? prev : initialClassId));
-        }
       } catch (err: any) {
         if (!cancelled) {
           console.error('[HifzTracker] Error loading classes:', err);
@@ -322,12 +478,6 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
           recMap[rec.student_id] = rec;
         }
         setDailyRecordsMap(recMap);
-
-        // Keep progress student synced with current class
-        setProgressStudentId((prev) => {
-          if (prev && classStudents.some((s) => s.id === prev)) return prev;
-          return classStudents[0]?.id || '';
-        });
       } catch (err: any) {
         if (!cancelled) {
           console.error('[HifzTracker] Error loading daily data:', err);
@@ -346,11 +496,44 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [madrasah?.id, selectedClassId, selectedDate, fetchStudentsForClass, isBn]);
+  }, [madrasah?.id, selectedClassId, selectedDate, fetchStudentsForClass, isBn, refreshTick]);
 
-  // 3. Load 30-Para Progress history when progress tab is active & student changes
+  // 3. Load students for 30-Para Progress class when Report tab is active
   useEffect(() => {
-    if (activeTab !== 'progress' || !madrasah?.id || !progressStudentId) return;
+    if (activeTab !== 'report' || !progressClassId) return;
+    if (progressClassId === selectedClassId && students.length > 0) {
+      setProgressClassStudents(students);
+      setProgressStudentId((prev) =>
+        prev && students.some((s) => s.id === prev) ? prev : students[0]?.id || ''
+      );
+      return;
+    }
+    let cancelled = false;
+    fetchStudentsForClass(progressClassId)
+      .then((list) => {
+        if (cancelled) return;
+        setProgressClassStudents(list);
+        setProgressStudentId((prev) =>
+          prev && list.some((s) => s.id === prev) ? prev : list[0]?.id || ''
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProgressClassStudents([]);
+          setProgressStudentId('');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, progressClassId, selectedClassId, students, fetchStudentsForClass, refreshTick]);
+
+  // 4. Load 30-Para Progress history when Report tab is active & student changes
+  useEffect(() => {
+    if (activeTab !== 'report' || !madrasah?.id || !progressStudentId) {
+      if (!progressStudentId) setStudentHistory([]);
+      return;
+    }
     let cancelled = false;
 
     const loadStudentProgress = async () => {
@@ -380,18 +563,21 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [activeTab, madrasah?.id, progressStudentId, dailyRecordsMap]);
+  }, [activeTab, madrasah?.id, progressStudentId, dailyRecordsMap, refreshTick]);
 
-  // Sync Report modal class students when reportClassId changes
+  // 5. Sync inline PDF Report class students when reportClassId changes inside Report tab
   useEffect(() => {
-    if (!showReportModal) return;
+    if (activeTab !== 'report') return;
     if (!reportClassId || reportClassId === 'all') {
       setReportClassStudents([]);
       setReportStudentId('all');
       return;
     }
-    if (reportClassId === selectedClassId) {
+    if (reportClassId === selectedClassId && students.length > 0) {
       setReportClassStudents(students);
+      setReportStudentId((prev) =>
+        prev === 'all' || students.some((s) => s.id === prev) ? prev : 'all'
+      );
       return;
     }
     let cancelled = false;
@@ -399,7 +585,9 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       .then((list) => {
         if (!cancelled) {
           setReportClassStudents(list);
-          setReportStudentId('all');
+          setReportStudentId((prev) =>
+            prev === 'all' || list.some((s) => s.id === prev) ? prev : 'all'
+          );
         }
       })
       .catch(() => {
@@ -408,7 +596,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [showReportModal, reportClassId, selectedClassId, students, fetchStudentsForClass]);
+  }, [activeTab, reportClassId, selectedClassId, students, fetchStudentsForClass, refreshTick]);
 
   // Derived stats & filtered students
   const { completedCount, pendingCount, filteredStudents } = useMemo(() => {
@@ -439,10 +627,19 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     setEntryError(null);
     setPrefillInfo(null);
 
+    const selectedClassObj = classes.find((c) => c.id === selectedClassId);
+    const classMappedDept = selectedClassObj ? getEffectiveClassDept(selectedClassObj) : activeDeptTab;
+    const defaultDept: DeptType =
+      activeTab === 'daily'
+        ? activeDeptTab
+        : classMappedDept !== 'off'
+          ? classMappedDept
+          : 'hifz';
+
     const existing = dailyRecordsMap[student.id];
     if (existing) {
       setEntryForm({
-        department: existing.department || 'hifz',
+        department: existing.department || defaultDept,
         para_no: existing.para_no ?? '',
         surah_name: existing.surah_name || '',
         page_from: existing.page_from ?? '',
@@ -460,10 +657,8 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       return;
     }
 
-    // Default initial state while fetching latest previous entry
-    const inferredDept: DeptType =
-      student.department === 'nazera' ? 'nazera' : 'hifz';
-    setEntryForm({ ...DEFAULT_FORM, department: inferredDept });
+    // Automatically apply the active department tab for new entries
+    setEntryForm({ ...DEFAULT_FORM, department: defaultDept });
 
     if (!madrasah?.id) return;
     setLoadingPrefill(true);
@@ -489,7 +684,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               : 1;
 
         setEntryForm({
-          department: last.department || inferredDept,
+          department: defaultDept,
           para_no: last.para_no ?? 1,
           surah_name: last.surah_name || '',
           page_from: nextPageFrom,
@@ -660,15 +855,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     };
   }, [studentHistory]);
 
-  // Open Report Modal
-  const handleOpenReportModal = () => {
-    setReportClassId(selectedClassId || (classes[0]?.id ?? 'all'));
-    setReportStudentId('all');
-    setReportClassStudents(students);
-    setShowReportModal(true);
-  };
-
-  // Compute date range for Report Modal
+  // Compute date range for inline PDF Report
   const computedReportRange = useMemo(() => {
     if (reportPeriod === 'weekly') {
       const end = reportWeekEnd || getTodayDateString();
@@ -765,7 +952,6 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         lang,
       });
 
-      setShowReportModal(false);
       showToast(isBn ? 'রিপোর্ট PDF ডাউনলোড শুরু হয়েছে' : 'Report PDF generated');
     } catch (err: any) {
       console.error('[HifzTracker] Report PDF error:', err);
@@ -808,264 +994,70 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
   return (
     <div className="space-y-4 sm:space-y-5 pb-28 max-w-6xl mx-auto px-1 font-noto animate-in fade-in duration-300">
-      {/* Top Bar */}
-      <div
-        className={`p-3.5 sm:p-5 rounded-[2rem] border transition-colors ${
-          isDark
-            ? 'bg-slate-900/90 border-slate-800 shadow-lg'
-            : 'bg-white border-slate-200/80 shadow-sm'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => onBack()}
-              aria-label={isBn ? 'ফিরে যান' : 'Back'}
-              className={`w-11 h-11 rounded-2xl flex items-center justify-center border shrink-0 active:scale-95 transition-transform cursor-pointer ${
-                isDark
-                  ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                  : 'bg-slate-50 border-slate-200 text-[#1E3A8A] hover:bg-slate-100'
-              }`}
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div className="min-w-0">
-              <h1
-                className={`text-base sm:text-xl font-black tracking-tight truncate ${
-                  isDark ? 'text-white' : 'text-[#1E3A8A]'
-                }`}
-              >
-                {isBn ? 'হিফজ ও সবক ট্র্যাকার' : 'Hifz & Sabaq Tracker'}
-              </h1>
-              <p className="text-[11px] font-bold text-slate-400 truncate">
-                {madrasah?.name || (isBn ? 'দৈনিক সবক ও প্রগ্রেস' : 'Daily Sabaq & Progress')}
-              </p>
-            </div>
-          </div>
-
+      {/* Clean Top Header (Attendance.tsx Style) */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={handleOpenReportModal}
-            className="h-11 px-3.5 sm:px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all shrink-0 whitespace-nowrap cursor-pointer"
+            onClick={() => onBack()}
+            aria-label={isBn ? 'ফিরে যান' : 'Back'}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all cursor-pointer ${
+              isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'
+            }`}
           >
-            <FileText size={16} />
-            <span>{isBn ? 'রিপোর্ট PDF' : 'Report PDF'}</span>
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>
+            {isBn ? 'হিফজ ও সবক ট্র্যাকার' : 'Hifz & Sabaq Tracker'}
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleOpenSettingsModal}
+            title={isBn ? 'হিফজ সেটিংস' : 'Hifz Settings'}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+              isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-400'
+            }`}
+          >
+            <Settings size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            title={isBn ? 'রিফ্রেশ' : 'Refresh'}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+              isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-400'
+            }`}
+          >
+            <RefreshCw size={18} className={loadingDaily || loadingProgress ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Filter Bar Card */}
+      {/* Two Main Tabs (Attendance.tsx Tab Bar Style) */}
       <div
-        className={`p-3.5 sm:p-4 rounded-[2rem] border space-y-3 ${
-          isDark
-            ? 'bg-slate-900/90 border-slate-800'
-            : 'bg-white border-slate-200/80 shadow-sm'
-        }`}
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-          {/* Class Selector */}
-          <div className="sm:col-span-5">
-            <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
-              {isBn ? 'জামাত / শ্রেণি' : 'Class / Jammat'}
-            </label>
-            <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              disabled={loadingClasses || classes.length === 0}
-              className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
-                isDark
-                  ? 'bg-slate-800 border-slate-700 text-white'
-                  : 'bg-slate-50 border-slate-200 text-slate-800'
-              }`}
-            >
-              {classes.length === 0 ? (
-                <option value="">{loadingClasses ? (isBn ? 'লোড হচ্ছে...' : 'Loading...') : (isBn ? 'কোনো শ্রেণি নেই' : 'No classes')}</option>
-              ) : (
-                classes.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.class_name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Date Selector with 1-tap prev/next */}
-          <div className="sm:col-span-4">
-            <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
-              {isBn ? 'তারিখ' : 'Date'}
-            </label>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSelectedDate((d) => shiftIsoDate(d, -1))}
-                aria-label={isBn ? 'আগের দিন' : 'Previous day'}
-                className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                className={`flex-1 min-w-0 h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 tabular-nums ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setSelectedDate((d) => shiftIsoDate(d, 1))}
-                aria-label={isBn ? 'পরের দিন' : 'Next day'}
-                className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          </div>
-
-          {/* Search */}
-          <div className="sm:col-span-3">
-            <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
-              {isBn ? 'দ্রুত খুঁজুন' : 'Quick Search'}
-            </label>
-            <div className="relative">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={isBn ? 'নাম বা রোল...' : 'Name or roll...'}
-                className={`w-full h-11 pl-10 pr-9 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
-                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
-                }`}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Summary Strip (Interactive 1-tap filter buttons) */}
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => setStatusFilter('all')}
-            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
-              statusFilter === 'all'
-                ? isDark
-                  ? 'bg-blue-500/15 border-blue-500/40'
-                  : 'bg-blue-50/90 border-blue-200'
-                : isDark
-                  ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
-                  : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
-            }`}
-          >
-            <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
-              {isBn ? 'মোট শিক্ষার্থী' : 'Total Students'}
-            </p>
-            <p className={`text-lg sm:text-2xl font-black tabular-nums mt-0.5 ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {fmtNum(students.length)}
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter((prev) => (prev === 'done' ? 'all' : 'done'))}
-            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
-              statusFilter === 'done'
-                ? isDark
-                  ? 'bg-emerald-500/20 border-emerald-500/50'
-                  : 'bg-emerald-50 border-emerald-300'
-                : isDark
-                  ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
-                  : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
-            }`}
-          >
-            <p className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">
-              {isBn ? 'আজ সবক দিয়েছে' : 'Completed'}
-            </p>
-            <p className="text-lg sm:text-2xl font-black tabular-nums mt-0.5 text-emerald-600 dark:text-emerald-400">
-              {fmtNum(completedCount)}
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))}
-            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
-              statusFilter === 'pending'
-                ? isDark
-                  ? 'bg-amber-500/20 border-amber-500/50'
-                  : 'bg-amber-50 border-amber-300'
-                : isDark
-                  ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
-                  : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
-            }`}
-          >
-            <p className="text-[10px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 truncate">
-              {isBn ? 'বাকি আছে' : 'Remaining'}
-            </p>
-            <p className="text-lg sm:text-2xl font-black tabular-nums mt-0.5 text-amber-600 dark:text-amber-400">
-              {fmtNum(pendingCount)}
-            </p>
-          </button>
-        </div>
-      </div>
-
-      {/* Two Main Tabs */}
-      <div
-        className={`p-1.5 rounded-[1.75rem] border grid grid-cols-2 gap-1.5 ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80 shadow-sm'
+        className={`flex p-1 rounded-[1.5rem] border shadow-sm transition-all ${
+          isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'
         }`}
       >
         <button
           type="button"
           onClick={() => setActiveTab('daily')}
-          className={`min-h-[44px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-[0.98] whitespace-nowrap cursor-pointer ${
-            activeTab === 'daily'
-              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-              : isDark
-                ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 cursor-pointer ${
+            activeTab === 'daily' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'
           }`}
         >
-          <BookOpen size={16} />
-          <span>{isBn ? 'দৈনিক সবক এন্ট্রি' : 'Daily Entry'}</span>
+          {isBn ? 'দৈনিক সবক এন্ট্রি' : 'Daily Sabaq Entry'}
         </button>
-
         <button
           type="button"
-          onClick={() => setActiveTab('progress')}
-          className={`min-h-[44px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-[0.98] whitespace-nowrap cursor-pointer ${
-            activeTab === 'progress'
-              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-              : isDark
-                ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          onClick={() => setActiveTab('report')}
+          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 cursor-pointer ${
+            activeTab === 'report' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'
           }`}
         >
-          <Grid3X3 size={16} />
-          <span>{isBn ? '৩০ পারা প্রগ্রেস' : '30-Para Progress'}</span>
+          {isBn ? 'হিফজ রিপোর্ট' : 'Hifz Report'}
         </button>
       </div>
 
@@ -1085,11 +1077,272 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
       {/* TAB 1: DAILY ENTRY */}
       {activeTab === 'daily' && (
-        <div>
+        <div className="space-y-4">
+          {/* Filter Bar Card (Department Pills + Class + Date + Search + Summary) */}
+          <div
+            className={`p-3.5 sm:p-4 rounded-[2rem] border space-y-3 ${
+              isDark
+                ? 'bg-slate-900/90 border-slate-800'
+                : 'bg-white border-slate-200/80 shadow-sm'
+            }`}
+          >
+            {/* 3 Department Filter Pills */}
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { key: 'hifz' as DeptType, bn: 'হিফজ', en: 'Hifz' },
+                  { key: 'nazera' as DeptType, bn: 'নাজেরা', en: 'Nazera' },
+                  { key: 'qaida' as DeptType, bn: 'কায়দা', en: 'Qaida' },
+                ] as const
+              ).map((tab) => {
+                const isActive = activeDeptTab === tab.key;
+                const deptClassCount = classes.filter((c) => getEffectiveClassDept(c) === tab.key).length;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveDeptTab(tab.key)}
+                    className={`min-h-[42px] px-2.5 py-2 rounded-2xl text-xs sm:text-sm font-black border flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-600/20'
+                        : isDark
+                          ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{isBn ? tab.bn : tab.en}</span>
+                    {deptClassCount > 0 && (
+                      <span
+                        className={`text-[10px] font-black px-1.5 py-0.5 rounded-lg tabular-nums ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : isDark
+                              ? 'bg-slate-700 text-slate-300'
+                              : 'bg-slate-200/80 text-slate-500'
+                        }`}
+                      >
+                        {fmtNum(deptClassCount)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+              {/* Class Selector */}
+              <div className="sm:col-span-5">
+                <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                  {isBn ? 'জামাত / শ্রেণি' : 'Class / Jammat'}
+                </label>
+                <select
+                  value={selectedClassId}
+                  onChange={(e) => setSelectedClassId(e.target.value)}
+                  disabled={loadingClasses || filteredClasses.length === 0}
+                  className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  {filteredClasses.length === 0 ? (
+                    <option value="">
+                      {loadingClasses
+                        ? isBn
+                          ? 'লোড হচ্ছে...'
+                          : 'Loading...'
+                        : isBn
+                          ? 'এই বিভাগে কোনো ক্লাস নেই'
+                          : 'No classes in this department'}
+                    </option>
+                  ) : (
+                    filteredClasses.map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.class_name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Date Selector with 1-tap prev/next */}
+              <div className="sm:col-span-4">
+                <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                  {isBn ? 'তারিখ' : 'Date'}
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate((d) => shiftIsoDate(d, -1))}
+                    aria-label={isBn ? 'আগের দিন' : 'Previous day'}
+                    className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                    className={`flex-1 min-w-0 h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 tabular-nums ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate((d) => shiftIsoDate(d, 1))}
+                    aria-label={isBn ? 'পরের দিন' : 'Next day'}
+                    className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="sm:col-span-3">
+                <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                  {isBn ? 'দ্রুত খুঁজুন' : 'Quick Search'}
+                </label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={isBn ? 'নাম বা রোল...' : 'Name or roll...'}
+                    className={`w-full h-11 pl-10 pr-9 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                    }`}
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Strip (Interactive 1-tap filter buttons) */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
+                  statusFilter === 'all'
+                    ? isDark
+                      ? 'bg-blue-500/15 border-blue-500/40'
+                      : 'bg-blue-50/90 border-blue-200'
+                    : isDark
+                      ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
+                }`}
+              >
+                <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
+                  {isBn ? 'মোট শিক্ষার্থী' : 'Total Students'}
+                </p>
+                <p className={`text-lg sm:text-2xl font-black tabular-nums mt-0.5 ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {fmtNum(students.length)}
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'done' ? 'all' : 'done'))}
+                className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
+                  statusFilter === 'done'
+                    ? isDark
+                      ? 'bg-emerald-500/20 border-emerald-500/50'
+                      : 'bg-emerald-50 border-emerald-300'
+                    : isDark
+                      ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
+                }`}
+              >
+                <p className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">
+                  {isBn ? 'আজ সবক দিয়েছে' : 'Completed'}
+                </p>
+                <p className="text-lg sm:text-2xl font-black tabular-nums mt-0.5 text-emerald-600 dark:text-emerald-400">
+                  {fmtNum(completedCount)}
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))}
+                className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
+                  statusFilter === 'pending'
+                    ? isDark
+                      ? 'bg-amber-500/20 border-amber-500/50'
+                      : 'bg-amber-50 border-amber-300'
+                    : isDark
+                      ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
+                }`}
+              >
+                <p className="text-[10px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 truncate">
+                  {isBn ? 'বাকি আছে' : 'Remaining'}
+                </p>
+                <p className="text-lg sm:text-2xl font-black tabular-nums mt-0.5 text-amber-600 dark:text-amber-400">
+                  {fmtNum(pendingCount)}
+                </p>
+              </button>
+            </div>
+          </div>
           {loadingDaily || loadingClasses ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
               <Loader2 size={28} className="animate-spin text-emerald-500" />
               <p className="text-xs font-bold">{isBn ? 'শিক্ষার্থী তালিকা লোড হচ্ছে...' : 'Loading students...'}</p>
+            </div>
+          ) : filteredClasses.length === 0 ? (
+            <div
+              className={`p-8 sm:p-10 rounded-[2rem] border-2 border-dashed text-center space-y-3 ${
+                isDark ? 'bg-slate-900/40 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
+              }`}
+            >
+              <div
+                className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center ${
+                  isDark ? 'bg-slate-800 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+                }`}
+              >
+                <Settings size={26} />
+              </div>
+              <div className="space-y-1">
+                <p className={`text-sm sm:text-base font-black ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                  {isBn
+                    ? `${DEPT_LABELS[activeDeptTab].bn} বিভাগে কোনো ক্লাস যুক্ত নেই`
+                    : `No classes mapped to ${DEPT_LABELS[activeDeptTab].en}`}
+                </p>
+                <p className="text-xs font-medium text-slate-400 max-w-sm mx-auto">
+                  {isBn
+                    ? 'সেটিংস থেকে আপনার পছন্দের ক্লাসগুলো এই বিভাগে যুক্ত করুন।'
+                    : 'Assign classes to this department from Hifz Settings.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenSettingsModal}
+                className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Settings size={16} />
+                <span>{isBn ? 'সেটিংস থেকে ক্লাস যোগ করুন' : 'Add Classes from Settings'}</span>
+              </button>
             </div>
           ) : filteredStudents.length === 0 ? (
             <div
@@ -1108,8 +1361,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               {filteredStudents.map((student) => {
                 const record = dailyRecordsMap[student.id];
                 const isDone = Boolean(record);
-                const deptKey: DeptType =
-                  record?.department || (student.department === 'nazera' ? 'nazera' : 'hifz');
+                const deptKey: DeptType = record?.department || activeDeptTab;
                 const deptLabel = DEPT_LABELS[deptKey]?.[isBn ? 'bn' : 'en'];
 
                 const paraText = record?.para_no
@@ -1129,15 +1381,14 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 return (
                   <div
                     key={student.id}
-                    onClick={() => handleOpenEntryModal(student)}
-                    className={`p-4 rounded-[2rem] border transition-all cursor-pointer active:scale-[0.99] flex flex-col justify-between gap-3 ${
+                    className={`p-4 rounded-[2rem] border transition-colors flex flex-col justify-between gap-3 ${
                       isDone
                         ? isDark
-                          ? 'bg-slate-900/90 border-emerald-500/30 hover:border-emerald-500/50'
-                          : 'bg-white border-emerald-200/80 hover:border-emerald-300 shadow-sm'
+                          ? 'bg-slate-900/90 border-emerald-500/30'
+                          : 'bg-white border-emerald-200/80 shadow-sm'
                         : isDark
-                          ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                          : 'bg-white border-slate-200/80 hover:border-blue-200 shadow-sm'
+                          ? 'bg-slate-900/90 border-slate-800'
+                          : 'bg-white border-slate-200/80 shadow-sm'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1184,10 +1435,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
                       <button
                         type="button"
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          handleOpenEntryModal(student);
-                        }}
+                        onClick={() => handleOpenEntryModal(student)}
                         className={`min-h-[40px] px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 shrink-0 whitespace-nowrap active:scale-95 transition-transform cursor-pointer ${
                           isDone
                             ? isDark
@@ -1243,17 +1491,266 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         </div>
       )}
 
-      {/* TAB 2: 30-PARA VISUAL PROGRESS */}
-      {activeTab === 'progress' && (
+      {/* TAB 2: HIFZ REPORT (Inline PDF Download + 30-Para Visual Progress) */}
+      {activeTab === 'report' && (
         <div className="space-y-4">
-          {/* Student selector card */}
+          {/* 1. PDF Report Download Card */}
           <div
             className={`p-4 sm:p-5 rounded-[2rem] border space-y-4 ${
               isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80 shadow-sm'
             }`}
           >
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-              <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <FileText size={20} />
+              </div>
+              <div className="min-w-0">
+                <h2 className={`text-sm sm:text-base font-black truncate ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {isBn ? 'সাপ্তাহিক / মাসিক / বাৎসরিক রিপোর্ট PDF' : 'Weekly / Monthly / Yearly Report PDF'}
+                </h2>
+                <p className="text-[11px] font-bold text-slate-400 truncate">
+                  {isBn ? 'সময়কাল ও ক্লাস নির্বাচন করে PDF ডাউনলোড করুন' : 'Select period & class to download PDF'}
+                </p>
+              </div>
+            </div>
+
+            {/* Period Type Pills */}
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { id: 'weekly' as HifzReportPeriod, bn: 'সাপ্তাহিক', en: 'Weekly' },
+                  { id: 'monthly' as HifzReportPeriod, bn: 'মাসিক', en: 'Monthly' },
+                  { id: 'yearly' as HifzReportPeriod, bn: 'বাৎসরিক', en: 'Yearly' },
+                ] as const
+              ).map((p) => {
+                const active = reportPeriod === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setReportPeriod(p.id)}
+                    className={`min-h-[42px] rounded-2xl border text-xs sm:text-sm font-black active:scale-95 transition-all cursor-pointer ${
+                      active
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                        : isDark
+                          ? 'bg-slate-800 border-slate-700 text-slate-300'
+                          : 'bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {isBn ? p.bn : p.en}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Period & Scope Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {reportPeriod === 'weekly' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                    {isBn ? 'সপ্তাহের শেষ তারিখ (গত ৭ দিন)' : 'Week Ending Date (Last 7 Days)'}
+                  </label>
+                  <input
+                    type="date"
+                    value={reportWeekEnd}
+                    onChange={(e) => e.target.value && setReportWeekEnd(e.target.value)}
+                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  />
+                </div>
+              )}
+
+              {reportPeriod === 'monthly' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                      {isBn ? 'মাস' : 'Month'}
+                    </label>
+                    <select
+                      value={reportMonth}
+                      onChange={(e) => setReportMonth(Number(e.target.value))}
+                      className={`w-full h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                      }`}
+                    >
+                      {(isBn ? BN_MONTHS : EN_MONTHS).map((mName, idx) => (
+                        <option key={mName} value={idx + 1}>
+                          {mName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                      {isBn ? 'সাল' : 'Year'}
+                    </label>
+                    <select
+                      value={reportYear}
+                      onChange={(e) => setReportYear(Number(e.target.value))}
+                      className={`w-full h-11 px-3 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                      }`}
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {fmtNum(y)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {reportPeriod === 'yearly' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                    {isBn ? 'সাল নির্বাচন করুন' : 'Select Year'}
+                  </label>
+                  <select
+                    value={reportYear}
+                    onChange={(e) => setReportYear(Number(e.target.value))}
+                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>
+                        {fmtNum(y)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Class Selector */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                  {isBn ? 'ক্লাস / জামাত' : 'Class / Jammat'}
+                </label>
+                <select
+                  value={reportClassId}
+                  onChange={(e) => setReportClassId(e.target.value)}
+                  className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <option value="all">{isBn ? 'সকল ক্লাস' : 'All Classes'}</option>
+                  {reportSelectableClasses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.class_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Student Selector */}
+              <div className="sm:col-span-2">
+                <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                  {isBn ? 'শিক্ষার্থী' : 'Student'}
+                </label>
+                <select
+                  value={reportStudentId}
+                  onChange={(e) => setReportStudentId(e.target.value)}
+                  disabled={reportClassId === 'all'}
+                  className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60 ${
+                    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <option value="all">
+                    {isBn ? 'সকল শিক্ষার্থী (ক্লাস সামারি)' : 'All Students (Class Summary)'}
+                  </option>
+                  {reportClassStudents.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.roll != null ? `[${fmtNum(s.roll)}] ` : ''}
+                      {s.student_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Range Summary + Download Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <div
+                className={`px-3.5 py-2.5 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
+                  isDark
+                    ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}
+              >
+                <Calendar size={15} className="shrink-0 text-emerald-500" />
+                <span>{computedReportRange.label}</span>
+              </div>
+
+              <button
+                type="button"
+                disabled={generatingPdf}
+                onClick={handleGeneratePdf}
+                className="h-12 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all disabled:opacity-50 shrink-0 cursor-pointer"
+              >
+                {generatingPdf ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>{isBn ? 'PDF তৈরি হচ্ছে...' : 'Generating PDF...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={18} />
+                    <span>{isBn ? 'রিপোর্ট PDF ডাউনলোড করুন' : 'Download Report PDF'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* 2. 30-Para Visual Progress Map */}
+          <div
+            className={`p-4 sm:p-5 rounded-[2rem] border space-y-4 ${
+              isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80 shadow-sm'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <Grid3X3 size={20} />
+              </div>
+              <div className="min-w-0">
+                <h2 className={`text-sm sm:text-base font-black truncate ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {isBn ? '৩০ পারা প্রগ্রেস ম্যাপ' : '30-Para Visual Progress'}
+                </h2>
+                <p className="text-[11px] font-bold text-slate-400 truncate">
+                  {isBn ? 'শিক্ষার্থী ভিত্তিক পারা অগ্রগতি ও সাম্প্রতিক হিস্ট্রি' : 'Student-wise para completion & history'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                  {isBn ? 'জামাত / শ্রেণি' : 'Class / Jammat'}
+                </label>
+                <select
+                  value={progressClassId}
+                  onChange={(e) => setProgressClassId(e.target.value)}
+                  className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  {reportSelectableClasses.length === 0 ? (
+                    <option value="">{isBn ? 'কোনো শ্রেণি নেই' : 'No classes'}</option>
+                  ) : (
+                    reportSelectableClasses.map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.class_name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                   {isBn ? 'শিক্ষার্থী নির্বাচন করুন' : 'Select Student'}
                 </label>
@@ -1266,10 +1763,10 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       : 'bg-slate-50 border-slate-200 text-slate-800'
                   }`}
                 >
-                  {students.length === 0 ? (
+                  {progressClassStudents.length === 0 ? (
                     <option value="">{isBn ? 'কোনো শিক্ষার্থী নেই' : 'No students'}</option>
                   ) : (
-                    students.map((s) => (
+                    progressClassStudents.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.roll != null ? `[${fmtNum(s.roll)}] ` : ''}
                         {s.student_name}
@@ -1278,24 +1775,24 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   )}
                 </select>
               </div>
+            </div>
 
-              {/* Compact legend */}
-              <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex-wrap">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />
-                  {isBn ? `সম্পন্ন (${fmtNum(paraProgressData.completedParasCount)})` : `Done (${paraProgressData.completedParasCount})`}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-md bg-blue-600 inline-block" />
-                  {isBn
-                    ? `চলমান (${paraProgressData.currentPara ? fmtNum(paraProgressData.currentPara) : '—'})`
-                    : `Current (${paraProgressData.currentPara || '—'})`}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-3 h-3 rounded-md inline-block ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
-                  {isBn ? 'বাকি' : 'Remaining'}
-                </span>
-              </div>
+            {/* Compact legend */}
+            <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex-wrap">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />
+                {isBn ? `সম্পন্ন (${fmtNum(paraProgressData.completedParasCount)})` : `Done (${paraProgressData.completedParasCount})`}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-blue-600 inline-block" />
+                {isBn
+                  ? `চলমান (${paraProgressData.currentPara ? fmtNum(paraProgressData.currentPara) : '—'})`
+                  : `Current (${paraProgressData.currentPara || '—'})`}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={`w-3 h-3 rounded-md inline-block ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                {isBn ? 'বাকি' : 'Remaining'}
+              </span>
             </div>
 
             {loadingProgress ? (
@@ -1304,49 +1801,46 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 <span className="text-xs font-bold">{isBn ? 'প্রগ্রেস লোড হচ্ছে...' : 'Loading progress...'}</span>
               </div>
             ) : (
-              <>
-                {/* 30-Para Visual Grid */}
-                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
-                  {paraProgressData.paras.map((p) => {
-                    const isCompleted = p.status === 'completed';
-                    const isCurrent = p.status === 'current';
-                    return (
-                      <div
-                        key={p.paraNo}
-                        className={`p-2 sm:p-2.5 rounded-2xl border text-center flex flex-col items-center justify-center min-h-[60px] transition-colors ${
-                          isCompleted
-                            ? isDark
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                            : isCurrent
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/25'
-                              : isDark
-                                ? 'bg-slate-800/60 border-slate-800 text-slate-400'
-                                : 'bg-slate-50 border-slate-200/70 text-slate-500'
-                        }`}
-                      >
-                        <span className="text-[10px] font-bold opacity-80 leading-none">
-                          {isBn ? 'পারা' : 'Para'}
+              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                {paraProgressData.paras.map((p) => {
+                  const isCompleted = p.status === 'completed';
+                  const isCurrent = p.status === 'current';
+                  return (
+                    <div
+                      key={p.paraNo}
+                      className={`p-2 sm:p-2.5 rounded-2xl border text-center flex flex-col items-center justify-center min-h-[60px] transition-colors ${
+                        isCompleted
+                          ? isDark
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : isCurrent
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/25'
+                            : isDark
+                              ? 'bg-slate-800/60 border-slate-800 text-slate-400'
+                              : 'bg-slate-50 border-slate-200/70 text-slate-500'
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold opacity-80 leading-none">
+                        {isBn ? 'পারা' : 'Para'}
+                      </span>
+                      <span className="text-base sm:text-lg font-black tabular-nums leading-tight mt-0.5">
+                        {fmtNum(p.paraNo)}
+                      </span>
+                      {isCurrent && p.maxPage > 0 ? (
+                        <span className="text-[9px] font-bold opacity-90 mt-0.5 leading-none">
+                          {isBn ? `পৃঃ ${fmtNum(p.maxPage)}` : `P.${p.maxPage}`}
                         </span>
-                        <span className="text-base sm:text-lg font-black tabular-nums leading-tight mt-0.5">
-                          {fmtNum(p.paraNo)}
-                        </span>
-                        {isCurrent && p.maxPage > 0 ? (
-                          <span className="text-[9px] font-bold opacity-90 mt-0.5 leading-none">
-                            {isBn ? `পৃঃ ${fmtNum(p.maxPage)}` : `P.${p.maxPage}`}
-                          </span>
-                        ) : isCompleted ? (
-                          <Check size={11} className="mt-0.5 opacity-90" />
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
+                      ) : isCompleted ? (
+                        <Check size={11} className="mt-0.5 opacity-90" />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* Recent Sabaq History Timeline */}
+          {/* 3. Recent Sabaq History Timeline */}
           <div
             className={`p-4 sm:p-5 rounded-[2rem] border space-y-3 ${
               isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80 shadow-sm'
@@ -1441,16 +1935,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         </div>
       )}
 
-      {/* ENTRY MODAL / BOTTOM SHEET */}
+      {/* ENTRY MODAL / BOTTOM SHEET (Positioned cleanly above mobile bottom nav bar) */}
       {activeStudent &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-slate-950/65 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 z-[150] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center px-2 pt-4 pb-[88px] sm:p-4 animate-in fade-in duration-200"
             onClick={() => !savingEntry && setActiveStudent(null)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full sm:max-w-lg rounded-t-[2rem] sm:rounded-[2.5rem] border shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 font-noto ${
+              className={`w-full sm:max-w-lg rounded-[2rem] sm:rounded-[2.5rem] border shadow-2xl max-h-[calc(100dvh-110px)] sm:max-h-[88vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 font-noto ${
                 isDark
                   ? 'bg-slate-900 border-slate-800 text-white'
                   : 'bg-white border-slate-200 text-slate-900'
@@ -1489,7 +1983,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               </div>
 
               {/* Scrollable Form Body */}
-              <form id="hifz-entry-form" onSubmit={handleSaveEntry} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 custom-scrollbar">
+              <form id="hifz-entry-form" onSubmit={handleSaveEntry} className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4 custom-scrollbar">
                 {loadingPrefill && (
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                     <Loader2 size={14} className="animate-spin" />
@@ -1520,12 +2014,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   </div>
                 )}
 
-                {/* 1. Department Pills */}
-                <div>
-                  <label className="text-xs font-black text-slate-500 dark:text-slate-400 block mb-1.5">
-                    {isBn ? 'বিভাগ' : 'Department'}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
+                {/* 1. Compact Department Indicator with optional quick override */}
+                <div
+                  className={`px-3 py-2 rounded-2xl border flex items-center justify-between gap-2 ${
+                    isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200/80'
+                  }`}
+                >
+                  <span className="text-[11px] font-black text-slate-500 dark:text-slate-400">
+                    {isBn ? 'বিভাগ:' : 'Dept:'}
+                  </span>
+                  <div className="flex items-center gap-1">
                     {(['hifz', 'nazera', 'qaida'] as DeptType[]).map((dept) => {
                       const active = entryForm.department === dept;
                       return (
@@ -1533,12 +2031,12 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           key={dept}
                           type="button"
                           onClick={() => setEntryForm((f) => ({ ...f, department: dept }))}
-                          className={`min-h-[44px] rounded-2xl text-xs sm:text-sm font-black border transition-all active:scale-95 cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
                             active
-                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                              ? 'bg-emerald-600 text-white shadow-sm'
                               : isDark
-                                ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                ? 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                                : 'text-slate-500 hover:bg-slate-200/70 hover:text-slate-800'
                           }`}
                         >
                           {DEPT_LABELS[dept][isBn ? 'bn' : 'en']}
@@ -2026,50 +2524,51 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
           document.body
         )}
 
-      {/* REPORT PDF MODAL */}
-      {showReportModal &&
+      {/* HIFZ SETTINGS MODAL (Positioned cleanly above mobile bottom nav bar) */}
+      {showSettingsModal &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-slate-950/65 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-200"
-            onClick={() => !generatingPdf && setShowReportModal(false)}
+            className="fixed inset-0 z-[150] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center px-2 pt-4 pb-[88px] sm:p-4 animate-in fade-in duration-200"
+            onClick={() => !savingSettings && setShowSettingsModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2.5rem] border shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 font-noto ${
+              className={`w-full sm:max-w-lg rounded-[2rem] sm:rounded-[2.5rem] border shadow-2xl max-h-[calc(100dvh-110px)] sm:max-h-[88vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 font-noto ${
                 isDark
                   ? 'bg-slate-900 border-slate-800 text-white'
                   : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
+              {/* Mobile drag handle */}
               <div className="sm:hidden pt-2.5 pb-1 flex justify-center shrink-0">
                 <div className={`w-10 h-1.5 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
               </div>
 
               {/* Header */}
               <div
-                className={`px-5 py-4 border-b flex items-center justify-between gap-3 ${
+                className={`px-5 py-4 border-b flex items-center justify-between gap-3 shrink-0 ${
                   isDark ? 'border-slate-800' : 'border-slate-100'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <FileText size={20} />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Settings size={20} />
                   </div>
-                  <div>
-                    <h2 className={`text-base sm:text-lg font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                      {isBn ? 'হিফজ ও সবক রিপোর্ট PDF' : 'Hifz & Sabaq Report PDF'}
+                  <div className="min-w-0">
+                    <h2 className={`text-base sm:text-lg font-black truncate ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                      {isBn ? 'হিফজ ও সবক সেটিংস' : 'Hifz & Sabaq Settings'}
                     </h2>
-                    <p className="text-[11px] font-bold text-slate-400">
-                      {isBn ? 'সাপ্তাহিক, মাসিক বা বাৎসরিক রিপোর্ট' : 'Weekly, Monthly or Yearly PDF'}
+                    <p className="text-[11px] font-bold text-slate-400 truncate">
+                      {isBn ? 'প্রতিটি ক্লাসের বিভাগ নির্ধারণ করুন' : 'Assign each class to a department'}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  disabled={generatingPdf}
-                  onClick={() => setShowReportModal(false)}
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer ${
-                    isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'
+                  disabled={savingSettings}
+                  onClick={() => setShowSettingsModal(false)}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 cursor-pointer ${
+                    isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
                 >
                   <X size={18} />
@@ -2077,210 +2576,124 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               </div>
 
               {/* Body */}
-              <div className="p-5 space-y-4 overflow-y-auto">
-                {/* Period Type */}
-                <div>
-                  <label className="text-xs font-black text-slate-500 dark:text-slate-400 block mb-1.5">
-                    {isBn ? 'রিপোর্টের সময়কাল' : 'Report Period'}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        { id: 'weekly' as HifzReportPeriod, bn: 'সাপ্তাহিক', en: 'Weekly' },
-                        { id: 'monthly' as HifzReportPeriod, bn: 'মাসিক', en: 'Monthly' },
-                        { id: 'yearly' as HifzReportPeriod, bn: 'বাৎসরিক', en: 'Yearly' },
-                      ] as const
-                    ).map((p) => {
-                      const active = reportPeriod === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setReportPeriod(p.id)}
-                          className={`min-h-[44px] rounded-2xl border text-xs sm:text-sm font-black active:scale-95 transition-all cursor-pointer ${
-                            active
-                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
-                              : isDark
-                                ? 'bg-slate-800 border-slate-700 text-slate-300'
-                                : 'bg-slate-50 border-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {isBn ? p.bn : p.en}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Period Controls */}
-                {reportPeriod === 'weekly' && (
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-400 block mb-1">
-                      {isBn ? 'সপ্তাহের শেষ তারিখ (গত ৭ দিন)' : 'Week Ending Date (Last 7 Days)'}
-                    </label>
-                    <input
-                      type="date"
-                      value={reportWeekEnd}
-                      onChange={(e) => e.target.value && setReportWeekEnd(e.target.value)}
-                      className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                      }`}
-                    />
-                  </div>
-                )}
-
-                {reportPeriod === 'monthly' && (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-400 block mb-1">
-                        {isBn ? 'মাস' : 'Month'}
-                      </label>
-                      <select
-                        value={reportMonth}
-                        onChange={(e) => setReportMonth(Number(e.target.value))}
-                        className={`w-full h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+              <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-3 custom-scrollbar">
+                {classes.length === 0 ? (
+                  <p className="text-xs font-bold text-slate-400 text-center py-8">
+                    {isBn ? 'কোনো ক্লাস পাওয়া যায়নি।' : 'No classes found.'}
+                  </p>
+                ) : (
+                  classes.map((cls) => {
+                    const currentVal: ClassDeptSetting =
+                      draftClassDeptMap[cls.id] || getEffectiveClassDept(cls);
+                    return (
+                      <div
+                        key={cls.id}
+                        className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                          isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50/90 border-slate-200/80'
                         }`}
                       >
-                        {(isBn ? BN_MONTHS : EN_MONTHS).map((mName, idx) => (
-                          <option key={mName} value={idx + 1}>
-                            {mName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-400 block mb-1">
-                        {isBn ? 'সাল' : 'Year'}
-                      </label>
-                      <select
-                        value={reportYear}
-                        onChange={(e) => setReportYear(Number(e.target.value))}
-                        className={`w-full h-11 px-3 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
-                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}
-                      >
-                        {yearOptions.map((y) => (
-                          <option key={y} value={y}>
-                            {fmtNum(y)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                            {cls.class_name}
+                          </span>
+                          {currentVal === 'off' && (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 shrink-0">
+                              {isBn ? 'বন্ধ' : 'Off'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(
+                            [
+                              {
+                                key: 'hifz' as ClassDeptSetting,
+                                bn: 'হিফজ',
+                                en: 'Hifz',
+                                activeCls: 'bg-emerald-600 border-emerald-600 text-white shadow-sm',
+                              },
+                              {
+                                key: 'nazera' as ClassDeptSetting,
+                                bn: 'নাজেরা',
+                                en: 'Nazera',
+                                activeCls: 'bg-blue-600 border-blue-600 text-white shadow-sm',
+                              },
+                              {
+                                key: 'qaida' as ClassDeptSetting,
+                                bn: 'কায়দা',
+                                en: 'Qaida',
+                                activeCls: 'bg-amber-500 border-amber-500 text-white shadow-sm',
+                              },
+                              {
+                                key: 'off' as ClassDeptSetting,
+                                bn: 'বন্ধ',
+                                en: 'Off',
+                                activeCls: 'bg-rose-600 border-rose-600 text-white shadow-sm',
+                              },
+                            ] as const
+                          ).map((opt) => {
+                            const active = currentVal === opt.key;
+                            return (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={() =>
+                                  setDraftClassDeptMap((prev) => ({
+                                    ...prev,
+                                    [cls.id]: opt.key,
+                                  }))
+                                }
+                                className={`min-h-[40px] px-2 rounded-xl border text-xs font-black active:scale-95 transition-all cursor-pointer ${
+                                  active
+                                    ? opt.activeCls
+                                    : isDark
+                                      ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                {isBn ? opt.bn : opt.en}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
-
-                {reportPeriod === 'yearly' && (
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-400 block mb-1">
-                      {isBn ? 'সাল নির্বাচন করুন' : 'Select Year'}
-                    </label>
-                    <select
-                      value={reportYear}
-                      onChange={(e) => setReportYear(Number(e.target.value))}
-                      className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                      }`}
-                    >
-                      {yearOptions.map((y) => (
-                        <option key={y} value={y}>
-                          {fmtNum(y)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Class Selector */}
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 block mb-1">
-                    {isBn ? 'ক্লাস / জামাত' : 'Class / Jammat'}
-                  </label>
-                  <select
-                    value={reportClassId}
-                    onChange={(e) => setReportClassId(e.target.value)}
-                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
-                  >
-                    <option value="all">{isBn ? 'সকল ক্লাস' : 'All Classes'}</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.class_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Student Selector */}
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 block mb-1">
-                    {isBn ? 'শিক্ষার্থী' : 'Student'}
-                  </label>
-                  <select
-                    value={reportStudentId}
-                    onChange={(e) => setReportStudentId(e.target.value)}
-                    disabled={reportClassId === 'all'}
-                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60 ${
-                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
-                  >
-                    <option value="all">
-                      {isBn ? 'সকল শিক্ষার্থী (ক্লাস সামারি)' : 'All Students (Class Summary)'}
-                    </option>
-                    {reportClassStudents.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.roll != null ? `[${fmtNum(s.roll)}] ` : ''}
-                        {s.student_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Range Summary */}
-                <div
-                  className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
-                    isDark
-                      ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  }`}
-                >
-                  <Calendar size={15} className="shrink-0 text-emerald-500" />
-                  <span>{computedReportRange.label}</span>
-                </div>
               </div>
 
-              {/* Footer */}
+              {/* Sticky Footer */}
               <div
-                className={`px-5 py-4 border-t flex items-center gap-2.5 ${
-                  isDark ? 'border-slate-800' : 'border-slate-100'
+                className={`px-5 py-3.5 border-t flex items-center gap-2.5 shrink-0 ${
+                  isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'
                 }`}
               >
                 <button
                   type="button"
-                  disabled={generatingPdf}
-                  onClick={() => setShowReportModal(false)}
-                  className={`flex-1 h-12 rounded-2xl border font-black text-xs sm:text-sm cursor-pointer ${
-                    isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'
+                  disabled={savingSettings}
+                  onClick={() => setShowSettingsModal(false)}
+                  className={`flex-1 h-12 rounded-2xl border font-black text-xs sm:text-sm active:scale-95 transition-transform cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-slate-300'
+                      : 'bg-slate-100 border-slate-200 text-slate-600'
                   }`}
                 >
-                  {isBn ? 'বন্ধ করুন' : 'Close'}
+                  {isBn ? 'বাতিল' : 'Cancel'}
                 </button>
                 <button
                   type="button"
-                  disabled={generatingPdf}
-                  onClick={handleGeneratePdf}
+                  disabled={savingSettings}
+                  onClick={handleSaveSettings}
                   className="flex-[2] h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  {generatingPdf ? (
+                  {savingSettings ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      <span>{isBn ? 'PDF তৈরি হচ্ছে...' : 'Generating PDF...'}</span>
+                      <span>{isBn ? 'সংরক্ষণ হচ্ছে...' : 'Saving...'}</span>
                     </>
                   ) : (
                     <>
-                      <Download size={18} />
-                      <span>{isBn ? 'PDF ডাউনলোড করুন' : 'Download PDF'}</span>
+                      <CheckCircle2 size={18} />
+                      <span>{isBn ? 'সংরক্ষণ করুন' : 'Save Settings'}</span>
                     </>
                   )}
                 </button>
@@ -2293,7 +2706,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       {/* Floating Toast Notification */}
       {toast.show &&
         createPortal(
-          <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[120] px-4 w-full max-w-sm pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[250] px-4 w-full max-w-sm pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200">
             <div
               className={`px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-2.5 text-xs sm:text-sm font-black font-noto ${
                 toast.type === 'success'
