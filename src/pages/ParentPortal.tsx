@@ -77,7 +77,7 @@ import { Attendance, Fee, HifzRecord, Language, Institution } from 'types';
 import { hardReload } from 'utils/reloadUtils';
 import { generateResultPDF } from 'utils/pdfGenerator';
 import { NotificationService, AppNotification } from '../services/NotificationService';
-import { DEPT_LABELS, GRADE_LABELS, SABQI_LABELS } from '../utils/hifzReportPdf';
+import { DEPT_LABELS, GRADE_LABELS, SABQI_LABELS, TILAWAT_LABELS } from '../utils/hifzReportPdf';
 
 const toBanglaNum = (num: any): string => {
   if (num === null || num === undefined) return '';
@@ -1814,6 +1814,29 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                             <ChevronRight size={16} className="text-emerald-500 shrink-0" />
                           </div>
                         </div>
+
+                        {(rec.tilawat_status === 'done' || rec.tilawat_status === 'partial' || rec.sabina_completed === true) && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {rec.tilawat_status === 'done' && (
+                              <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black font-noto">
+                                দৈনিক তেলাওয়াত: {rec.tilawat_amount || TILAWAT_LABELS.done.bn}
+                              </span>
+                            )}
+                            {rec.tilawat_status === 'partial' && (
+                              <span className="px-2.5 py-1 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-black font-noto">
+                                দৈনিক তেলাওয়াত: {rec.tilawat_amount || TILAWAT_LABELS.partial.bn}
+                              </span>
+                            )}
+                            {rec.sabina_completed === true && (
+                              <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-black font-noto">
+                                🌟 সাপ্তাহিক সবিনা: {rec.sabina_paras || 'সম্পন্ন'}
+                                {rec.sabina_grade && GRADE_LABELS[rec.sabina_grade]
+                                  ? ` (${GRADE_LABELS[rec.sabina_grade].bn})`
+                                  : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {rec.remarks && (
                           <div className="px-3.5 py-2.5 rounded-xl bg-amber-50/70 border border-amber-100 text-[11px] font-bold text-amber-900 font-noto">
@@ -3571,8 +3594,26 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 </div>
                               </div>
 
-                              {(lokma > 0 || tajweed > 0) && (
+                              {(rec.tilawat_status === 'done' || rec.tilawat_status === 'partial' || rec.sabina_completed === true || lokma > 0 || tajweed > 0) && (
                                 <div className="flex items-center gap-2 flex-wrap">
+                                  {rec.tilawat_status === 'done' && (
+                                    <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black">
+                                      দৈনিক তেলাওয়াত: {rec.tilawat_amount || TILAWAT_LABELS.done.bn}
+                                    </span>
+                                  )}
+                                  {rec.tilawat_status === 'partial' && (
+                                    <span className="px-2.5 py-1 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-black">
+                                      দৈনিক তেলাওয়াত: {rec.tilawat_amount || TILAWAT_LABELS.partial.bn}
+                                    </span>
+                                  )}
+                                  {rec.sabina_completed === true && (
+                                    <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-black">
+                                      🌟 সাপ্তাহিক সবিনা: {rec.sabina_paras || 'সম্পন্ন'}
+                                      {rec.sabina_grade && GRADE_LABELS[rec.sabina_grade]
+                                        ? ` (${GRADE_LABELS[rec.sabina_grade].bn})`
+                                        : ''}
+                                    </span>
+                                  )}
                                   {lokma > 0 && (
                                     <span className="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-black">
                                       লোকমা: {toBanglaNum(lokma)} টি

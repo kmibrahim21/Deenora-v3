@@ -598,6 +598,11 @@ export interface HifzRecord {
   mistakes_tajweed?: number | null;
   grade?: 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada' | null;
   remarks?: string | null;
+  tilawat_status?: 'done' | 'partial' | 'none' | null;
+  tilawat_amount?: string | null;
+  sabina_completed?: boolean | null;
+  sabina_paras?: string | null;
+  sabina_grade?: 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada' | null;
   created_at?: string;
   updated_at?: string;
 }

@@ -37,6 +37,7 @@ import {
   GRADE_LABELS,
   HifzReportPeriod,
   SABQI_LABELS,
+  TILAWAT_LABELS,
 } from 'utils/hifzReportPdf';
 import { NotificationService } from '../services/NotificationService';
 
@@ -51,6 +52,7 @@ interface HifzTrackerProps {
 type DeptType = 'hifz' | 'nazera' | 'qaida';
 type ClassDeptSetting = DeptType | 'off';
 type SabqiType = 'done' | 'partial' | 'missed';
+type TilawatType = 'done' | 'partial' | 'none';
 type GradeType = 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada';
 
 const detectDefaultClassDepartment = (className?: string | null): DeptType => {
@@ -84,6 +86,10 @@ interface EntryFormState {
   sabqi_pages: number | '';
   amukhta_para: string;
   amukhta_amount: string;
+  tilawat_status: TilawatType;
+  tilawat_amount: string;
+  sabina_completed: boolean;
+  sabina_paras: string;
   mistakes_lokma: number;
   mistakes_tajweed: number;
   grade: GradeType;
@@ -101,6 +107,10 @@ const DEFAULT_FORM: EntryFormState = {
   sabqi_pages: '',
   amukhta_para: '',
   amukhta_amount: '১ পারা',
+  tilawat_status: 'none',
+  tilawat_amount: '',
+  sabina_completed: false,
+  sabina_paras: '',
   mistakes_lokma: 0,
   mistakes_tajweed: 0,
   grade: 'mumtaz',
@@ -121,6 +131,22 @@ const AMUKHTA_AMOUNTS = [
   { key: 'আধা পারা', bn: 'আধা পারা', en: 'Half Para' },
   { key: '১ পারা', bn: '১ পারা', en: '1 Para' },
   { key: '২ পারা', bn: '২ পারা', en: '2 Paras' },
+];
+
+const TILAWAT_AMOUNTS = [
+  { key: '৫ পৃষ্ঠা', bn: '৫ পৃষ্ঠা', en: '5 Pages' },
+  { key: '১০ পৃষ্ঠা', bn: '১০ পৃষ্ঠা', en: '10 Pages' },
+  { key: '১ পারা', bn: '১ পারা', en: '1 Para' },
+  { key: '২ পারা', bn: '২ পারা', en: '2 Paras' },
+];
+
+const SABINA_AMOUNTS = [
+  { key: '২ পারা', bn: '২ পারা', en: '2 Paras' },
+  { key: '৩ পারা', bn: '৩ পারা', en: '3 Paras' },
+  { key: '৫ পারা', bn: '৫ পারা', en: '5 Paras' },
+  { key: '১০ পারা', bn: '১০ পারা', en: '10 Paras' },
+  { key: '১৫ পারা', bn: '১৫ পারা', en: '15 Paras' },
+  { key: '৩০ পারা খতম', bn: '৩০ পারা খতম', en: '30 Para Khatam' },
 ];
 
 const LINE_OPTIONS = [5, 10, 15];
@@ -173,7 +199,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDateString());
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'done' | 'pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'done' | 'pending' | 'sabina'>('all');
 
   const [students, setStudents] = useState<Student[]>([]);
   const [dailyRecordsMap, setDailyRecordsMap] = useState<Record<string, HifzRecord>>({});
@@ -600,18 +626,25 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   }, [activeTab, reportClassId, selectedClassId, students, fetchStudentsForClass, refreshTick]);
 
   // Derived stats & filtered students
-  const { completedCount, pendingCount, filteredStudents } = useMemo(() => {
+  const { completedCount, pendingCount, sabinaCount, filteredStudents } = useMemo(() => {
     let completed = 0;
+    let sabina = 0;
     for (const s of students) {
-      if (dailyRecordsMap[s.id]) completed++;
+      const rec = dailyRecordsMap[s.id];
+      if (rec) {
+        completed++;
+        if (rec.sabina_completed === true) sabina++;
+      }
     }
     const pending = Math.max(0, students.length - completed);
 
     const q = searchQuery.trim().toLowerCase();
     const list = students.filter((s) => {
-      const hasRec = Boolean(dailyRecordsMap[s.id]);
+      const rec = dailyRecordsMap[s.id];
+      const hasRec = Boolean(rec);
       if (statusFilter === 'done' && !hasRec) return false;
       if (statusFilter === 'pending' && hasRec) return false;
+      if (statusFilter === 'sabina' && rec?.sabina_completed !== true) return false;
       if (!q) return true;
       const nameMatch = (s.student_name || '').toLowerCase().includes(q);
       const rollStr = s.roll != null ? String(s.roll) : '';
@@ -619,7 +652,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       return nameMatch || rollStr.includes(q) || rollBn.includes(q);
     });
 
-    return { completedCount: completed, pendingCount: pending, filteredStudents: list };
+    return { completedCount: completed, pendingCount: pending, sabinaCount: sabina, filteredStudents: list };
   }, [students, dailyRecordsMap, searchQuery, statusFilter]);
 
   // Open Entry Modal with Smart Auto-Prefill
@@ -650,6 +683,10 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         sabqi_pages: existing.sabqi_pages ?? '',
         amukhta_para: existing.amukhta_para != null ? String(existing.amukhta_para) : '',
         amukhta_amount: existing.amukhta_amount || '',
+        tilawat_status: existing.tilawat_status || 'none',
+        tilawat_amount: existing.tilawat_amount || '',
+        sabina_completed: existing.sabina_completed === true,
+        sabina_paras: existing.sabina_paras || '',
         mistakes_lokma: Number(existing.mistakes_lokma || 0),
         mistakes_tajweed: Number(existing.mistakes_tajweed || 0),
         grade: existing.grade || 'mumtaz',
@@ -695,6 +732,10 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
           sabqi_pages: last.sabqi_pages ?? '',
           amukhta_para: last.amukhta_para != null ? String(last.amukhta_para) : '',
           amukhta_amount: last.amukhta_amount || '১ পারা',
+          tilawat_status: 'none',
+          tilawat_amount: '',
+          sabina_completed: false,
+          sabina_paras: '',
           mistakes_lokma: 0,
           mistakes_tajweed: 0,
           grade: 'mumtaz',
@@ -738,6 +779,14 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     const validYearId = yearId && isValidUUID(yearId) ? yearId : null;
     const validTeacherId = teacherInfo?.id && isValidUUID(teacherInfo.id) ? teacherInfo.id : null;
 
+    const tilawatSabinaFields = {
+      tilawat_status: entryForm.tilawat_status || 'none',
+      tilawat_amount: entryForm.tilawat_status === 'none' ? null : entryForm.tilawat_amount.trim() || null,
+      sabina_completed: Boolean(entryForm.sabina_completed),
+      sabina_paras: entryForm.sabina_completed ? entryForm.sabina_paras.trim() || null : null,
+      sabina_grade: null,
+    };
+
     const basePayload: Record<string, any> = {
       institution_id: madrasah.id,
       student_id: activeStudent.id,
@@ -759,6 +808,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       mistakes_tajweed: Math.max(0, Number(entryForm.mistakes_tajweed) || 0),
       grade: entryForm.grade,
       remarks: entryForm.remarks.trim() || null,
+      ...tilawatSabinaFields,
     };
 
     try {
@@ -768,19 +818,36 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         .select()
         .single();
 
-      // Resilient retry if amukhta_para is integer in DB or teacher_id FK mismatch
-      if (error && (error.code === '22P02' || error.code === '23503')) {
-        const retryPayload = { ...basePayload };
-        if (error.code === '22P02' && typeof retryPayload.amukhta_para === 'string') {
-          const digits = parseInt(retryPayload.amukhta_para.replace(/[^0-9]/g, ''), 10);
-          retryPayload.amukhta_para = isNaN(digits) ? null : digits;
+      // Resilient retry if new tilawat/sabina columns are not migrated yet, amukhta_para is integer, or teacher_id FK mismatch
+      let attemptPayload = { ...basePayload };
+      for (let retry = 0; retry < 2 && error; retry++) {
+        const errMsg = String(error.message || '');
+        const isMissingCol =
+          error.code === 'PGRST204' ||
+          error.code === '42703' ||
+          /column .* does not exist|Could not find the .* column/i.test(errMsg);
+        const isTypeOrFk = error.code === '22P02' || error.code === '23503';
+
+        if (!isMissingCol && !isTypeOrFk) break;
+
+        if (isMissingCol) {
+          delete attemptPayload.tilawat_status;
+          delete attemptPayload.tilawat_amount;
+          delete attemptPayload.sabina_completed;
+          delete attemptPayload.sabina_paras;
+          delete attemptPayload.sabina_grade;
         }
-        if (error.code === '23503' && String(error.message || '').includes('teacher_id')) {
-          retryPayload.teacher_id = null;
+        if (error.code === '22P02' && typeof attemptPayload.amukhta_para === 'string') {
+          const digits = parseInt(attemptPayload.amukhta_para.replace(/[^0-9]/g, ''), 10);
+          attemptPayload.amukhta_para = isNaN(digits) ? null : digits;
         }
+        if (error.code === '23503' && errMsg.includes('teacher_id')) {
+          attemptPayload.teacher_id = null;
+        }
+
         const retryRes = await supabase
           .from('hifz_records')
-          .upsert(retryPayload, { onConflict: 'student_id,record_date' })
+          .upsert(attemptPayload, { onConflict: 'student_id,record_date' })
           .select()
           .single();
         data = retryRes.data;
@@ -790,7 +857,10 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       if (error) throw error;
 
       const isUpdate = Boolean(dailyRecordsMap[activeStudent.id]);
-      const savedRecord = (data || { ...basePayload, id: `${activeStudent.id}_${selectedDate}` }) as HifzRecord;
+      const savedRecord = {
+        ...(data || { ...basePayload, id: `${activeStudent.id}_${selectedDate}` }),
+        ...tilawatSabinaFields,
+      } as HifzRecord;
       const notifiedStudent = activeStudent;
       setDailyRecordsMap((prev) => ({ ...prev, [activeStudent.id]: savedRecord }));
       setActiveStudent(null);
@@ -1260,7 +1330,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
             </div>
 
             {/* Summary Strip (Interactive 1-tap filter buttons) */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setStatusFilter('all')}
@@ -1321,6 +1391,27 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </p>
                 <p className="text-lg sm:text-2xl font-black tabular-nums mt-0.5 text-amber-600 dark:text-amber-400">
                   {fmtNum(pendingCount)}
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'sabina' ? 'all' : 'sabina'))}
+                className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
+                  statusFilter === 'sabina'
+                    ? isDark
+                      ? 'bg-yellow-500/20 border-yellow-500/50'
+                      : 'bg-amber-100/80 border-amber-400'
+                    : isDark
+                      ? 'bg-slate-800/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-slate-50/80 border-slate-200/70 hover:border-slate-300'
+                }`}
+              >
+                <p className="text-[10px] sm:text-xs font-bold text-amber-700 dark:text-yellow-400 truncate">
+                  {isBn ? '🌟 সবিনা সম্পন্ন' : '🌟 Sabina Done'}
+                </p>
+                <p className="text-lg sm:text-2xl font-black tabular-nums mt-0.5 text-amber-700 dark:text-yellow-400">
+                  {fmtNum(sabinaCount)}
                 </p>
               </button>
             </div>
@@ -1479,27 +1570,70 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                     </div>
 
                     {isDone && (
-                      <div
-                        className={`px-3 py-2 rounded-2xl text-xs flex items-center justify-between gap-2 ${
-                          isDark ? 'bg-slate-800/70 text-slate-200' : 'bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <div className="min-w-0 truncate font-bold">
-                          {summaryLine || (isBn ? 'সবক সংরক্ষিত' : 'Sabaq logged')}
-                          {totalMistakes > 0 && (
-                            <span className="text-rose-500 ml-1.5">
-                              · {isBn ? 'ভুল' : 'Err'} {fmtNum(totalMistakes)}
+                      <div className="space-y-2">
+                        <div
+                          className={`px-3 py-2 rounded-2xl text-xs flex items-center justify-between gap-2 ${
+                            isDark ? 'bg-slate-800/70 text-slate-200' : 'bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="min-w-0 truncate font-bold">
+                            {summaryLine || (isBn ? 'সবক সংরক্ষিত' : 'Sabaq logged')}
+                            {totalMistakes > 0 && (
+                              <span className="text-rose-500 ml-1.5">
+                                · {isBn ? 'ভুল' : 'Err'} {fmtNum(totalMistakes)}
+                              </span>
+                            )}
+                          </div>
+                          {gradeLabel && (
+                            <span
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${getGradePillClass(
+                                record.grade
+                              )}`}
+                            >
+                              {gradeLabel}
                             </span>
                           )}
                         </div>
-                        {gradeLabel && (
-                          <span
-                            className={`px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${getGradePillClass(
-                              record.grade
-                            )}`}
-                          >
-                            {gradeLabel}
-                          </span>
+
+                        {(record.tilawat_status === 'done' || record.tilawat_status === 'partial' || record.sabina_completed === true) && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {record.tilawat_status === 'done' && (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[10px] font-black border ${
+                                  isDark
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                }`}
+                              >
+                                {isBn ? 'তিলাওয়াত:' : 'Tilawat:'}{' '}
+                                {record.tilawat_amount || (isBn ? 'সম্পন্ন' : 'Done')}
+                              </span>
+                            )}
+                            {record.tilawat_status === 'partial' && (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[10px] font-black border ${
+                                  isDark
+                                    ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
+                                    : 'bg-teal-50 border-teal-200 text-teal-700'
+                                }`}
+                              >
+                                {isBn ? 'তিলাওয়াত:' : 'Tilawat:'}{' '}
+                                {record.tilawat_amount || (isBn ? 'আংশিক' : 'Partial')}
+                              </span>
+                            )}
+                            {record.sabina_completed === true && (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[10px] font-black border ${
+                                  isDark
+                                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                    : 'bg-amber-50 border-amber-300 text-amber-800'
+                                }`}
+                              >
+                                🌟 {isBn ? 'সবিনা:' : 'Sabina:'}{' '}
+                                {record.sabina_paras || (isBn ? 'সম্পন্ন' : 'Completed')}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1927,6 +2061,18 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                                 .join(' ')}
                             </span>
                           )}
+                          {(rec.tilawat_status === 'done' || rec.tilawat_status === 'partial') && (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                              · {isBn ? 'তিলাওয়াত:' : 'Tilawat:'}{' '}
+                              {rec.tilawat_amount || TILAWAT_LABELS[rec.tilawat_status]?.[isBn ? 'bn' : 'en']}
+                            </span>
+                          )}
+                          {rec.sabina_completed === true && (
+                            <span className="text-amber-600 dark:text-amber-400 font-black">
+                              · 🌟 {isBn ? 'সবিনা:' : 'Sabina:'}{' '}
+                              {rec.sabina_paras || (isBn ? 'সম্পন্ন' : 'Completed')}
+                            </span>
+                          )}
                           {(Number(rec.mistakes_lokma || 0) > 0 || Number(rec.mistakes_tajweed || 0) > 0) && (
                             <span className="text-rose-500 font-bold">
                               · {isBn ? 'লোকমা' : 'Lokma'} {fmtNum(rec.mistakes_lokma || 0)}, {isBn ? 'তাজবীদ' : 'Tajweed'}{' '}
@@ -2003,7 +2149,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               </div>
 
               {/* Scrollable Form Body */}
-              <form id="hifz-entry-form" onSubmit={handleSaveEntry} className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4 custom-scrollbar">
+              <form id="hifz-entry-form" onSubmit={handleSaveEntry} className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-5 py-3.5 space-y-3.5 custom-scrollbar">
                 {loadingPrefill && (
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                     <Loader2 size={14} className="animate-spin" />
@@ -2013,7 +2159,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
                 {prefillInfo && (
                   <div
-                    className={`px-3.5 py-2.5 rounded-2xl border text-xs flex items-center gap-2 ${
+                    className={`px-3 py-2 rounded-xl border text-xs flex items-center gap-2 ${
                       isDark
                         ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
                         : 'bg-emerald-50 border-emerald-200 text-emerald-800'
@@ -2028,7 +2174,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 )}
 
                 {entryError && (
-                  <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
                     <AlertCircle size={15} className="shrink-0" />
                     <span>{entryError}</span>
                   </div>
@@ -2036,11 +2182,11 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
                 {/* 1. Compact Department Indicator with optional quick override */}
                 <div
-                  className={`px-3 py-2 rounded-2xl border flex items-center justify-between gap-2 ${
+                  className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 ${
                     isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200/80'
                   }`}
                 >
-                  <span className="text-[11px] font-black text-slate-500 dark:text-slate-400">
+                  <span className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {isBn ? 'বিভাগ:' : 'Dept:'}
                   </span>
                   <div className="flex items-center gap-1">
@@ -2051,7 +2197,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           key={dept}
                           type="button"
                           onClick={() => setEntryForm((f) => ({ ...f, department: dept }))}
-                          className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all cursor-pointer ${
+                          className={`h-7 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                             active
                               ? 'bg-emerald-600 text-white shadow-sm'
                               : isDark
@@ -2067,17 +2213,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </div>
 
                 {/* 2. New Sabaq */}
-                <div className="space-y-3 pt-1">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>
-                      {isBn ? 'নতুন সবক (Sabaq)' : 'New Sabaq'}
-                    </span>
-                  </div>
+                <div className="space-y-2.5 pt-1">
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'নতুন সবক' : 'New Sabaq'}</span>
+                  </h3>
 
                   <div className="grid grid-cols-12 gap-2">
                     {/* Para Selector */}
                     <div className="col-span-4">
-                      <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                      <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn ? 'পারা (১–৩০)' : 'Para (1-30)'}
                       </label>
                       <select
@@ -2088,7 +2233,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             para_no: e.target.value === '' ? '' : Number(e.target.value),
                           }))
                         }
-                        className={`w-full h-11 px-2.5 rounded-2xl border font-black text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
                           isDark
                             ? 'bg-slate-800 border-slate-700 text-white'
                             : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -2105,7 +2250,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
                     {/* Page From */}
                     <div className="col-span-4">
-                      <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                      <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn ? 'পৃষ্ঠা শুরু' : 'Page From'}
                       </label>
                       <input
@@ -2125,7 +2270,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           }));
                         }}
                         placeholder="1"
-                        className={`w-full h-11 px-3 rounded-2xl border font-black text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
                           isDark
                             ? 'bg-slate-800 border-slate-700 text-white'
                             : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -2135,7 +2280,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
                     {/* Page To */}
                     <div className="col-span-4">
-                      <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                      <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn ? 'পৃষ্ঠা শেষ' : 'Page To'}
                       </label>
                       <input
@@ -2150,7 +2295,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           }))
                         }
                         placeholder="1"
-                        className={`w-full h-11 px-3 rounded-2xl border font-black text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
                           isDark
                             ? 'bg-slate-800 border-slate-700 text-white'
                             : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -2160,7 +2305,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   </div>
 
                   {/* Quick +1 Page & Lines Pills */}
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() =>
@@ -2173,18 +2318,20 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           };
                         })
                       }
-                      className={`min-h-[40px] px-3 rounded-xl border text-xs font-black flex items-center gap-1 active:scale-95 transition-transform cursor-pointer ${
+                      className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-transform cursor-pointer ${
                         isDark
                           ? 'bg-blue-500/15 border-blue-500/30 text-blue-300 hover:bg-blue-500/25'
                           : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
                       }`}
                     >
-                      <Plus size={14} />
+                      <Plus size={13} />
                       <span>{isBn ? '+১ পৃষ্ঠা' : '+1 Page'}</span>
                     </button>
 
                     <div className="flex items-center gap-1.5 ml-auto">
-                      <span className="text-[11px] font-bold text-slate-400">{isBn ? 'লাইন:' : 'Lines:'}</span>
+                      <span className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {isBn ? 'লাইন:' : 'Lines:'}
+                      </span>
                       {LINE_OPTIONS.map((ln) => {
                         const active = entryForm.lines_count === ln;
                         return (
@@ -2197,7 +2344,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                                 lines_count: f.lines_count === ln ? '' : ln,
                               }))
                             }
-                            className={`min-h-[40px] min-w-[44px] px-2.5 rounded-xl border text-xs font-black tabular-nums active:scale-95 transition-all cursor-pointer ${
+                            className={`h-8 min-w-[36px] px-2.5 rounded-xl border text-[11px] font-bold tabular-nums active:scale-95 transition-all cursor-pointer ${
                               active
                                 ? 'bg-emerald-600 border-emerald-600 text-white'
                                 : isDark
@@ -2218,7 +2365,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                     value={entryForm.surah_name}
                     onChange={(e) => setEntryForm((f) => ({ ...f, surah_name: e.target.value }))}
                     placeholder={isBn ? 'সূরা / তখতি (ঐচ্ছিক, যেমন: সূরা বাকারা)' : 'Surah / Takhti (optional)'}
-                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
                       isDark
                         ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
                         : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
@@ -2227,11 +2374,12 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </div>
 
                 {/* 3. Sabqi (সাত সবক) */}
-                <div className="space-y-2 pt-1">
-                  <label className={`text-xs font-black block ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>
-                    {isBn ? 'সাত সবক (Sabqi)' : 'Sabqi'}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
+                <div className={`space-y-2.5 pt-2.5 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'সাত সবক' : 'Sabqi'}</span>
+                  </h3>
+                  <div className="grid grid-cols-3 gap-1.5">
                     {(['done', 'partial', 'missed'] as SabqiType[]).map((st) => {
                       const active = entryForm.sabqi_status === st;
                       const activeColors =
@@ -2245,7 +2393,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           key={st}
                           type="button"
                           onClick={() => setEntryForm((f) => ({ ...f, sabqi_status: st }))}
-                          className={`min-h-[44px] px-2 rounded-2xl border text-xs font-black active:scale-95 transition-all cursor-pointer ${
+                          className={`h-9 px-3 rounded-xl border text-xs font-bold active:scale-95 transition-all cursor-pointer ${
                             active
                               ? activeColors
                               : isDark
@@ -2270,7 +2418,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       }))
                     }
                     placeholder={isBn ? 'সাত সবক পৃষ্ঠা সংখ্যা (ঐচ্ছিক)' : 'Sabqi pages (optional)'}
-                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
                       isDark
                         ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
                         : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
@@ -2279,23 +2427,13 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </div>
 
                 {/* 4. Amukhta (আমুখতা) */}
-                <div className="space-y-2 pt-1">
-                  <label className={`text-xs font-black block ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>
-                    {isBn ? 'আমুখতা / মঞ্জিল (Amukhta)' : 'Amukhta / Manzil'}
-                  </label>
-                  <div className="grid grid-cols-12 gap-2">
-                    <input
-                      type="text"
-                      value={entryForm.amukhta_para}
-                      onChange={(e) => setEntryForm((f) => ({ ...f, amukhta_para: e.target.value }))}
-                      placeholder={isBn ? 'পারা (যেমন: ৫ বা ১–৩)' : 'Para (e.g. 5)'}
-                      className={`col-span-5 h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        isDark
-                          ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
-                          : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
-                      }`}
-                    />
-                    <div className="col-span-7 grid grid-cols-3 gap-1.5">
+                <div className={`space-y-2.5 pt-2.5 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'আমুখতা' : 'Amukhta / Manzil'}</span>
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                       {AMUKHTA_AMOUNTS.map((amt) => {
                         const active = entryForm.amukhta_amount === amt.key;
                         return (
@@ -2308,7 +2446,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                                 amukhta_amount: f.amukhta_amount === amt.key ? '' : amt.key,
                               }))
                             }
-                            className={`min-h-[44px] px-1.5 rounded-2xl border text-[11px] font-black active:scale-95 transition-all cursor-pointer ${
+                            className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer ${
                               active
                                 ? 'bg-blue-600 border-blue-600 text-white'
                                 : isDark
@@ -2321,25 +2459,231 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                         );
                       })}
                     </div>
+                    <input
+                      type="text"
+                      value={entryForm.amukhta_para}
+                      onChange={(e) => setEntryForm((f) => ({ ...f, amukhta_para: e.target.value }))}
+                      placeholder={isBn ? 'পারা (যেমন: ৫ বা ১–৩)' : 'Para (e.g. 5 or 1-3)'}
+                      className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        isDark
+                          ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
+                          : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* 4.5. Daily Tilawat (দৈনিক তেলাওয়াত) */}
+                <div className={`space-y-2.5 pt-2.5 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'দৈনিক তেলাওয়াত' : 'Daily Tilawat'}</span>
+                  </h3>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['done', 'partial', 'none'] as TilawatType[]).map((st) => {
+                      const active = entryForm.tilawat_status === st;
+                      const activeColors =
+                        st === 'done'
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                          : st === 'partial'
+                            ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                            : isDark
+                              ? 'bg-slate-700 border-slate-600 text-white'
+                              : 'bg-slate-700 border-slate-700 text-white';
+                      return (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() =>
+                            setEntryForm((f) => ({
+                              ...f,
+                              tilawat_status: st,
+                              tilawat_amount: st === 'none' ? '' : f.tilawat_amount,
+                            }))
+                          }
+                          className={`h-9 px-3 rounded-xl border text-xs font-bold active:scale-95 transition-all cursor-pointer ${
+                            active
+                              ? activeColors
+                              : isDark
+                                ? 'bg-slate-800 border-slate-700 text-slate-300'
+                                : 'bg-slate-50 border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {TILAWAT_LABELS[st][isBn ? 'bn' : 'en']}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {(entryForm.tilawat_status === 'done' || entryForm.tilawat_status === 'partial') && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {TILAWAT_AMOUNTS.map((amt) => {
+                          const active = entryForm.tilawat_amount === amt.key;
+                          return (
+                            <button
+                              key={amt.key}
+                              type="button"
+                              onClick={() =>
+                                setEntryForm((f) => ({
+                                  ...f,
+                                  tilawat_amount: f.tilawat_amount === amt.key ? '' : amt.key,
+                                }))
+                              }
+                              className={`h-8 px-2 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer ${
+                                active
+                                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                                  : isDark
+                                    ? 'bg-slate-800 border-slate-700 text-slate-300'
+                                    : 'bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {isBn ? amt.bn : amt.en}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <input
+                        type="text"
+                        value={entryForm.tilawat_amount}
+                        onChange={(e) => setEntryForm((f) => ({ ...f, tilawat_amount: e.target.value }))}
+                        placeholder={isBn ? 'যেমন: ১ পারা বা সূরা ইয়াসিন' : 'e.g. 1 Para or Surah Yaseen'}
+                        className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                          isDark
+                            ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                        }`}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* 4.6. Weekly Sabina (সাপ্তাহিক সবিনা) */}
+                <div className={`space-y-2.5 pt-2.5 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'সাপ্তাহিক সবিনা' : 'Weekly Sabina'}</span>
+                  </h3>
+                  <div
+                    className={`p-3 rounded-2xl border space-y-2.5 transition-colors ${
+                      entryForm.sabina_completed
+                        ? isDark
+                          ? 'bg-amber-950/25 border-amber-600/40'
+                          : 'bg-amber-50/70 border-amber-200'
+                        : isDark
+                          ? 'bg-slate-800/50 border-slate-700/80'
+                          : 'bg-slate-50/80 border-slate-200/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[11px] sm:text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                        {isBn ? 'আজ সাপ্তাহিক সবিনা শুনিয়েছে?' : 'Completed Weekly Sabina today?'}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEntryForm((f) => ({
+                              ...f,
+                              sabina_completed: false,
+                              sabina_paras: '',
+                            }))
+                          }
+                          className={`h-8 px-3 rounded-xl text-xs font-bold border transition-all active:scale-95 cursor-pointer ${
+                            !entryForm.sabina_completed
+                              ? isDark
+                                ? 'bg-slate-700 border-slate-600 text-white'
+                                : 'bg-slate-700 border-slate-700 text-white'
+                              : isDark
+                                ? 'bg-slate-900/60 border-slate-700 text-slate-400'
+                                : 'bg-white border-slate-200 text-slate-500'
+                          }`}
+                        >
+                          {isBn ? 'না' : 'No'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEntryForm((f) => ({
+                              ...f,
+                              sabina_completed: true,
+                            }))
+                          }
+                          className={`h-8 px-3 rounded-xl text-xs font-bold border transition-all active:scale-95 cursor-pointer ${
+                            entryForm.sabina_completed
+                              ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                              : isDark
+                                ? 'bg-slate-900/60 border-slate-700 text-slate-400'
+                                : 'bg-white border-slate-200 text-slate-500'
+                          }`}
+                        >
+                          {isBn ? 'হ্যাঁ' : 'Yes'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {entryForm.sabina_completed && (
+                      <div className="space-y-2 pt-0.5">
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {SABINA_AMOUNTS.map((amt) => {
+                            const active = entryForm.sabina_paras === amt.key;
+                            return (
+                              <button
+                                key={amt.key}
+                                type="button"
+                                onClick={() =>
+                                  setEntryForm((f) => ({
+                                    ...f,
+                                    sabina_paras: f.sabina_paras === amt.key ? '' : amt.key,
+                                  }))
+                                }
+                                className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer truncate ${
+                                  active
+                                    ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                                    : isDark
+                                      ? 'bg-slate-900/80 border-slate-700 text-slate-200'
+                                      : 'bg-white border-amber-200 text-amber-900'
+                                }`}
+                              >
+                                {isBn ? amt.bn : amt.en}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <input
+                          type="text"
+                          value={entryForm.sabina_paras}
+                          onChange={(e) => setEntryForm((f) => ({ ...f, sabina_paras: e.target.value }))}
+                          placeholder={isBn ? 'যেমন: ১–৫ পারা' : 'Para range or count'}
+                          className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-amber-500 ${
+                            isDark
+                              ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                              : 'bg-white border-amber-200 text-slate-800 placeholder:text-slate-400'
+                          }`}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* 5. Mistake Counters (1-Tap Steppers) */}
-                <div className="space-y-2 pt-1">
-                  <label className={`text-xs font-black block ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>
-                    {isBn ? 'ভুল গণনা' : 'Mistake Counters'}
-                  </label>
-                  <div className="grid grid-cols-2 gap-2.5">
+                <div className={`space-y-2.5 pt-2.5 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'ভুল গণনা' : 'Mistake Counters'}</span>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
                     {/* Lokma */}
                     <div
-                      className={`p-3 rounded-2xl border flex flex-col items-center gap-2 ${
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 ${
                         isDark ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'
                       }`}
                     >
-                      <span className="text-xs font-black text-slate-500 dark:text-slate-300">
+                      <span className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn ? 'লোকমা' : 'Lokma'}
                       </span>
-                      <div className="flex items-center justify-between w-full gap-2">
+                      <div className="flex items-center justify-between w-full gap-1.5">
                         <button
                           type="button"
                           onClick={() =>
@@ -2349,15 +2693,15 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             }))
                           }
                           aria-label="Decrease Lokma"
-                          className={`w-11 h-11 rounded-xl border flex items-center justify-center active:scale-90 transition-transform cursor-pointer ${
+                          className={`w-9 h-9 rounded-xl border flex items-center justify-center active:scale-90 transition-transform cursor-pointer ${
                             isDark
                               ? 'bg-slate-900 border-slate-700 text-white'
                               : 'bg-white border-slate-200 text-slate-700'
                           }`}
                         >
-                          <Minus size={18} />
+                          <Minus size={15} />
                         </button>
-                        <span className="text-xl font-black tabular-nums text-rose-600 dark:text-rose-400">
+                        <span className="text-base font-black tabular-nums text-rose-600 dark:text-rose-400">
                           {fmtNum(entryForm.mistakes_lokma)}
                         </span>
                         <button
@@ -2369,23 +2713,23 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             }))
                           }
                           aria-label="Increase Lokma"
-                          className="w-11 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
+                          className="w-9 h-9 rounded-xl bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
                         >
-                          <Plus size={18} />
+                          <Plus size={15} />
                         </button>
                       </div>
                     </div>
 
                     {/* Tajweed */}
                     <div
-                      className={`p-3 rounded-2xl border flex flex-col items-center gap-2 ${
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 ${
                         isDark ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'
                       }`}
                     >
-                      <span className="text-xs font-black text-slate-500 dark:text-slate-300">
+                      <span className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn ? 'তাজবীদ ভুল' : 'Tajweed'}
                       </span>
-                      <div className="flex items-center justify-between w-full gap-2">
+                      <div className="flex items-center justify-between w-full gap-1.5">
                         <button
                           type="button"
                           onClick={() =>
@@ -2395,15 +2739,15 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             }))
                           }
                           aria-label="Decrease Tajweed"
-                          className={`w-11 h-11 rounded-xl border flex items-center justify-center active:scale-90 transition-transform cursor-pointer ${
+                          className={`w-9 h-9 rounded-xl border flex items-center justify-center active:scale-90 transition-transform cursor-pointer ${
                             isDark
                               ? 'bg-slate-900 border-slate-700 text-white'
                               : 'bg-white border-slate-200 text-slate-700'
                           }`}
                         >
-                          <Minus size={18} />
+                          <Minus size={15} />
                         </button>
-                        <span className="text-xl font-black tabular-nums text-amber-600 dark:text-amber-400">
+                        <span className="text-base font-black tabular-nums text-amber-600 dark:text-amber-400">
                           {fmtNum(entryForm.mistakes_tajweed)}
                         </span>
                         <button
@@ -2415,9 +2759,9 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             }))
                           }
                           aria-label="Increase Tajweed"
-                          className="w-11 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
+                          className="w-9 h-9 rounded-xl bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
                         >
-                          <Plus size={18} />
+                          <Plus size={15} />
                         </button>
                       </div>
                     </div>
@@ -2425,11 +2769,12 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </div>
 
                 {/* 6. Grade 1-Tap Pills */}
-                <div className="space-y-2 pt-1">
-                  <label className={`text-xs font-black block ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>
-                    {isBn ? 'সবকের মান' : 'Sabaq Grade'}
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className={`space-y-2.5 pt-2.5 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                  <h3 className={`text-[15px] sm:text-base font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    <span className="w-1.5 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{isBn ? 'সবকের মান' : 'Sabaq Grade'}</span>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {(
                       [
                         {
@@ -2472,7 +2817,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           key={g.key}
                           type="button"
                           onClick={() => setEntryForm((f) => ({ ...f, grade: g.key }))}
-                          className={`min-h-[46px] px-3 rounded-2xl border text-xs sm:text-sm font-black active:scale-95 transition-all cursor-pointer ${
+                          className={`h-9 px-3 rounded-xl border text-xs font-bold active:scale-95 transition-all cursor-pointer ${
                             active ? g.activeClass : g.idleClass
                           }`}
                         >
@@ -2484,8 +2829,8 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </div>
 
                 {/* 7. Remarks */}
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                <div className="pt-0.5">
+                  <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {isBn ? 'মন্তব্য (ঐচ্ছিক)' : 'Remarks (optional)'}
                   </label>
                   <input
@@ -2493,7 +2838,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                     value={entryForm.remarks}
                     onChange={(e) => setEntryForm((f) => ({ ...f, remarks: e.target.value }))}
                     placeholder={isBn ? 'বিশেষ নোট লিখুন...' : 'Any notes...'}
-                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
                       isDark
                         ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
                         : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
@@ -2504,7 +2849,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
               {/* Sticky Footer Save CTA */}
               <div
-                className={`px-5 py-3.5 border-t flex items-center gap-2.5 shrink-0 ${
+                className={`px-4 sm:px-5 py-3 border-t flex items-center gap-2 shrink-0 ${
                   isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'
                 }`}
               >
@@ -2512,7 +2857,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   type="button"
                   disabled={savingEntry}
                   onClick={() => setActiveStudent(null)}
-                  className={`flex-1 h-12 rounded-2xl border font-black text-xs sm:text-sm active:scale-95 transition-transform cursor-pointer ${
+                  className={`flex-1 h-11 rounded-xl border font-black text-xs sm:text-sm active:scale-95 transition-transform cursor-pointer ${
                     isDark
                       ? 'bg-slate-800 border-slate-700 text-slate-300'
                       : 'bg-slate-100 border-slate-200 text-slate-600'
@@ -2524,16 +2869,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   type="submit"
                   form="hifz-entry-form"
                   disabled={savingEntry}
-                  className="flex-[2] h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                  className="flex-[2] h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {savingEntry ? (
                     <>
-                      <Loader2 size={18} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin" />
                       <span>{isBn ? 'সংরক্ষণ হচ্ছে...' : 'Saving...'}</span>
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 size={18} />
+                      <CheckCircle2 size={16} />
                       <span>{isBn ? 'সংরক্ষণ করুন' : 'Save Entry'}</span>
                     </>
                   )}

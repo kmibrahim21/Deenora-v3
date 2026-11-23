@@ -49,6 +49,12 @@ export const SABQI_LABELS: Record<'done' | 'partial' | 'missed', { bn: string; e
   missed: { bn: 'হয়নি', en: 'Missed' },
 };
 
+export const TILAWAT_LABELS: Record<'done' | 'partial' | 'none', { bn: string; en: string }> = {
+  done: { bn: 'সম্পন্ন', en: 'Done' },
+  partial: { bn: 'আংশিক', en: 'Partial' },
+  none: { bn: 'হয়নি', en: 'None' },
+};
+
 const formatNum = (n: number | string, isBn: boolean) => (isBn ? toBnDigit(n) : String(n));
 
 const formatDateDisplay = (isoDate: string, isBn: boolean) => {
@@ -124,19 +130,23 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
   const totalPagesAll = records.reduce((acc, r) => acc + calcRecordPages(r), 0);
   const overallAvgGrade = getAvgGradeLabel(records, isBn);
   const activeStudentsCount = new Set(records.map((r) => r.student_id)).size;
+  const totalTilawatDaysAll = records.filter((r) => r.tilawat_status === 'done' || r.tilawat_status === 'partial').length;
+  const totalSabinaCountAll = records.filter((r) => r.sabina_completed === true).length;
 
   if (selectedStudent) {
     // Individual student detailed timeline report
     const sorted = [...records].sort((a, b) => a.record_date.localeCompare(b.record_date));
     tableHeaderHtml = `
       <tr style="background:#065f46;color:#ffffff;">
-        <th style="padding:7px 6px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'তারিখ' : 'Date'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:9%;text-align:center;">${isBn ? 'বিভাগ' : 'Dept'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:24%;text-align:left;">${isBn ? 'নতুন সবক (পারা / পৃষ্ঠা / লাইন)' : 'New Sabaq'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:14%;text-align:center;">${isBn ? 'সাত সবক' : 'Sabqi'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:14%;text-align:center;">${isBn ? 'আমুখতা' : 'Amukhta'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'লোকমা / তাজবীদ' : 'Errors'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:17%;text-align:center;">${isBn ? 'মান ও মন্তব্য' : 'Grade & Note'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:10%;text-align:center;">${isBn ? 'তারিখ' : 'Date'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:7%;text-align:center;">${isBn ? 'বিভাগ' : 'Dept'}</th>
+        <th style="padding:6px 5px;border:1px solid #047857;width:19%;text-align:left;">${isBn ? 'নতুন সবক' : 'New Sabaq'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'সাত সবক' : 'Sabqi'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'আমুখতা' : 'Amukhta'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'তিলাওয়াত' : 'Tilawat'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'সবিনা' : 'Sabina'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:8%;text-align:center;">${isBn ? 'ভুল' : 'Errors'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:12%;text-align:center;">${isBn ? 'মান ও মন্তব্য' : 'Grade'}</th>
       </tr>
     `;
 
@@ -152,7 +162,7 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
             : '';
       const linePart = r.lines_count ? `${formatNum(r.lines_count, isBn)} ${isBn ? 'লাইন' : 'lines'}` : '';
       const sabaqMain = [paraPart, pagePart, linePart].filter(Boolean).join(' · ') || '—';
-      const surahLine = r.surah_name ? `<div style="font-size:10px;color:#475569;margin-top:2px;">${escapeHtml(r.surah_name)}</div>` : '';
+      const surahLine = r.surah_name ? `<div style="font-size:9.5px;color:#475569;margin-top:2px;">${escapeHtml(r.surah_name)}</div>` : '';
 
       const sabqiText = r.sabqi_status ? SABQI_LABELS[r.sabqi_status]?.[isBn ? 'bn' : 'en'] || '' : '—';
       const sabqiPg = r.sabqi_pages ? ` (${formatNum(r.sabqi_pages, isBn)} ${isBn ? 'পৃঃ' : 'p'})` : '';
@@ -163,6 +173,26 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
       ].filter(Boolean);
       const amukhtaText = amukhtaParts.join(' · ') || '—';
 
+      let tilawatHtml = '<span style="color:#94a3b8;">—</span>';
+      if (r.tilawat_status === 'done' || r.tilawat_status === 'partial') {
+        const tLabel = TILAWAT_LABELS[r.tilawat_status][isBn ? 'bn' : 'en'];
+        const tColor = r.tilawat_status === 'done' ? '#047857' : '#b45309';
+        const tBg = r.tilawat_status === 'done' ? '#ecfdf5' : '#fffbeb';
+        tilawatHtml = `
+          <span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:700;font-size:9.5px;color:${tColor};background:${tBg};">${escapeHtml(tLabel)}</span>
+          ${r.tilawat_amount ? `<div style="font-size:9px;color:#334155;margin-top:2px;font-weight:600;">${escapeHtml(r.tilawat_amount)}</div>` : ''}
+        `;
+      }
+
+      let sabinaHtml = '<span style="color:#94a3b8;">—</span>';
+      if (r.sabina_completed === true) {
+        const sGradeText = r.sabina_grade ? GRADE_LABELS[r.sabina_grade]?.[isBn ? 'bn' : 'en'] : '';
+        sabinaHtml = `
+          <span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:800;font-size:9.5px;color:#b45309;background:#fef3c7;">★ ${escapeHtml(r.sabina_paras || (isBn ? 'সম্পন্ন' : 'Done'))}</span>
+          ${sGradeText ? `<div style="font-size:9px;color:#92400e;margin-top:2px;font-weight:700;">${escapeHtml(sGradeText)}</div>` : ''}
+        `;
+      }
+
       const lokma = Number(r.mistakes_lokma || 0);
       const tajweed = Number(r.mistakes_tajweed || 0);
       const gradeStyle = getGradeStyle(r.grade);
@@ -170,15 +200,17 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
 
       return `
         <tr style="background:${bg};">
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#0f172a;white-space:nowrap;">${formatDateDisplay(r.record_date, isBn)}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#065f46;">${escapeHtml(deptText)}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:left;color:#0f172a;font-weight:600;">${escapeHtml(sabaqMain)}${surahLine}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;color:#334155;">${escapeHtml(sabqiText + sabqiPg)}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;color:#334155;">${amukhtaText}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:${lokma + tajweed > 0 ? '#be123c' : '#475569'};">${formatNum(lokma, isBn)} / ${formatNum(tajweed, isBn)}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;">
-            <span style="display:inline-block;padding:2px 7px;border-radius:6px;font-weight:700;font-size:10.5px;color:${gradeStyle.color};background:${gradeStyle.bg};">${escapeHtml(gradeText)}</span>
-            ${r.remarks ? `<div style="font-size:9.5px;color:#64748b;margin-top:2px;">${escapeHtml(r.remarks)}</div>` : ''}
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#0f172a;white-space:nowrap;font-size:10px;">${formatDateDisplay(r.record_date, isBn)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#065f46;font-size:10px;">${escapeHtml(deptText)}</td>
+          <td style="padding:5px;border:1px solid #cbd5e1;text-align:left;color:#0f172a;font-weight:600;font-size:10px;">${escapeHtml(sabaqMain)}${surahLine}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;color:#334155;font-size:10px;">${escapeHtml(sabqiText + sabqiPg)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;color:#334155;font-size:10px;">${amukhtaText}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">${tilawatHtml}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">${sabinaHtml}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;font-size:10px;color:${lokma + tajweed > 0 ? '#be123c' : '#475569'};">${formatNum(lokma, isBn)}/${formatNum(tajweed, isBn)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">
+            <span style="display:inline-block;padding:2px 6px;border-radius:6px;font-weight:700;font-size:9.5px;color:${gradeStyle.color};background:${gradeStyle.bg};">${escapeHtml(gradeText)}</span>
+            ${r.remarks ? `<div style="font-size:9px;color:#64748b;margin-top:2px;">${escapeHtml(r.remarks)}</div>` : ''}
           </td>
         </tr>
       `;
@@ -194,14 +226,16 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
 
     tableHeaderHtml = `
       <tr style="background:#065f46;color:#ffffff;">
-        <th style="padding:7px 5px;border:1px solid #047857;width:6%;text-align:center;">${isBn ? 'ক্রমিক' : 'SL'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:23%;text-align:left;">${isBn ? 'নাম ও রোল' : 'Name & Roll'}</th>
-        <th style="padding:7px 5px;border:1px solid #047857;width:9%;text-align:center;">${isBn ? 'বিভাগ' : 'Dept'}</th>
-        <th style="padding:7px 5px;border:1px solid #047857;width:9%;text-align:center;">${isBn ? 'মোট দিন' : 'Days'}</th>
-        <th style="padding:7px 5px;border:1px solid #047857;width:10%;text-align:center;">${isBn ? 'মোট পৃষ্ঠা' : 'Pages'}</th>
-        <th style="padding:7px 6px;border:1px solid #047857;width:18%;text-align:center;">${isBn ? 'শেষ পারা ও পৃষ্ঠা' : 'Last Para & Page'}</th>
-        <th style="padding:7px 5px;border:1px solid #047857;width:13%;text-align:center;">${isBn ? 'গড় মান' : 'Avg Grade'}</th>
-        <th style="padding:7px 5px;border:1px solid #047857;width:12%;text-align:center;">${isBn ? 'লোকমা / তাজবীদ ভুল' : 'Lokma / Tajweed'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:5%;text-align:center;">${isBn ? 'ক্র.' : 'SL'}</th>
+        <th style="padding:6px 5px;border:1px solid #047857;width:19%;text-align:left;">${isBn ? 'নাম ও রোল' : 'Name & Roll'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:7%;text-align:center;">${isBn ? 'বিভাগ' : 'Dept'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:7%;text-align:center;">${isBn ? 'দিন' : 'Days'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:7%;text-align:center;">${isBn ? 'পৃষ্ঠা' : 'Pages'}</th>
+        <th style="padding:6px 5px;border:1px solid #047857;width:15%;text-align:center;">${isBn ? 'শেষ পারা ও পৃষ্ঠা' : 'Last Para & Page'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'তিলাওয়াত' : 'Tilawat'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:11%;text-align:center;">${isBn ? 'সাপ্তাহিক সবিনা' : 'Sabina'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:10%;text-align:center;">${isBn ? 'গড় মান' : 'Avg Grade'}</th>
+        <th style="padding:6px 4px;border:1px solid #047857;width:8%;text-align:center;">${isBn ? 'ভুল' : 'Errors'}</th>
       </tr>
     `;
 
@@ -213,6 +247,26 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
       const totalLokma = stuRecords.reduce((sum, r) => sum + Number(r.mistakes_lokma || 0), 0);
       const totalTajweed = stuRecords.reduce((sum, r) => sum + Number(r.mistakes_tajweed || 0), 0);
       const avgGrade = getAvgGradeLabel(stuRecords, isBn);
+
+      // Daily Tilawat summary per student
+      const tilawatRecords = stuRecords.filter((r) => r.tilawat_status === 'done' || r.tilawat_status === 'partial');
+      const tilawatDays = tilawatRecords.length;
+      const latestTilawatAmt = tilawatRecords.find((r) => r.tilawat_amount)?.tilawat_amount || '';
+      const tilawatCellHtml =
+        tilawatDays > 0
+          ? `<div style="font-weight:800;color:#047857;font-size:10px;">${formatNum(tilawatDays, isBn)} ${isBn ? 'দিন' : 'd'}</div>${latestTilawatAmt ? `<div style="font-size:9px;color:#475569;margin-top:1px;">${escapeHtml(latestTilawatAmt)}</div>` : ''}`
+          : '<span style="color:#94a3b8;">—</span>';
+
+      // Weekly Sabina summary per student
+      const sabinaRecords = stuRecords.filter((r) => r.sabina_completed === true);
+      const sabinaCount = sabinaRecords.length;
+      const sabinaParasList = Array.from(
+        new Set(sabinaRecords.map((r) => (r.sabina_paras || '').trim()).filter(Boolean))
+      ).slice(0, 2);
+      const sabinaCellHtml =
+        sabinaCount > 0
+          ? `<span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:800;font-size:9.5px;color:#b45309;background:#fef3c7;">★ ${formatNum(sabinaCount, isBn)} ${isBn ? 'বার' : 'x'}</span>${sabinaParasList.length > 0 ? `<div style="font-size:9px;color:#92400e;margin-top:1px;font-weight:600;">${escapeHtml(sabinaParasList.join(', '))}</div>` : ''}`
+          : '<span style="color:#94a3b8;">—</span>';
 
       const deptKey: 'hifz' | 'nazera' | 'qaida' =
         latest?.department ||
@@ -238,19 +292,21 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
       const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
       return `
         <tr style="background:${bg};">
-          <td style="padding:6px 5px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#475569;">${formatNum(idx + 1, isBn)}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:left;">
-            <div style="font-weight:800;color:#0f172a;font-size:11.5px;">${escapeHtml(stu.student_name)}</div>
-            ${subMeta ? `<div style="font-size:9.5px;color:#64748b;margin-top:1px;">${escapeHtml(subMeta)}</div>` : ''}
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#475569;font-size:10px;">${formatNum(idx + 1, isBn)}</td>
+          <td style="padding:5px;border:1px solid #cbd5e1;text-align:left;">
+            <div style="font-weight:800;color:#0f172a;font-size:11px;">${escapeHtml(stu.student_name)}</div>
+            ${subMeta ? `<div style="font-size:9px;color:#64748b;margin-top:1px;">${escapeHtml(subMeta)}</div>` : ''}
           </td>
-          <td style="padding:6px 5px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#065f46;">${escapeHtml(deptText)}</td>
-          <td style="padding:6px 5px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#0f172a;">${formatNum(totalDays, isBn)}</td>
-          <td style="padding:6px 5px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#0f172a;">${formatNum(totalPages, isBn)}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;font-weight:600;color:#1e293b;">${escapeHtml(lastPos)}</td>
-          <td style="padding:6px 5px;border:1px solid #cbd5e1;text-align:center;">
-            <span style="display:inline-block;padding:2px 7px;border-radius:6px;font-weight:700;font-size:10.5px;color:${avgGrade.color};background:${avgGrade.bg};">${escapeHtml(avgGrade.text)}</span>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#065f46;font-size:10px;">${escapeHtml(deptText)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#0f172a;font-size:10px;">${formatNum(totalDays, isBn)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#0f172a;font-size:10px;">${formatNum(totalPages, isBn)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:600;color:#1e293b;font-size:10px;">${escapeHtml(lastPos)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">${tilawatCellHtml}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">${sabinaCellHtml}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">
+            <span style="display:inline-block;padding:2px 6px;border-radius:6px;font-weight:700;font-size:9.5px;color:${avgGrade.color};background:${avgGrade.bg};">${escapeHtml(avgGrade.text)}</span>
           </td>
-          <td style="padding:6px 5px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:${totalLokma + totalTajweed > 0 ? '#be123c' : '#475569'};">${formatNum(totalLokma, isBn)} / ${formatNum(totalTajweed, isBn)}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;font-size:10px;color:${totalLokma + totalTajweed > 0 ? '#be123c' : '#475569'};">${formatNum(totalLokma, isBn)}/${formatNum(totalTajweed, isBn)}</td>
         </tr>
       `;
     });
@@ -259,7 +315,7 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
   if (rowHtmlItems.length === 0) {
     rowHtmlItems.push(`
       <tr>
-        <td colspan="${selectedStudent ? 7 : 8}" style="padding:28px;border:1px solid #cbd5e1;text-align:center;color:#64748b;font-weight:700;">
+        <td colspan="${selectedStudent ? 9 : 10}" style="padding:28px;border:1px solid #cbd5e1;text-align:center;color:#64748b;font-weight:700;">
           ${isBn ? 'নির্বাচিত সময়কালে কোনো সবক রেকর্ড পাওয়া যায়নি।' : 'No Hifz/Sabaq records found for the selected period.'}
         </td>
       </tr>
@@ -310,19 +366,21 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
         </div>
       </div>
 
-      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#064e3b;font-weight:700;">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:10.5px;color:#064e3b;font-weight:700;">
         <div>
           <span>${isBn ? 'জামাত / শ্রেণি:' : 'Class:'} <strong>${escapeHtml(classLabel)}</strong></span>
           ${
             selectedStudent
-              ? `<span style="margin-left:14px;">${isBn ? 'শিক্ষার্থী:' : 'Student:'} <strong>${escapeHtml(selectedStudent.student_name)}</strong>${selectedStudent.roll != null ? ` (${isBn ? 'রোল' : 'Roll'}: ${formatNum(selectedStudent.roll, isBn)})` : ''}</span>`
-              : `<span style="margin-left:14px;">${isBn ? 'শিক্ষার্থী:' : 'Students:'} <strong>${formatNum(students.length, isBn)}</strong> (${isBn ? 'সক্রিয়' : 'Active'}: ${formatNum(activeStudentsCount, isBn)})</span>`
+              ? `<span style="margin-left:12px;">${isBn ? 'শিক্ষার্থী:' : 'Student:'} <strong>${escapeHtml(selectedStudent.student_name)}</strong>${selectedStudent.roll != null ? ` (${isBn ? 'রোল' : 'Roll'}: ${formatNum(selectedStudent.roll, isBn)})` : ''}</span>`
+              : `<span style="margin-left:12px;">${isBn ? 'শিক্ষার্থী:' : 'Students:'} <strong>${formatNum(students.length, isBn)}</strong> (${isBn ? 'সক্রিয়' : 'Active'}: ${formatNum(activeStudentsCount, isBn)})</span>`
           }
         </div>
         <div>
           <span>${isBn ? 'মোট এন্ট্রি:' : 'Entries:'} <strong>${formatNum(totalEntriesCount, isBn)}</strong></span>
-          <span style="margin-left:12px;">${isBn ? 'মোট পৃষ্ঠা:' : 'Pages:'} <strong>${formatNum(totalPagesAll, isBn)}</strong></span>
-          <span style="margin-left:12px;">${isBn ? 'গড় মান:' : 'Avg:'} <strong>${escapeHtml(overallAvgGrade.text)}</strong></span>
+          <span style="margin-left:10px;">${isBn ? 'পৃষ্ঠা:' : 'Pages:'} <strong>${formatNum(totalPagesAll, isBn)}</strong></span>
+          <span style="margin-left:10px;">${isBn ? 'তিলাওয়াত:' : 'Tilawat:'} <strong>${formatNum(totalTilawatDaysAll, isBn)} ${isBn ? 'দিন' : 'd'}</strong></span>
+          <span style="margin-left:10px;color:#b45309;">${isBn ? 'সবিনা:' : 'Sabina:'} <strong>${formatNum(totalSabinaCountAll, isBn)} ${isBn ? 'বার' : 'x'}</strong></span>
+          <span style="margin-left:10px;">${isBn ? 'গড় মান:' : 'Avg:'} <strong>${escapeHtml(overallAvgGrade.text)}</strong></span>
         </div>
       </div>
     `;

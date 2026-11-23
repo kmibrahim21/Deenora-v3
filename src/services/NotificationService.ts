@@ -526,6 +526,11 @@ export const NotificationService = {
       mistakes_tajweed?: number | null;
       grade?: 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada' | null;
       remarks?: string | null;
+      tilawat_status?: 'done' | 'partial' | 'none' | null;
+      tilawat_amount?: string | null;
+      sabina_completed?: boolean | null;
+      sabina_paras?: string | null;
+      sabina_grade?: 'mumtaz' | 'jayyid_jiddan' | 'jayyid' | 'iada' | null;
     };
     isUpdate?: boolean;
   }): Promise<{ success: boolean; message?: string }> => {
@@ -602,6 +607,25 @@ export const NotificationService = {
       }
       if (record.grade && gradeMap[record.grade]) {
         detailSegments.push(`মান: ${gradeMap[record.grade]}`);
+      }
+      if (record.tilawat_status === 'done' || record.tilawat_status === 'partial') {
+        const tilawatLabel =
+          record.tilawat_amount?.trim()
+            ? toBanglaDigits(record.tilawat_amount.trim())
+            : record.tilawat_status === 'done'
+            ? 'সম্পন্ন'
+            : 'আংশিক';
+        detailSegments.push(`দৈনিক তিলাওয়াত: ${tilawatLabel}`);
+      }
+      if (record.sabina_completed === true) {
+        const sabinaAmt = record.sabina_paras?.trim()
+          ? toBanglaDigits(record.sabina_paras.trim())
+          : 'সম্পন্ন';
+        const sabinaGradeStr =
+          record.sabina_grade && gradeMap[record.sabina_grade]
+            ? ` (${gradeMap[record.sabina_grade]})`
+            : '';
+        detailSegments.push(`সাপ্তাহিক সবিনা: ${sabinaAmt}${sabinaGradeStr}`);
       }
 
       const lokma = Number(record.mistakes_lokma || 0);
