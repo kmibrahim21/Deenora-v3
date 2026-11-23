@@ -407,7 +407,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     biometric_device_sync: false,
     live_chat: false,
     question_bank: false,
-    hifz_tracker: false
+    hifz_tracker: false,
+    public_website: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -424,6 +425,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editReveSecretKey, setEditReveSecretKey] = useState('');
   const [editReveClientId, setEditReveClientId] = useState('');
   const [editInstituteCode, setEditInstituteCode] = useState('');
+  const [editPublicSlug, setEditPublicSlug] = useState('');
+  const [copiedPublicSlug, setCopiedPublicSlug] = useState(false);
   const [editSmsRate, setEditSmsRate] = useState<number>(0.50);
   const [editVoiceRate, setEditVoiceRate] = useState<number>(0.45);
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
@@ -528,6 +531,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       live_chat: false,
       question_bank: false,
       hifz_tracker: false,
+      public_website: false,
     };
 
     // 10. Ultimate package: Attendance, exam, Accounting, sms, voice, certificate, students photo, ID card, class routine, parent portal, messages
@@ -2216,6 +2220,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         live_chat: userModules.live_chat ?? false,
         question_bank: userModules.question_bank ?? false,
         hifz_tracker: userModules.hifz_tracker ?? false,
+        public_website: userModules.public_website ?? false,
         ...userModules
       });
     } else {
@@ -2239,6 +2244,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         live_chat: false,
         question_bank: false,
         hifz_tracker: false,
+        public_website: false,
       });
     }
 
@@ -2260,6 +2266,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditReveSecretKey(user.reve_secret_key || '');
     setEditReveClientId(user.reve_client_id || '');
     setEditInstituteCode(userConfig?.institute_code || '');
+    setEditPublicSlug(userConfig?.public_site?.slug || '');
+    setCopiedPublicSlug(false);
     setEditSmsRate(user.sms_rate || 0.50);
     setEditVoiceRate(user.voice_rate !== undefined && user.voice_rate !== null ? user.voice_rate : 0.45);
     setEditPaidMonths(userConfig?.paid_months || []);
@@ -2347,6 +2355,80 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         syncedModules.exam_routine = syncedModules.exam;
       }
 
+      // Sanitize & validate Custom Public URL Slug uniqueness before saving
+      const cleanPublicSlug = editPublicSlug
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '');
+
+      if (cleanPublicSlug) {
+        const [{ data: dupBySlug }, { data: dupByCode }] = await Promise.all([
+          supabase
+            .from('institutions')
+            .select('id, config_json')
+            .filter('config_json->public_site->>slug', 'ilike', cleanPublicSlug)
+            .neq('id', selectedUser.id)
+            .limit(5),
+          supabase
+            .from('institutions')
+            .select('id, config_json')
+            .ilike('config_json->>institute_code', cleanPublicSlug)
+            .neq('id', selectedUser.id)
+            .limit(5),
+        ]);
+
+        const parseSafeCfg = (raw: any) => {
+          if (!raw) return {};
+          if (typeof raw === 'string') {
+            try { return JSON.parse(raw) || {}; } catch { return {}; }
+          }
+          return typeof raw === 'object' ? raw : {};
+        };
+
+        const hasSlugConflict =
+          (dupBySlug || []).some(
+            (row: any) =>
+              String(parseSafeCfg(row.config_json)?.public_site?.slug || '')
+                .trim()
+                .toLowerCase() === cleanPublicSlug
+          ) ||
+          (dupByCode || []).some(
+            (row: any) =>
+              String(parseSafeCfg(row.config_json)?.institute_code || '')
+                .trim()
+                .toLowerCase() === cleanPublicSlug
+          ) ||
+          madrasahs.some((inst: any) => {
+            if (inst.id === selectedUser.id) return false;
+            const cfg = parseSafeCfg(inst.config_json);
+            const otherSlug = String(cfg?.public_site?.slug || '').trim().toLowerCase();
+            const otherCode = String(inst.institute_code || cfg?.institute_code || '').trim().toLowerCase();
+            return otherSlug === cleanPublicSlug || otherCode === cleanPublicSlug;
+          });
+
+        if (hasSlugConflict) {
+          setStatusModal({
+            show: true,
+            type: 'error',
+            title: 'ডুপ্লিকেট লিংক',
+            message: 'এই নামটি ইতিমধ্যেই অন্য প্রতিষ্ঠানের জন্য ব্যবহৃত হয়েছে',
+          });
+          setIsUpdatingUser(false);
+          return;
+        }
+      }
+
+      const nextPublicSite: Record<string, any> = {
+        ...(latestConfig?.public_site && typeof latestConfig.public_site === 'object'
+          ? latestConfig.public_site
+          : {}),
+      };
+      if (cleanPublicSlug) {
+        nextPublicSite.slug = cleanPublicSlug;
+      } else {
+        delete nextPublicSite.slug;
+      }
+
       console.log('Saving config_json:', {
         modules: syncedModules,
         result_engine: editResultEngine,
@@ -2388,6 +2470,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           config_json: {
             ...latestConfig,
             modules: syncedModules,
+            public_site: nextPublicSite,
             result_engine: editResultEngine,
             result_system: editResultSystem,
             fee_structure: editFeeStructure,
@@ -4869,6 +4952,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       biometric_device_sync: 'Biometric Device',
                                       question_bank: 'Question Bank',
                                       hifz_tracker: 'Hifz & Sabaq Tracker',
+                                      public_website: 'Public Website',
                                     };
 
                                     return (
@@ -4890,6 +4974,83 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     );
                                   })}
                               </div>
+
+                              {editModules.public_website && (
+                                <div className={`mt-4 p-5 rounded-3xl border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-900/70 border-slate-700/80' : 'bg-white border-blue-100 shadow-sm'}`}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                        <Globe size={18} />
+                                      </div>
+                                      <div>
+                                        <h5 className={`text-xs font-black tracking-wide ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
+                                          Custom Public URL Slug (সুপার অ্যাডমিন অনলি)
+                                        </h5>
+                                        <p className="text-[11px] font-medium text-slate-400">
+                                          প্রতিষ্ঠানের কাস্টম পাবলিক ওয়েবসাইট লিংক নির্ধারণ করুন (শুধুমাত্র a-z, 0-9 এবং -)
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className={`flex items-center rounded-2xl border overflow-hidden focus-within:border-blue-500 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-950 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                    <span className={`px-3.5 py-3 text-xs font-black font-mono select-none border-r shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+                                      deenora.app/m/
+                                    </span>
+                                    <input
+                                      type="text"
+                                      disabled={!canWrite('permissions')}
+                                      value={editPublicSlug}
+                                      onChange={(e) => setEditPublicSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                      placeholder="hamidia"
+                                      maxLength={60}
+                                      className={`w-full px-3.5 py-3 bg-transparent font-mono text-sm font-bold outline-none ${madrasah?.theme === 'dark' ? 'text-white placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-400'} ${!canWrite('permissions') ? 'cursor-not-allowed opacity-70' : ''}`}
+                                    />
+                                  </div>
+
+                                  {(() => {
+                                    const previewSlug = editPublicSlug || editInstituteCode.trim() || selectedUser?.id || '';
+                                    const previewUrl = `https://deenora.app/m/${previewSlug}`;
+                                    return (
+                                      <div className={`px-3.5 py-2.5 rounded-2xl border flex items-center justify-between gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-950/70 border-slate-800 text-blue-300' : 'bg-blue-50/60 border-blue-100 text-blue-700'}`}>
+                                        <div className="min-w-0">
+                                          <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                            Live Preview URL
+                                          </span>
+                                          <span className="block text-xs font-bold font-mono truncate">
+                                            {previewUrl}
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              await navigator.clipboard.writeText(previewUrl);
+                                              setCopiedPublicSlug(true);
+                                              setTimeout(() => setCopiedPublicSlug(false), 2000);
+                                            } catch {
+                                              setStatusModal({
+                                                show: true,
+                                                type: 'error',
+                                                title: 'ত্রুটি',
+                                                message: 'লিংক কপি করা যায়নি।',
+                                              });
+                                            }
+                                          }}
+                                          className={`h-8 px-3 rounded-xl text-[11px] font-black inline-flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                                            copiedPublicSlug
+                                              ? 'bg-emerald-600 text-white'
+                                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                          }`}
+                                        >
+                                          {copiedPublicSlug ? <Check size={13} /> : <Copy size={13} />}
+                                          <span>{copiedPublicSlug ? 'কপি হয়েছে' : 'কপি'}</span>
+                                        </button>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              )}
                            </div>
                         </div>
                       )}

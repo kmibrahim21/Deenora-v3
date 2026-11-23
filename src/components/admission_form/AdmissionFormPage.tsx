@@ -33,6 +33,7 @@ import { requestManager } from '../../services/RequestManager';
 import { extractStudentExtraFields, packStudentNotesWithExtra } from '../../utils/studentExtraFields';
 import { checkStudentLimit } from '../../utils/studentLimitChecker';
 import { exportAdmissionFormHeadless } from '../../utils/admissionFormPdf';
+import { PublicSiteManager } from '../PublicSiteManager';
 
 interface Props {
   madrasah: Institution | null;
@@ -235,7 +236,22 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'download' | 'edit' | 'design'>('download');
+  const [activeTab, setActiveTab] = useState<'download' | 'edit' | 'design' | 'online'>('download');
+  const [pendingOnlineCount, setPendingOnlineCount] = useState<number>(0);
+
+  const isPublicWebsiteEnabled = React.useMemo(() => {
+    if (!madrasah) return false;
+    if (madrasah.is_super_admin) return true;
+    let cfg: any = madrasah.config_json;
+    if (typeof cfg === 'string') {
+      try {
+        cfg = JSON.parse(cfg);
+      } catch {
+        cfg = {};
+      }
+    }
+    return cfg?.modules?.public_website === true;
+  }, [madrasah]);
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [studentsInClass, setStudentsInClass] = useState<Student[]>([]);
@@ -947,13 +963,13 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
           {/* Sidebar Area: Selection, Live Data Entry & Customization */}
           <div className="w-full lg:w-[420px] shrink-0 space-y-5 print:hidden">
             
-            {/* 3-Tab Navigation */}
-            <div className="grid grid-cols-3 bg-slate-200 dark:bg-slate-800 p-1 rounded-2xl shadow-inner gap-1">
+            {/* Tab Navigation */}
+            <div className={`grid ${isPublicWebsiteEnabled ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} bg-slate-200 dark:bg-slate-800 p-1 rounded-2xl shadow-inner gap-1`}>
               <button
                 onClick={() => setActiveTab('download')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'download' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                className={`flex items-center justify-center gap-1 py-2.5 px-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer ${activeTab === 'download' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
               >
-                <Download size={14} />
+                <Download size={13} />
                 <span>{lang === 'bn' ? 'ডাউনলোড' : 'Download'}</span>
               </button>
               <button
@@ -961,22 +977,56 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang, a
                   setIsPreviewingBlank(false);
                   setActiveTab('edit');
                 }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'edit' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                className={`flex items-center justify-center gap-1 py-2.5 px-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer ${activeTab === 'edit' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
               >
-                <Edit3 size={14} />
-                <span>{lang === 'bn' ? 'তথ্য পূরণ / ভর্তি' : 'Admit / Edit'}</span>
+                <Edit3 size={13} />
+                <span>{lang === 'bn' ? 'তথ্য পূরণ' : 'Admit'}</span>
               </button>
+              {isPublicWebsiteEnabled && (
+                <button
+                  onClick={() => setActiveTab('online')}
+                  className={`flex items-center justify-center gap-1 py-2.5 px-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer ${activeTab === 'online' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                >
+                  <Globe size={13} />
+                  <span>{lang === 'bn' ? 'অনলাইন' : 'Online'}</span>
+                  {pendingOnlineCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[9px] font-black leading-none tabular-nums">
+                      {pendingOnlineCount}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('design')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'design' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                className={`flex items-center justify-center gap-1 py-2.5 px-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer ${activeTab === 'design' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
               >
-                <Settings2 size={14} />
+                <Settings2 size={13} />
                 <span>{lang === 'bn' ? 'ডিজাইন' : 'Design'}</span>
               </button>
             </div>
 
             <AnimatePresence mode="wait">
-              {activeTab === 'design' ? (
+              {activeTab === 'online' && isPublicWebsiteEnabled ? (
+                <motion.div
+                  key="online-tab"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="max-h-[85vh] overflow-y-auto pr-1 custom-scrollbar"
+                >
+                  <PublicSiteManager
+                    madrasah={madrasah}
+                    lang={lang}
+                    activeYear={activeYear}
+                    classesList={classes}
+                    onPendingCountChange={setPendingOnlineCount}
+                    onApproved={(admittedClassId) => {
+                      setSelectedClassId(admittedClassId);
+                      fetchStudentsByClass(admittedClassId);
+                    }}
+                  />
+                </motion.div>
+              ) : activeTab === 'design' ? (
                 <motion.div
                   key="design-tab"
                   initial={{ opacity: 0, x: -10 }}

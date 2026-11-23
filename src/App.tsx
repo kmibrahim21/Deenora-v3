@@ -83,6 +83,24 @@ const MarketerPortal = React.lazy(() =>
   import("pages/MarketerPortal").then((m) => ({ default: m.MarketerPortal }))
 );
 const HifzTracker = React.lazy(() => import("pages/HifzTracker"));
+const PublicInstitutionSite = React.lazy(() => import("pages/PublicInstitutionSite"));
+
+function getPublicSiteCode(): string | null {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname || '';
+  if (path.startsWith('/m/')) {
+    const seg = path.slice(3).split('/')[0]?.trim();
+    if (seg) {
+      try {
+        return decodeURIComponent(seg);
+      } catch {
+        return seg;
+      }
+    }
+  }
+  const param = new URLSearchParams(window.location.search).get('m')?.trim();
+  return param || null;
+}
 
 const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
   // Academic Documents sub-views -> parent is academic-documents
@@ -114,7 +132,7 @@ const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
   "final-results": "exams",
 };
 
-const App: React.FC = () => {
+const AuthenticatedApp: React.FC = () => {
   useSyncEngine();
   const {
     session,
@@ -1513,6 +1531,27 @@ const App: React.FC = () => {
       )}
     </Layout>
   );
+};
+
+const App: React.FC = () => {
+  const publicCode = useMemo(() => getPublicSiteCode(), []);
+
+  if (publicCode) {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-6 font-noto">
+            <div className="w-12 h-12 border-4 border-blue-500/20 border-t-[#2563EB] rounded-full animate-spin mb-4" />
+            <p className="text-sm font-bold text-[#1E3A8A]">পোর্টাল লোড হচ্ছে...</p>
+          </div>
+        }
+      >
+        <PublicInstitutionSite code={publicCode} />
+      </Suspense>
+    );
+  }
+
+  return <AuthenticatedApp />;
 };
 
 export default App;

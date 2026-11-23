@@ -60,6 +60,7 @@ export interface Institution {
       biometric_device_sync?: boolean;
       question_bank?: boolean;
       hifz_tracker?: boolean;
+      public_website?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     class_result_engines?: Record<string, 'gpa' | 'befaq' | 'high_school' | 'school'>;
@@ -115,6 +116,9 @@ export interface Institution {
     };
     hifz_settings?: {
       class_departments?: Record<string, 'hifz' | 'nazera' | 'qaida' | 'off'>;
+    };
+    public_site?: {
+      slug?: string;
     };
   };
   theme: string;

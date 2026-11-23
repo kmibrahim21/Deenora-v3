@@ -12,6 +12,7 @@ import PaymentCheckout from '../components/PaymentCheckout';
 import { hasAdmissionFormAccess } from 'utils/packageUtils';
 import { BranchManagementModal } from '../components/branch/BranchManagementModal';
 import { BranchSwitcher } from '../components/branch/BranchSwitcher';
+import { PublicSiteManager } from '../components/PublicSiteManager';
 
 const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -153,6 +154,7 @@ const Account: React.FC<AccountProps> = ({
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   const [showBranchModal, setShowBranchModal] = useState(false);
+  const [showPublicSiteModal, setShowPublicSiteModal] = useState(false);
   
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
   const [adminNagad, setAdminNagad] = useState('০১৭৬৬-XXXXXX');
@@ -250,6 +252,7 @@ const Account: React.FC<AccountProps> = ({
       exam_routine: configObj.modules?.exam_routine ?? true,
       live_chat: configObj.modules?.live_chat === true,
       hifz_tracker: configObj.modules?.hifz_tracker === true,
+      public_website: configObj.modules?.public_website === true,
     };
   }, [madrasah]);
 
@@ -1914,6 +1917,18 @@ const Account: React.FC<AccountProps> = ({
               onClick={() => setShowBranchModal(true)}
               dark={madrasah?.theme === 'dark'}
             />
+
+            {/* Public Website & Online Admissions Card */}
+            {(modules.public_website || isSuperAdmin) && (
+              <ActionCard
+                icon={Globe}
+                title={lang === 'bn' ? 'পাবলিক ওয়েবসাইট ও অনলাইন আবেদন' : 'Public Website & Admissions'}
+                subtitle={lang === 'bn' ? 'লিংক শেয়ার ও ভর্তি অ্যাপ্রুভ' : 'Share Link & Approve'}
+                colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                onClick={() => setShowPublicSiteModal(true)}
+                dark={madrasah?.theme === 'dark'}
+              />
+            )}
           </>
         )}
 
@@ -2477,6 +2492,64 @@ const Account: React.FC<AccountProps> = ({
         activeBranchId={activeBranchId || null}
         onSwitchBranch={onSwitchBranch || (() => {})}
       />
+
+      {/* Public Website & Online Admissions Modal */}
+      {showPublicSiteModal &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[150] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center px-2 pt-4 pb-[88px] sm:p-4 animate-in fade-in duration-200"
+            onClick={() => setShowPublicSiteModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full sm:max-w-xl rounded-[2rem] border shadow-2xl max-h-[calc(100dvh-110px)] sm:max-h-[88vh] flex flex-col overflow-hidden font-noto ${
+                madrasah?.theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              <div
+                className={`px-5 py-4 border-b flex items-center justify-between gap-3 shrink-0 ${
+                  madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Globe size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3
+                      className={`text-base font-black truncate ${
+                        madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'
+                      }`}
+                    >
+                      {lang === 'bn' ? 'পাবলিক ওয়েবসাইট ও অনলাইন আবেদন' : 'Public Website & Admissions'}
+                    </h3>
+                    <p className="text-[11px] font-bold text-slate-400 truncate">
+                      {madrasah?.name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPublicSiteModal(false)}
+                  aria-label={lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 cursor-pointer ${
+                    madrasah?.theme === 'dark'
+                      ? 'bg-slate-800 text-slate-400 hover:text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-5 custom-scrollbar">
+                <PublicSiteManager madrasah={madrasah} lang={lang} />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

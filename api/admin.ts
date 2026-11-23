@@ -1071,6 +1071,75 @@ export default async function handler(req, res) {
         ? { ...existingCfg, ...updateFields.config_json }
         : { ...existingCfg };
 
+      // Sanitize and validate Super Admin custom public_site.slug uniqueness
+      if (effectiveCfg?.public_site && typeof effectiveCfg.public_site === 'object') {
+        const rawSlug = effectiveCfg.public_site.slug;
+        if (rawSlug !== undefined && rawSlug !== null && String(rawSlug).trim() !== '') {
+          const normalizedSlug = String(rawSlug)
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '');
+
+          if (normalizedSlug) {
+            const [bySlugRes, byTopCodeRes, byJsonCodeRes] = await Promise.all([
+              supabase
+                .from('institutions')
+                .select('id, config_json')
+                .filter('config_json->public_site->>slug', 'ilike', normalizedSlug)
+                .neq('id', id)
+                .limit(5),
+              supabase
+                .from('institutions')
+                .select('id, institute_code')
+                .ilike('institute_code', normalizedSlug)
+                .neq('id', id)
+                .limit(5),
+              supabase
+                .from('institutions')
+                .select('id, config_json')
+                .ilike('config_json->>institute_code', normalizedSlug)
+                .neq('id', id)
+                .limit(5),
+            ]);
+
+            const slugConflict = (bySlugRes.data || []).some(
+              (row: any) =>
+                String(parseConfigJson(row.config_json)?.public_site?.slug || '')
+                  .trim()
+                  .toLowerCase() === normalizedSlug
+            );
+            const topCodeConflict = (byTopCodeRes.data || []).some(
+              (row: any) => String(row.institute_code || '').trim().toLowerCase() === normalizedSlug
+            );
+            const jsonCodeConflict = (byJsonCodeRes.data || []).some(
+              (row: any) =>
+                String(parseConfigJson(row.config_json)?.institute_code || '')
+                  .trim()
+                  .toLowerCase() === normalizedSlug
+            );
+
+            if (slugConflict || topCodeConflict || jsonCodeConflict) {
+              return res.status(409).json({
+                error: 'এই নামটি ইতিমধ্যেই অন্য প্রতিষ্ঠানের জন্য ব্যবহৃত হয়েছে',
+              });
+            }
+
+            effectiveCfg.public_site = {
+              ...effectiveCfg.public_site,
+              slug: normalizedSlug,
+            };
+          } else {
+            const { slug: _removed, ...restPublicSite } = effectiveCfg.public_site;
+            effectiveCfg.public_site = restPublicSite;
+          }
+          updateFields.config_json = effectiveCfg;
+        } else if (rawSlug === '' || rawSlug === null) {
+          const { slug: _removed, ...restPublicSite } = effectiveCfg.public_site;
+          effectiveCfg.public_site = restPublicSite;
+          updateFields.config_json = effectiveCfg;
+        }
+      }
+
       // Track intentional per-branch manual deactivation vs auto-deactivation
       if (effectiveCfg.parent_institution_id) {
         if (updateFields.is_active === false || updateFields.status === 'suspended') {

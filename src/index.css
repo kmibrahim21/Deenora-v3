@@ -352,3 +352,23 @@ select {
 .animate-muse-bar-4 { animation: muse-bar 0.9s ease-in-out infinite 0.15s; }
 .animate-muse-bar-5 { animation: muse-bar 0.9s ease-in-out infinite 0.35s; }
 
+/* Standalone Public Institution Website: unlock native mobile & desktop scrolling */
+html.public-site-scroll,
+html.public-site-scroll body,
+html.public-site-scroll #root {
+  position: static !important;
+  inset: auto !important;
+  height: auto !important;
+  min-height: 100dvh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: auto !important;
+  -webkit-overscroll-behavior-y: auto !important;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.public-site-scroll #root {
+  display: block !important;
+}
+
