@@ -599,14 +599,27 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       }
       setVoiceRate(vRate || 0.45);
 
+      let resolvedVoices: any[] = [];
       const { data: localVoices } = await supabase
         .from('voice_templates')
         .select('id, provider_voice_name, title')
         .eq('institution_id', institutionId);
       
-      setVoices(localVoices || []);
       if (localVoices && localVoices.length > 0) {
-        setSelectedVoiceId(localVoices[0].id);
+        resolvedVoices = localVoices;
+      } else {
+        const res = await fetch(`/api/awaj?action=templates&institution_id=${encodeURIComponent(institutionId)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.templates)) {
+            resolvedVoices = json.templates;
+          }
+        }
+      }
+
+      setVoices(resolvedVoices);
+      if (resolvedVoices.length > 0) {
+        setSelectedVoiceId(resolvedVoices[0].id);
       }
       setShowVoiceModal(true);
     } catch (err) {
@@ -628,7 +641,23 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       if (phoneNumbers.length === 0) throw new Error('No valid phone numbers found.');
 
       const estimatedCost = phoneNumbers.length * voiceRate;
-      const { data: instData } = await supabase.from('institutions').select('balance, voice_sender_id').eq('id', institutionId).single();
+      const { data: { session } } = await supabase.auth.getSession();
+      let { data: instData } = await supabase.from('institutions').select('balance, voice_sender_id').eq('id', institutionId).maybeSingle();
+      if (!instData && session?.access_token) {
+        const wRes = await fetch(`/api/awaj?action=wallet_balance&institution_id=${encodeURIComponent(institutionId)}`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        });
+        if (wRes.ok) {
+          const wJson = await wRes.json();
+          instData = {
+            balance: typeof wJson.balance === 'number' ? wJson.balance : (madrasah?.balance || 0),
+            voice_sender_id: wJson.voice_sender_id || madrasah?.voice_sender_id || null
+          };
+        }
+      }
+      if (!instData && madrasah) {
+        instData = { balance: madrasah.balance || 0, voice_sender_id: madrasah.voice_sender_id || null };
+      }
       
       if (!instData || instData.balance < estimatedCost) {
         throw new Error(lang === 'bn' ? `পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজন: ${estimatedCost} ৳, আছে: ${instData?.balance || 0} ৳` : `Insufficient balance. Required: ${estimatedCost} ৳, Available: ${instData?.balance || 0} ৳`);
@@ -723,22 +752,47 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       const result = await response.json();
       const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
 
-      // Deduct balance
-      const { error: deductError } = await supabase.rpc('deduct_balance', {
-        p_institution_id: institutionId,
-        p_amount: actualEstimatedCost
-      });
-      if (deductError) throw deductError;
+      // Save to Supabase & deduct balance via authenticated backend endpoint (immune to branch RLS)
+      if (session?.access_token) {
+        const recordRes = await fetch('/api/awaj', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            action: 'record_broadcast',
+            institution_id: institutionId,
+            voice_template_id: selectedVoiceId,
+            total_numbers: uniqueNormalizedPhoneNumbers.length,
+            estimated_cost: actualEstimatedCost,
+            status: 'pending',
+            provider_campaign_id: campaignId.toString(),
+            deduct_balance: true,
+            deduct_amount: actualEstimatedCost
+          })
+        });
+        const recordJson = await recordRes.json().catch(() => ({}));
+        if (!recordRes.ok) {
+          throw new Error(recordJson.error || 'Failed to record voice broadcast');
+        }
+      } else {
+        const { error: deductError } = await supabase.rpc('deduct_balance', {
+          p_institution_id: institutionId,
+          p_amount: actualEstimatedCost
+        });
+        if (deductError) throw deductError;
 
-      // Save to Supabase
-      await supabase.from('voice_broadcasts').insert({
-        institution_id: institutionId,
-        voice_template_id: selectedVoiceId,
-        total_numbers: uniqueNormalizedPhoneNumbers.length,
-        estimated_cost: actualEstimatedCost,
-        status: 'pending',
-        provider_campaign_id: campaignId.toString()
-      });
+        const { error: insertErr } = await supabase.from('voice_broadcasts').insert({
+          institution_id: institutionId,
+          voice_template_id: selectedVoiceId,
+          total_numbers: uniqueNormalizedPhoneNumbers.length,
+          estimated_cost: actualEstimatedCost,
+          status: 'pending',
+          provider_campaign_id: campaignId.toString()
+        });
+        if (insertErr) throw insertErr;
+      }
 
       setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'সফল হয়েছে' : 'Success', message: lang === 'bn' ? 'ভয়েস কল সফলভাবে পাঠানো হয়েছে' : 'Voice broadcast sent successfully' });
       setShowVoiceModal(false);

@@ -555,9 +555,21 @@ const Donations: React.FC<DonationsProps> = ({
         if (!selectedVoiceTemplateId) {
           setSelectedVoiceTemplateId(data[0].id);
         }
-      } else {
-        setVoiceTemplates([]);
+        return;
       }
+
+      const res = await fetch(`/api/awaj?action=templates&institution_id=${encodeURIComponent(madrasah.id)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.templates) && json.templates.length > 0) {
+          setVoiceTemplates(json.templates);
+          if (!selectedVoiceTemplateId) {
+            setSelectedVoiceTemplateId(json.templates[0].id);
+          }
+          return;
+        }
+      }
+      setVoiceTemplates([]);
     } catch (e) {
       console.warn('Voice templates load error:', e);
     }
@@ -893,17 +905,40 @@ const Donations: React.FC<DonationsProps> = ({
         console.warn('Awaj API call exception:', apiErr);
       }
 
-      // Record in Supabase
+      // Record in Supabase via authenticated backend endpoint (supports main & branch accounts)
       try {
-        await supabase.from('voice_broadcasts').insert({
-          institution_id: madrasah.id,
-          voice_template_id: selectedVoice?.id && !selectedVoice.id.startsWith('vt_assigned_') ? selectedVoice.id : null,
-          target_type: 'donors',
-          target_class_name: `Donors (${voiceTargetGroup})`,
-          total_numbers: phoneNumbers.length,
-          status: 'sending',
-          provider_campaign_id: campaignId,
-        });
+        const voiceTemplateId = selectedVoice?.id && !selectedVoice.id.startsWith('vt_assigned_') ? selectedVoice.id : null;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await fetch('/api/awaj', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              action: 'record_broadcast',
+              institution_id: madrasah.id,
+              voice_template_id: voiceTemplateId,
+              target_type: 'donors',
+              target_class_name: `Donors (${voiceTargetGroup})`,
+              total_numbers: phoneNumbers.length,
+              status: 'sending',
+              provider_campaign_id: campaignId,
+              deduct_balance: false
+            })
+          });
+        } else {
+          await supabase.from('voice_broadcasts').insert({
+            institution_id: madrasah.id,
+            voice_template_id: voiceTemplateId,
+            target_type: 'donors',
+            target_class_name: `Donors (${voiceTargetGroup})`,
+            total_numbers: phoneNumbers.length,
+            status: 'sending',
+            provider_campaign_id: campaignId,
+          });
+        }
       } catch (e) {
         console.warn('Voice broadcast insert warning:', e);
       }

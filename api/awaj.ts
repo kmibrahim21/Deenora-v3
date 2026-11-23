@@ -182,10 +182,137 @@ const getAwajHeaders = () => {
   };
 };
 
+const parseJsonObj = (val: any): Record<string, any> => {
+  if (!val) return {};
+  if (typeof val === 'string') {
+    try { return JSON.parse(val) || {}; } catch { return {}; }
+  }
+  return typeof val === 'object' ? val : {};
+};
+
+const isUuidString = (val: any): boolean =>
+  typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+async function verifyCallerAndInstitutionAccess(req: VercelRequest, targetInstitutionId?: string | null) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return { ok: false as const, status: 401, error: 'Unauthorized: Missing token' };
+  }
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token || token === 'undefined' || token === 'null') {
+    return { ok: false as const, status: 401, error: 'Unauthorized: Missing token' };
+  }
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+  if (userErr || !userData?.user) {
+    return { ok: false as const, status: 401, error: 'Unauthorized: Invalid or expired token' };
+  }
+
+  const user = userData.user;
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('id, institution_id, role')
+    .eq('id', user.id)
+    .single();
+
+  if (profileErr || !profile) {
+    return { ok: false as const, status: 403, error: 'Forbidden: Profile not found' };
+  }
+
+  const isSuperAdmin = profile.role === 'super_admin' || profile.role === 'manager';
+
+  if (!targetInstitutionId) {
+    if (isSuperAdmin) {
+      return { ok: true as const, user, profile, isSuperAdmin, resolvedInstitutionId: null as string | null };
+    }
+    return { ok: false as const, status: 400, error: 'institution_id is required' };
+  }
+
+  if (isSuperAdmin) {
+    if (!isUuidString(targetInstitutionId)) {
+      const { data: sysInst } = await supabase
+        .from('institutions')
+        .select('id')
+        .eq('name', 'SYSTEM_GLOBAL_INTERNAL')
+        .limit(1);
+      if (sysInst && sysInst.length > 0) {
+        return { ok: true as const, user, profile, isSuperAdmin, resolvedInstitutionId: sysInst[0].id as string };
+      }
+    }
+    return { ok: true as const, user, profile, isSuperAdmin, resolvedInstitutionId: targetInstitutionId };
+  }
+
+  if (!isUuidString(targetInstitutionId)) {
+    return { ok: false as const, status: 400, error: 'Invalid institution_id' };
+  }
+
+  if (profile.institution_id === targetInstitutionId) {
+    return { ok: true as const, user, profile, isSuperAdmin, resolvedInstitutionId: targetInstitutionId };
+  }
+
+  // Allow parent institution admin to operate on its child branches
+  const { data: targetInst } = await supabase
+    .from('institutions')
+    .select('id, config_json')
+    .eq('id', targetInstitutionId)
+    .maybeSingle();
+
+  const targetCfg = parseJsonObj(targetInst?.config_json);
+  if (targetCfg.parent_institution_id && targetCfg.parent_institution_id === profile.institution_id) {
+    return { ok: true as const, user, profile, isSuperAdmin, resolvedInstitutionId: targetInstitutionId };
+  }
+
+  return { ok: false as const, status: 403, error: 'Forbidden: Access denied for this institution' };
+}
+
+async function deductInstitutionBalance(institutionId: string, amount: number): Promise<number | null> {
+  const cleanAmount = Number(Number(amount || 0).toFixed(2));
+  if (!(cleanAmount > 0)) return null;
+
+  const { error: rpcErr } = await supabase.rpc('deduct_balance', {
+    p_institution_id: institutionId,
+    p_amount: cleanAmount
+  });
+
+  if (rpcErr) {
+    const { data: inst, error: fetchErr } = await supabase
+      .from('institutions')
+      .select('balance')
+      .eq('id', institutionId)
+      .single();
+    if (fetchErr || !inst) throw rpcErr;
+
+    const currentBalance = Number(inst.balance || 0);
+    const newBalance = Math.max(0, Number((currentBalance - cleanAmount).toFixed(2)));
+    const { error: updErr } = await supabase
+      .from('institutions')
+      .update({ balance: newBalance })
+      .eq('id', institutionId);
+    if (updErr) throw updErr;
+    return newBalance;
+  }
+
+  const { data: updatedInst } = await supabase
+    .from('institutions')
+    .select('balance')
+    .eq('id', institutionId)
+    .maybeSingle();
+  return updatedInst ? Number(updatedInst.balance || 0) : null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   const urlPath = url.pathname;
   const parts = urlPath.split('/').filter(Boolean);
+
+  // Ensure body is parsed if it's a string before reading action
+  if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch (e) {
+      console.warn('Failed to parse req.body as JSON in awaj API handler:', e);
+    }
+  }
   
   // Robust action detection
   let action = '';
@@ -215,15 +342,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const subAction = parts[3] || parts[2] || (req.query.id as string);
   console.log(`Awaj API: url=${req.url}, parts=${JSON.stringify(parts)}, action="${action}", subAction="${subAction}"`);
-
-  // Ensure body is parsed if it's a string
-  if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
-    try {
-      req.body = JSON.parse(req.body);
-    } catch (e) {
-      console.warn('Failed to parse req.body as JSON in awaj API handler:', e);
-    }
-  }
 
   // AUDIO PROXY STREAM (Direct audio streaming without CORS)
   if (action === 'stream' || action === 'proxy-audio') {
@@ -277,6 +395,283 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       console.error('Audio stream proxy error:', streamErr);
       return res.status(500).json({ error: streamErr.message });
+    }
+  }
+
+  // AUTHENTICATED VOICE BROADCAST & TEMPLATE DB OPERATIONS (Supports main & branch accounts cleanly)
+  if (action === 'record_broadcast') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    try {
+      const body = req.body || {};
+      const auth = await verifyCallerAndInstitutionAccess(req, body.institution_id);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+      if (!auth.resolvedInstitutionId) return res.status(400).json({ error: 'institution_id is required' });
+
+      const insertPayload: Record<string, any> = {
+        institution_id: auth.resolvedInstitutionId,
+        voice_template_id: body.voice_template_id || null,
+        total_numbers: Math.max(0, Math.floor(Number(body.total_numbers || 0))),
+        provider_campaign_id: body.provider_campaign_id ? String(body.provider_campaign_id) : null,
+        status: body.status || 'sending'
+      };
+      if (body.target_type !== undefined) insertPayload.target_type = body.target_type;
+      if (body.target_class_name !== undefined) insertPayload.target_class_name = body.target_class_name;
+      if (body.estimated_cost !== undefined && body.estimated_cost !== null) {
+        insertPayload.estimated_cost = Math.max(0, Number(Number(body.estimated_cost).toFixed(2)));
+      }
+
+      const { data: broadcast, error: insertErr } = await supabase
+        .from('voice_broadcasts')
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (insertErr) throw insertErr;
+
+      let updatedBalance: number | null = null;
+      const deductAmount = body.deduct_amount !== undefined ? Number(body.deduct_amount) : Number(body.estimated_cost || 0);
+      if (body.deduct_balance === true && deductAmount > 0) {
+        updatedBalance = await deductInstitutionBalance(auth.resolvedInstitutionId, deductAmount);
+      }
+
+      return res.status(200).json({ success: true, broadcast, balance: updatedBalance });
+    } catch (err: any) {
+      console.error('record_broadcast error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to record voice broadcast' });
+    }
+  }
+
+  if (action === 'update_broadcast') {
+    if (req.method !== 'POST' && req.method !== 'PATCH') return res.status(405).json({ error: 'Method not allowed' });
+    try {
+      const body = req.body || {};
+      const broadcastId = body.id || req.query.id;
+      if (!broadcastId || !isUuidString(String(broadcastId))) {
+        return res.status(400).json({ error: 'Valid broadcast id is required' });
+      }
+
+      const { data: existing, error: fetchErr } = await supabase
+        .from('voice_broadcasts')
+        .select('id, institution_id')
+        .eq('id', broadcastId)
+        .single();
+
+      if (fetchErr || !existing) return res.status(404).json({ error: 'Broadcast not found' });
+
+      const auth = await verifyCallerAndInstitutionAccess(req, existing.institution_id);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+      const updates: Record<string, any> = {};
+      if (body.status !== undefined) updates.status = body.status;
+      if (body.estimated_cost !== undefined) updates.estimated_cost = Number(Number(body.estimated_cost).toFixed(2));
+      if (body.retries !== undefined) updates.retries = body.retries;
+
+      let updatedBroadcast = existing;
+      if (Object.keys(updates).length > 0) {
+        const { data: updData, error: updErr } = await supabase
+          .from('voice_broadcasts')
+          .update(updates)
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (updErr) throw updErr;
+        updatedBroadcast = updData;
+      }
+
+      let updatedBalance: number | null = null;
+      const deductAmount = Number(body.deduct_amount || 0);
+      if (body.deduct_balance === true && deductAmount > 0) {
+        updatedBalance = await deductInstitutionBalance(existing.institution_id, deductAmount);
+      }
+
+      return res.status(200).json({ success: true, broadcast: updatedBroadcast, balance: updatedBalance });
+    } catch (err: any) {
+      console.error('update_broadcast error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to update broadcast' });
+    }
+  }
+
+  if (action === 'delete_broadcast') {
+    if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
+    try {
+      const broadcastId = req.body?.id || req.query.id;
+      if (!broadcastId || !isUuidString(String(broadcastId))) {
+        return res.status(400).json({ error: 'Valid broadcast id is required' });
+      }
+
+      const { data: existing, error: fetchErr } = await supabase
+        .from('voice_broadcasts')
+        .select('id, institution_id')
+        .eq('id', broadcastId)
+        .single();
+
+      if (fetchErr || !existing) return res.status(404).json({ error: 'Broadcast not found' });
+
+      const auth = await verifyCallerAndInstitutionAccess(req, existing.institution_id);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+      const { error: delErr } = await supabase
+        .from('voice_broadcasts')
+        .delete()
+        .eq('id', existing.id);
+
+      if (delErr) throw delErr;
+      return res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error('delete_broadcast error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to delete broadcast' });
+    }
+  }
+
+  if (action === 'list_broadcasts') {
+    try {
+      const requestedInstId = (req.query.institution_id || req.body?.institution_id || null) as string | null;
+      const auth = await verifyCallerAndInstitutionAccess(req, requestedInstId);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+      const fifteenDaysAgo = new Date();
+      fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+      let query = supabase
+        .from('voice_broadcasts')
+        .select('*, voice_templates(title)')
+        .gte('created_at', fifteenDaysAgo.toISOString());
+
+      const filterInstId = auth.isSuperAdmin
+        ? (requestedInstId && isUuidString(requestedInstId) ? requestedInstId : null)
+        : auth.resolvedInstitutionId;
+
+      if (filterInstId) {
+        query = query.eq('institution_id', filterInstId);
+      }
+
+      const { data: broadcasts, error: bErr } = await query
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (bErr) throw bErr;
+
+      let txQuery = supabase
+        .from('transactions')
+        .select('transaction_id, amount')
+        .eq('module', 'voice')
+        .eq('type', 'credit');
+      if (filterInstId) {
+        txQuery = txQuery.eq('institution_id', filterInstId);
+      }
+      const { data: refundTransactions } = await txQuery;
+
+      let balance: number | null = null;
+      if (filterInstId) {
+        const { data: inst } = await supabase
+          .from('institutions')
+          .select('balance')
+          .eq('id', filterInstId)
+          .maybeSingle();
+        if (inst) balance = Number(inst.balance || 0);
+      }
+
+      return res.status(200).json({
+        success: true,
+        broadcasts: broadcasts || [],
+        refundTransactions: refundTransactions || [],
+        balance
+      });
+    } catch (err: any) {
+      console.error('list_broadcasts error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to list broadcasts' });
+    }
+  }
+
+  if (action === 'wallet_balance') {
+    try {
+      const requestedInstId = (req.query.institution_id || req.body?.institution_id || null) as string | null;
+      const auth = await verifyCallerAndInstitutionAccess(req, requestedInstId);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+      if (!auth.resolvedInstitutionId) return res.status(200).json({ success: true, balance: 999999 });
+
+      const { data: inst, error: instErr } = await supabase
+        .from('institutions')
+        .select('balance, voice_sender_id, voice_rate')
+        .eq('id', auth.resolvedInstitutionId)
+        .maybeSingle();
+      if (instErr) throw instErr;
+
+      return res.status(200).json({
+        success: true,
+        balance: inst ? Number(inst.balance || 0) : 0,
+        voice_sender_id: inst?.voice_sender_id || null,
+        voice_rate: inst?.voice_rate || null
+      });
+    } catch (err: any) {
+      console.error('wallet_balance error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to fetch wallet balance' });
+    }
+  }
+
+  if (action === 'update_template') {
+    if (req.method !== 'POST' && req.method !== 'PATCH') return res.status(405).json({ error: 'Method not allowed' });
+    try {
+      const body = req.body || {};
+      const templateId = body.id;
+      const title = typeof body.title === 'string' ? body.title.trim() : '';
+      if (!templateId || !isUuidString(String(templateId)) || !title) {
+        return res.status(400).json({ error: 'Valid template id and title are required' });
+      }
+
+      const { data: existing, error: fetchErr } = await supabase
+        .from('voice_templates')
+        .select('id, institution_id')
+        .eq('id', templateId)
+        .single();
+      if (fetchErr || !existing) return res.status(404).json({ error: 'Template not found' });
+
+      const auth = await verifyCallerAndInstitutionAccess(req, existing.institution_id);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+      const { data: updated, error: updErr } = await supabase
+        .from('voice_templates')
+        .update({ title })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (updErr) throw updErr;
+
+      return res.status(200).json({ success: true, template: updated });
+    } catch (err: any) {
+      console.error('update_template error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to update voice template' });
+    }
+  }
+
+  if (action === 'delete_template') {
+    if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
+    try {
+      const templateId = req.body?.id || req.query.id;
+      if (!templateId || !isUuidString(String(templateId))) {
+        return res.status(400).json({ error: 'Valid template id is required' });
+      }
+
+      const { data: existing, error: fetchErr } = await supabase
+        .from('voice_templates')
+        .select('id, institution_id')
+        .eq('id', templateId)
+        .single();
+      if (fetchErr || !existing) return res.status(404).json({ error: 'Template not found' });
+
+      const auth = await verifyCallerAndInstitutionAccess(req, existing.institution_id);
+      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+      const { error: delErr } = await supabase
+        .from('voice_templates')
+        .delete()
+        .eq('id', existing.id);
+      if (delErr) throw delErr;
+
+      return res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error('delete_template error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to delete voice template' });
     }
   }
 
@@ -1105,48 +1500,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const authHeader = req.headers.authorization;
         if (!authHeader) return res.status(401).json({ error: 'Unauthorized: Missing token' });
         
-        const token = authHeader.replace('Bearer ', '').trim();
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
         if (!token || token === 'undefined' || token === 'null') {
           return res.status(401).json({ error: 'Unauthorized: Missing token' });
         }
 
-        let user: any = null;
-        let userId: string = '';
-
-        try {
-          const { data: userData } = await supabase.auth.getUser(token);
-          if (userData?.user) {
-            user = userData.user;
-            userId = user.id;
-          }
-        } catch (e) {}
-
-        if (!user) {
-          try {
-            const parts = token.split('.');
-            if (parts.length === 3) {
-              const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-              if (payload && payload.sub) {
-                userId = payload.sub;
-                user = { id: userId };
-              }
-            }
-          } catch (jwtErr) {}
-        }
-
-        if (!user || !userId) {
+        const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        if (userErr || !user) {
           return res.status(401).json({ error: 'Unauthorized: Invalid token' });
         }
 
         const broadcastId = req.body.broadcast_id || req.body.broadcastId;
         const campaignId = req.body.campaign_id || req.body.campaignId;
-        const providedInstitutionId = req.body.institution_id || req.body.institutionId;
 
         if (!broadcastId) {
           return res.status(400).json({ error: 'Broadcast ID is required' });
         }
 
-        const { data: profile, error: profileErr } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('institution_id, role')
           .eq('id', user.id)
@@ -1195,7 +1567,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isSuperAdmin = profile?.role === 'super_admin' || profile?.role === 'manager';
         const userInstId = profile?.institution_id;
 
-        if (!isSuperAdmin && userInstId !== broadcast.institution_id) {
+        let hasBroadcastAccess = Boolean(userInstId && userInstId === broadcast.institution_id);
+        if (!hasBroadcastAccess && !isSuperAdmin && userInstId && broadcast.institution_id) {
+          const { data: broadcastInst } = await supabase
+            .from('institutions')
+            .select('id, config_json')
+            .eq('id', broadcast.institution_id)
+            .maybeSingle();
+          const broadcastInstCfg = parseJsonObj(broadcastInst?.config_json);
+          if (broadcastInstCfg.parent_institution_id === userInstId) {
+            hasBroadcastAccess = true;
+          }
+        }
+
+        if (!isSuperAdmin && !hasBroadcastAccess) {
           return res.status(403).json({ error: 'Forbidden: Access denied to this broadcast' });
         }
 

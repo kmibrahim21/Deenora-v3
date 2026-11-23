@@ -116,7 +116,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }, [availableTabs, activeTab]);
   
   // Wallet state
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletBalance, setWalletBalance] = useState<number>(madrasah?.balance || 0);
   const processingRefundsRef = useRef<Set<string>>(new Set());
   const isFetchingHistoryRef = useRef<boolean>(false);
   const hasFetchedSendersRef = useRef(false);
@@ -196,12 +196,26 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     setIsUpdatingTitle(true);
     try {
       const cleanTitle = editingVoice.title.trim();
-      const { error } = await supabase
-        .from('voice_templates')
-        .update({ title: cleanTitle })
-        .eq('id', editingVoice.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/awaj', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'update_template', id: editingVoice.id, title: cleanTitle })
+        });
+        const resJson = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(resJson.error || 'Failed to update voice title');
+      } else {
+        const { error } = await supabase
+          .from('voice_templates')
+          .update({ title: cleanTitle })
+          .eq('id', editingVoice.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       setVoices(prev => prev.map(v => v.id === editingVoice.id ? { ...v, title: cleanTitle } : v));
 
@@ -467,8 +481,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     setIsDeleting(true);
     
     try {
-      const { error } = await supabase.from('voice_broadcasts').delete().eq('id', historyDeleteConfirm);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/awaj', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'delete_broadcast', id: historyDeleteConfirm })
+        });
+        const resJson = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(resJson.error || 'Failed to delete broadcast history');
+      } else {
+        const { error } = await supabase.from('voice_broadcasts').delete().eq('id', historyDeleteConfirm);
+        if (error) throw error;
+      }
       
       setBroadcastHistory(prev => prev.filter(h => h.id !== historyDeleteConfirm));
       if (expandedHistoryId === historyDeleteConfirm) {
@@ -669,8 +697,30 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
     
     if (targetId && isValidUUID(targetId)) {
-      const { data } = await supabase.from('institutions').select('balance').eq('id', targetId).single();
-      if (data) setWalletBalance(data.balance);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const res = await fetch(`/api/awaj?action=wallet_balance&institution_id=${encodeURIComponent(targetId)}`, {
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
+          });
+          if (res.ok) {
+            const resJson = await res.json();
+            if (typeof resJson.balance === 'number') {
+              setWalletBalance(resJson.balance);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Backend wallet_balance fallback:', err);
+      }
+
+      const { data } = await supabase.from('institutions').select('balance').eq('id', targetId).maybeSingle();
+      if (data) {
+        setWalletBalance(data.balance);
+      } else if (typeof madrasah?.balance === 'number') {
+        setWalletBalance(madrasah.balance);
+      }
     }
   };
 
@@ -828,8 +878,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         }
       }
 
-      const { error } = await supabase.from('voice_templates').delete().eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch('/api/awaj', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ action: 'delete_template', id })
+        });
+        const resJson = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(resJson.error || 'Failed to delete voice template');
+      } else {
+        const { error } = await supabase.from('voice_templates').delete().eq('id', id);
+        if (error) throw error;
+      }
       
       setVoices(voices.filter(v => v.id !== id));
       setStatusModal({
@@ -1019,27 +1083,63 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const fifteenDaysAgo = new Date();
       fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
 
-      let query = supabase
-        .from('voice_broadcasts')
-        .select('*, voice_templates(title)')
-        .gte('created_at', fifteenDaysAgo.toISOString());
-      
-      // For super admins, show all history if they are in the super admin panel (madrasah.id is 'super_admin')
-      // Otherwise filter by institution
-      if (!isSuperAdmin || (madrasah && isValidUUID(madrasah.id))) {
-        if (madrasah?.id && isValidUUID(madrasah.id)) {
-          query = query.eq('institution_id', madrasah.id);
+      let data: any[] | null = null;
+      let refundTxs: any[] | null = null;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          const params = new URLSearchParams({ action: 'list_broadcasts' });
+          if (madrasah?.id && isValidUUID(madrasah.id)) {
+            params.set('institution_id', madrasah.id);
+          }
+          const res = await fetch(`/api/awaj?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
+          });
+          if (res.ok) {
+            const resJson = await res.json();
+            if (Array.isArray(resJson.broadcasts)) {
+              data = resJson.broadcasts;
+              refundTxs = Array.isArray(resJson.refundTransactions) ? resJson.refundTransactions : [];
+              if (typeof resJson.balance === 'number') {
+                setWalletBalance(resJson.balance);
+              }
+            }
+          }
+        } catch (backendErr) {
+          console.warn('Backend list_broadcasts fallback:', backendErr);
         }
       }
-      
-      const { data } = await query.order('created_at', { ascending: false }).limit(200);
-      if (data) {
-        let instIdToFilter = madrasah?.id;
-        let txQuery = supabase.from('transactions').select('transaction_id, amount').eq('module', 'voice').eq('type', 'credit');
-        if (instIdToFilter && isValidUUID(instIdToFilter)) {
-          txQuery = txQuery.eq('institution_id', instIdToFilter);
+
+      if (!data) {
+        let query = supabase
+          .from('voice_broadcasts')
+          .select('*, voice_templates(title)')
+          .gte('created_at', fifteenDaysAgo.toISOString());
+        
+        // For super admins, show all history if they are in the super admin panel (madrasah.id is 'super_admin')
+        // Otherwise filter by institution
+        if (!isSuperAdmin || (madrasah && isValidUUID(madrasah.id))) {
+          if (madrasah?.id && isValidUUID(madrasah.id)) {
+            query = query.eq('institution_id', madrasah.id);
+          }
         }
-        const { data: refundTxs } = await txQuery;
+        
+        const { data: localData } = await query.order('created_at', { ascending: false }).limit(200);
+        data = localData || null;
+      }
+
+      if (data) {
+        if (!refundTxs) {
+          let instIdToFilter = madrasah?.id;
+          let txQuery = supabase.from('transactions').select('transaction_id, amount').eq('module', 'voice').eq('type', 'credit');
+          if (instIdToFilter && isValidUUID(instIdToFilter)) {
+            txQuery = txQuery.eq('institution_id', instIdToFilter);
+          }
+          const { data: localRefundTxs } = await txQuery;
+          refundTxs = localRefundTxs || [];
+        }
+
         const refundMap: { [campId: string]: number } = {};
         if (refundTxs) {
           refundTxs.forEach(tx => {
@@ -1114,7 +1214,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               }
 
               if (newStatus !== broadcast.status) {
-                await supabase.from('voice_broadcasts').update({ status: newStatus }).eq('id', broadcast.id);
+                if (session?.access_token) {
+                  await fetch('/api/awaj', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                      action: 'update_broadcast',
+                      id: broadcast.id,
+                      status: newStatus
+                    })
+                  });
+                } else {
+                  await supabase.from('voice_broadcasts').update({ status: newStatus }).eq('id', broadcast.id);
+                }
                 
                 if (newStatus === 'completed' || newStatus === 'failed') {
                    handleClaimRefundAuto(broadcast.id, activeCampaignId);
@@ -1329,31 +1444,58 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const result = await response.json();
       const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
 
-      // Save to Supabase (update existing record to include new retry campaign and add cost/numbers)
-      // We will append the new campaign ID to the retries array
+      // Save to Supabase via authenticated backend endpoint (supports main & branch accounts)
       const currentRetries = broadcast.retries || [];
       const newRetries = [...currentRetries, campaignId];
+      const { data: { session } } = await supabase.auth.getSession();
 
-      const { error } = await supabase.from('voice_broadcasts')
-        .update({
-          status: 'sending',
-          estimated_cost: broadcast.estimated_cost + estimatedCost,
-          retries: newRetries
-        })
-        .eq('id', broadcast.id);
-
-      if (error) throw error;
-
-      // Deduct balance
-      const { error: deductError } = await supabase.rpc('deduct_balance', {
-        p_institution_id: madrasah?.id,
-        p_amount: estimatedCost
-      });
-      
-      if (deductError) {
-        console.error('Failed to deduct balance:', deductError);
+      if (session?.access_token) {
+        const updateRes = await fetch('/api/awaj', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            action: 'update_broadcast',
+            id: broadcast.id,
+            status: 'sending',
+            estimated_cost: Number(broadcast.estimated_cost || 0) + estimatedCost,
+            retries: newRetries,
+            deduct_balance: true,
+            deduct_amount: estimatedCost
+          })
+        });
+        const updateJson = await updateRes.json().catch(() => ({}));
+        if (!updateRes.ok) {
+          throw new Error(updateJson.error || 'Failed to update retry broadcast');
+        }
+        if (typeof updateJson.balance === 'number') {
+          setWalletBalance(updateJson.balance);
+        } else {
+          setWalletBalance(prev => Math.max(0, prev - estimatedCost));
+        }
       } else {
-        setWalletBalance(prev => prev - estimatedCost);
+        const { error } = await supabase.from('voice_broadcasts')
+          .update({
+            status: 'sending',
+            estimated_cost: broadcast.estimated_cost + estimatedCost,
+            retries: newRetries
+          })
+          .eq('id', broadcast.id);
+
+        if (error) throw error;
+
+        const { error: deductError } = await supabase.rpc('deduct_balance', {
+          p_institution_id: madrasah?.id,
+          p_amount: estimatedCost
+        });
+        
+        if (deductError) {
+          console.error('Failed to deduct balance:', deductError);
+        } else {
+          setWalletBalance(prev => prev - estimatedCost);
+        }
       }
 
       setStatusModal({ show: true, title: 'Success', type: 'success', message: `Successfully initiated retry for ${phoneNumbers.length} calls.` });
@@ -1820,36 +1962,66 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       console.log('Broadcast creation result:', result);
       const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
 
-      // 2. Save to Supabase
+      // 2. Save to Supabase & deduct balance via authenticated backend endpoint (immune to branch RLS)
       let saveInstId = madrasah.id;
-      if (isSuperAdmin && !isValidUUID(saveInstId)) {
-        // Find system institution ID as fallback
-        const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
-        if (sysInst && sysInst.length > 0) {
-          saveInstId = sysInst[0].id;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        const recordRes = await fetch('/api/awaj', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            action: 'record_broadcast',
+            institution_id: saveInstId,
+            voice_template_id: selectedVoiceId,
+            target_type: 'students',
+            target_class_name: targetClassName,
+            total_numbers: finalCount,
+            estimated_cost: finalEstimatedCost,
+            provider_campaign_id: campaignId,
+            status: 'sending',
+            deduct_balance: true,
+            deduct_amount: finalEstimatedCost
+          })
+        });
+        const recordJson = await recordRes.json().catch(() => ({}));
+        if (!recordRes.ok) {
+          throw new Error(recordJson.error || 'Failed to record voice broadcast');
         }
+        if (typeof recordJson.balance === 'number') {
+          setWalletBalance(recordJson.balance);
+        }
+      } else {
+        if (isSuperAdmin && !isValidUUID(saveInstId)) {
+          const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+          if (sysInst && sysInst.length > 0) {
+            saveInstId = sysInst[0].id;
+          }
+        }
+
+        const { error } = await supabase.from('voice_broadcasts').insert({
+          institution_id: saveInstId,
+          voice_template_id: selectedVoiceId,
+          target_type: 'students',
+          target_class_name: targetClassName,
+          total_numbers: finalCount,
+          estimated_cost: finalEstimatedCost,
+          provider_campaign_id: campaignId,
+          status: 'sending'
+        });
+
+        if (error) throw error;
+
+        const { error: deductError } = await supabase.rpc('deduct_balance', {
+          p_institution_id: saveInstId,
+          p_amount: finalEstimatedCost
+        });
+        
+        if (deductError) throw deductError;
       }
-
-      const { error } = await supabase.from('voice_broadcasts').insert({
-        institution_id: saveInstId,
-        voice_template_id: selectedVoiceId,
-        target_type: 'students',
-        target_class_name: targetClassName,
-        total_numbers: finalCount,
-        estimated_cost: finalEstimatedCost,
-        provider_campaign_id: campaignId,
-        status: 'sending'
-      });
-
-      if (error) throw error;
-
-      // 3. Deduct balance from institution
-      const { error: deductError } = await supabase.rpc('deduct_balance', {
-        p_institution_id: saveInstId,
-        p_amount: finalEstimatedCost
-      });
-      
-      if (deductError) throw deductError;
 
       setStatusModal({
         show: true,

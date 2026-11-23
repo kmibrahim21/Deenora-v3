@@ -668,6 +668,22 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       (q: any) => q.select('*').eq('institution_id', madrasah.id).order('created_at', { ascending: false }),
       `voice_templates:${madrasah.id}:all`
     );
+    if (data && data.length > 0) {
+      setVoiceTemplates(data);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/awaj?action=templates&institution_id=${encodeURIComponent(madrasah.id)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.templates)) {
+          setVoiceTemplates(json.templates);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Backend voice templates fallback error:', e);
+    }
     if (data) setVoiceTemplates(data);
   };
 
@@ -1781,7 +1797,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             `institution_voice_sender:${madrasah.id}`,
             CACHE_TTLS.LONG
           );
-          let sNumber = instData?.voice_sender_id || '';
+          let sNumber = instData?.voice_sender_id || madrasah.voice_sender_id || '';
           
           if (!sNumber) {
             // Fallback: try to fetch first available sender from API
@@ -1843,27 +1859,59 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           const result = await response.json();
           const campaignId = result.broadcast?.id || result.id || requestId;
 
-          // Log to database
-          await supabase.from('voice_broadcasts').insert({
-            institution_id: madrasah.id,
-            voice_template_id: voice.id,
-            target_type: 'students',
-            target_class_name: customClassName || selectedClass?.class_name || 'Attendance Class',
-            total_numbers: phoneNumbers.length,
-            estimated_cost: estimatedCost,
-            status: 'sending',
-            provider_campaign_id: campaignId
-          });
+          // Log to database & deduct balance via authenticated backend endpoint (supports main & branch accounts)
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            const recordRes = await fetch('/api/awaj', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+              },
+              body: JSON.stringify({
+                action: 'record_broadcast',
+                institution_id: madrasah.id,
+                voice_template_id: voice.id,
+                target_type: 'students',
+                target_class_name: customClassName || selectedClass?.class_name || 'Attendance Class',
+                total_numbers: phoneNumbers.length,
+                estimated_cost: estimatedCost,
+                status: 'sending',
+                provider_campaign_id: campaignId,
+                deduct_balance: true,
+                deduct_amount: estimatedCost
+              })
+            });
+            const recordJson = await recordRes.json().catch(() => ({}));
+            if (!recordRes.ok) {
+              throw new Error(recordJson.error || 'Failed to record voice broadcast');
+            }
+            if (typeof recordJson.balance === 'number') {
+              setWalletBalance(recordJson.balance);
+            } else {
+              setWalletBalance(prev => Math.max(0, prev - estimatedCost));
+            }
+          } else {
+            const { error: insertErr } = await supabase.from('voice_broadcasts').insert({
+              institution_id: madrasah.id,
+              voice_template_id: voice.id,
+              target_type: 'students',
+              target_class_name: customClassName || selectedClass?.class_name || 'Attendance Class',
+              total_numbers: phoneNumbers.length,
+              estimated_cost: estimatedCost,
+              status: 'sending',
+              provider_campaign_id: campaignId
+            });
+            if (insertErr) throw insertErr;
 
-          // Deduct balance
-          const { error: deductError } = await supabase.rpc('deduct_balance', {
-            p_institution_id: madrasah.id,
-            p_amount: estimatedCost
-          });
+            const { error: deductError } = await supabase.rpc('deduct_balance', {
+              p_institution_id: madrasah.id,
+              p_amount: estimatedCost
+            });
 
-          if (deductError) console.error('Error deducting balance:', deductError);
-          
-          setWalletBalance(prev => prev - estimatedCost);
+            if (deductError) console.error('Error deducting balance:', deductError);
+            setWalletBalance(prev => prev - estimatedCost);
+          }
           
           setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
           setSuccessMessage(lang === 'bn' ? `${absents.length} জন অভিভাবককে ভয়েস কল রিকোয়েস্ট পাঠানো হয়েছে।` : `Voice call request sent to ${absents.length} guardians.`);
