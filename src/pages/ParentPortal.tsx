@@ -78,6 +78,7 @@ import { hardReload } from 'utils/reloadUtils';
 import { generateResultPDF } from 'utils/pdfGenerator';
 import { NotificationService, AppNotification } from '../services/NotificationService';
 import { DEPT_LABELS, GRADE_LABELS, SABQI_LABELS, TILAWAT_LABELS } from '../utils/hifzReportPdf';
+import { computeHifzParaProgress } from '../utils/studentExtraFields';
 
 const toBanglaNum = (num: any): string => {
   if (num === null || num === undefined) return '';
@@ -989,53 +990,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   }, [modules.hifz_tracker, hifzRecords.length]);
 
   const hifzParaProgress = useMemo(() => {
-    const latestWithPara = hifzRecords.find(
-      (r) => r.para_no != null && Number(r.para_no) >= 1 && Number(r.para_no) <= 30
-    );
-    const currentPara = latestWithPara ? Number(latestWithPara.para_no) : null;
-
-    const paraMaxPage: Record<number, number> = {};
-    const paraVisited = new Set<number>();
-
-    for (const rec of hifzRecords) {
-      const p = Number(rec.para_no);
-      if (p >= 1 && p <= 30) {
-        paraVisited.add(p);
-        const pg = Math.max(Number(rec.page_to || 0), Number(rec.page_from || 0));
-        if (pg > (paraMaxPage[p] || 0)) {
-          paraMaxPage[p] = pg;
-        }
-      }
-    }
-
-    const paras = Array.from({ length: 30 }, (_, idx) => {
-      const paraNo = idx + 1;
-      let status: 'completed' | 'current' | 'remaining' = 'remaining';
-      if (currentPara !== null) {
-        if (paraNo === currentPara) {
-          status = 'current';
-        } else if (paraVisited.has(paraNo)) {
-          status = 'completed';
-        } else if (paraNo < currentPara && currentPara <= 28) {
-          status = 'completed';
-        }
-      }
-      return {
-        paraNo,
-        status,
-        maxPage: paraMaxPage[paraNo] || 0,
-      };
-    });
-
-    const completedParasCount = paras.filter((p) => p.status === 'completed').length;
+    const base = computeHifzParaProgress(hifzRecords, student);
     return {
-      paras,
-      currentPara,
-      completedParasCount,
-      currentParaPage: currentPara ? paraMaxPage[currentPara] || 0 : 0,
+      ...base,
       latestRecord: hifzRecords[0] || null,
     };
-  }, [hifzRecords]);
+  }, [hifzRecords, student]);
 
   const recentActivities = useMemo(() => {
     const latestHifz = hifzRecords[0];
@@ -3419,7 +3379,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                     </div>
 
                     {/* 30-Para Visual Progress Grid */}
-                    {hifzRecords.some((r) => r.para_no != null) && (
+                    {(hifzRecords.some((r) => r.para_no != null) || hifzParaProgress.completedParasCount > 0) && (
                       <div className="bg-white border border-slate-100 rounded-[2rem] p-4 sm:p-5 shadow-soft space-y-3">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
@@ -3452,11 +3412,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                               }`}
                             >
                               <span>{toBanglaNum(p.paraNo)}</span>
-                              {p.status === 'current' && p.maxPage > 0 && (
+                              {p.status === 'completed' ? (
+                                <Check size={10} className="text-emerald-600 leading-none" />
+                              ) : p.status === 'current' && p.maxPage > 0 ? (
                                 <span className="text-[8px] font-bold text-blue-100 leading-none">
                                   পৃঃ {toBanglaNum(p.maxPage)}
                                 </span>
-                              )}
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -3587,7 +3549,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   <p className="text-[10px] font-bold text-slate-400">আমুখতা (দোহরানি)</p>
                                   <p className="text-xs font-black text-slate-800 mt-0.5">
                                     {[
-                                      rec.amukhta_para ? `পারা ${toBanglaNum(rec.amukhta_para)}` : '',
+                                      rec.amukhta_para
+                                        ? /^(পারা|para|p\.)/i.test(String(rec.amukhta_para).trim())
+                                          ? toBanglaNum(String(rec.amukhta_para).trim())
+                                          : `পারা ${toBanglaNum(rec.amukhta_para)}`
+                                        : '',
                                       rec.amukhta_amount ? toBanglaNum(rec.amukhta_amount) : '',
                                     ].filter(Boolean).join(' · ') || '—'}
                                   </p>
@@ -3598,17 +3564,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 <div className="flex items-center gap-2 flex-wrap">
                                   {rec.tilawat_status === 'done' && (
                                     <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black">
-                                      দৈনিক তেলাওয়াত: {rec.tilawat_amount || TILAWAT_LABELS.done.bn}
+                                      দৈনিক তেলাওয়াত: {rec.tilawat_amount ? toBanglaNum(rec.tilawat_amount) : TILAWAT_LABELS.done.bn}
                                     </span>
                                   )}
                                   {rec.tilawat_status === 'partial' && (
                                     <span className="px-2.5 py-1 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-black">
-                                      দৈনিক তেলাওয়াত: {rec.tilawat_amount || TILAWAT_LABELS.partial.bn}
+                                      দৈনিক তেলাওয়াত: {rec.tilawat_amount ? toBanglaNum(rec.tilawat_amount) : TILAWAT_LABELS.partial.bn}
                                     </span>
                                   )}
                                   {rec.sabina_completed === true && (
                                     <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-black">
-                                      🌟 সাপ্তাহিক সবিনা: {rec.sabina_paras || 'সম্পন্ন'}
+                                      🌟 সাপ্তাহিক সবিনা: {rec.sabina_paras ? toBanglaNum(rec.sabina_paras) : 'সম্পন্ন'}
                                       {rec.sabina_grade && GRADE_LABELS[rec.sabina_grade]
                                         ? ` (${GRADE_LABELS[rec.sabina_grade].bn})`
                                         : ''}

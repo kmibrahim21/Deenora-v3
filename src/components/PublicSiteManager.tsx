@@ -25,6 +25,11 @@ import {
   Calendar,
   Building2,
   Clock,
+  Camera,
+  Image as ImageIcon,
+  Megaphone,
+  Quote,
+  Upload,
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language } from 'types';
@@ -36,10 +41,17 @@ import { requestManager } from 'services/RequestManager';
 interface PublicSiteFormState {
   admission_open: boolean;
   admission_note: string;
+  hero_image_url: string;
+  ticker_text: string;
   tagline: string;
   about: string;
   established_year: string;
   office_hours: string;
+  principal_name: string;
+  principal_title: string;
+  principal_message: string;
+  principal_photo_url: string;
+  gallery_urls: string[];
   facebook_url: string;
   youtube_url: string;
   map_url: string;
@@ -48,10 +60,17 @@ interface PublicSiteFormState {
 const DEFAULT_PUBLIC_SITE_FORM: PublicSiteFormState = {
   admission_open: true,
   admission_note: '',
+  hero_image_url: '',
+  ticker_text: '',
   tagline: '',
   about: '',
   established_year: '',
   office_hours: '',
+  principal_name: '',
+  principal_title: '',
+  principal_message: '',
+  principal_photo_url: '',
+  gallery_urls: [],
   facebook_url: '',
   youtube_url: '',
   map_url: '',
@@ -73,13 +92,26 @@ function parseConfigJson(raw: any): Record<string, any> {
 function extractPublicSiteForm(rawConfig: any): PublicSiteFormState {
   const cfg = parseConfigJson(rawConfig);
   const ps = cfg?.public_site && typeof cfg.public_site === 'object' ? cfg.public_site : {};
+  const gallery = Array.isArray(ps.gallery_urls)
+    ? ps.gallery_urls
+        .filter((u: any) => typeof u === 'string' && u.trim())
+        .map((u: string) => u.trim())
+        .slice(0, 4)
+    : [];
   return {
     admission_open: ps.admission_open !== false,
     admission_note: typeof ps.admission_note === 'string' ? ps.admission_note : '',
+    hero_image_url: typeof ps.hero_image_url === 'string' ? ps.hero_image_url : '',
+    ticker_text: typeof ps.ticker_text === 'string' ? ps.ticker_text : '',
     tagline: typeof ps.tagline === 'string' ? ps.tagline : '',
     about: typeof ps.about === 'string' ? ps.about : '',
     established_year: typeof ps.established_year === 'string' ? ps.established_year : '',
     office_hours: typeof ps.office_hours === 'string' ? ps.office_hours : '',
+    principal_name: typeof ps.principal_name === 'string' ? ps.principal_name : '',
+    principal_title: typeof ps.principal_title === 'string' ? ps.principal_title : '',
+    principal_message: typeof ps.principal_message === 'string' ? ps.principal_message : '',
+    principal_photo_url: typeof ps.principal_photo_url === 'string' ? ps.principal_photo_url : '',
+    gallery_urls: gallery,
     facebook_url: typeof ps.facebook_url === 'string' ? ps.facebook_url : '',
     youtube_url: typeof ps.youtube_url === 'string' ? ps.youtube_url : '',
     map_url: typeof ps.map_url === 'string' ? ps.map_url : '',
@@ -98,6 +130,62 @@ function validateOptionalHttpUrl(raw: string): { valid: boolean; cleaned: string
   } catch {
     return { valid: false, cleaned: trimmed };
   }
+}
+
+async function compressImage(
+  file: File,
+  maxWidth = 900,
+  maxBytes = 75 * 1024
+): Promise<{ dataUrl: string; sizeKB: number }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('ছবি পড়া সম্ভব হয়নি'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('সঠিক ছবি ফাইল নির্বাচন করুন'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('ব্রাউজার ক্যানভাস সাপোর্ট করছে না'));
+          return;
+        }
+
+        let targetWidth = Math.min(maxWidth, img.width || maxWidth);
+        let quality = 0.84;
+        let dataUrl = '';
+        let byteSize = Infinity;
+
+        for (let step = 0; step < 10; step++) {
+          const scale = img.width > 0 ? Math.min(1, targetWidth / img.width) : 1;
+          const w = Math.max(120, Math.round((img.width || targetWidth) * scale));
+          const h = Math.max(120, Math.round((img.height || targetWidth) * scale));
+          canvas.width = w;
+          canvas.height = h;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+          const commaIdx = dataUrl.indexOf(',');
+          const b64 = commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+          byteSize = Math.ceil((b64.length * 3) / 4);
+
+          if (byteSize <= maxBytes) break;
+
+          if (quality > 0.45) {
+            quality = Number((quality - 0.12).toFixed(2));
+          } else {
+            targetWidth = Math.round(targetWidth * 0.78);
+          }
+        }
+
+        resolve({ dataUrl, sizeKB: Math.max(1, Math.round(byteSize / 1024)) });
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export interface OnlineAdmissionRow {
@@ -177,6 +265,7 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
   );
   const [savingSiteInfo, setSavingSiteInfo] = useState<boolean>(false);
   const [confirmResetSite, setConfirmResetSite] = useState<boolean>(false);
+  const [uploadingTarget, setUploadingTarget] = useState<'hero' | 'principal' | 'gallery' | null>(null);
 
   useEffect(() => {
     setSiteForm(extractPublicSiteForm(madrasah?.config_json));
@@ -366,10 +455,19 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
       const sanitizedForm: PublicSiteFormState = {
         admission_open: Boolean(nextFields.admission_open),
         admission_note: nextFields.admission_note.trim().slice(0, 240),
+        hero_image_url: nextFields.hero_image_url.trim(),
+        ticker_text: nextFields.ticker_text.trim().slice(0, 220),
         tagline: nextFields.tagline.trim().slice(0, 300),
         about: nextFields.about.trim().slice(0, 2500),
         established_year: nextFields.established_year.trim().slice(0, 30),
         office_hours: nextFields.office_hours.trim().slice(0, 120),
+        principal_name: nextFields.principal_name.trim().slice(0, 120),
+        principal_title: nextFields.principal_title.trim().slice(0, 120),
+        principal_message: nextFields.principal_message.trim().slice(0, 1200),
+        principal_photo_url: nextFields.principal_photo_url.trim(),
+        gallery_urls: (nextFields.gallery_urls || [])
+          .filter((u) => typeof u === 'string' && u.trim())
+          .slice(0, 4),
         facebook_url: fbCheck.cleaned,
         youtube_url: ytCheck.cleaned,
         map_url: mapCheck.cleaned,
@@ -412,6 +510,9 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
         }
       }
 
+      if (madrasah && typeof madrasah === 'object') {
+        (madrasah as any).config_json = nextConfig;
+      }
       requestManager.invalidatePattern(`institution:${madrasah.id}`);
       setSiteForm(sanitizedForm);
       setConfirmResetSite(false);
@@ -442,9 +543,98 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
     await persistPublicSiteConfig(
       { ...DEFAULT_PUBLIC_SITE_FORM },
       isBn
-        ? 'ওয়েবসাইটের কাস্টম তথ্য মুছে ডিফল্ট করা হয়েছে।'
-        : 'Website content reset to defaults.'
+        ? 'ওয়েবসাইটের কাস্টম তথ্য ও ছবি মুছে ডিফল্ট করা হয়েছে।'
+        : 'Website content and photos reset to defaults.'
     );
+  };
+
+  const handleUploadHeroImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showNotice(isBn ? 'শুধুমাত্র ছবি ফাইল নির্বাচন করুন।' : 'Please select an image file.', 'error');
+      return;
+    }
+    setUploadingTarget('hero');
+    try {
+      const { dataUrl, sizeKB } = await compressImage(file, 900, 75 * 1024);
+      setSiteForm((prev) => ({ ...prev, hero_image_url: dataUrl }));
+      showNotice(
+        isBn
+          ? `হিরো ছবি প্রস্তুত (${toBnDigit(sizeKB)} KB) — সংরক্ষণ করুন বাটনে চাপ দিন`
+          : `Hero photo ready (${sizeKB} KB) — click Save`,
+        'success'
+      );
+    } catch (err: any) {
+      showNotice(err?.message || (isBn ? 'ছবি আপলোড করা যায়নি।' : 'Image compression failed.'), 'error');
+    } finally {
+      setUploadingTarget(null);
+    }
+  };
+
+  const handleUploadPrincipalPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showNotice(isBn ? 'শুধুমাত্র ছবি ফাইল নির্বাচন করুন।' : 'Please select an image file.', 'error');
+      return;
+    }
+    setUploadingTarget('principal');
+    try {
+      const { dataUrl, sizeKB } = await compressImage(file, 600, 65 * 1024);
+      setSiteForm((prev) => ({ ...prev, principal_photo_url: dataUrl }));
+      showNotice(
+        isBn
+          ? `মুহতামিমের ছবি প্রস্তুত (${toBnDigit(sizeKB)} KB) — সংরক্ষণ করুন বাটনে চাপ দিন`
+          : `Principal photo ready (${sizeKB} KB) — click Save`,
+        'success'
+      );
+    } catch (err: any) {
+      showNotice(err?.message || (isBn ? 'ছবি আপলোড করা যায়নি।' : 'Image compression failed.'), 'error');
+    } finally {
+      setUploadingTarget(null);
+    }
+  };
+
+  const handleUploadGalleryPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    const remainingSlots = Math.max(0, 4 - siteForm.gallery_urls.length);
+    if (remainingSlots <= 0) {
+      showNotice(isBn ? 'সর্বোচ্চ ৪টি গ্যালারি ছবি যোগ করা যাবে।' : 'Maximum 4 gallery photos allowed.', 'error');
+      return;
+    }
+
+    setUploadingTarget('gallery');
+    try {
+      const selected = files.filter((f) => f.type.startsWith('image/')).slice(0, remainingSlots);
+      if (selected.length === 0) {
+        throw new Error(isBn ? 'সঠিক ছবি ফাইল নির্বাচন করুন।' : 'Select valid image files.');
+      }
+      const compressed: string[] = [];
+      for (const file of selected) {
+        const { dataUrl } = await compressImage(file, 900, 60 * 1024);
+        compressed.push(dataUrl);
+      }
+      setSiteForm((prev) => ({
+        ...prev,
+        gallery_urls: [...prev.gallery_urls, ...compressed].slice(0, 4),
+      }));
+      showNotice(
+        isBn
+          ? `${toBnDigit(compressed.length)}টি গ্যালারি ছবি যুক্ত হয়েছে — সংরক্ষণ করুন বাটনে চাপ দিন`
+          : `Added ${compressed.length} gallery photo(s) — click Save`,
+        'success'
+      );
+    } catch (err: any) {
+      showNotice(err?.message || (isBn ? 'গ্যালারি ছবি প্রসেস করা যায়নি।' : 'Failed to process gallery image.'), 'error');
+    } finally {
+      setUploadingTarget(null);
+    }
   };
 
   const handleCopyLink = async () => {
@@ -807,16 +997,16 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
             </div>
             <div className="min-w-0">
               <h4 className={`text-sm sm:text-base font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                {isBn ? 'ওয়েবসাইটের তথ্য এডিট করুন' : 'Edit Website Info'}
+                {isBn ? 'ওয়েবসাইটের তথ্য ও ছবি এডিট করুন' : 'Edit Website Content & Photos'}
               </h4>
               <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
                 {siteForm.admission_open
                   ? isBn
-                    ? 'অনলাইন ভর্তি চালু আছে · ট্যাগলাইন, পরিচিতি ও যোগাযোগ লিংক আপডেট করুন'
-                    : 'Admissions open · Update tagline, about & contact links'
+                    ? 'ভর্তি চালু · হিরো ছবি, টিকার, মুহতামিমের বাণী ও গ্যালারি আপডেট করুন'
+                    : 'Admissions open · Update hero photo, ticker, principal message & gallery'
                   : isBn
-                    ? 'অনলাইন ভর্তি বর্তমানে বন্ধ · এখান থেকে স্ট্যাটাস ও তথ্য পরিবর্তন করুন'
-                    : 'Admissions closed · Update status & website content'}
+                    ? 'ভর্তি বন্ধ · এখান থেকে স্ট্যাটাস, ছবি ও ওয়েবসাইটের তথ্য পরিবর্তন করুন'
+                    : 'Admissions closed · Update status, photos & website content'}
               </p>
             </div>
           </div>
@@ -926,7 +1116,118 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
               />
             </div>
 
-            {/* 3. Tagline */}
+            {/* 3. Hero Campus Photo */}
+            <div
+              className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                isDark ? 'bg-slate-900/60 border-slate-700' : 'bg-slate-50/80 border-slate-200/80'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-200">
+                  <ImageIcon size={14} className="text-[#2563EB]" />
+                  <span>{isBn ? 'হিরো ক্যাম্পাস ছবি' : 'Hero Campus Photo'}</span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {isBn ? 'অটো কমপ্রেস (<= ৭৫ KB)' : 'Auto <= 75KB'}
+                </span>
+              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div
+                  className={`w-full sm:w-32 h-20 rounded-xl border overflow-hidden flex items-center justify-center shrink-0 ${
+                    isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  {siteForm.hero_image_url && isSafeImageSrc(siteForm.hero_image_url) ? (
+                    <img
+                      src={siteForm.hero_image_url}
+                      alt="Hero Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Camera size={20} className="text-slate-400" />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadHeroImage}
+                    className="hidden"
+                    id="public-site-hero-upload"
+                  />
+                  <label
+                    htmlFor="public-site-hero-upload"
+                    className={`h-9 px-3.5 rounded-xl border text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-[#2563EB]'
+                    }`}
+                  >
+                    {uploadingTarget === 'hero' ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Upload size={14} />
+                    )}
+                    <span>
+                      {siteForm.hero_image_url
+                        ? isBn
+                          ? 'ছবি পরিবর্তন করুন'
+                          : 'Change Photo'
+                        : isBn
+                          ? 'হিরো ছবি আপলোড'
+                          : 'Upload Hero Photo'}
+                    </span>
+                  </label>
+                  {siteForm.hero_image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setSiteForm((prev) => ({ ...prev, hero_image_url: '' }))}
+                      className="h-9 px-3 rounded-xl border border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 text-xs font-black inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      <span>{isBn ? 'ছবি ডিলিট' : 'Delete Photo'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Top Notice Ticker */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-black text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
+                  <Megaphone size={13} className="text-[#059669]" />
+                  <span>{isBn ? 'টপ নোটিশ টিকার (ঐচ্ছিক)' : 'Top Notice Ticker'}</span>
+                </label>
+                {siteForm.ticker_text && (
+                  <button
+                    type="button"
+                    onClick={() => setSiteForm((prev) => ({ ...prev, ticker_text: '' }))}
+                    className="text-[11px] font-bold text-rose-500 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <X size={12} />
+                    <span>{isBn ? 'মুছুন' : 'Clear'}</span>
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                value={siteForm.ticker_text}
+                onChange={(e) => setSiteForm((prev) => ({ ...prev, ticker_text: e.target.value }))}
+                placeholder={
+                  isBn
+                    ? 'যেমন: ২০২৬ শিক্ষাবর্ষের সকল বিভাগে অনলাইন ভর্তি আবেদন চলছে!'
+                    : 'Announcement shown in the top marquee bar'
+                }
+                className={`w-full h-10 px-3.5 rounded-xl border text-xs sm:text-sm font-bold outline-none focus:ring-2 focus:ring-[#2563EB] transition-all ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white placeholder:text-slate-400'
+                }`}
+              />
+            </div>
+
+            {/* 5. Tagline */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-xs font-black text-slate-700 dark:text-slate-300">
@@ -960,41 +1261,7 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
               />
             </div>
 
-            {/* 4. About Institution */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-black text-slate-700 dark:text-slate-300">
-                  {isBn ? 'প্রতিষ্ঠানের পরিচিতি / মুহতামিমের বাণী' : 'About Institution'}
-                </label>
-                {siteForm.about && (
-                  <button
-                    type="button"
-                    onClick={() => setSiteForm((prev) => ({ ...prev, about: '' }))}
-                    className="text-[11px] font-bold text-rose-500 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <X size={12} />
-                    <span>{isBn ? 'মুছুন' : 'Clear'}</span>
-                  </button>
-                )}
-              </div>
-              <textarea
-                rows={4}
-                value={siteForm.about}
-                onChange={(e) => setSiteForm((prev) => ({ ...prev, about: e.target.value }))}
-                placeholder={
-                  isBn
-                    ? 'প্রতিষ্ঠানের লক্ষ্য, শিক্ষা ব্যবস্থা, আবাসিক সুবিধা বা মুহতামিমের সংক্ষিপ্ত বাণী লিখুন...'
-                    : 'Write a short introduction about your institution...'
-                }
-                className={`w-full p-3.5 rounded-xl border text-xs sm:text-sm font-medium leading-relaxed outline-none focus:ring-2 focus:ring-[#2563EB] transition-all resize-y ${
-                  isDark
-                    ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
-                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white placeholder:text-slate-400'
-                }`}
-              />
-            </div>
-
-            {/* 5 & 6. Established Year & Office Hours */}
+            {/* 6. Established Year & Office Hours */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
@@ -1054,6 +1321,265 @@ export const PublicSiteManager: React.FC<PublicSiteManagerProps> = ({
                   }`}
                 />
               </div>
+            </div>
+
+            {/* 7. About Institution */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-black text-slate-700 dark:text-slate-300">
+                  {isBn ? 'প্রতিষ্ঠান পরিচিতি' : 'About Institution'}
+                </label>
+                {siteForm.about && (
+                  <button
+                    type="button"
+                    onClick={() => setSiteForm((prev) => ({ ...prev, about: '' }))}
+                    className="text-[11px] font-bold text-rose-500 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <X size={12} />
+                    <span>{isBn ? 'মুছুন' : 'Clear'}</span>
+                  </button>
+                )}
+              </div>
+              <textarea
+                rows={4}
+                value={siteForm.about}
+                onChange={(e) => setSiteForm((prev) => ({ ...prev, about: e.target.value }))}
+                placeholder={
+                  isBn
+                    ? 'প্রতিষ্ঠানের লক্ষ্য, শিক্ষা ব্যবস্থা ও আবাসিক সুযোগ-সুবিধা সম্পর্কে লিখুন...'
+                    : 'Write a short introduction about your institution...'
+                }
+                className={`w-full p-3.5 rounded-xl border text-xs sm:text-sm font-medium leading-relaxed outline-none focus:ring-2 focus:ring-[#2563EB] transition-all resize-y ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white placeholder:text-slate-400'
+                }`}
+              />
+            </div>
+
+            {/* 8. Principal / Muhtamim Message & Photo */}
+            <div
+              className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+                isDark ? 'bg-slate-900/60 border-slate-700' : 'bg-blue-50/40 border-blue-100'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 text-xs font-black text-[#1E3A8A] dark:text-blue-300">
+                <Quote size={14} className="text-[#2563EB]" />
+                <span>{isBn ? 'মুহতামিম / প্রতিষ্ঠান প্রধানের বাণী ও ছবি' : "Principal's Message & Photo"}</span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div
+                  className={`w-16 h-16 rounded-2xl border overflow-hidden flex items-center justify-center shrink-0 ${
+                    isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  {siteForm.principal_photo_url && isSafeImageSrc(siteForm.principal_photo_url) ? (
+                    <img
+                      src={siteForm.principal_photo_url}
+                      alt="Principal"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User size={22} className="text-slate-400" />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadPrincipalPhoto}
+                    className="hidden"
+                    id="public-site-principal-upload"
+                  />
+                  <label
+                    htmlFor="public-site-principal-upload"
+                    className={`h-9 px-3 rounded-xl border text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-[#2563EB]'
+                    }`}
+                  >
+                    {uploadingTarget === 'principal' ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Camera size={14} />
+                    )}
+                    <span>
+                      {siteForm.principal_photo_url
+                        ? isBn
+                          ? 'ছবি পরিবর্তন'
+                          : 'Change Photo'
+                        : isBn
+                          ? 'প্রধানের ছবি আপলোড'
+                          : 'Upload Photo'}
+                    </span>
+                  </label>
+                  {siteForm.principal_photo_url && (
+                    <button
+                      type="button"
+                      onClick={() => setSiteForm((prev) => ({ ...prev, principal_photo_url: '' }))}
+                      className="h-9 px-3 rounded-xl border border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 text-xs font-black inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      <span>{isBn ? 'ছবি ডিলিট' : 'Delete Photo'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    {isBn ? 'প্রতিষ্ঠান প্রধানের নাম' : 'Principal Name'}
+                  </label>
+                  <input
+                    type="text"
+                    value={siteForm.principal_name}
+                    onChange={(e) =>
+                      setSiteForm((prev) => ({ ...prev, principal_name: e.target.value }))
+                    }
+                    placeholder={isBn ? 'যেমন: মাওলানা মুফতি আব্দুল্লাহ' : 'Principal Name'}
+                    className={`w-full h-10 px-3 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-[#2563EB] transition-all ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                        : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400'
+                    }`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    {isBn ? 'পদবী' : 'Title / Designation'}
+                  </label>
+                  <input
+                    type="text"
+                    value={siteForm.principal_title}
+                    onChange={(e) =>
+                      setSiteForm((prev) => ({ ...prev, principal_title: e.target.value }))
+                    }
+                    placeholder={isBn ? 'যেমন: মুহতামিম / অধ্যক্ষ' : 'Principal / Muhtamim'}
+                    className={`w-full h-10 px-3 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-[#2563EB] transition-all ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                        : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    {isBn ? 'মুহতামিম / অধ্যক্ষের বাণী' : 'Principal Message'}
+                  </label>
+                  {siteForm.principal_message && (
+                    <button
+                      type="button"
+                      onClick={() => setSiteForm((prev) => ({ ...prev, principal_message: '' }))}
+                      className="text-[11px] font-bold text-rose-500 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <X size={11} />
+                      <span>{isBn ? 'মুছুন' : 'Clear'}</span>
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={3}
+                  value={siteForm.principal_message}
+                  onChange={(e) =>
+                    setSiteForm((prev) => ({ ...prev, principal_message: e.target.value }))
+                  }
+                  placeholder={
+                    isBn
+                      ? 'শিক্ষার্থী ও অভিভাবকদের উদ্দেশ্যে প্রতিষ্ঠান প্রধানের শুভেচ্ছা বাণী লিখুন...'
+                      : 'Inspiring message from the Principal...'
+                  }
+                  className={`w-full p-3 rounded-xl border text-xs font-medium leading-relaxed outline-none focus:ring-2 focus:ring-[#2563EB] transition-all resize-y ${
+                    isDark
+                      ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                      : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* 9. Campus Photo Gallery (up to 4 photos <= 60KB each) */}
+            <div
+              className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+                isDark ? 'bg-slate-900/60 border-slate-700' : 'bg-slate-50/80 border-slate-200/80'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-slate-200">
+                  <ImageIcon size={14} className="text-[#059669]" />
+                  <span>
+                    {isBn
+                      ? `ক্যাম্পাস ফটো গ্যালারি (${toBnDigit(siteForm.gallery_urls.length)}/৪)`
+                      : `Campus Photo Gallery (${siteForm.gallery_urls.length}/4)`}
+                  </span>
+                </div>
+                {siteForm.gallery_urls.length < 4 && (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleUploadGalleryPhotos}
+                      className="hidden"
+                      id="public-site-gallery-upload"
+                    />
+                    <label
+                      htmlFor="public-site-gallery-upload"
+                      className="h-8 px-3 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-[11px] font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      {uploadingTarget === 'gallery' ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Upload size={13} />
+                      )}
+                      <span>{isBn ? 'গ্যালারি ছবি যোগ করুন' : 'Add Gallery Photos'}</span>
+                    </label>
+                  </>
+                )}
+              </div>
+
+              {siteForm.gallery_urls.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {siteForm.gallery_urls.map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      className="relative group aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"
+                    >
+                      {isSafeImageSrc(imgUrl) && (
+                        <img
+                          src={imgUrl}
+                          alt={`Gallery ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        aria-label={isBn ? 'ছবি ডিলিট করুন' : 'Delete photo'}
+                        onClick={() =>
+                          setSiteForm((prev) => ({
+                            ...prev,
+                            gallery_urls: prev.gallery_urls.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-lg bg-rose-600/90 hover:bg-rose-700 text-white flex items-center justify-center shadow-sm cursor-pointer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] font-bold text-slate-400">
+                  {isBn
+                    ? 'ক্লাসরুম, মাদরাসা ভবন বা অনুষ্ঠানের সর্বোচ্চ ৪টি ছবি আপলোড করতে পারেন।'
+                    : 'Upload up to 4 campus or event photos.'}
+                </p>
+              )}
             </div>
 
             {/* 7. Social & Map Links */}

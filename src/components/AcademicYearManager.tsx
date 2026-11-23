@@ -149,7 +149,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       // Fetch exams summary
       const { data: yearExams } = await supabase
         .from("exams")
-        .select("id, name, exam_date, is_published")
+        .select("id, exam_name, exam_date, is_published")
+        .eq("institution_id", institution.id)
         .eq("academic_year_id", year.id);
 
       setReportData({

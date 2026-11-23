@@ -23,10 +23,29 @@ export interface StudentExtraFields {
   admission_fee?: string | null;
   monthly_fee?: string | null;
   receipt_number?: string | null;
+  hifz_completed_paras?: number[];
+  hifz_uncompleted_paras?: number[];
 }
 
 const ADM_TAG_PREFIX = '[ADM_EXTRA:';
 const ADM_TAG_SUFFIX = ']';
+
+const parseCompletedParas = (raw: unknown): number[] => {
+  const nums: number[] = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const n = Number(item);
+      if (Number.isInteger(n) && n >= 1 && n <= 30) nums.push(n);
+    }
+  } else if (typeof raw === 'string' && raw.trim().length > 0) {
+    const parts = raw.split(/[\s,]+/);
+    for (const p of parts) {
+      const n = parseInt(p.trim(), 10);
+      if (!isNaN(n) && n >= 1 && n <= 30) nums.push(n);
+    }
+  }
+  return Array.from(new Set(nums)).sort((a, b) => a - b);
+};
 
 /**
  * Extracts extra admission fields from either direct properties or from the packed notes tag
@@ -34,7 +53,7 @@ const ADM_TAG_SUFFIX = ']';
 export function extractStudentExtraFields(student?: Student | null): StudentExtraFields {
   if (!student) return {};
 
-  let parsedFromNotes: StudentExtraFields = {};
+  let parsedFromNotes: Record<string, any> = {};
   if (student.notes && student.notes.includes(ADM_TAG_PREFIX)) {
     try {
       const startIndex = student.notes.indexOf(ADM_TAG_PREFIX);
@@ -73,6 +92,8 @@ export function extractStudentExtraFields(student?: Student | null): StudentExtr
     admission_fee: (s.admission_fee ?? parsedFromNotes.admission_fee) || '',
     monthly_fee: (s.monthly_fee ?? parsedFromNotes.monthly_fee) || '',
     receipt_number: (s.receipt_number ?? parsedFromNotes.receipt_number) || '',
+    hifz_completed_paras: parseCompletedParas(s.hifz_completed_paras ?? parsedFromNotes.hifz_completed_paras),
+    hifz_uncompleted_paras: parseCompletedParas(s.hifz_uncompleted_paras ?? parsedFromNotes.hifz_uncompleted_paras),
   };
 }
 
@@ -86,6 +107,14 @@ export function packStudentNotesWithExtra(currentNotes: string | undefined | nul
 
   const cleanExtra: Record<string, string> = {};
   for (const [k, v] of Object.entries(extra)) {
+    if (k === 'hifz_completed_paras' || k === 'hifz_uncompleted_paras') {
+      const paras = parseCompletedParas(v);
+      if (paras.length > 0) {
+        // Store as comma-separated string to guarantee no ']' bracket inside [ADM_EXTRA:...]
+        cleanExtra[k] = paras.join(',');
+      }
+      continue;
+    }
     if (v !== undefined && v !== null && typeof v === 'string' && v.trim().length > 0) {
       cleanExtra[k] = v.trim();
     }
@@ -108,4 +137,81 @@ export function getDisplayNotes(notes?: string | null): string {
     .replace(/\[ADM_EXTRA:.*?\]/g, '')
     .replace(/\[ACC_START:.*?\]/g, '')
     .trim();
+}
+
+export interface HifzParaProgressItem {
+  paraNo: number;
+  status: 'completed' | 'current' | 'remaining';
+  maxPage: number;
+  isAutoCompleted: boolean;
+  isManualCompleted: boolean;
+}
+
+/**
+ * Computes 30-Para progress combining:
+ * 1) Automatic completion when a student moves past a recorded Para to a new Para, or completes page 20 of a Para
+ * 2) Manual teacher ticks (hifz_completed_paras) and manual uncheck overrides (hifz_uncompleted_paras)
+ */
+export function computeHifzParaProgress(
+  records: Array<{
+    para_no?: number | string | null;
+    page_from?: number | string | null;
+    page_to?: number | string | null;
+  }>,
+  student?: Student | null
+) {
+  const latestWithPara = records.find(
+    (r) => r.para_no != null && Number(r.para_no) >= 1 && Number(r.para_no) <= 30
+  );
+  const currentPara = latestWithPara ? Number(latestWithPara.para_no) : null;
+
+  const extra = extractStudentExtraFields(student);
+  const manualCompletedSet = new Set<number>(extra.hifz_completed_paras || []);
+  const manualUncompletedSet = new Set<number>(extra.hifz_uncompleted_paras || []);
+
+  const recordedParas = new Set<number>();
+  const paraMaxPage: Record<number, number> = {};
+  for (const rec of records) {
+    const p = Number(rec.para_no);
+    if (p >= 1 && p <= 30) {
+      recordedParas.add(p);
+      const pg = Math.max(Number(rec.page_to || 0), Number(rec.page_from || 0));
+      if (pg > (paraMaxPage[p] || 0)) {
+        paraMaxPage[p] = pg;
+      }
+    }
+  }
+
+  const paras: HifzParaProgressItem[] = Array.from({ length: 30 }, (_, idx) => {
+    const paraNo = idx + 1;
+    const maxPage = paraMaxPage[paraNo] || 0;
+    const isManualCompleted = manualCompletedSet.has(paraNo);
+    const isManualUncompleted = manualUncompletedSet.has(paraNo);
+    const isAutoCompleted =
+      (recordedParas.has(paraNo) && currentPara !== null && paraNo !== currentPara) ||
+      maxPage >= 20;
+
+    let status: 'completed' | 'current' | 'remaining' = 'remaining';
+    if (isManualCompleted || (isAutoCompleted && !isManualUncompleted)) {
+      status = 'completed';
+    } else if (currentPara !== null && paraNo === currentPara) {
+      status = 'current';
+    }
+
+    return {
+      paraNo,
+      status,
+      maxPage,
+      isAutoCompleted,
+      isManualCompleted,
+    };
+  });
+
+  const completedParasCount = paras.filter((p) => p.status === 'completed').length;
+  return {
+    paras,
+    currentPara,
+    completedParasCount,
+    currentParaPage: currentPara ? paraMaxPage[currentPara] || 0 : 0,
+  };
 }

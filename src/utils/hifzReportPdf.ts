@@ -167,28 +167,41 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
       const sabqiText = r.sabqi_status ? SABQI_LABELS[r.sabqi_status]?.[isBn ? 'bn' : 'en'] || '' : '—';
       const sabqiPg = r.sabqi_pages ? ` (${formatNum(r.sabqi_pages, isBn)} ${isBn ? 'পৃঃ' : 'p'})` : '';
 
-      const amukhtaParts = [
-        r.amukhta_para ? `${isBn ? 'পারা' : 'P.'} ${escapeHtml(isBn ? toBnDigit(String(r.amukhta_para)) : String(r.amukhta_para))}` : '',
-        r.amukhta_amount ? escapeHtml(r.amukhta_amount) : '',
-      ].filter(Boolean);
-      const amukhtaText = amukhtaParts.join(' · ') || '—';
+      const amukhtaParaRaw = r.amukhta_para != null ? String(r.amukhta_para).trim() : '';
+      const amukhtaAmtRaw = (r.amukhta_amount || '').trim();
+      const amukhtaParaLabel = amukhtaParaRaw
+        ? /^(পারা|para|p\.)/i.test(amukhtaParaRaw)
+          ? isBn ? toBnDigit(amukhtaParaRaw) : amukhtaParaRaw
+          : `${isBn ? 'পারা' : 'Para'} ${isBn ? toBnDigit(amukhtaParaRaw) : amukhtaParaRaw}`
+        : '';
+      const amukhtaAmtLabel = amukhtaAmtRaw ? (isBn ? toBnDigit(amukhtaAmtRaw) : amukhtaAmtRaw) : '';
+      const amukhtaHtml =
+        amukhtaParaLabel || amukhtaAmtLabel
+          ? `${amukhtaParaLabel ? `<div style="font-weight:700;color:#1e293b;font-size:10px;">${escapeHtml(amukhtaParaLabel)}</div>` : ''}${
+              amukhtaAmtLabel ? `<div style="font-size:9px;color:#475569;margin-top:1px;line-height:1.25;">${escapeHtml(amukhtaAmtLabel)}</div>` : ''
+            }`
+          : '<span style="color:#94a3b8;">—</span>';
 
       let tilawatHtml = '<span style="color:#94a3b8;">—</span>';
       if (r.tilawat_status === 'done' || r.tilawat_status === 'partial') {
         const tLabel = TILAWAT_LABELS[r.tilawat_status][isBn ? 'bn' : 'en'];
         const tColor = r.tilawat_status === 'done' ? '#047857' : '#b45309';
         const tBg = r.tilawat_status === 'done' ? '#ecfdf5' : '#fffbeb';
+        const tAmtDisplay = r.tilawat_amount ? (isBn ? toBnDigit(r.tilawat_amount) : r.tilawat_amount) : '';
         tilawatHtml = `
           <span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:700;font-size:9.5px;color:${tColor};background:${tBg};">${escapeHtml(tLabel)}</span>
-          ${r.tilawat_amount ? `<div style="font-size:9px;color:#334155;margin-top:2px;font-weight:600;">${escapeHtml(r.tilawat_amount)}</div>` : ''}
+          ${tAmtDisplay ? `<div style="font-size:9px;color:#334155;margin-top:2px;font-weight:600;line-height:1.25;">${escapeHtml(tAmtDisplay)}</div>` : ''}
         `;
       }
 
       let sabinaHtml = '<span style="color:#94a3b8;">—</span>';
       if (r.sabina_completed === true) {
         const sGradeText = r.sabina_grade ? GRADE_LABELS[r.sabina_grade]?.[isBn ? 'bn' : 'en'] : '';
+        const sParasDisplay = r.sabina_paras
+          ? isBn ? toBnDigit(r.sabina_paras) : r.sabina_paras
+          : isBn ? 'সম্পন্ন' : 'Done';
         sabinaHtml = `
-          <span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:800;font-size:9.5px;color:#b45309;background:#fef3c7;">★ ${escapeHtml(r.sabina_paras || (isBn ? 'সম্পন্ন' : 'Done'))}</span>
+          <span style="display:inline-block;padding:2px 5px;border-radius:5px;font-weight:800;font-size:9px;color:#b45309;background:#fef3c7;line-height:1.3;">★ ${escapeHtml(sParasDisplay)}</span>
           ${sGradeText ? `<div style="font-size:9px;color:#92400e;margin-top:2px;font-weight:700;">${escapeHtml(sGradeText)}</div>` : ''}
         `;
       }
@@ -204,7 +217,7 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
           <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#065f46;font-size:10px;">${escapeHtml(deptText)}</td>
           <td style="padding:5px;border:1px solid #cbd5e1;text-align:left;color:#0f172a;font-weight:600;font-size:10px;">${escapeHtml(sabaqMain)}${surahLine}</td>
           <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;color:#334155;font-size:10px;">${escapeHtml(sabqiText + sabqiPg)}</td>
-          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;color:#334155;font-size:10px;">${amukhtaText}</td>
+          <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;color:#334155;font-size:10px;">${amukhtaHtml}</td>
           <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">${tilawatHtml}</td>
           <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;">${sabinaHtml}</td>
           <td style="padding:5px 4px;border:1px solid #cbd5e1;text-align:center;font-weight:700;font-size:10px;color:${lokma + tajweed > 0 ? '#be123c' : '#475569'};">${formatNum(lokma, isBn)}/${formatNum(tajweed, isBn)}</td>
@@ -251,21 +264,27 @@ export const generateHifzReportPdf = async (opts: GenerateHifzReportOptions): Pr
       // Daily Tilawat summary per student
       const tilawatRecords = stuRecords.filter((r) => r.tilawat_status === 'done' || r.tilawat_status === 'partial');
       const tilawatDays = tilawatRecords.length;
-      const latestTilawatAmt = tilawatRecords.find((r) => r.tilawat_amount)?.tilawat_amount || '';
+      const latestTilawatAmtRaw = tilawatRecords.find((r) => r.tilawat_amount)?.tilawat_amount || '';
+      const latestTilawatAmt = latestTilawatAmtRaw ? (isBn ? toBnDigit(latestTilawatAmtRaw) : latestTilawatAmtRaw) : '';
       const tilawatCellHtml =
         tilawatDays > 0
-          ? `<div style="font-weight:800;color:#047857;font-size:10px;">${formatNum(tilawatDays, isBn)} ${isBn ? 'দিন' : 'd'}</div>${latestTilawatAmt ? `<div style="font-size:9px;color:#475569;margin-top:1px;">${escapeHtml(latestTilawatAmt)}</div>` : ''}`
+          ? `<div style="font-weight:800;color:#047857;font-size:10px;">${formatNum(tilawatDays, isBn)} ${isBn ? 'দিন' : 'd'}</div>${latestTilawatAmt ? `<div style="font-size:8.5px;color:#475569;margin-top:1px;line-height:1.25;">${escapeHtml(latestTilawatAmt)}</div>` : ''}`
           : '<span style="color:#94a3b8;">—</span>';
 
       // Weekly Sabina summary per student
       const sabinaRecords = stuRecords.filter((r) => r.sabina_completed === true);
       const sabinaCount = sabinaRecords.length;
       const sabinaParasList = Array.from(
-        new Set(sabinaRecords.map((r) => (r.sabina_paras || '').trim()).filter(Boolean))
+        new Set(
+          sabinaRecords
+            .map((r) => (r.sabina_paras || '').trim())
+            .filter(Boolean)
+            .map((s) => (isBn ? toBnDigit(s) : s))
+        )
       ).slice(0, 2);
       const sabinaCellHtml =
         sabinaCount > 0
-          ? `<span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:800;font-size:9.5px;color:#b45309;background:#fef3c7;">★ ${formatNum(sabinaCount, isBn)} ${isBn ? 'বার' : 'x'}</span>${sabinaParasList.length > 0 ? `<div style="font-size:9px;color:#92400e;margin-top:1px;font-weight:600;">${escapeHtml(sabinaParasList.join(', '))}</div>` : ''}`
+          ? `<span style="display:inline-block;padding:1.5px 5px;border-radius:5px;font-weight:800;font-size:9.5px;color:#b45309;background:#fef3c7;">★ ${formatNum(sabinaCount, isBn)} ${isBn ? 'বার' : 'x'}</span>${sabinaParasList.length > 0 ? `<div style="font-size:8.5px;color:#92400e;margin-top:2px;font-weight:600;line-height:1.25;">${escapeHtml(sabinaParasList.join(', '))}</div>` : ''}`
           : '<span style="color:#94a3b8;">—</span>';
 
       const deptKey: 'hifz' | 'nazera' | 'qaida' =

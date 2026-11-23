@@ -121,11 +121,18 @@ export interface Institution {
       slug?: string;
       tagline?: string;
       about?: string;
+      ticker_text?: string;
       banner_text?: string;
       admission_open?: boolean;
       admission_note?: string;
       established_year?: string;
       office_hours?: string;
+      principal_name?: string;
+      principal_title?: string;
+      principal_message?: string;
+      principal_photo_url?: string;
+      hero_image_url?: string;
+      gallery_urls?: string[];
       facebook_url?: string;
       youtube_url?: string;
       website_url?: string;

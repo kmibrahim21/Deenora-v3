@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -19,6 +20,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Trash2,
   User,
   X,
   AlertCircle,
@@ -30,7 +32,11 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { getTodayDateString, toBnDigit } from 'utils/calendarUtils';
 import { isValidUUID } from 'utils/validation';
 import { useBackHandler } from 'utils/backHandler';
-import { extractStudentExtraFields } from 'utils/studentExtraFields';
+import {
+  computeHifzParaProgress,
+  extractStudentExtraFields,
+  packStudentNotesWithExtra,
+} from 'utils/studentExtraFields';
 import {
   DEPT_LABELS,
   generateHifzReportPdf,
@@ -40,6 +46,8 @@ import {
   TILAWAT_LABELS,
 } from 'utils/hifzReportPdf';
 import { NotificationService } from '../services/NotificationService';
+import { SmartDatePicker } from '../components/common/SmartDatePicker';
+import { CompactMonthPicker } from '../components/finance/CompactMonthPicker';
 
 interface HifzTrackerProps {
   madrasah: Institution | null;
@@ -75,6 +83,208 @@ const parseConfigJson = (raw: any): Record<string, any> => {
   return typeof raw === 'object' ? raw : {};
 };
 
+const PARA_LIST = Array.from({ length: 30 }, (_, i) => i + 1);
+
+const toEnDigits = (str: string): string =>
+  String(str || '').replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+
+const clampInt = (val: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, Math.round(val)));
+
+const formatAmukhtaAmount = (from: number | '', to: number | '', isBn: boolean): string => {
+  if (from === '' && to === '') return '';
+  const f = clampInt(Number(from === '' ? to : from), 1, 20);
+  const t = clampInt(Number(to === '' ? f : to), 1, 20);
+  const lo = Math.min(f, t);
+  const hi = Math.max(f, t);
+  if (lo === 1 && hi === 10) return isBn ? 'পৃঃ ১–১০ (প্রথম অর্ধেক)' : 'P. 1-10 (First Half)';
+  if (lo === 11 && hi === 20) return isBn ? 'পৃঃ ১১–২০ (শেষ অর্ধেক)' : 'P. 11-20 (Last Half)';
+  if (lo === 1 && hi === 20) return isBn ? 'পৃঃ ১–২০ (পূর্ণ পারা)' : 'P. 1-20 (Full Para)';
+  if (lo === hi) return `${isBn ? 'পৃঃ' : 'P.'} ${isBn ? toBnDigit(lo) : lo}`;
+  return `${isBn ? 'পৃঃ' : 'P.'} ${isBn ? toBnDigit(lo) : lo}–${isBn ? toBnDigit(hi) : hi}`;
+};
+
+const parseAmukhtaFields = (
+  paraRaw?: string | number | null,
+  amountRaw?: string | null
+): { para: number | ''; from: number | ''; to: number | '' } => {
+  let para: number | '' = '';
+  if (paraRaw != null && String(paraRaw).trim() !== '') {
+    const enPara = toEnDigits(String(paraRaw));
+    const m = enPara.match(/(\d+)/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n >= 1 && n <= 30) para = n;
+    }
+  }
+
+  let from: number | '' = '';
+  let to: number | '' = '';
+  const amt = toEnDigits(String(amountRaw || '')).trim();
+  if (amt) {
+    const rangeMatch = amt.match(/(\d+)\s*[–\-—]\s*(\d+)/);
+    if (rangeMatch) {
+      from = clampInt(parseInt(rangeMatch[1], 10), 1, 20);
+      to = clampInt(parseInt(rangeMatch[2], 10), 1, 20);
+    } else if (/আধা|half|প্রথম অর্ধেক|first half/i.test(amt)) {
+      from = 1;
+      to = 10;
+    } else if (/শেষ অর্ধেক|last half/i.test(amt)) {
+      from = 11;
+      to = 20;
+    } else if (/পূর্ণ|full|1\s*পারা|1\s*para/i.test(amt)) {
+      from = 1;
+      to = 20;
+    } else {
+      const singlePage = amt.match(/(?:পৃঃ|পৃষ্ঠা|p\.?)\s*(\d+)/i);
+      if (singlePage) {
+        const n = clampInt(parseInt(singlePage[1], 10), 1, 20);
+        from = n;
+        to = n;
+      }
+    }
+  }
+
+  return { para, from, to };
+};
+
+const formatTilawatAmount = (
+  para: number | '',
+  from: number | '',
+  to: number | '',
+  isBn: boolean
+): string => {
+  const paraPart =
+    para !== '' ? `${isBn ? 'পারা' : 'Para'} ${isBn ? toBnDigit(para) : para}` : '';
+  if (from === '' && to === '') return paraPart;
+  const f = clampInt(Number(from === '' ? to : from), 1, 20);
+  const t = clampInt(Number(to === '' ? f : to), 1, 20);
+  const lo = Math.min(f, t);
+  const hi = Math.max(f, t);
+  let rangePart = '';
+  if (lo === 1 && hi === 20) {
+    rangePart = isBn ? 'পৃঃ ১–২০, পূর্ণ পারা' : 'P. 1-20, Full Para';
+  } else if (lo === hi) {
+    rangePart = `${isBn ? 'পৃঃ' : 'P.'} ${isBn ? toBnDigit(lo) : lo}`;
+  } else {
+    rangePart = `${isBn ? 'পৃঃ' : 'P.'} ${isBn ? toBnDigit(lo) : lo}–${isBn ? toBnDigit(hi) : hi}`;
+  }
+  return paraPart ? `${paraPart} (${rangePart})` : rangePart;
+};
+
+const parseTilawatFields = (
+  amountRaw?: string | null
+): { para: number | ''; from: number | ''; to: number | '' } => {
+  const txt = toEnDigits(String(amountRaw || '')).trim();
+  if (!txt) return { para: '', from: '', to: '' };
+
+  let para: number | '' = '';
+  const paraMatch = txt.match(/(?:পারা|para)\s*(\d+)/i);
+  if (paraMatch) {
+    const p = parseInt(paraMatch[1], 10);
+    if (p >= 1 && p <= 30) para = p;
+  }
+
+  let from: number | '' = '';
+  let to: number | '' = '';
+  const rangeMatch = txt.match(/(?:পৃঃ|পৃষ্ঠা|p\.?)\s*(\d+)(?:\s*[–\-—]\s*(\d+))?/i);
+  if (rangeMatch) {
+    from = clampInt(parseInt(rangeMatch[1], 10), 1, 20);
+    to = rangeMatch[2] ? clampInt(parseInt(rangeMatch[2], 10), 1, 20) : from;
+  } else if (/পূর্ণ|full|1\s*পারা|1\s*para/i.test(txt)) {
+    from = 1;
+    to = 20;
+  } else if (/10\s*(?:পৃষ্ঠা|page)/i.test(txt)) {
+    from = 1;
+    to = 10;
+  } else if (/5\s*(?:পৃষ্ঠা|page)/i.test(txt)) {
+    from = 1;
+    to = 5;
+  }
+
+  return { para, from, to };
+};
+
+const calcSabinaParaCount = (from: number, to: number): number => {
+  const f = clampInt(from, 1, 30);
+  const t = clampInt(to, 1, 30);
+  return t >= f ? t - f + 1 : 30 - f + 1 + t;
+};
+
+const formatSabinaRange = (
+  from: number,
+  to: number,
+  isBn: boolean
+): { text: string; shortRange: string; count: number } => {
+  const f = clampInt(from, 1, 30);
+  const t = clampInt(to, 1, 30);
+  const count = calcSabinaParaCount(f, t);
+  const fStr = isBn ? toBnDigit(f) : String(f);
+  const tStr = isBn ? toBnDigit(t) : String(t);
+  const cStr = isBn ? toBnDigit(count) : String(count);
+
+  if (f === 1 && t === 30) {
+    return {
+      text: isBn ? 'পারা ১–৩০ (৩০ পারা খতম)' : 'Para 1-30 (30 Para Khatam)',
+      shortRange: isBn ? 'পারা ১–৩০' : 'Para 1-30',
+      count: 30,
+    };
+  }
+  if (f === t) {
+    return {
+      text: isBn ? `পারা ${fStr} (১ পারা)` : `Para ${fStr} (1 Para)`,
+      shortRange: isBn ? `পারা ${fStr}` : `Para ${fStr}`,
+      count: 1,
+    };
+  }
+  return {
+    text: isBn ? `পারা ${fStr}–${tStr} (${cStr} পারা)` : `Para ${fStr}-${tStr} (${cStr} Paras)`,
+    shortRange: isBn ? `পারা ${fStr}–${tStr}` : `Para ${fStr}-${tStr}`,
+    count,
+  };
+};
+
+const parseSabinaRange = (
+  raw?: string | null
+): { from: number; to: number; count: number } | null => {
+  const txt = toEnDigits(String(raw || '')).trim();
+  if (!txt) return null;
+  if (/খতম|khatam/i.test(txt)) {
+    return { from: 1, to: 30, count: 30 };
+  }
+  const rangeMatch = txt.match(/(\d+)\s*[–\-—]\s*(\d+)/);
+  if (rangeMatch) {
+    const f = clampInt(parseInt(rangeMatch[1], 10), 1, 30);
+    const t = clampInt(parseInt(rangeMatch[2], 10), 1, 30);
+    return { from: f, to: t, count: calcSabinaParaCount(f, t) };
+  }
+  const paraFirst = txt.match(/(?:পারা|para)\s*(\d+)/i);
+  if (paraFirst) {
+    const p = clampInt(parseInt(paraFirst[1], 10), 1, 30);
+    return { from: p, to: p, count: 1 };
+  }
+  const countFirst = txt.match(/(\d+)\s*(?:পারা|para)/i);
+  if (countFirst) {
+    const cnt = clampInt(parseInt(countFirst[1], 10), 1, 30);
+    return { from: 1, to: cnt, count: cnt };
+  }
+  return null;
+};
+
+const computeNextSabinaSerial = (prev: {
+  from: number;
+  to: number;
+  count: number;
+}): { from: number; to: number; count: number } => {
+  if (prev.count >= 30) {
+    return { from: 1, to: 30, count: 30 };
+  }
+  const span = clampInt(prev.count || 3, 1, 30);
+  const nextFrom = (prev.to % 30) + 1;
+  const nextTo = ((nextFrom + span - 2) % 30) + 1;
+  return { from: nextFrom, to: nextTo, count: span };
+};
+
 interface EntryFormState {
   department: DeptType;
   para_no: number | '';
@@ -84,12 +294,16 @@ interface EntryFormState {
   lines_count: number | '';
   sabqi_status: SabqiType;
   sabqi_pages: number | '';
-  amukhta_para: string;
-  amukhta_amount: string;
+  amukhta_para_num: number | '';
+  amukhta_page_from: number | '';
+  amukhta_page_to: number | '';
   tilawat_status: TilawatType;
-  tilawat_amount: string;
+  tilawat_para: number | '';
+  tilawat_page_from: number | '';
+  tilawat_page_to: number | '';
   sabina_completed: boolean;
-  sabina_paras: string;
+  sabina_from_para: number;
+  sabina_to_para: number;
   mistakes_lokma: number;
   mistakes_tajweed: number;
   grade: GradeType;
@@ -105,12 +319,16 @@ const DEFAULT_FORM: EntryFormState = {
   lines_count: 15,
   sabqi_status: 'done',
   sabqi_pages: '',
-  amukhta_para: '',
-  amukhta_amount: '১ পারা',
+  amukhta_para_num: '',
+  amukhta_page_from: '',
+  amukhta_page_to: '',
   tilawat_status: 'none',
-  tilawat_amount: '',
+  tilawat_para: '',
+  tilawat_page_from: '',
+  tilawat_page_to: '',
   sabina_completed: false,
-  sabina_paras: '',
+  sabina_from_para: 1,
+  sabina_to_para: 3,
   mistakes_lokma: 0,
   mistakes_tajweed: 0,
   grade: 'mumtaz',
@@ -127,28 +345,6 @@ const EN_MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const AMUKHTA_AMOUNTS = [
-  { key: 'আধা পারা', bn: 'আধা পারা', en: 'Half Para' },
-  { key: '১ পারা', bn: '১ পারা', en: '1 Para' },
-  { key: '২ পারা', bn: '২ পারা', en: '2 Paras' },
-];
-
-const TILAWAT_AMOUNTS = [
-  { key: '৫ পৃষ্ঠা', bn: '৫ পৃষ্ঠা', en: '5 Pages' },
-  { key: '১০ পৃষ্ঠা', bn: '১০ পৃষ্ঠা', en: '10 Pages' },
-  { key: '১ পারা', bn: '১ পারা', en: '1 Para' },
-  { key: '২ পারা', bn: '২ পারা', en: '2 Paras' },
-];
-
-const SABINA_AMOUNTS = [
-  { key: '২ পারা', bn: '২ পারা', en: '2 Paras' },
-  { key: '৩ পারা', bn: '৩ পারা', en: '3 Paras' },
-  { key: '৫ পারা', bn: '৫ পারা', en: '5 Paras' },
-  { key: '১০ পারা', bn: '১০ পারা', en: '10 Paras' },
-  { key: '১৫ পারা', bn: '১৫ পারা', en: '15 Paras' },
-  { key: '৩০ পারা খতম', bn: '৩০ পারা খতম', en: '30 Para Khatam' },
-];
-
 const LINE_OPTIONS = [5, 10, 15];
 
 const shiftIsoDate = (isoDate: string, deltaDays: number): string => {
@@ -159,6 +355,402 @@ const shiftIsoDate = (isoDate: string, deltaDays: number): string => {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+};
+
+const formatFriendlyDateLabel = (isoDate: string, isBn: boolean): string => {
+  const parts = (isoDate || '').split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return isoDate;
+  const [y, m, d] = parts;
+  const monthName = (isBn ? BN_MONTHS : EN_MONTHS)[m - 1] || '';
+  const isToday = isoDate === getTodayDateString();
+  const dayStr = isBn ? toBnDigit(d) : String(d);
+  const yearStr = isBn ? toBnDigit(y) : String(y);
+  const todayTag = isToday ? (isBn ? ' (আজ)' : ' (Today)') : '';
+  return `${dayStr} ${monthName}, ${yearStr}${todayTag}`;
+};
+
+interface CompactParaPickerProps {
+  value: number | '';
+  onChange: (val: number | '') => void;
+  isBn: boolean;
+  isDark: boolean;
+  allowEmpty?: boolean;
+  placeholder?: string;
+  title?: string;
+  accent?: 'emerald' | 'blue' | 'amber';
+}
+
+const CompactParaPicker: React.FC<CompactParaPickerProps> = ({
+  value,
+  onChange,
+  isBn,
+  isDark,
+  allowEmpty = true,
+  placeholder,
+  title,
+  accent = 'emerald',
+}) => {
+  const [open, setOpen] = useState(false);
+
+  const activeBtnClass =
+    accent === 'blue'
+      ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+      : accent === 'amber'
+        ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+        : 'bg-emerald-600 border-emerald-600 text-white shadow-sm';
+
+  const triggerBorderClass =
+    accent === 'amber'
+      ? isDark
+        ? 'bg-slate-900 border-slate-700 text-white hover:border-amber-500/60'
+        : 'bg-white border-amber-200 text-slate-800 hover:border-amber-400'
+      : isDark
+        ? 'bg-slate-800 border-slate-700 text-white hover:border-slate-600'
+        : 'bg-slate-50 border-slate-200 text-slate-800 hover:border-slate-300';
+
+  const displayLabel =
+    value !== ''
+      ? isBn
+        ? `পারা ${toBnDigit(value)}`
+        : `Para ${value}`
+      : placeholder || (isBn ? 'নির্বাচন' : 'Select');
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm tabular-nums flex items-center justify-between gap-1 active:scale-[0.98] transition-all cursor-pointer ${triggerBorderClass}`}
+      >
+        <span className={`truncate ${value === '' ? 'text-slate-400 font-semibold' : ''}`}>
+          {displayLabel}
+        </span>
+        <ChevronDown size={14} className="text-slate-400 shrink-0" />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[190] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`w-[276px] max-w-[92vw] rounded-2xl border shadow-2xl p-3.5 space-y-2.5 font-noto animate-in zoom-in-95 duration-150 ${
+                isDark
+                  ? 'bg-slate-900 border-slate-700 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {title || (isBn ? 'পারা নির্বাচন করুন (১–৩০)' : 'Select Para (1-30)')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer ${
+                    isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1.5">
+                {PARA_LIST.map((p) => {
+                  const selected = value === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => {
+                        onChange(p);
+                        setOpen(false);
+                      }}
+                      className={`h-8 rounded-lg border text-xs font-black tabular-nums flex items-center justify-center active:scale-90 transition-all cursor-pointer ${
+                        selected
+                          ? activeBtnClass
+                          : isDark
+                            ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:border-slate-500'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isBn ? toBnDigit(p) : p}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {allowEmpty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange('');
+                    setOpen(false);
+                  }}
+                  className={`w-full h-8 rounded-xl border text-[11px] font-bold transition-colors cursor-pointer ${
+                    value === ''
+                      ? isDark
+                        ? 'bg-slate-700 border-slate-600 text-white'
+                        : 'bg-slate-200 border-slate-300 text-slate-800'
+                      : isDark
+                        ? 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  {isBn ? 'নেই / খালি রাখুন' : 'None / Clear'}
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+};
+
+interface CompactStudentPickerProps {
+  students: Student[];
+  value: string;
+  onChange: (val: string) => void;
+  isBn: boolean;
+  isDark: boolean;
+  disabled?: boolean;
+  includeAllOption?: boolean;
+  allLabel?: string;
+  emptyLabel?: string;
+  title?: string;
+}
+
+const CompactStudentPicker: React.FC<CompactStudentPickerProps> = ({
+  students,
+  value,
+  onChange,
+  isBn,
+  isDark,
+  disabled = false,
+  includeAllOption = false,
+  allLabel,
+  emptyLabel,
+  title,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selectedStudent = useMemo(
+    () => students.find((s) => s.id === value) || null,
+    [students, value]
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    const qEn = toEnDigits(q);
+    return students.filter((s) => {
+      const name = (s.student_name || '').toLowerCase();
+      const roll = s.roll != null ? String(s.roll) : '';
+      const rollBn = s.roll != null ? toBnDigit(s.roll) : '';
+      return name.includes(q) || roll.includes(qEn) || rollBn.includes(q);
+    });
+  }, [students, query]);
+
+  const handleOpen = () => {
+    if (disabled) return;
+    setQuery('');
+    setOpen(true);
+  };
+
+  const triggerText =
+    includeAllOption && value === 'all'
+      ? allLabel || (isBn ? 'সকল শিক্ষার্থী (ক্লাস সামারি)' : 'All Students (Class Summary)')
+      : selectedStudent
+        ? selectedStudent.student_name
+        : emptyLabel || (isBn ? 'কোনো শিক্ষার্থী নেই' : 'No students');
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={handleOpen}
+        className={`w-full h-11 px-3 rounded-2xl border font-bold text-xs sm:text-sm flex items-center justify-between gap-2 transition-all active:scale-[0.99] disabled:opacity-55 disabled:cursor-not-allowed cursor-pointer ${
+          isDark
+            ? 'bg-slate-800 border-slate-700 text-white hover:border-slate-600'
+            : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-[#2563EB] shadow-xs'
+        }`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {selectedStudent && selectedStudent.roll != null ? (
+            <span
+              className={`h-6 min-w-[26px] px-1.5 rounded-lg text-[10px] font-black tabular-nums flex items-center justify-center shrink-0 ${
+                isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              {isBn ? toBnDigit(selectedStudent.roll) : selectedStudent.roll}
+            </span>
+          ) : (
+            <User size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+          )}
+          <span className="truncate">{triggerText}</span>
+        </div>
+        <ChevronDown size={15} className="text-slate-400 shrink-0" />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[190] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`w-[320px] max-w-[92vw] rounded-2xl border shadow-2xl p-3.5 space-y-2.5 font-noto animate-in zoom-in-95 duration-150 ${
+                isDark
+                  ? 'bg-slate-900 border-slate-700 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`text-xs font-black truncate ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {title || (isBn ? 'শিক্ষার্থী নির্বাচন করুন' : 'Select Student')}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-black tabular-nums shrink-0 ${
+                      isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {isBn ? toBnDigit(students.length) : students.length}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 cursor-pointer ${
+                    isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Search input */}
+              {students.length > 5 && (
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={isBn ? 'নাম বা রোল খুঁজুন...' : 'Search name or roll...'}
+                    className={`w-full h-8 pl-8 pr-7 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                    }`}
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Compact scrollable list */}
+              <div className="max-h-[250px] overflow-y-auto space-y-1 pr-0.5 custom-scrollbar">
+                {includeAllOption && !query.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange('all');
+                      setOpen(false);
+                    }}
+                    className={`w-full px-2.5 py-2 rounded-xl border text-left flex items-center justify-between gap-2 transition-all active:scale-[0.98] cursor-pointer ${
+                      value === 'all'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                        : isDark
+                          ? 'bg-slate-800/70 border-slate-700/80 text-slate-200 hover:border-slate-600'
+                          : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                          value === 'all'
+                            ? 'bg-white/20 text-white'
+                            : isDark
+                              ? 'bg-slate-700 text-slate-300'
+                              : 'bg-white text-emerald-600'
+                        }`}
+                      >
+                        <User size={12} />
+                      </span>
+                      <span className="text-xs font-black truncate">
+                        {allLabel || (isBn ? 'সকল শিক্ষার্থী (ক্লাস সামারি)' : 'All Students (Class Summary)')}
+                      </span>
+                    </div>
+                    {value === 'all' && <Check size={14} className="shrink-0 stroke-[3]" />}
+                  </button>
+                )}
+
+                {filtered.length === 0 ? (
+                  <p className="text-[11px] font-bold text-slate-400 text-center py-6">
+                    {isBn ? 'কোনো শিক্ষার্থী পাওয়া যায়নি' : 'No students found'}
+                  </p>
+                ) : (
+                  filtered.map((s) => {
+                    const active = value === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          onChange(s.id);
+                          setOpen(false);
+                        }}
+                        className={`w-full px-2.5 py-1.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all active:scale-[0.98] cursor-pointer ${
+                          active
+                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                            : isDark
+                              ? 'bg-slate-800/50 border-slate-800 text-slate-200 hover:bg-slate-800 hover:border-slate-700'
+                              : 'bg-slate-50/80 border-slate-200/70 text-slate-800 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`h-6 min-w-[26px] px-1 rounded-lg text-[10px] font-black tabular-nums flex items-center justify-center shrink-0 ${
+                              active
+                                ? 'bg-white/20 text-white'
+                                : isDark
+                                  ? 'bg-slate-700 text-slate-300'
+                                  : 'bg-white border border-slate-200/80 text-[#1E3A8A]'
+                            }`}
+                          >
+                            {s.roll != null ? (isBn ? toBnDigit(s.roll) : s.roll) : '—'}
+                          </span>
+                          <span className="text-xs font-bold truncate">{s.student_name}</span>
+                        </div>
+                        {active && <Check size={14} className="shrink-0 stroke-[3]" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
 };
 
 const HifzTracker: React.FC<HifzTrackerProps> = ({
@@ -227,9 +819,17 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   // Entry Modal / Bottom Sheet state
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
   const [entryForm, setEntryForm] = useState<EntryFormState>(DEFAULT_FORM);
-  const [prefillInfo, setPrefillInfo] = useState<{ date: string; summary: string } | null>(null);
+  const [prefillInfo, setPrefillInfo] = useState<{ date: string; summary: string; paraNo?: number | null } | null>(null);
+  const [lastSabinaHint, setLastSabinaHint] = useState<{
+    prevRangeLabel: string;
+    nextFrom: number;
+    nextTo: number;
+    nextCount: number;
+  } | null>(null);
   const [loadingPrefill, setLoadingPrefill] = useState<boolean>(false);
   const [savingEntry, setSavingEntry] = useState<boolean>(false);
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<boolean>(false);
+  const [deletingEntry, setDeletingEntry] = useState<boolean>(false);
   const [entryError, setEntryError] = useState<string | null>(null);
 
   // 30-Para Progress (inside Report tab) state
@@ -238,6 +838,9 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
   const [progressStudentId, setProgressStudentId] = useState<string>('');
   const [studentHistory, setStudentHistory] = useState<HifzRecord[]>([]);
   const [loadingProgress, setLoadingProgress] = useState<boolean>(false);
+  const [togglingPara, setTogglingPara] = useState<number | null>(null);
+  const [confirmDeleteHistoryId, setConfirmDeleteHistoryId] = useState<string | null>(null);
+  const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
 
   // Inline Report PDF state (inside Report tab)
   const [reportPeriod, setReportPeriod] = useState<HifzReportPeriod>('weekly');
@@ -655,11 +1258,13 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     return { completedCount: completed, pendingCount: pending, sabinaCount: sabina, filteredStudents: list };
   }, [students, dailyRecordsMap, searchQuery, statusFilter]);
 
-  // Open Entry Modal with Smart Auto-Prefill
+  // Open Entry Modal with Smart Auto-Prefill & Sabina Serial Carryover
   const handleOpenEntryModal = async (student: Student) => {
     setActiveStudent(student);
     setEntryError(null);
     setPrefillInfo(null);
+    setLastSabinaHint(null);
+    setConfirmDeleteEntry(false);
 
     const selectedClassObj = classes.find((c) => c.id === selectedClassId);
     const classMappedDept = selectedClassObj ? getEffectiveClassDept(selectedClassObj) : activeDeptTab;
@@ -670,8 +1275,44 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
           ? classMappedDept
           : 'hifz';
 
+    const fetchLastSabina = async () => {
+      if (!madrasah?.id) return null;
+      try {
+        const { data: sabinaRows, error: sabinaErr } = await supabase
+          .from('hifz_records')
+          .select('record_date, sabina_paras, sabina_completed')
+          .eq('institution_id', madrasah.id)
+          .eq('student_id', student.id)
+          .eq('sabina_completed', true)
+          .lt('record_date', selectedDate)
+          .order('record_date', { ascending: false })
+          .limit(1);
+
+        if (!sabinaErr && sabinaRows && sabinaRows.length > 0) {
+          const parsed = parseSabinaRange(sabinaRows[0].sabina_paras);
+          if (parsed) {
+            const next = computeNextSabinaSerial(parsed);
+            const prevFormatted = formatSabinaRange(parsed.from, parsed.to, isBn);
+            return {
+              prevRangeLabel: prevFormatted.shortRange,
+              nextFrom: next.from,
+              nextTo: next.to,
+              nextCount: next.count,
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[HifzTracker] Previous Sabina lookup skipped:', e);
+      }
+      return null;
+    };
+
     const existing = dailyRecordsMap[student.id];
     if (existing) {
+      const parsedAmukhta = parseAmukhtaFields(existing.amukhta_para, existing.amukhta_amount);
+      const parsedTilawat = parseTilawatFields(existing.tilawat_amount);
+      const parsedSabina = parseSabinaRange(existing.sabina_paras);
+
       setEntryForm({
         department: existing.department || defaultDept,
         para_no: existing.para_no ?? '',
@@ -681,17 +1322,33 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         lines_count: existing.lines_count ?? '',
         sabqi_status: existing.sabqi_status || 'done',
         sabqi_pages: existing.sabqi_pages ?? '',
-        amukhta_para: existing.amukhta_para != null ? String(existing.amukhta_para) : '',
-        amukhta_amount: existing.amukhta_amount || '',
+        amukhta_para_num: parsedAmukhta.para,
+        amukhta_page_from: parsedAmukhta.from,
+        amukhta_page_to: parsedAmukhta.to,
         tilawat_status: existing.tilawat_status || 'none',
-        tilawat_amount: existing.tilawat_amount || '',
+        tilawat_para: parsedTilawat.para,
+        tilawat_page_from: parsedTilawat.from,
+        tilawat_page_to: parsedTilawat.to,
         sabina_completed: existing.sabina_completed === true,
-        sabina_paras: existing.sabina_paras || '',
+        sabina_from_para: parsedSabina ? parsedSabina.from : 1,
+        sabina_to_para: parsedSabina ? parsedSabina.to : 3,
         mistakes_lokma: Number(existing.mistakes_lokma || 0),
         mistakes_tajweed: Number(existing.mistakes_tajweed || 0),
         grade: existing.grade || 'mumtaz',
         remarks: existing.remarks || '',
       });
+
+      const hint = await fetchLastSabina();
+      if (hint) {
+        setLastSabinaHint(hint);
+        if (!existing.sabina_completed) {
+          setEntryForm((f) => ({
+            ...f,
+            sabina_from_para: hint.nextFrom,
+            sabina_to_para: hint.nextTo,
+          }));
+        }
+      }
       return;
     }
 
@@ -701,15 +1358,23 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     if (!madrasah?.id) return;
     setLoadingPrefill(true);
     try {
-      const { data: prevRows, error } = await supabase
-        .from('hifz_records')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .eq('student_id', student.id)
-        .lt('record_date', selectedDate)
-        .order('record_date', { ascending: false })
-        .limit(1);
+      const [prevRes, sabinaHint] = await Promise.all([
+        supabase
+          .from('hifz_records')
+          .select('*')
+          .eq('institution_id', madrasah.id)
+          .eq('student_id', student.id)
+          .lt('record_date', selectedDate)
+          .order('record_date', { ascending: false })
+          .limit(1),
+        fetchLastSabina(),
+      ]);
 
+      if (sabinaHint) {
+        setLastSabinaHint(sabinaHint);
+      }
+
+      const { data: prevRows, error } = prevRes;
       if (!error && prevRows && prevRows.length > 0) {
         const last = prevRows[0] as HifzRecord;
         const isIada = last.grade === 'iada';
@@ -720,6 +1385,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
             : last.page_from != null
               ? Number(last.page_from) + 1
               : 1;
+        const parsedLastAmukhta = parseAmukhtaFields(last.amukhta_para, last.amukhta_amount);
 
         setEntryForm({
           department: defaultDept,
@@ -730,12 +1396,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
           lines_count: last.lines_count ?? 15,
           sabqi_status: 'done',
           sabqi_pages: last.sabqi_pages ?? '',
-          amukhta_para: last.amukhta_para != null ? String(last.amukhta_para) : '',
-          amukhta_amount: last.amukhta_amount || '১ পারা',
+          amukhta_para_num: parsedLastAmukhta.para,
+          amukhta_page_from: parsedLastAmukhta.from,
+          amukhta_page_to: parsedLastAmukhta.to,
           tilawat_status: 'none',
-          tilawat_amount: '',
+          tilawat_para: '',
+          tilawat_page_from: '',
+          tilawat_page_to: '',
           sabina_completed: false,
-          sabina_paras: '',
+          sabina_from_para: sabinaHint ? sabinaHint.nextFrom : 1,
+          sabina_to_para: sabinaHint ? sabinaHint.nextTo : 3,
           mistakes_lokma: 0,
           mistakes_tajweed: 0,
           grade: 'mumtaz',
@@ -753,7 +1423,14 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
         setPrefillInfo({
           date: last.record_date,
           summary: parts.join(' · '),
+          paraNo: last.para_no != null ? Number(last.para_no) : null,
         });
+      } else if (sabinaHint) {
+        setEntryForm((f) => ({
+          ...f,
+          sabina_from_para: sabinaHint.nextFrom,
+          sabina_to_para: sabinaHint.nextTo,
+        }));
       }
     } catch (err) {
       console.warn('[HifzTracker] Prefill lookup skipped:', err);
@@ -775,15 +1452,32 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     const parsedLines = entryForm.lines_count === '' ? null : Number(entryForm.lines_count);
     const parsedSabqiPages = entryForm.sabqi_pages === '' ? null : Number(entryForm.sabqi_pages);
 
+    const formattedAmukhtaPara =
+      entryForm.amukhta_para_num !== '' ? String(entryForm.amukhta_para_num) : null;
+    const formattedAmukhtaAmt =
+      formatAmukhtaAmount(entryForm.amukhta_page_from, entryForm.amukhta_page_to, true) || null;
+    const formattedTilawatAmt =
+      entryForm.tilawat_status === 'none'
+        ? null
+        : formatTilawatAmount(
+            entryForm.tilawat_para,
+            entryForm.tilawat_page_from,
+            entryForm.tilawat_page_to,
+            true
+          ) || null;
+    const formattedSabinaParas = entryForm.sabina_completed
+      ? formatSabinaRange(entryForm.sabina_from_para, entryForm.sabina_to_para, true).text
+      : null;
+
     const yearId = activeYear?.id || (madrasah?.config_json as any)?.active_academic_year_id || null;
     const validYearId = yearId && isValidUUID(yearId) ? yearId : null;
     const validTeacherId = teacherInfo?.id && isValidUUID(teacherInfo.id) ? teacherInfo.id : null;
 
     const tilawatSabinaFields = {
       tilawat_status: entryForm.tilawat_status || 'none',
-      tilawat_amount: entryForm.tilawat_status === 'none' ? null : entryForm.tilawat_amount.trim() || null,
+      tilawat_amount: formattedTilawatAmt,
       sabina_completed: Boolean(entryForm.sabina_completed),
-      sabina_paras: entryForm.sabina_completed ? entryForm.sabina_paras.trim() || null : null,
+      sabina_paras: formattedSabinaParas,
       sabina_grade: null,
     };
 
@@ -802,8 +1496,8 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       lines_count: parsedLines != null && !isNaN(parsedLines) ? parsedLines : null,
       sabqi_status: entryForm.sabqi_status,
       sabqi_pages: parsedSabqiPages != null && !isNaN(parsedSabqiPages) ? parsedSabqiPages : null,
-      amukhta_para: entryForm.amukhta_para.trim() || null,
-      amukhta_amount: entryForm.amukhta_amount.trim() || null,
+      amukhta_para: formattedAmukhtaPara,
+      amukhta_amount: formattedAmukhtaAmt,
       mistakes_lokma: Math.max(0, Number(entryForm.mistakes_lokma) || 0),
       mistakes_tajweed: Math.max(0, Number(entryForm.mistakes_tajweed) || 0),
       grade: entryForm.grade,
@@ -856,13 +1550,83 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
       if (error) throw error;
 
-      const isUpdate = Boolean(dailyRecordsMap[activeStudent.id]);
+      const prevExistingRecord = dailyRecordsMap[activeStudent.id];
+      const isUpdate = Boolean(prevExistingRecord);
       const savedRecord = {
         ...(data || { ...basePayload, id: `${activeStudent.id}_${selectedDate}` }),
         ...tilawatSabinaFields,
       } as HifzRecord;
       const notifiedStudent = activeStudent;
+
+      // Auto-complete previous Para when student's Para updates (or when reaching Page 20 of current Para)
+      const prevParaNum =
+        prevExistingRecord?.para_no != null
+          ? Number(prevExistingRecord.para_no)
+          : prefillInfo?.paraNo != null
+            ? Number(prefillInfo.paraNo)
+            : null;
+      const autoCompletedCandidates: number[] = [];
+      if (
+        prevParaNum != null &&
+        prevParaNum >= 1 &&
+        prevParaNum <= 30 &&
+        parsedPara != null &&
+        parsedPara >= 1 &&
+        parsedPara <= 30 &&
+        prevParaNum !== parsedPara
+      ) {
+        autoCompletedCandidates.push(prevParaNum);
+      }
+      if (parsedPara != null && parsedPara >= 1 && parsedPara <= 30 && parsedTo != null && parsedTo >= 20) {
+        autoCompletedCandidates.push(parsedPara);
+      }
+      if (autoCompletedCandidates.length > 0) {
+        try {
+          const existingExtra = extractStudentExtraFields(activeStudent);
+          const completedSet = new Set<number>(existingExtra.hifz_completed_paras || []);
+          const uncompletedSet = new Set<number>(existingExtra.hifz_uncompleted_paras || []);
+          let changed = false;
+          for (const pNum of autoCompletedCandidates) {
+            if (!completedSet.has(pNum)) {
+              completedSet.add(pNum);
+              changed = true;
+            }
+            if (uncompletedSet.has(pNum)) {
+              uncompletedSet.delete(pNum);
+              changed = true;
+            }
+          }
+          if (changed) {
+            const packedNotes = packStudentNotesWithExtra(activeStudent.notes, {
+              ...existingExtra,
+              hifz_completed_paras: Array.from(completedSet).sort((a, b) => a - b),
+              hifz_uncompleted_paras: Array.from(uncompletedSet).sort((a, b) => a - b),
+            });
+            const { error: stuErr } = await supabase
+              .from('students')
+              .update({ notes: packedNotes })
+              .eq('id', activeStudent.id)
+              .eq('institution_id', madrasah.id);
+            if (!stuErr) {
+              const syncList = (list: Student[]) =>
+                list.map((s) => (s.id === activeStudent.id ? { ...s, notes: packedNotes } : s));
+              setStudents(syncList);
+              setProgressClassStudents(syncList);
+              setReportClassStudents(syncList);
+            }
+          }
+        } catch (autoErr) {
+          console.warn('[HifzTracker] Auto-mark completed para skipped:', autoErr);
+        }
+      }
+
       setDailyRecordsMap((prev) => ({ ...prev, [activeStudent.id]: savedRecord }));
+      if (progressStudentId === activeStudent.id) {
+        setStudentHistory((prev) => {
+          const filtered = prev.filter((r) => r.id !== savedRecord.id && r.record_date !== savedRecord.record_date);
+          return [savedRecord, ...filtered].sort((a, b) => b.record_date.localeCompare(a.record_date));
+        });
+      }
       setActiveStudent(null);
       showToast(
         isBn
@@ -897,53 +1661,124 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
     }
   };
 
-  // Compute 30-Para Visual Progress
-  const paraProgressData = useMemo(() => {
-    const latestWithPara = studentHistory.find((r) => r.para_no != null && Number(r.para_no) >= 1 && Number(r.para_no) <= 30);
-    const currentPara = latestWithPara ? Number(latestWithPara.para_no) : null;
-
-    const paraMaxPage: Record<number, number> = {};
-    const paraVisited = new Set<number>();
-
-    for (const rec of studentHistory) {
-      const p = Number(rec.para_no);
-      if (p >= 1 && p <= 30) {
-        paraVisited.add(p);
-        const pg = Math.max(Number(rec.page_to || 0), Number(rec.page_from || 0));
-        if (pg > (paraMaxPage[p] || 0)) {
-          paraMaxPage[p] = pg;
-        }
-      }
+  // Delete a Sabaq history record (with tenant isolation)
+  const handleDeleteHifzRecord = async (rec: HifzRecord, closeModalOnDone = false) => {
+    if (!madrasah?.id || !rec?.id) return;
+    if (closeModalOnDone) {
+      setDeletingEntry(true);
+    } else {
+      setDeletingHistoryId(rec.id);
     }
+    try {
+      const { error } = await supabase
+        .from('hifz_records')
+        .delete()
+        .eq('id', rec.id)
+        .eq('institution_id', madrasah.id);
 
-    const paras = Array.from({ length: 30 }, (_, idx) => {
-      const paraNo = idx + 1;
-      let status: 'completed' | 'current' | 'remaining' = 'remaining';
-      if (currentPara !== null) {
-        if (paraNo === currentPara) {
-          status = 'current';
-        } else if (paraVisited.has(paraNo)) {
-          status = 'completed';
-        } else if (paraNo < currentPara && currentPara <= 28) {
-          // Sequential Hifz (1 -> 30): paras before current para are completed
-          status = 'completed';
+      if (error) throw error;
+
+      setStudentHistory((prev) => prev.filter((item) => item.id !== rec.id));
+      setDailyRecordsMap((prev) => {
+        const cur = prev[rec.student_id];
+        if (!cur || (cur.id !== rec.id && rec.record_date !== selectedDate)) return prev;
+        const next = { ...prev };
+        delete next[rec.student_id];
+        return next;
+      });
+      setConfirmDeleteHistoryId(null);
+      setConfirmDeleteEntry(false);
+      if (closeModalOnDone) {
+        setActiveStudent(null);
+      }
+      showToast(isBn ? 'সবক রেকর্ড মুছে ফেলা হয়েছে' : 'Sabaq record deleted');
+    } catch (err: any) {
+      console.error('[HifzTracker] Delete error:', err);
+      showToast(
+        err?.message || (isBn ? 'রেকর্ড মুছতে সমস্যা হয়েছে' : 'Failed to delete record'),
+        'error'
+      );
+    } finally {
+      setDeletingEntry(false);
+      setDeletingHistoryId(null);
+    }
+  };
+
+  const selectedProgressStudent = useMemo(
+    () => progressClassStudents.find((s) => s.id === progressStudentId) || null,
+    [progressClassStudents, progressStudentId]
+  );
+
+  // Compute 30-Para Visual Progress (combines automatic Para-update completion + manual teacher ticks)
+  const paraProgressData = useMemo(
+    () => computeHifzParaProgress(studentHistory, selectedProgressStudent),
+    [studentHistory, selectedProgressStudent]
+  );
+
+  // Toggle completed para checkmark (1-tap manual marking or unmarking even auto-completed paras)
+  const handleToggleCompletedPara = async (paraNo: number) => {
+    if (!madrasah?.id || !selectedProgressStudent || togglingPara !== null) return;
+    setTogglingPara(paraNo);
+    try {
+      const existingExtra = extractStudentExtraFields(selectedProgressStudent);
+      const completedSet = new Set<number>(existingExtra.hifz_completed_paras || []);
+      const uncompletedSet = new Set<number>(existingExtra.hifz_uncompleted_paras || []);
+      const paraItem = paraProgressData.paras[paraNo - 1];
+      const currentlyCompleted = paraItem?.status === 'completed';
+      const willBeCompleted = !currentlyCompleted;
+
+      if (willBeCompleted) {
+        completedSet.add(paraNo);
+        uncompletedSet.delete(paraNo);
+      } else {
+        completedSet.delete(paraNo);
+        if (paraItem?.isAutoCompleted) {
+          uncompletedSet.add(paraNo);
+        } else {
+          uncompletedSet.delete(paraNo);
         }
       }
-      return {
-        paraNo,
-        status,
-        maxPage: paraMaxPage[paraNo] || 0,
-      };
-    });
 
-    const completedParasCount = paras.filter((p) => p.status === 'completed').length;
-    return {
-      paras,
-      currentPara,
-      completedParasCount,
-      currentParaPage: currentPara ? paraMaxPage[currentPara] || 0 : 0,
-    };
-  }, [studentHistory]);
+      const packedNotes = packStudentNotesWithExtra(selectedProgressStudent.notes, {
+        ...existingExtra,
+        hifz_completed_paras: Array.from(completedSet).sort((a, b) => a - b),
+        hifz_uncompleted_paras: Array.from(uncompletedSet).sort((a, b) => a - b),
+      });
+
+      const { error } = await supabase
+        .from('students')
+        .update({ notes: packedNotes })
+        .eq('id', selectedProgressStudent.id)
+        .eq('institution_id', madrasah.id);
+
+      if (error) throw error;
+
+      const updateStuList = (list: Student[]) =>
+        list.map((s) => (s.id === selectedProgressStudent.id ? { ...s, notes: packedNotes } : s));
+
+      setProgressClassStudents(updateStuList);
+      setStudents(updateStuList);
+      setReportClassStudents(updateStuList);
+
+      showToast(
+        willBeCompleted
+          ? isBn
+            ? `পারা ${fmtNum(paraNo)} সম্পন্ন হিসেবে সংরক্ষিত হয়েছে`
+            : `Para ${paraNo} marked as completed`
+          : isBn
+            ? `পারা ${fmtNum(paraNo)} বাকি হিসেবে চিহ্নিত হয়েছে`
+            : `Para ${paraNo} marked as remaining`
+      );
+    } catch (err: any) {
+      console.error('[HifzTracker] Toggle completed para error:', err);
+      showToast(
+        err?.message || (isBn ? 'পারা স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে' : 'Failed to update para status'),
+        'error'
+      );
+    } finally {
+      setTogglingPara(null);
+    }
+  };
 
   // Compute date range for inline PDF Report
   const computedReportRange = useMemo(() => {
@@ -1273,15 +2108,33 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   >
                     <ChevronLeft size={18} />
                   </button>
-                  <input
-                    type="date"
+                  <SmartDatePicker
                     value={selectedDate}
-                    onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                    className={`flex-1 min-w-0 h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 tabular-nums ${
-                      isDark
-                        ? 'bg-slate-800 border-slate-700 text-white'
-                        : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
+                    onChange={(val) => val && setSelectedDate(val)}
+                    lang={lang}
+                    isDark={isDark}
+                    minDate={activeYear?.start_date}
+                    maxDate={activeYear?.end_date}
+                    className="flex-1 min-w-0"
+                    renderTrigger={(openPicker) => (
+                      <button
+                        type="button"
+                        onClick={openPicker}
+                        className={`w-full h-11 px-3 rounded-2xl border font-black text-xs sm:text-sm flex items-center justify-between gap-2 transition-all active:scale-[0.99] cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800 border-slate-700 text-white hover:border-slate-600'
+                            : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-[#2563EB] shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Calendar size={15} className="text-[#2563EB] shrink-0" />
+                          <span className="truncate tabular-nums">
+                            {formatFriendlyDateLabel(selectedDate, isBn)}
+                          </span>
+                        </div>
+                        <ChevronDown size={15} className="text-slate-400 shrink-0" />
+                      </button>
+                    )}
                   />
                   <button
                     type="button"
@@ -1704,55 +2557,54 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                     {isBn ? 'সপ্তাহের শেষ তারিখ (গত ৭ দিন)' : 'Week Ending Date (Last 7 Days)'}
                   </label>
-                  <input
-                    type="date"
+                  <SmartDatePicker
                     value={reportWeekEnd}
-                    onChange={(e) => e.target.value && setReportWeekEnd(e.target.value)}
-                    className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
-                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
+                    onChange={(val) => val && setReportWeekEnd(val)}
+                    lang={lang}
+                    isDark={isDark}
+                    minDate={activeYear?.start_date}
+                    maxDate={activeYear?.end_date}
+                    renderTrigger={(openPicker) => (
+                      <button
+                        type="button"
+                        onClick={openPicker}
+                        className={`w-full h-11 px-3.5 rounded-2xl border font-black text-xs sm:text-sm flex items-center justify-between gap-2 transition-all active:scale-[0.99] cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800 border-slate-700 text-white hover:border-slate-600'
+                            : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-[#2563EB] shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Calendar size={15} className="text-[#2563EB] shrink-0" />
+                          <span className="truncate tabular-nums">
+                            {formatFriendlyDateLabel(reportWeekEnd, isBn)}
+                          </span>
+                        </div>
+                        <ChevronDown size={15} className="text-slate-400 shrink-0" />
+                      </button>
+                    )}
                   />
                 </div>
               )}
 
               {reportPeriod === 'monthly' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
-                      {isBn ? 'মাস' : 'Month'}
-                    </label>
-                    <select
-                      value={reportMonth}
-                      onChange={(e) => setReportMonth(Number(e.target.value))}
-                      className={`w-full h-11 px-3 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                      }`}
-                    >
-                      {(isBn ? BN_MONTHS : EN_MONTHS).map((mName, idx) => (
-                        <option key={mName} value={idx + 1}>
-                          {mName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
-                      {isBn ? 'সাল' : 'Year'}
-                    </label>
-                    <select
-                      value={reportYear}
-                      onChange={(e) => setReportYear(Number(e.target.value))}
-                      className={`w-full h-11 px-3 rounded-2xl border font-bold text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                      }`}
-                    >
-                      {yearOptions.map((y) => (
-                        <option key={y} value={y}>
-                          {fmtNum(y)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
+                    {isBn ? 'মাস ও সাল নির্বাচন' : 'Select Month & Year'}
+                  </label>
+                  <CompactMonthPicker
+                    value={`${reportYear}-${String(reportMonth).padStart(2, '0')}`}
+                    onChange={(val) => {
+                      const [yStr, mStr] = val.split('-');
+                      const yNum = parseInt(yStr, 10);
+                      const mNum = parseInt(mStr, 10);
+                      if (!Number.isNaN(yNum)) setReportYear(yNum);
+                      if (!Number.isNaN(mNum)) setReportMonth(mNum);
+                    }}
+                    lang={lang}
+                    isDark={isDark}
+                    availableYears={yearOptions}
+                  />
                 </div>
               )}
 
@@ -1803,24 +2655,17 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                   {isBn ? 'শিক্ষার্থী' : 'Student'}
                 </label>
-                <select
+                <CompactStudentPicker
+                  students={reportClassStudents}
                   value={reportStudentId}
-                  onChange={(e) => setReportStudentId(e.target.value)}
+                  onChange={(val) => setReportStudentId(val)}
                   disabled={reportClassId === 'all'}
-                  className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60 ${
-                    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                >
-                  <option value="all">
-                    {isBn ? 'সকল শিক্ষার্থী (ক্লাস সামারি)' : 'All Students (Class Summary)'}
-                  </option>
-                  {reportClassStudents.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.roll != null ? `[${fmtNum(s.roll)}] ` : ''}
-                      {s.student_name}
-                    </option>
-                  ))}
-                </select>
+                  includeAllOption={true}
+                  allLabel={isBn ? 'সকল শিক্ষার্থী (ক্লাস সামারি)' : 'All Students (Class Summary)'}
+                  title={isBn ? 'রিপোর্টের শিক্ষার্থী নির্বাচন' : 'Select Report Student'}
+                  isBn={isBn}
+                  isDark={isDark}
+                />
               </div>
             </div>
 
@@ -1908,45 +2753,48 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                   {isBn ? 'শিক্ষার্থী নির্বাচন করুন' : 'Select Student'}
                 </label>
-                <select
+                <CompactStudentPicker
+                  students={progressClassStudents}
                   value={progressStudentId}
-                  onChange={(e) => setProgressStudentId(e.target.value)}
-                  className={`w-full h-11 px-3.5 rounded-2xl border font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                    isDark
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                >
-                  {progressClassStudents.length === 0 ? (
-                    <option value="">{isBn ? 'কোনো শিক্ষার্থী নেই' : 'No students'}</option>
-                  ) : (
-                    progressClassStudents.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.roll != null ? `[${fmtNum(s.roll)}] ` : ''}
-                        {s.student_name}
-                      </option>
-                    ))
-                  )}
-                </select>
+                  onChange={(val) => setProgressStudentId(val)}
+                  disabled={progressClassStudents.length === 0}
+                  emptyLabel={isBn ? 'কোনো শিক্ষার্থী নেই' : 'No students'}
+                  title={isBn ? 'প্রগ্রেস ম্যাপের শিক্ষার্থী' : 'Select Student for Progress'}
+                  isBn={isBn}
+                  isDark={isDark}
+                />
               </div>
             </div>
 
-            {/* Compact legend */}
-            <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex-wrap">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />
-                {isBn ? `সম্পন্ন (${fmtNum(paraProgressData.completedParasCount)})` : `Done (${paraProgressData.completedParasCount})`}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-blue-600 inline-block" />
+            {/* Helper note + Compact legend */}
+            <div className="space-y-2">
+              <p
+                className={`text-[11px] font-bold px-3 py-2 rounded-xl border ${
+                  isDark
+                    ? 'bg-emerald-950/25 border-emerald-800/40 text-emerald-300'
+                    : 'bg-emerald-50/80 border-emerald-200/80 text-emerald-800'
+                }`}
+              >
                 {isBn
-                  ? `চলমান (${paraProgressData.currentPara ? fmtNum(paraProgressData.currentPara) : '—'})`
-                  : `Current (${paraProgressData.currentPara || '—'})`}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className={`w-3 h-3 rounded-md inline-block ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
-                {isBn ? 'বাকি' : 'Remaining'}
-              </span>
+                  ? 'পারা আপডেট হলে স্বয়ংক্রিয়ভাবে সবুজ টিক (✓) যুক্ত হয়; এছাড়া যেকোনো পারায় ট্যাপ করেও টিক (✓) দেওয়া বা বাদ দেওয়া যাবে'
+                  : 'Completed Paras auto-tick (✓) when updated; you can also tap any Para to mark or unmark manually'}
+              </p>
+              <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex-wrap">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />
+                  {isBn ? `সম্পন্ন (${fmtNum(paraProgressData.completedParasCount)})` : `Done (${paraProgressData.completedParasCount})`}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-md bg-blue-600 inline-block" />
+                  {isBn
+                    ? `চলমান (${paraProgressData.currentPara ? fmtNum(paraProgressData.currentPara) : '—'})`
+                    : `Current (${paraProgressData.currentPara || '—'})`}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`w-3 h-3 rounded-md inline-block ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                  {isBn ? 'বাকি' : 'Remaining'}
+                </span>
+              </div>
             </div>
 
             {loadingProgress ? (
@@ -1955,39 +2803,42 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 <span className="text-xs font-bold">{isBn ? 'প্রগ্রেস লোড হচ্ছে...' : 'Loading progress...'}</span>
               </div>
             ) : (
-              <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+              <div className="grid grid-cols-6 sm:grid-cols-10 gap-1.5 sm:gap-2">
                 {paraProgressData.paras.map((p) => {
                   const isCompleted = p.status === 'completed';
                   const isCurrent = p.status === 'current';
+                  const isBusy = togglingPara === p.paraNo;
                   return (
-                    <div
+                    <button
                       key={p.paraNo}
-                      className={`p-2 sm:p-2.5 rounded-2xl border text-center flex flex-col items-center justify-center min-h-[60px] transition-colors ${
+                      type="button"
+                      disabled={!selectedProgressStudent || togglingPara !== null}
+                      onClick={() => handleToggleCompletedPara(p.paraNo)}
+                      className={`relative h-10 sm:h-11 px-1 rounded-xl border text-center flex flex-col items-center justify-center transition-all active:scale-95 cursor-pointer disabled:opacity-60 ${
                         isCompleted
                           ? isDark
-                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-xs'
+                            : 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs'
                           : isCurrent
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/25'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-600/25'
                             : isDark
-                              ? 'bg-slate-800/60 border-slate-800 text-slate-400'
-                              : 'bg-slate-50 border-slate-200/70 text-slate-500'
+                              ? 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:border-emerald-500/50'
+                              : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:border-emerald-300'
                       }`}
                     >
-                      <span className="text-[10px] font-bold opacity-80 leading-none">
-                        {isBn ? 'পারা' : 'Para'}
-                      </span>
-                      <span className="text-base sm:text-lg font-black tabular-nums leading-tight mt-0.5">
+                      <span className="text-xs sm:text-sm font-black tabular-nums leading-none">
                         {fmtNum(p.paraNo)}
                       </span>
-                      {isCurrent && p.maxPage > 0 ? (
-                        <span className="text-[9px] font-bold opacity-90 mt-0.5 leading-none">
-                          {isBn ? `পৃঃ ${fmtNum(p.maxPage)}` : `P.${p.maxPage}`}
-                        </span>
+                      {isBusy ? (
+                        <Loader2 size={10} className="mt-0.5 animate-spin" />
                       ) : isCompleted ? (
-                        <Check size={11} className="mt-0.5 opacity-90" />
+                        <Check size={10} className="mt-0.5 stroke-[3]" />
+                      ) : isCurrent && p.maxPage > 0 ? (
+                        <span className="text-[8.5px] font-bold opacity-90 mt-0.5 leading-none tabular-nums">
+                          {isBn ? `পৃঃ${fmtNum(p.maxPage)}` : `P.${p.maxPage}`}
+                        </span>
                       ) : null}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -2019,6 +2870,8 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                   const gradeLabel = rec.grade ? GRADE_LABELS[rec.grade]?.[isBn ? 'bn' : 'en'] : '';
                   const deptLabel = DEPT_LABELS[rec.department]?.[isBn ? 'bn' : 'en'] || rec.department;
                   const sabqiLabel = rec.sabqi_status ? SABQI_LABELS[rec.sabqi_status]?.[isBn ? 'bn' : 'en'] : '';
+                  const isConfirmingDel = confirmDeleteHistoryId === rec.id;
+                  const isDeletingRec = deletingHistoryId === rec.id;
                   return (
                     <div key={rec.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="min-w-0 space-y-0.5">
@@ -2055,22 +2908,24 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                               · {isBn ? 'আমুখতা:' : 'Amukhta:'}{' '}
                               {[
                                 rec.amukhta_para ? `${isBn ? 'পারা' : 'P.'} ${fmtNum(String(rec.amukhta_para))}` : '',
-                                rec.amukhta_amount || '',
+                                rec.amukhta_amount ? fmtNum(rec.amukhta_amount) : '',
                               ]
                                 .filter(Boolean)
-                                .join(' ')}
+                                .join(' · ')}
                             </span>
                           )}
                           {(rec.tilawat_status === 'done' || rec.tilawat_status === 'partial') && (
                             <span className="text-emerald-600 dark:text-emerald-400 font-bold">
                               · {isBn ? 'তিলাওয়াত:' : 'Tilawat:'}{' '}
-                              {rec.tilawat_amount || TILAWAT_LABELS[rec.tilawat_status]?.[isBn ? 'bn' : 'en']}
+                              {rec.tilawat_amount
+                                ? fmtNum(rec.tilawat_amount)
+                                : TILAWAT_LABELS[rec.tilawat_status]?.[isBn ? 'bn' : 'en']}
                             </span>
                           )}
                           {rec.sabina_completed === true && (
                             <span className="text-amber-600 dark:text-amber-400 font-black">
                               · 🌟 {isBn ? 'সবিনা:' : 'Sabina:'}{' '}
-                              {rec.sabina_paras || (isBn ? 'সম্পন্ন' : 'Completed')}
+                              {rec.sabina_paras ? fmtNum(rec.sabina_paras) : isBn ? 'সম্পন্ন' : 'Completed'}
                             </span>
                           )}
                           {(Number(rec.mistakes_lokma || 0) > 0 || Number(rec.mistakes_tajweed || 0) > 0) && (
@@ -2083,15 +2938,59 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                         </div>
                       </div>
 
-                      {gradeLabel && (
-                        <span
-                          className={`self-start sm:self-center px-2.5 py-1 rounded-xl text-[11px] font-black border shrink-0 ${getGradePillClass(
-                            rec.grade
-                          )}`}
-                        >
-                          {gradeLabel}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
+                        {gradeLabel && (
+                          <span
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-black border shrink-0 ${getGradePillClass(
+                              rec.grade
+                            )}`}
+                          >
+                            {gradeLabel}
+                          </span>
+                        )}
+                        {isConfirmingDel ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={isDeletingRec}
+                              onClick={() => handleDeleteHifzRecord(rec, false)}
+                              className="h-7 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black flex items-center gap-1 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              {isDeletingRec ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <span>{isBn ? 'মুছুন' : 'Delete'}</span>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isDeletingRec}
+                              onClick={() => setConfirmDeleteHistoryId(null)}
+                              className={`h-7 px-2 rounded-lg border text-[11px] font-bold active:scale-95 transition-all cursor-pointer ${
+                                isDark
+                                  ? 'bg-slate-800 border-slate-700 text-slate-300'
+                                  : 'bg-slate-100 border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {isBn ? 'না' : 'No'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteHistoryId(rec.id)}
+                            aria-label={isBn ? 'সবক রেকর্ড মুছুন' : 'Delete Sabaq record'}
+                            title={isBn ? 'মুছুন' : 'Delete'}
+                            className={`w-8 h-8 rounded-xl border flex items-center justify-center active:scale-90 transition-all cursor-pointer ${
+                              isDark
+                                ? 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50'
+                            }`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -2225,27 +3124,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn ? 'পারা (১–৩০)' : 'Para (1-30)'}
                       </label>
-                      <select
+                      <CompactParaPicker
                         value={entryForm.para_no}
-                        onChange={(e) =>
-                          setEntryForm((f) => ({
-                            ...f,
-                            para_no: e.target.value === '' ? '' : Number(e.target.value),
-                          }))
-                        }
-                        className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
-                          isDark
-                            ? 'bg-slate-800 border-slate-700 text-white'
-                            : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}
-                      >
-                        <option value="">{isBn ? 'নেই' : 'None'}</option>
-                        {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>
-                            {isBn ? `পারা ${toBnDigit(n)}` : `Para ${n}`}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setEntryForm((f) => ({ ...f, para_no: val }))}
+                        isBn={isBn}
+                        isDark={isDark}
+                        allowEmpty={true}
+                        placeholder={isBn ? 'নেই' : 'None'}
+                        title={isBn ? 'নতুন সবকের পারা নির্বাচন' : 'Select Sabaq Para'}
+                        accent="emerald"
+                      />
                     </div>
 
                     {/* Page From */}
@@ -2433,43 +3321,136 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                     <span>{isBn ? 'আমুখতা' : 'Amukhta / Manzil'}</span>
                   </h3>
                   <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {isBn ? 'পারা' : 'Para'}
+                        </label>
+                        <CompactParaPicker
+                          value={entryForm.amukhta_para_num}
+                          onChange={(val) => setEntryForm((f) => ({ ...f, amukhta_para_num: val }))}
+                          isBn={isBn}
+                          isDark={isDark}
+                          allowEmpty={true}
+                          placeholder={isBn ? 'নির্বাচন' : 'None'}
+                          title={isBn ? 'আমুখতার পারা নির্বাচন' : 'Select Amukhta Para'}
+                          accent="blue"
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {isBn ? 'পৃষ্ঠা থেকে' : 'Page From'}
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          inputMode="numeric"
+                          value={entryForm.amukhta_page_from}
+                          onChange={(e) =>
+                            setEntryForm((f) => ({
+                              ...f,
+                              amukhta_page_from: e.target.value === '' ? '' : clampInt(Number(e.target.value), 1, 20),
+                            }))
+                          }
+                          placeholder={isBn ? '১' : '1'}
+                          className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {isBn ? 'পৃষ্ঠা পর্যন্ত' : 'Page To'}
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          inputMode="numeric"
+                          value={entryForm.amukhta_page_to}
+                          onChange={(e) =>
+                            setEntryForm((f) => ({
+                              ...f,
+                              amukhta_page_to: e.target.value === '' ? '' : clampInt(Number(e.target.value), 1, 20),
+                            }))
+                          }
+                          placeholder={isBn ? '১০' : '10'}
+                          className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3 Quick 1-Tap Amukhta Page-Range Presets */}
                     <div className="grid grid-cols-3 gap-1.5">
-                      {AMUKHTA_AMOUNTS.map((amt) => {
-                        const active = entryForm.amukhta_amount === amt.key;
+                      {[
+                        { from: 1, to: 10, bn: 'প্রথম অর্ধেক (১–১০)', en: 'First Half (1-10)' },
+                        { from: 11, to: 20, bn: 'শেষ অর্ধেক (১১–২০)', en: 'Last Half (11-20)' },
+                        { from: 1, to: 20, bn: 'পূর্ণ পারা (১–২০)', en: 'Full Para (1-20)' },
+                      ].map((chip) => {
+                        const active =
+                          entryForm.amukhta_page_from === chip.from && entryForm.amukhta_page_to === chip.to;
                         return (
                           <button
-                            key={amt.key}
+                            key={chip.bn}
                             type="button"
                             onClick={() =>
                               setEntryForm((f) => ({
                                 ...f,
-                                amukhta_amount: f.amukhta_amount === amt.key ? '' : amt.key,
+                                amukhta_page_from: active ? '' : chip.from,
+                                amukhta_page_to: active ? '' : chip.to,
                               }))
                             }
-                            className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer ${
+                            className={`h-8 px-1.5 rounded-xl border text-[10.5px] font-bold active:scale-95 transition-all cursor-pointer truncate ${
                               active
-                                ? 'bg-blue-600 border-blue-600 text-white'
+                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
                                 : isDark
                                   ? 'bg-slate-800 border-slate-700 text-slate-300'
                                   : 'bg-slate-50 border-slate-200 text-slate-700'
                             }`}
                           >
-                            {isBn ? amt.bn : amt.en}
+                            {isBn ? chip.bn : chip.en}
                           </button>
                         );
                       })}
                     </div>
-                    <input
-                      type="text"
-                      value={entryForm.amukhta_para}
-                      onChange={(e) => setEntryForm((f) => ({ ...f, amukhta_para: e.target.value }))}
-                      placeholder={isBn ? 'পারা (যেমন: ৫ বা ১–৩)' : 'Para (e.g. 5 or 1-3)'}
-                      className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        isDark
-                          ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
-                          : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
-                      }`}
-                    />
+
+                    {(entryForm.amukhta_para_num !== '' ||
+                      entryForm.amukhta_page_from !== '' ||
+                      entryForm.amukhta_page_to !== '') && (
+                      <div
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center justify-between ${
+                          isDark ? 'bg-blue-950/30 text-blue-300' : 'bg-blue-50 text-blue-800'
+                        }`}
+                      >
+                        <span>
+                          {[
+                            entryForm.amukhta_para_num !== ''
+                              ? `${isBn ? 'পারা' : 'Para'} ${fmtNum(entryForm.amukhta_para_num)}`
+                              : '',
+                            formatAmukhtaAmount(entryForm.amukhta_page_from, entryForm.amukhta_page_to, isBn),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEntryForm((f) => ({
+                              ...f,
+                              amukhta_para_num: '',
+                              amukhta_page_from: '',
+                              amukhta_page_to: '',
+                            }))
+                          }
+                          className="text-[10px] underline opacity-75 hover:opacity-100 cursor-pointer"
+                        >
+                          {isBn ? 'মুছুন' : 'Clear'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2498,7 +3479,9 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             setEntryForm((f) => ({
                               ...f,
                               tilawat_status: st,
-                              tilawat_amount: st === 'none' ? '' : f.tilawat_amount,
+                              ...(st === 'none'
+                                ? { tilawat_para: '', tilawat_page_from: '', tilawat_page_to: '' }
+                                : {}),
                             }))
                           }
                           className={`h-9 px-3 rounded-xl border text-xs font-bold active:scale-95 transition-all cursor-pointer ${
@@ -2517,43 +3500,118 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
 
                   {(entryForm.tilawat_status === 'done' || entryForm.tilawat_status === 'partial') && (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {TILAWAT_AMOUNTS.map((amt) => {
-                          const active = entryForm.tilawat_amount === amt.key;
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {isBn ? 'পারা' : 'Para'}
+                          </label>
+                          <CompactParaPicker
+                            value={entryForm.tilawat_para}
+                            onChange={(val) => setEntryForm((f) => ({ ...f, tilawat_para: val }))}
+                            isBn={isBn}
+                            isDark={isDark}
+                            allowEmpty={true}
+                            placeholder={isBn ? 'নির্বাচন' : 'None'}
+                            title={isBn ? 'তেলাওয়াতের পারা নির্বাচন' : 'Select Tilawat Para'}
+                            accent="emerald"
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {isBn ? 'পৃষ্ঠা থেকে' : 'Page From'}
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            inputMode="numeric"
+                            value={entryForm.tilawat_page_from}
+                            onChange={(e) =>
+                              setEntryForm((f) => ({
+                                ...f,
+                                tilawat_page_from: e.target.value === '' ? '' : clampInt(Number(e.target.value), 1, 20),
+                              }))
+                            }
+                            placeholder={isBn ? '১' : '1'}
+                            className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                              isDark ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {isBn ? 'পৃষ্ঠা পর্যন্ত' : 'Page To'}
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            inputMode="numeric"
+                            value={entryForm.tilawat_page_to}
+                            onChange={(e) =>
+                              setEntryForm((f) => ({
+                                ...f,
+                                tilawat_page_to: e.target.value === '' ? '' : clampInt(Number(e.target.value), 1, 20),
+                              }))
+                            }
+                            placeholder={isBn ? '১০' : '10'}
+                            className={`w-full h-10 px-2.5 rounded-xl border font-bold text-xs sm:text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
+                              isDark ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 3 Quick 1-Tap Tilawat Page-Range Presets */}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { from: 1, to: 10, bn: 'পৃঃ ১–১০', en: 'P. 1-10' },
+                          { from: 11, to: 20, bn: 'পৃঃ ১১–২০', en: 'P. 11-20' },
+                          { from: 1, to: 20, bn: 'পূর্ণ পারা (১–২০)', en: 'Full Para (1-20)' },
+                        ].map((chip) => {
+                          const active =
+                            entryForm.tilawat_page_from === chip.from && entryForm.tilawat_page_to === chip.to;
                           return (
                             <button
-                              key={amt.key}
+                              key={chip.bn}
                               type="button"
                               onClick={() =>
                                 setEntryForm((f) => ({
                                   ...f,
-                                  tilawat_amount: f.tilawat_amount === amt.key ? '' : amt.key,
+                                  tilawat_page_from: active ? '' : chip.from,
+                                  tilawat_page_to: active ? '' : chip.to,
                                 }))
                               }
-                              className={`h-8 px-2 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer ${
+                              className={`h-8 px-1.5 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer truncate ${
                                 active
-                                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
                                   : isDark
                                     ? 'bg-slate-800 border-slate-700 text-slate-300'
                                     : 'bg-slate-50 border-slate-200 text-slate-700'
                               }`}
                             >
-                              {isBn ? amt.bn : amt.en}
+                              {isBn ? chip.bn : chip.en}
                             </button>
                           );
                         })}
                       </div>
-                      <input
-                        type="text"
-                        value={entryForm.tilawat_amount}
-                        onChange={(e) => setEntryForm((f) => ({ ...f, tilawat_amount: e.target.value }))}
-                        placeholder={isBn ? 'যেমন: ১ পারা বা সূরা ইয়াসিন' : 'e.g. 1 Para or Surah Yaseen'}
-                        className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
-                          isDark
-                            ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400'
-                        }`}
-                      />
+
+                      {(entryForm.tilawat_para !== '' ||
+                        entryForm.tilawat_page_from !== '' ||
+                        entryForm.tilawat_page_to !== '') && (
+                        <div
+                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold ${
+                            isDark ? 'bg-emerald-950/30 text-emerald-300' : 'bg-emerald-50 text-emerald-800'
+                          }`}
+                        >
+                          {formatTilawatAmount(
+                            entryForm.tilawat_para,
+                            entryForm.tilawat_page_from,
+                            entryForm.tilawat_page_to,
+                            isBn
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2586,7 +3644,6 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             setEntryForm((f) => ({
                               ...f,
                               sabina_completed: false,
-                              sabina_paras: '',
                             }))
                           }
                           className={`h-8 px-3 rounded-xl text-xs font-bold border transition-all active:scale-95 cursor-pointer ${
@@ -2607,6 +3664,12 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                             setEntryForm((f) => ({
                               ...f,
                               sabina_completed: true,
+                              ...(lastSabinaHint && !f.sabina_completed
+                                ? {
+                                    sabina_from_para: lastSabinaHint.nextFrom,
+                                    sabina_to_para: lastSabinaHint.nextTo,
+                                  }
+                                : {}),
                             }))
                           }
                           className={`h-8 px-3 rounded-xl text-xs font-bold border transition-all active:scale-95 cursor-pointer ${
@@ -2622,48 +3685,146 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       </div>
                     </div>
 
-                    {entryForm.sabina_completed && (
-                      <div className="space-y-2 pt-0.5">
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {SABINA_AMOUNTS.map((amt) => {
-                            const active = entryForm.sabina_paras === amt.key;
-                            return (
-                              <button
-                                key={amt.key}
-                                type="button"
-                                onClick={() =>
-                                  setEntryForm((f) => ({
-                                    ...f,
-                                    sabina_paras: f.sabina_paras === amt.key ? '' : amt.key,
-                                  }))
-                                }
-                                className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer truncate ${
-                                  active
-                                    ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                                    : isDark
-                                      ? 'bg-slate-900/80 border-slate-700 text-slate-200'
-                                      : 'bg-white border-amber-200 text-amber-900'
-                                }`}
-                              >
-                                {isBn ? amt.bn : amt.en}
-                              </button>
-                            );
-                          })}
-                        </div>
+                    {entryForm.sabina_completed && (() => {
+                      const sabinaSummary = formatSabinaRange(
+                        entryForm.sabina_from_para,
+                        entryForm.sabina_to_para,
+                        isBn
+                      );
+                      return (
+                        <div className="space-y-2.5 pt-0.5">
+                          {/* Smart Serial Auto-Carryover Hint */}
+                          {lastSabinaHint && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEntryForm((f) => ({
+                                  ...f,
+                                  sabina_from_para: lastSabinaHint.nextFrom,
+                                  sabina_to_para: lastSabinaHint.nextTo,
+                                }))
+                              }
+                              className={`w-full px-3 py-2 rounded-xl border text-left text-[11px] font-bold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                isDark
+                                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-200 hover:bg-amber-500/20'
+                                  : 'bg-white border-amber-300 text-amber-900 hover:bg-amber-50'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <Sparkles size={13} className="text-amber-500 shrink-0" />
+                                <span className="truncate">
+                                  {isBn
+                                    ? `গত সবিনা: ${lastSabinaHint.prevRangeLabel} → পরবর্তী সিরিয়াল: ${fmtNum(lastSabinaHint.nextFrom)}–${fmtNum(lastSabinaHint.nextTo)}`
+                                    : `Last Sabina: ${lastSabinaHint.prevRangeLabel} → Next serial: ${lastSabinaHint.nextFrom}-${lastSabinaHint.nextTo}`}
+                                </span>
+                              </span>
+                            </button>
+                          )}
 
-                        <input
-                          type="text"
-                          value={entryForm.sabina_paras}
-                          onChange={(e) => setEntryForm((f) => ({ ...f, sabina_paras: e.target.value }))}
-                          placeholder={isBn ? 'যেমন: ১–৫ পারা' : 'Para range or count'}
-                          className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm outline-none focus:ring-2 focus:ring-amber-500 ${
-                            isDark
-                              ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
-                              : 'bg-white border-amber-200 text-slate-800 placeholder:text-slate-400'
-                          }`}
-                        />
-                      </div>
-                    )}
+                          {/* Exact From / To Para Selectors */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-300' : 'text-amber-900/80'}`}>
+                                {isBn ? 'শুরু পারা' : 'Start Para'}
+                              </label>
+                              <CompactParaPicker
+                                value={entryForm.sabina_from_para}
+                                onChange={(val) => {
+                                  if (val !== '') {
+                                    setEntryForm((f) => ({
+                                      ...f,
+                                      sabina_from_para: val,
+                                    }));
+                                  }
+                                }}
+                                isBn={isBn}
+                                isDark={isDark}
+                                allowEmpty={false}
+                                title={isBn ? 'সবিনা শুরু পারা নির্বাচন' : 'Select Sabina Start Para'}
+                                accent="amber"
+                              />
+                            </div>
+                            <div>
+                              <label className={`text-[11px] font-bold block mb-1 ${isDark ? 'text-slate-300' : 'text-amber-900/80'}`}>
+                                {isBn ? 'শেষ পারা' : 'End Para'}
+                              </label>
+                              <CompactParaPicker
+                                value={entryForm.sabina_to_para}
+                                onChange={(val) => {
+                                  if (val !== '') {
+                                    setEntryForm((f) => ({
+                                      ...f,
+                                      sabina_to_para: val,
+                                    }));
+                                  }
+                                }}
+                                isBn={isBn}
+                                isDark={isDark}
+                                allowEmpty={false}
+                                title={isBn ? 'সবিনা শেষ পারা নির্বাচন' : 'Select Sabina End Para'}
+                                accent="amber"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Auto-calculated Sabina Range Badge */}
+                          <div
+                            className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 ${
+                              isDark
+                                ? 'bg-amber-500/20 border-amber-500/40 text-amber-200'
+                                : 'bg-amber-100/80 border-amber-300 text-amber-900'
+                            }`}
+                          >
+                            <span className="text-xs font-black">
+                              🌟 {sabinaSummary.shortRange}
+                            </span>
+                            <span className="text-[11px] font-black px-2 py-0.5 rounded-lg bg-amber-500 text-white tabular-nums">
+                              {isBn ? `মোট ${fmtNum(sabinaSummary.count)} পারা` : `Total ${sabinaSummary.count} Paras`}
+                            </span>
+                          </div>
+
+                          {/* Quick Span Buttons */}
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { span: 2, bn: '+২ পারা', en: '+2 Paras' },
+                              { span: 3, bn: '+৩ পারা', en: '+3 Paras' },
+                              { span: 5, bn: '+৫ পারা', en: '+5 Paras' },
+                              { span: 30, bn: '৩০ খতম', en: '30 Khatam' },
+                            ].map((btn) => {
+                              const isKhatam = btn.span === 30;
+                              const active = isKhatam
+                                ? entryForm.sabina_from_para === 1 && entryForm.sabina_to_para === 30
+                                : sabinaSummary.count === btn.span;
+                              return (
+                                <button
+                                  key={btn.span}
+                                  type="button"
+                                  onClick={() =>
+                                    setEntryForm((f) =>
+                                      isKhatam
+                                        ? { ...f, sabina_from_para: 1, sabina_to_para: 30 }
+                                        : {
+                                            ...f,
+                                            sabina_to_para: ((f.sabina_from_para + btn.span - 2) % 30) + 1,
+                                          }
+                                    )
+                                  }
+                                  className={`h-8 px-1.5 rounded-xl border text-[11px] font-bold active:scale-95 transition-all cursor-pointer truncate ${
+                                    active
+                                      ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                                      : isDark
+                                        ? 'bg-slate-900/80 border-slate-700 text-slate-200'
+                                        : 'bg-white border-amber-200 text-amber-900'
+                                  }`}
+                                >
+                                  {isBn ? btn.bn : btn.en}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -2847,15 +4008,54 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 </div>
               </form>
 
-              {/* Sticky Footer Save CTA */}
+              {/* Sticky Footer Save CTA (+ Inline Delete for existing record) */}
               <div
                 className={`px-4 sm:px-5 py-3 border-t flex items-center gap-2 shrink-0 ${
                   isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'
                 }`}
               >
+                {dailyRecordsMap[activeStudent.id] && (
+                  confirmDeleteEntry ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={deletingEntry || savingEntry}
+                        onClick={() => handleDeleteHifzRecord(dailyRecordsMap[activeStudent.id], true)}
+                        className="h-11 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs flex items-center gap-1 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {deletingEntry ? <Loader2 size={14} className="animate-spin" /> : <span>{isBn ? 'মুছুন' : 'Delete'}</span>}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingEntry}
+                        onClick={() => setConfirmDeleteEntry(false)}
+                        className={`h-11 px-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {isBn ? 'না' : 'No'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={savingEntry || deletingEntry}
+                      onClick={() => setConfirmDeleteEntry(true)}
+                      aria-label={isBn ? 'রেকর্ড মুছুন' : 'Delete entry'}
+                      title={isBn ? 'রেকর্ড মুছুন' : 'Delete entry'}
+                      className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 active:scale-95 transition-all cursor-pointer ${
+                        isDark
+                          ? 'bg-rose-950/30 border-rose-800/50 text-rose-400 hover:bg-rose-950/60'
+                          : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+                      }`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )
+                )}
                 <button
                   type="button"
-                  disabled={savingEntry}
+                  disabled={savingEntry || deletingEntry}
                   onClick={() => setActiveStudent(null)}
                   className={`flex-1 h-11 rounded-xl border font-black text-xs sm:text-sm active:scale-95 transition-transform cursor-pointer ${
                     isDark
@@ -2868,7 +4068,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                 <button
                   type="submit"
                   form="hifz-entry-form"
-                  disabled={savingEntry}
+                  disabled={savingEntry || deletingEntry}
                   className="flex-[2] h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {savingEntry ? (

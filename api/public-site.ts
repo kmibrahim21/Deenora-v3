@@ -166,17 +166,26 @@ function buildPublicInstitution(inst: any) {
     'slug',
     'tagline',
     'about',
+    'ticker_text',
     'banner_text',
+    'established_year',
+    'office_hours',
     'admission_open',
     'admission_note',
+    'principal_name',
+    'principal_title',
+    'principal_message',
+    'principal_photo_url',
+    'hero_image_url',
+    'gallery_urls',
     'facebook_url',
     'youtube_url',
     'website_url',
-    'established_year',
-    'office_hours',
     'map_url',
   ];
   const urlKeys = new Set(['facebook_url', 'youtube_url', 'website_url', 'map_url']);
+  const photoKeys = new Set(['principal_photo_url', 'hero_image_url']);
+
   for (const key of allowedPublicKeys) {
     if (rawPublicSite[key] !== undefined) {
       if (urlKeys.has(key)) {
@@ -190,6 +199,18 @@ function buildPublicInstitution(inst: any) {
           } catch {
             // Skip invalid URL
           }
+        }
+      } else if (photoKeys.has(key)) {
+        const rawPhoto = typeof rawPublicSite[key] === 'string' ? rawPublicSite[key].trim() : '';
+        if (rawPhoto && isSafePhotoUrl(rawPhoto)) {
+          safePublicSite[key] = rawPhoto;
+        }
+      } else if (key === 'gallery_urls') {
+        if (Array.isArray(rawPublicSite.gallery_urls)) {
+          safePublicSite.gallery_urls = rawPublicSite.gallery_urls
+            .filter((item: any) => typeof item === 'string' && item.trim() && isSafePhotoUrl(item.trim()))
+            .map((item: string) => item.trim())
+            .slice(0, 4);
         }
       } else {
         safePublicSite[key] = rawPublicSite[key];
@@ -585,6 +606,7 @@ export default async function handler(req: any, res: any) {
       befaqExamsRes,
       studentCountRes,
       teacherCountRes,
+      teachersListRes,
     ] = await Promise.all([
       supabase
         .from('classes')
@@ -621,6 +643,11 @@ export default async function handler(req: any, res: any) {
         .from('teachers')
         .select('id', { count: 'exact', head: true })
         .eq('institution_id', inst.id),
+      supabase
+        .from('teachers')
+        .select('id, teacher_name, designation, photo_url')
+        .eq('institution_id', inst.id)
+        .limit(8),
     ]);
 
     const classes = (classesRes.data || []).map((c: any) => ({
@@ -633,6 +660,13 @@ export default async function handler(req: any, res: any) {
       title: n.title || 'নোটিশ',
       message: parseNoticeMessage(n.message),
       created_at: n.created_at,
+    }));
+
+    const teachersList = (teachersListRes.data || []).map((t: any) => ({
+      id: t.id,
+      teacher_name: t.teacher_name || '',
+      designation: t.designation || '',
+      photo_url: t.photo_url && isSafePhotoUrl(String(t.photo_url)) ? String(t.photo_url) : '',
     }));
 
     const rawExams =
@@ -656,6 +690,7 @@ export default async function handler(req: any, res: any) {
       classes,
       notices,
       exams: publishedExams,
+      teachers: teachersList,
       stats: {
         student_count: studentCountRes.count || 0,
         teacher_count: teacherCountRes.count || 0,
