@@ -119,6 +119,17 @@ export interface Institution {
     };
     public_site?: {
       slug?: string;
+      tagline?: string;
+      about?: string;
+      banner_text?: string;
+      admission_open?: boolean;
+      admission_note?: string;
+      established_year?: string;
+      office_hours?: string;
+      facebook_url?: string;
+      youtube_url?: string;
+      website_url?: string;
+      map_url?: string;
     };
   };
   theme: string;

@@ -10,10 +10,13 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  ExternalLink,
   FileText,
   GraduationCap,
   Home,
+  Info,
   Loader2,
+  Lock,
   Mail,
   MapPin,
   Menu,
@@ -42,10 +45,15 @@ interface PublicInstitution {
     slug?: string;
     tagline?: string;
     about?: string;
+    banner_text?: string;
     admission_open?: boolean;
     admission_note?: string;
     established_year?: string;
     office_hours?: string;
+    facebook_url?: string;
+    youtube_url?: string;
+    website_url?: string;
+    map_url?: string;
   };
 }
 
@@ -137,6 +145,21 @@ const HIGHLIGHTS = [
 function isSafeImageSrc(src?: string | null): boolean {
   if (!src) return false;
   return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('data:image/');
+}
+
+function getSafeExternalUrl(raw?: string | null): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function formatBnDate(isoDate?: string | null): string {
@@ -498,6 +521,14 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
   const { institution, classes, notices, exams, stats } = siteData;
   const hasSafeLogo = isSafeImageSrc(institution.logo_url) && !logoError;
   const verifiedIdentifier = institution.public_site?.slug || institution.institute_code || '';
+  const isAdmissionOpen = institution.public_site?.admission_open !== false;
+  const admissionNote = (institution.public_site?.admission_note || '').trim();
+  const aboutText = (institution.public_site?.about || '').trim();
+  const establishedYear = (institution.public_site?.established_year || '').trim();
+  const officeHours = (institution.public_site?.office_hours || '').trim();
+  const facebookUrl = getSafeExternalUrl(institution.public_site?.facebook_url);
+  const youtubeUrl = getSafeExternalUrl(institution.public_site?.youtube_url);
+  const mapUrl = getSafeExternalUrl(institution.public_site?.map_url);
   const resultPercentage =
     resultData && resultData.max_total > 0
       ? Math.round((resultData.total_marks / resultData.max_total) * 100)
@@ -506,16 +537,16 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
   return (
     <div className="min-h-screen w-full bg-[#F8FAFC] text-slate-900 font-noto overflow-x-clip selection:bg-[#2563EB]/15 selection:text-[#1E3A8A]">
       {/* Section 1 — Sticky Glassmorphic Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 lg:gap-8">
-          {/* Brand Zone */}
+      <header className="sticky top-0 z-50 bg-white/92 backdrop-blur-md border-b border-slate-200/80">
+        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-16 flex items-center justify-between gap-2.5 sm:gap-4 lg:gap-8">
+          {/* Brand Zone (2-line mobile friendly) */}
           <a
             href="#home"
             onClick={(e) => {
               e.preventDefault();
               scrollToSection('home');
             }}
-            className="flex items-center gap-3 min-w-0 shrink"
+            className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 lg:flex-initial"
           >
             {hasSafeLogo ? (
               <img
@@ -523,25 +554,25 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                 alt={institution.name}
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
-                className="w-10 h-10 rounded-full object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <GraduationCap size={20} />
               </div>
             )}
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm sm:text-base font-black text-[#1E3A8A] truncate">
-                  {institution.name}
-                </span>
-                {verifiedIdentifier && (
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-[#059669] whitespace-nowrap shrink-0">
-                    <ShieldCheck size={13} />
-                    <span>{toBnDigit(verifiedIdentifier)}</span>
+              <span className="block text-sm sm:text-base font-black text-[#1E3A8A] leading-tight line-clamp-1">
+                {institution.name}
+              </span>
+              {(verifiedIdentifier || institution.address) && (
+                <span className="mt-0.5 flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#059669] truncate">
+                  <ShieldCheck size={11} className="shrink-0" />
+                  <span className="truncate">
+                    {verifiedIdentifier ? toBnDigit(verifiedIdentifier) : institution.address}
                   </span>
-                )}
-              </div>
+                </span>
+              )}
             </div>
           </a>
 
@@ -563,22 +594,22 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
           </nav>
 
           {/* Primary CTA + Mobile Menu Toggle */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
               onClick={() => scrollToSection('admission')}
-              className="h-10 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
+              className="h-9 px-3 sm:h-10 sm:px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
             >
-              অনলাইন ভর্তি
+              ভর্তি আবেদন
             </button>
             <button
               type="button"
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-label="মেনু"
               aria-expanded={mobileMenuOpen}
-              className="lg:hidden w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 flex items-center justify-center transition-colors cursor-pointer"
+              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 flex items-center justify-center transition-colors cursor-pointer"
             >
-              {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
           </div>
         </div>
@@ -606,134 +637,189 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
       </header>
 
       {/* Section 2 — Full-Width Hero Section (#home) */}
-      <section
-        id="home"
-        className="relative w-full overflow-hidden bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-indigo-700 text-white scroll-mt-16"
-      >
-        {/* Subtle Geometric Islamic Arch SVG Watermark */}
-        <svg
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 w-full h-full opacity-[0.1]"
-          xmlns="http://www.w3.org/2000/svg"
-          preserveAspectRatio="xMidYMid slice"
-          viewBox="0 0 800 400"
+      <div className="bg-white">
+        <section
+          id="home"
+          className="relative w-full overflow-hidden bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-indigo-700 text-white rounded-b-[2rem] sm:rounded-b-[2.5rem] shadow-lg shadow-blue-950/10 scroll-mt-16"
         >
-          <defs>
-            <pattern id="islamic-arch-grid" width="120" height="140" patternUnits="userSpaceOnUse">
-              <path
-                d="M60 12 C90 36 108 66 108 136 L12 136 C12 66 30 36 60 12 Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-              />
-              <path
-                d="M60 28 C82 48 94 72 94 128 L26 128 C26 72 38 48 60 28 Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="0.8"
-              />
-              <polygon
-                points="60,4 66,12 60,20 54,12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="0.9"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#islamic-arch-grid)" />
-        </svg>
+          {/* Subtle Geometric Islamic Arch SVG Watermark */}
+          <svg
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 w-full h-full opacity-[0.1]"
+            xmlns="http://www.w3.org/2000/svg"
+            preserveAspectRatio="xMidYMid slice"
+            viewBox="0 0 800 400"
+          >
+            <defs>
+              <pattern id="islamic-arch-grid" width="120" height="140" patternUnits="userSpaceOnUse">
+                <path
+                  d="M60 12 C90 36 108 66 108 136 L12 136 C12 66 30 36 60 12 Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                />
+                <path
+                  d="M60 28 C82 48 94 72 94 128 L26 128 C26 72 38 48 60 28 Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="0.8"
+                />
+                <polygon
+                  points="60,4 66,12 60,20 54,12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="0.9"
+                />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#islamic-arch-grid)" />
+          </svg>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 lg:py-20">
-          <div className="max-w-3xl space-y-6">
-            {/* Admission Status & Location Meta */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm font-bold">
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-300/35 text-emerald-100">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>অনলাইন ভর্তি চলছে</span>
-              </span>
-              {institution.address && (
-                <span className="inline-flex items-center gap-1.5 text-blue-100/95">
-                  <MapPin size={15} className="text-blue-200 shrink-0" />
-                  <span>{institution.address}</span>
-                </span>
-              )}
+          <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16 lg:py-20">
+            <div className="max-w-3xl space-y-5 sm:space-y-6">
+              {/* Admission Status, Established Year & Location Meta */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs font-bold">
+                {isAdmissionOpen ? (
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-300/35 text-emerald-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>অনলাইন ভর্তি চলছে</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-300/40 text-amber-100">
+                    <Lock size={12} className="shrink-0" />
+                    <span>ভর্তি বর্তমানে বন্ধ</span>
+                  </span>
+                )}
+
+                {establishedYear && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 border border-white/25 text-blue-50">
+                    <span>স্থাপিত: {toBnDigit(establishedYear)}</span>
+                  </span>
+                )}
+
+                {institution.address && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-blue-100/95 max-w-full">
+                    <MapPin size={13} className="text-blue-200 shrink-0" />
+                    <span className="truncate">{institution.address}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Institution Title */}
+              <h1
+                className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.18] tracking-tight text-white"
+                style={{ textWrap: 'balance' }}
+              >
+                {institution.name}
+              </h1>
+
+              {/* Tagline */}
+              <p className="text-sm sm:text-base lg:text-lg text-blue-100/90 leading-relaxed max-w-2xl font-medium">
+                {institution.public_site?.tagline ||
+                  'দ্বীনি ও আধুনিক শিক্ষার সমন্বয়ে নৈতিক ও আদর্শ মানুষ গড়ার নির্ভরযোগ্য প্রতিষ্ঠান। অনলাইনে ভর্তি আবেদন, সর্বশেষ নোটিশ ও পরীক্ষার ফলাফল জানুন মুহূর্তেই।'}
+              </p>
+
+              {/* Primary & Secondary CTAs (full-width stacked on small mobile, inline on sm+) */}
+              <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => scrollToSection('admission')}
+                  className="w-full sm:w-auto justify-center h-12 px-6 rounded-xl bg-white hover:bg-emerald-50 text-[#1E3A8A] font-black text-sm inline-flex items-center gap-2 shadow-lg shadow-blue-950/20 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <UserPlus size={18} className="text-[#059669]" />
+                  <span>{isAdmissionOpen ? 'অনলাইন ভর্তি আবেদন' : 'ভর্তি তথ্য দেখুন'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollToSection('results')}
+                  className="w-full sm:w-auto justify-center h-12 px-6 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-black text-sm inline-flex items-center gap-2 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Award size={18} />
+                  <span>রেজাল্ট দেখুন</span>
+                </button>
+              </div>
             </div>
 
-            {/* Institution Title */}
-            <h1
-              className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.18] tracking-tight text-white"
-              style={{ textWrap: 'balance' }}
-            >
-              {institution.name}
-            </h1>
+            {/* Bottom Row: 3 Glassmorphic Stat Cards */}
+            <div className="mt-9 sm:mt-12 grid grid-cols-3 gap-2.5 sm:gap-5 max-w-2xl">
+              <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/20 p-3 sm:p-5 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-between gap-2">
+                  <span className="text-lg sm:text-3xl font-black tabular-nums leading-none text-white">
+                    {toBnDigit(stats.student_count)}+
+                  </span>
+                  <Users size={18} className="hidden sm:block text-blue-200/80 shrink-0" />
+                </div>
+                <div className="text-[11px] sm:text-xs font-bold text-blue-100 mt-1.5 leading-snug">
+                  মোট শিক্ষার্থী
+                </div>
+              </div>
 
-            {/* Tagline */}
-            <p className="text-sm sm:text-base lg:text-lg text-blue-100/90 leading-relaxed max-w-2xl font-medium">
-              {institution.public_site?.tagline ||
-                'দ্বীনি ও আধুনিক শিক্ষার সমন্বয়ে নৈতিক ও আদর্শ মানুষ গড়ার নির্ভরযোগ্য প্রতিষ্ঠান। অনলাইনে ভর্তি আবেদন, সর্বশেষ নোটিশ ও পরীক্ষার ফলাফল জানুন মুহূর্তেই।'}
-            </p>
+              <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/20 p-3 sm:p-5 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-between gap-2">
+                  <span className="text-lg sm:text-3xl font-black tabular-nums leading-none text-white">
+                    {toBnDigit(stats.teacher_count)}+
+                  </span>
+                  <GraduationCap size={18} className="hidden sm:block text-emerald-200/90 shrink-0" />
+                </div>
+                <div className="text-[11px] sm:text-xs font-bold text-blue-100 mt-1.5 leading-snug">
+                  অভিজ্ঞ শিক্ষক
+                </div>
+              </div>
 
-            {/* Primary & Secondary CTAs */}
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => scrollToSection('admission')}
-                className="h-12 px-6 rounded-xl bg-white hover:bg-emerald-50 text-[#1E3A8A] font-black text-sm inline-flex items-center gap-2 shadow-lg shadow-blue-950/20 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
-              >
-                <UserPlus size={18} className="text-[#059669]" />
-                <span>অনলাইন ভর্তি আবেদন</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('results')}
-                className="h-12 px-6 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-black text-sm inline-flex items-center gap-2 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
-              >
-                <Award size={18} />
-                <span>রেজাল্ট দেখুন</span>
-              </button>
+              <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/20 p-3 sm:p-5 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-between gap-2">
+                  <span className="text-lg sm:text-3xl font-black tabular-nums leading-none text-white">
+                    {toBnDigit(classes.length)}
+                  </span>
+                  <BookOpen size={18} className="hidden sm:block text-blue-200/80 shrink-0" />
+                </div>
+                <div className="text-[11px] sm:text-xs font-bold text-blue-100 mt-1.5 leading-snug">
+                  শ্রেণি ও বিভাগ
+                </div>
+              </div>
             </div>
           </div>
+        </section>
+      </div>
 
-          {/* Bottom Row: 3 Glassmorphic Stat Cards */}
-          <div className="mt-10 sm:mt-12 grid grid-cols-3 gap-3 sm:gap-5 max-w-2xl">
-            <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/20 p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xl sm:text-3xl font-black tabular-nums leading-none text-white">
-                  {toBnDigit(stats.student_count)}+
-                </span>
-                <Users size={18} className="hidden sm:block text-blue-200/80 shrink-0" />
-              </div>
-              <div className="text-[11px] sm:text-xs font-bold text-blue-100 mt-1.5">
-                মোট শিক্ষার্থী
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/20 p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xl sm:text-3xl font-black tabular-nums leading-none text-white">
-                  {toBnDigit(stats.teacher_count)}+
-                </span>
-                <GraduationCap size={18} className="hidden sm:block text-emerald-200/90 shrink-0" />
-              </div>
-              <div className="text-[11px] sm:text-xs font-bold text-blue-100 mt-1.5">
-                অভিজ্ঞ শিক্ষক
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/20 p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xl sm:text-3xl font-black tabular-nums leading-none text-white">
-                  {toBnDigit(classes.length)}
-                </span>
-                <BookOpen size={18} className="hidden sm:block text-blue-200/80 shrink-0" />
-              </div>
-              <div className="text-[11px] sm:text-xs font-bold text-blue-100 mt-1.5">
-                শ্রেণি ও বিভাগ
+      {/* Section 2.5 — প্রতিষ্ঠান পরিচিতি (#about) — rendered when custom about text is set */}
+      {aboutText && (
+        <section id="about" className="w-full bg-white pt-12 sm:pt-16 pb-2 scroll-mt-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="rounded-3xl bg-[#F8FAFC] border border-slate-200/80 p-6 sm:p-8 lg:p-10 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-[#1E3A8A] via-[#2563EB] to-[#059669]" />
+              <div className="pl-2 sm:pl-3 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 text-[#1E3A8A] flex items-center justify-center shrink-0">
+                      <Building2 size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-black text-[#1E3A8A] tracking-tight">
+                        প্রতিষ্ঠান পরিচিতি
+                      </h2>
+                      {establishedYear && (
+                        <p className="text-xs font-bold text-[#059669]">
+                          স্থাপিত: {toBnDigit(establishedYear)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {officeHours && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200/80 text-xs font-bold text-slate-600">
+                      <Clock size={14} className="text-[#2563EB] shrink-0" />
+                      <span>{officeHours}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed whitespace-pre-line">
+                  {aboutText}
+                </p>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Section 3 — আমাদের বৈশিষ্ট্যসমূহ / Highlights (#features) */}
       <section id="features" className="w-full bg-white border-b border-slate-200/70 py-14 sm:py-20 scroll-mt-16">
@@ -1059,7 +1145,40 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
           </div>
 
           <div className="max-w-3xl mx-auto bg-white rounded-[2rem] shadow-xl shadow-slate-900/5 border border-slate-200/80 p-5 sm:p-8 lg:p-10">
-            {submittedApplication ? (
+            {!isAdmissionOpen ? (
+              <div className="rounded-3xl bg-amber-50/70 border border-amber-200/80 p-6 sm:p-8 text-center space-y-5">
+                <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 border border-amber-200 flex items-center justify-center mx-auto">
+                  <Lock size={28} />
+                </div>
+                <div className="space-y-2 max-w-md mx-auto">
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                    বর্তমানে অনলাইন ভর্তি কার্যক্রম বন্ধ রয়েছে
+                  </h3>
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    পরবর্তী ভর্তি বিজ্ঞপ্তি অথবা সরাসরি ভর্তি সংক্রান্ত তথ্যের জন্য প্রতিষ্ঠানের অফিসে যোগাযোগ করুন।
+                  </p>
+                </div>
+
+                {admissionNote && (
+                  <div className="max-w-md mx-auto px-4 py-3 rounded-2xl bg-white border border-amber-200 text-xs sm:text-sm font-bold text-amber-900 leading-relaxed">
+                    {admissionNote}
+                  </div>
+                )}
+
+                {institution.phone && (
+                  <div className="pt-1">
+                    <a
+                      href={`tel:${institution.phone}`}
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#1E3A8A] hover:bg-[#2563EB] text-white text-sm font-black shadow-sm transition-colors"
+                    >
+                      <Phone size={16} />
+                      <span>কল করুন:</span>
+                      <span className="tabular-nums">{institution.phone}</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : submittedApplication ? (
               <div className="rounded-3xl bg-emerald-50/70 border border-emerald-200 p-6 sm:p-8 text-center space-y-5 animate-in fade-in duration-300">
                 <div className="w-16 h-16 rounded-2xl bg-[#059669] text-white flex items-center justify-center mx-auto shadow-md shadow-emerald-600/20">
                   <CheckCircle2 size={32} />
@@ -1110,6 +1229,13 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
               </div>
             ) : (
               <form onSubmit={handleSubmitAdmission} className="space-y-7">
+                {admissionNote && (
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-blue-50/90 border border-blue-200/80 text-[#1E3A8A] text-xs sm:text-sm font-bold flex items-start gap-2.5 leading-relaxed">
+                    <Info size={18} className="text-[#2563EB] shrink-0 mt-0.5" />
+                    <span>{admissionNote}</span>
+                  </div>
+                )}
+
                 {submitError && (
                   <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm font-bold flex items-center gap-2">
                     <AlertCircle size={17} className="shrink-0" />
@@ -1406,10 +1532,10 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                     alt={institution.name}
                     referrerPolicy="no-referrer"
                     onError={() => setLogoError(true)}
-                    className="w-11 h-11 rounded-full object-cover border border-slate-700 bg-white shrink-0"
+                    className="w-11 h-11 rounded-2xl object-cover border border-slate-700 bg-white shrink-0"
                   />
                 ) : (
-                  <div className="w-11 h-11 rounded-full bg-[#2563EB] text-white flex items-center justify-center shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center shrink-0">
                     <GraduationCap size={22} />
                   </div>
                 )}
@@ -1422,11 +1548,54 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                   )}
                 </div>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed max-w-md">
-                {institution.public_site?.about ||
+              <p className="text-sm text-slate-400 leading-relaxed max-w-md line-clamp-4">
+                {aboutText ||
                   institution.public_site?.tagline ||
                   'দ্বীনি ও আধুনিক শিক্ষার মানোন্নয়নে নিবেদিত একটি আদর্শ শিক্ষা প্রতিষ্ঠান।'}
               </p>
+
+              {(facebookUrl || youtubeUrl || mapUrl) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {facebookUrl && (
+                    <a
+                      href={facebookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-[#1877F2] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.49-3.91 3.78-3.91 1.09 0 2.24.2 2.24.2v2.47h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.44 2.91h-2.34V22c4.78-.76 8.43-4.92 8.43-9.94Z" />
+                      </svg>
+                      <span>ফেসবুক</span>
+                    </a>
+                  )}
+                  {youtubeUrl && (
+                    <a
+                      href={youtubeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-[#FF0000] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
+                    >
+                      <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M23.5 6.2a3.01 3.01 0 0 0-2.12-2.13C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.52A3.01 3.01 0 0 0 .5 6.2 31.3 31.3 0 0 0 0 12a31.3 31.3 0 0 0 .5 5.8 3.01 3.01 0 0 0 2.12 2.13c1.88.52 9.38.52 9.38.52s7.5 0 9.38-.52a3.01 3.01 0 0 0 2.12-2.13A31.3 31.3 0 0 0 24 12a31.3 31.3 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.85 12 9.6 15.6Z" />
+                      </svg>
+                      <span>ইউটিউব</span>
+                    </a>
+                  )}
+                  {mapUrl && (
+                    <a
+                      href={mapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-[#059669] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
+                    >
+                      <MapPin size={14} className="shrink-0" />
+                      <span>গুগল ম্যাপ</span>
+                      <ExternalLink size={11} className="opacity-75 shrink-0" />
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Column 2 — Quick Section Links */}
@@ -1492,10 +1661,10 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                     <span>{institution.contact_email}</span>
                   </a>
                 )}
-                {institution.public_site?.office_hours && (
-                  <div className="flex items-center gap-2.5 text-slate-400">
-                    <Building2 size={17} className="text-slate-400 shrink-0" />
-                    <span>{institution.public_site.office_hours}</span>
+                {officeHours && (
+                  <div className="flex items-start gap-2.5 text-slate-300">
+                    <Clock size={17} className="text-emerald-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{officeHours}</span>
                   </div>
                 )}
               </div>

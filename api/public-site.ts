@@ -176,9 +176,24 @@ function buildPublicInstitution(inst: any) {
     'office_hours',
     'map_url',
   ];
+  const urlKeys = new Set(['facebook_url', 'youtube_url', 'website_url', 'map_url']);
   for (const key of allowedPublicKeys) {
     if (rawPublicSite[key] !== undefined) {
-      safePublicSite[key] = rawPublicSite[key];
+      if (urlKeys.has(key)) {
+        const rawUrl = typeof rawPublicSite[key] === 'string' ? rawPublicSite[key].trim() : '';
+        if (rawUrl) {
+          try {
+            const parsed = new URL(rawUrl);
+            if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+              safePublicSite[key] = parsed.toString();
+            }
+          } catch {
+            // Skip invalid URL
+          }
+        }
+      } else {
+        safePublicSite[key] = rawPublicSite[key];
+      }
     }
   }
 
@@ -306,6 +321,12 @@ export default async function handler(req: any, res: any) {
         return res.status(403).json({
           error: 'এই প্রতিষ্ঠানের অনলাইন ভর্তি পোর্টাল বর্তমানে বন্ধ রয়েছে।',
           code: 'SITE_DISABLED',
+        });
+      }
+      if (parseConfigJson(instRow.config_json)?.public_site?.admission_open === false) {
+        return res.status(403).json({
+          error: 'বর্তমানে অনলাইন ভর্তি আবেদন বন্ধ রয়েছে।',
+          code: 'ADMISSION_CLOSED',
         });
       }
       if (!classRow) {
