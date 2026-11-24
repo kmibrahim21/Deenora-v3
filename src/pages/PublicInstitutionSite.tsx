@@ -295,6 +295,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
   const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [activeNav, setActiveNav] = useState<string>('home');
 
   // Modals
   const [activeNotice, setActiveNotice] = useState<PublicNotice | null>(null);
@@ -399,6 +400,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
 
   const scrollToSection = useCallback((id: string) => {
     setMobileMenuOpen(false);
+    setActiveNav(id);
     const el = document.getElementById(id);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -628,45 +630,34 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
   return (
     <div className="min-h-screen w-full bg-[#F8FAFC] text-slate-900 font-noto overflow-x-clip selection:bg-[#2563EB]/15 selection:text-[#1E3A8A]">
       {/* Section 1A — Slim Dark Notice Ticker Bar */}
-      <div className="w-full bg-[#0F172A] text-white text-xs py-2 px-3.5 sm:px-6 border-b border-slate-800">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+      <div className="w-full bg-[#0B1736] text-white text-xs py-2 px-3 sm:px-6 border-b border-slate-800/80">
+        <div className="max-w-6xl mx-auto flex items-center justify-center">
           <button
             type="button"
             onClick={() => (notices[0] ? setActiveNotice(notices[0]) : scrollToSection('notices'))}
-            className="flex items-center gap-2.5 min-w-0 flex-1 text-left group cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 sm:gap-2.5 min-w-0 max-w-full group cursor-pointer"
           >
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-black shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
-              <span>নোটিশ</span>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#0F9D6E] text-white text-[11px] font-bold shrink-0 shadow-xs">
+              নোটিশ
             </span>
-            <span className="truncate font-bold text-slate-200 group-hover:text-white transition-colors">
+            <span className="truncate text-[12px] sm:text-[13px] font-medium text-white/95 group-hover:text-white transition-colors">
               {tickerText}
             </span>
           </button>
-
-          {institution.phone && (
-            <a
-              href={`tel:${institution.phone}`}
-              className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 transition-colors shrink-0 tabular-nums"
-            >
-              <Phone size={12} className="text-[#10B981]" />
-              <span>{institution.phone}</span>
-            </a>
-          )}
         </div>
       </div>
 
-      {/* Section 1B — Sticky Glassmorphic Navbar */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 lg:py-0 lg:h-16 flex flex-col lg:flex-row items-center lg:justify-between gap-2 lg:gap-6">
-          {/* Brand Zone — Centered & spacious on mobile, left-aligned horizontal on desktop */}
+      {/* Section 1B — Minimal Premium Single-Row Glass Navbar */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-[0_6px_24px_-12px_rgba(15,23,42,0.14)]">
+        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 py-2.5 lg:py-3 flex items-center justify-between gap-2.5 lg:gap-6">
+          {/* Brand Zone — Circular Logo + 2-Line Title + Green Address */}
           <a
             href="#home"
             onClick={(e) => {
               e.preventDefault();
               scrollToSection('home');
             }}
-            className="flex flex-col lg:flex-row items-center justify-center lg:justify-start text-center lg:text-left gap-1.5 lg:gap-3 min-w-0 max-w-full lg:flex-initial"
+            className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 lg:flex-initial lg:max-w-[320px]"
           >
             {hasSafeLogo ? (
               <img
@@ -674,28 +665,27 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                 alt={institution.name}
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-slate-200/90 bg-white shrink-0 shadow-xs"
               />
             ) : (
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#1D4ED8] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <GraduationCap size={20} />
               </div>
             )}
-            <div className="min-w-0 max-w-full">
-              <span className="block text-[15px] sm:text-base font-black text-[#1E3A8A] leading-snug line-clamp-2 lg:line-clamp-1">
+            <div className="min-w-0 flex-1">
+              <span className="block text-[13.5px] sm:text-[15px] font-extrabold text-[#0F172A] leading-[1.2] line-clamp-2">
                 {institution.name}
               </span>
               {headerAddress && (
-                <span className="mt-0.5 flex items-center justify-center lg:justify-start gap-1 text-[11px] font-bold text-[#059669] max-w-full">
-                  <MapPin size={11} className="shrink-0" />
-                  <span className="truncate">{headerAddress}</span>
+                <span className="mt-0.5 block text-[10.5px] sm:text-[11.5px] font-bold text-[#059669] leading-tight truncate">
+                  {headerAddress}
                 </span>
               )}
             </div>
           </a>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-5 text-sm font-bold text-slate-600">
+          <nav className="hidden lg:flex items-center gap-6 text-[14px] font-bold">
             {visibleNavItems.map((item) => (
               <a
                 key={item.id}
@@ -704,28 +694,33 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                   e.preventDefault();
                   scrollToSection(item.id);
                 }}
-                className="hover:text-[#2563EB] transition-colors whitespace-nowrap shrink-0 py-1 border-b-2 border-transparent hover:border-[#2563EB]"
+                className={`transition-colors whitespace-nowrap shrink-0 py-1 ${
+                  activeNav === item.id
+                    ? 'text-[#1D4ED8]'
+                    : 'text-slate-800 hover:text-[#1D4ED8]'
+                }`}
               >
                 {item.label}
               </a>
             ))}
           </nav>
 
-          {/* Primary CTA + Mobile Menu Toggle */}
-          <div className="flex items-center justify-center lg:justify-end gap-2 shrink-0 w-full lg:w-auto">
+          {/* Primary Pill CTA + Mobile Hamburger Menu */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => scrollToSection('admission')}
-              className="h-9 sm:h-10 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
+              className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-[#1D4ED8] hover:bg-[#1E3A8A] text-white text-[13px] sm:text-sm font-bold shadow-sm shadow-blue-700/25 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer inline-flex items-center justify-center"
             >
-              অনলাইন ভর্তি
+              <span className="sm:hidden">ভর্তি</span>
+              <span className="hidden sm:inline">অনলাইন ভর্তি</span>
             </button>
             <button
               type="button"
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-label="মেনু"
               aria-expanded={mobileMenuOpen}
-              className="lg:hidden w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 inline-flex items-center justify-center transition-colors cursor-pointer"
+              className="lg:hidden w-9 h-9 rounded-xl border border-slate-200/90 bg-white text-slate-700 hover:text-[#1D4ED8] hover:border-blue-200 shadow-2xs inline-flex items-center justify-center transition-colors cursor-pointer shrink-0"
             >
               {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
@@ -744,7 +739,11 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                     e.preventDefault();
                     scrollToSection(item.id);
                   }}
-                  className="h-10 px-3 rounded-xl bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#1E3A8A] text-xs font-black flex items-center justify-center transition-colors whitespace-nowrap"
+                  className={`h-10 px-3 rounded-xl text-xs font-black flex items-center justify-center transition-colors whitespace-nowrap ${
+                    activeNav === item.id
+                      ? 'bg-blue-50 text-[#1D4ED8]'
+                      : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#1D4ED8]'
+                  }`}
                 >
                   {item.label}
                 </a>
