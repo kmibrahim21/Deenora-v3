@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
-  ExternalLink,
   FileText,
   GraduationCap,
   Home,
@@ -588,7 +587,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
   const { institution, classes, notices, exams, teachers = [], stats } = siteData;
   const ps = institution.public_site || {};
   const hasSafeLogo = isSafeImageSrc(institution.logo_url) && !logoError;
-  const headerSubtitle = (institution.address || ps.tagline || '').trim();
+  const headerAddress = (institution.address || '').trim();
   const isAdmissionOpen = ps.admission_open !== false;
   const admissionNote = (ps.admission_note || '').trim();
   const aboutText = (ps.about || '').trim();
@@ -659,7 +658,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
 
       {/* Section 1B — Sticky Glassmorphic Navbar */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 lg:py-0 lg:h-16 flex flex-col lg:flex-row items-center lg:justify-between gap-2.5 lg:gap-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 lg:py-0 lg:h-16 flex flex-col lg:flex-row items-center lg:justify-between gap-2 lg:gap-6">
           {/* Brand Zone — Centered & spacious on mobile, left-aligned horizontal on desktop */}
           <a
             href="#home"
@@ -675,10 +674,10 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                 alt={institution.name}
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
-                className="w-10 h-10 lg:w-11 lg:h-11 rounded-2xl object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
               />
             ) : (
-              <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <GraduationCap size={20} />
               </div>
             )}
@@ -686,14 +685,10 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
               <span className="block text-[15px] sm:text-base font-black text-[#1E3A8A] leading-snug line-clamp-2 lg:line-clamp-1">
                 {institution.name}
               </span>
-              {headerSubtitle && (
+              {headerAddress && (
                 <span className="mt-0.5 flex items-center justify-center lg:justify-start gap-1 text-[11px] font-bold text-[#059669] max-w-full">
-                  {institution.address ? (
-                    <MapPin size={11} className="shrink-0" />
-                  ) : (
-                    <ShieldCheck size={11} className="shrink-0" />
-                  )}
-                  <span className="truncate">{headerSubtitle}</span>
+                  <MapPin size={11} className="shrink-0" />
+                  <span className="truncate">{headerAddress}</span>
                 </span>
               )}
             </div>
@@ -716,12 +711,12 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
             ))}
           </nav>
 
-          {/* Primary CTA + Mobile Menu Toggle — Balanced centered row on mobile, right-aligned on desktop */}
-          <div className="flex items-center justify-center lg:justify-end gap-2 shrink-0 w-full lg:w-auto pt-1.5 lg:pt-0 border-t border-slate-100 lg:border-t-0">
+          {/* Primary CTA + Mobile Menu Toggle */}
+          <div className="flex items-center justify-center lg:justify-end gap-2 shrink-0 w-full lg:w-auto">
             <button
               type="button"
               onClick={() => scrollToSection('admission')}
-              className="h-9 px-4 lg:h-10 lg:px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
+              className="h-9 sm:h-10 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
             >
               অনলাইন ভর্তি
             </button>
@@ -730,10 +725,9 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-label="মেনু"
               aria-expanded={mobileMenuOpen}
-              className="lg:hidden h-9 px-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 inline-flex items-center justify-center gap-1.5 text-xs font-black transition-colors cursor-pointer"
+              className="lg:hidden w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 inline-flex items-center justify-center transition-colors cursor-pointer"
             >
-              {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
-              <span>{mobileMenuOpen ? 'বন্ধ' : 'মেনু'}</span>
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
           </div>
         </div>
@@ -1906,12 +1900,12 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
         </div>
       </section>
 
-      {/* Section 7 — Modern 4-Column Dark Navy Footer (#contact) with Map Card */}
+      {/* Section 7 — Ultra-Compact 2-Column Dark Navy Footer (#contact) */}
       <footer id="contact" className="w-full bg-[#0F172A] text-slate-300 scroll-mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-8 sm:gap-9">
-            {/* Column 1 — Logo & Summary */}
-            <div className="lg:col-span-4 space-y-4 text-center sm:text-left">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-10 items-start">
+            {/* Left Zone — Institution Brand, Summary & Action Pills */}
+            <div className="lg:col-span-6 text-center lg:text-left flex flex-col items-center lg:items-start space-y-3.5">
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 {hasSafeLogo ? (
                   <img
@@ -1919,174 +1913,167 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                     alt={institution.name}
                     referrerPolicy="no-referrer"
                     onError={() => setLogoError(true)}
-                    className="w-11 h-11 rounded-2xl object-cover border border-slate-700 bg-white shrink-0"
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border border-slate-700 bg-white shrink-0"
                   />
                 ) : (
-                  <div className="w-11 h-11 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center shrink-0">
-                    <GraduationCap size={22} />
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center shrink-0">
+                    <GraduationCap size={20} />
                   </div>
                 )}
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-black text-white leading-snug">
-                    {institution.name}
-                  </h3>
-                </div>
+                <h3 className="text-base sm:text-lg font-black text-white leading-snug">
+                  {institution.name}
+                </h3>
               </div>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed line-clamp-4">
+
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed line-clamp-2 max-w-lg">
                 {aboutText ||
                   ps.tagline ||
                   'দ্বীনি ও আধুনিক শিক্ষার মানোন্নয়নে নিবেদিত একটি আদর্শ শিক্ষা প্রতিষ্ঠান।'}
               </p>
 
-              {(facebookUrl || youtubeUrl) && (
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                  {facebookUrl && (
-                    <a
-                      href={facebookUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-[#1877F2] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
-                    >
-                      <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.49-3.91 3.78-3.91 1.09 0 2.24.2 2.24.2v2.47h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.44 2.91h-2.34V22c4.78-.76 8.43-4.92 8.43-9.94Z" />
-                      </svg>
-                      <span>ফেসবুক</span>
-                    </a>
-                  )}
-                  {youtubeUrl && (
-                    <a
-                      href={youtubeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-[#FF0000] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
-                    >
-                      <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M23.5 6.2a3.01 3.01 0 0 0-2.12-2.13C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.52A3.01 3.01 0 0 0 .5 6.2 31.3 31.3 0 0 0 0 12a31.3 31.3 0 0 0 .5 5.8 3.01 3.01 0 0 0 2.12 2.13c1.88.52 9.38.52 9.38.52s7.5 0 9.38-.52a3.01 3.01 0 0 0 2.12-2.13A31.3 31.3 0 0 0 24 12a31.3 31.3 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.85 12 9.6 15.6Z" />
-                      </svg>
-                      <span>ইউটিউব</span>
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Column 2 — Quick Links */}
-            <div className="lg:col-span-2 space-y-3.5">
-              <h4 className="text-sm font-black text-white">গুরুত্বপূর্ণ লিংক</h4>
-              <ul className="space-y-2 text-xs sm:text-sm font-medium text-slate-400">
-                {visibleNavItems.map((item) => (
-                  <li key={item.id}>
-                    <a
-                      href={`#${item.id}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        scrollToSection(item.id);
-                      }}
-                      className="hover:text-white transition-colors inline-flex items-center gap-1.5"
-                    >
-                      <ChevronRight size={14} className="text-[#2563EB]" />
-                      <span>{item.label}</span>
-                    </a>
-                  </li>
-                ))}
-                <li>
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 pt-1">
+                {facebookUrl && (
                   <a
-                    href="#results"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      scrollToSection('results');
-                    }}
-                    className="hover:text-white transition-colors inline-flex items-center gap-1.5"
+                    href={facebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-[#1877F2] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
                   >
-                    <ChevronRight size={14} className="text-[#2563EB]" />
-                    <span>অনলাইন রেজাল্ট</span>
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="#admission"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      scrollToSection('admission');
-                    }}
-                    className="hover:text-emerald-300 text-emerald-400 font-bold transition-colors inline-flex items-center gap-1.5"
-                  >
-                    <ChevronRight size={14} />
-                    <span>অনলাইন ভর্তি</span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Column 3 — Direct Contact */}
-            <div className="lg:col-span-3 space-y-3.5">
-              <h4 className="text-sm font-black text-white">সরাসরি যোগাযোগ</h4>
-              <div className="space-y-3 text-xs sm:text-sm">
-                {institution.phone && (
-                  <a
-                    href={`tel:${institution.phone}`}
-                    className="flex items-center gap-2.5 text-white font-bold hover:text-emerald-300 transition-colors"
-                  >
-                    <Phone size={16} className="text-emerald-400 shrink-0" />
-                    <span className="tabular-nums">{institution.phone}</span>
+                    <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.49-3.91 3.78-3.91 1.09 0 2.24.2 2.24.2v2.47h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.44 2.91h-2.34V22c4.78-.76 8.43-4.92 8.43-9.94Z" />
+                    </svg>
+                    <span>ফেসবুক</span>
                   </a>
                 )}
-                {institution.contact_email && (
+                {youtubeUrl && (
                   <a
-                    href={`mailto:${institution.contact_email}`}
-                    className="flex items-center gap-2.5 text-slate-300 hover:text-white transition-colors break-all"
+                    href={youtubeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-[#FF0000] border border-slate-700/80 text-slate-200 hover:text-white text-xs font-bold transition-colors"
                   >
-                    <Mail size={16} className="text-blue-400 shrink-0" />
-                    <span>{institution.contact_email}</span>
+                    <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M23.5 6.2a3.01 3.01 0 0 0-2.12-2.13C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.52A3.01 3.01 0 0 0 .5 6.2 31.3 31.3 0 0 0 0 12a31.3 31.3 0 0 0 .5 5.8 3.01 3.01 0 0 0 2.12 2.13c1.88.52 9.38.52 9.38.52s7.5 0 9.38-.52a3.01 3.01 0 0 0 2.12-2.13A31.3 31.3 0 0 0 24 12a31.3 31.3 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.85 12 9.6 15.6Z" />
+                    </svg>
+                    <span>ইউটিউব</span>
                   </a>
                 )}
-                {officeHours && (
-                  <div className="flex items-start gap-2.5 text-slate-300">
-                    <Clock size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{officeHours}</span>
-                  </div>
-                )}
-                {institution.address && (
-                  <div className="flex items-start gap-2.5 text-slate-400">
-                    <MapPin size={16} className="text-blue-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{institution.address}</span>
-                  </div>
-                )}
+                <a
+                  href={googleMapFallbackUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-600 border border-emerald-400/30 text-emerald-300 hover:text-white text-xs font-bold transition-colors"
+                >
+                  <MapPin size={13} className="shrink-0" />
+                  <span>গুগল ম্যাপ</span>
+                </a>
               </div>
             </div>
 
-            {/* Column 4 — Location & Google Map Card */}
-            <div className="lg:col-span-3 space-y-3.5">
-              <h4 className="text-sm font-black text-white">অবস্থান ও ম্যাপ</h4>
-              <a
-                href={googleMapFallbackUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-2xl border border-slate-700/80 bg-gradient-to-br from-slate-800 via-slate-800/90 to-slate-900 p-4 hover:border-[#10B981]/60 transition-all group space-y-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-[#10B981] flex items-center justify-center shrink-0">
-                    <MapPin size={18} />
-                  </div>
-                  <span className="text-[11px] font-black text-emerald-300 inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                    <span>ম্যাপে দেখুন</span>
-                    <ExternalLink size={12} />
-                  </span>
+            {/* Right Zone — Quick Links & Direct Contact Side-by-Side */}
+            <div className="lg:col-span-6 grid grid-cols-2 gap-6">
+              {/* Column A — Quick Links */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-black text-white">গুরুত্বপূর্ণ লিংক</h4>
+                <ul className="space-y-2 text-xs sm:text-sm font-medium text-slate-400">
+                  <li>
+                    <a
+                      href="#home"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        scrollToSection('home');
+                      }}
+                      className="hover:text-white transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <ChevronRight size={14} className="text-[#2563EB] shrink-0" />
+                      <span>হোম</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="#notices"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        scrollToSection('notices');
+                      }}
+                      className="hover:text-white transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <ChevronRight size={14} className="text-[#2563EB] shrink-0" />
+                      <span>নোটিশ বোর্ড</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="#results"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        scrollToSection('results');
+                      }}
+                      className="hover:text-white transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <ChevronRight size={14} className="text-[#2563EB] shrink-0" />
+                      <span>ফলাফল</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="#admission"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        scrollToSection('admission');
+                      }}
+                      className="hover:text-emerald-300 text-emerald-400 font-bold transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <ChevronRight size={14} className="shrink-0" />
+                      <span>অনলাইন ভর্তি</span>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Column B — Contact */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-black text-white">যোগাযোগ</h4>
+                <div className="space-y-2.5 text-xs sm:text-sm">
+                  {institution.phone && (
+                    <a
+                      href={`tel:${institution.phone}`}
+                      className="flex items-center gap-2 text-white font-bold hover:text-emerald-300 transition-colors"
+                    >
+                      <Phone size={14} className="text-emerald-400 shrink-0" />
+                      <span className="tabular-nums truncate">{institution.phone}</span>
+                    </a>
+                  )}
+                  {institution.contact_email && (
+                    <a
+                      href={`mailto:${institution.contact_email}`}
+                      className="flex items-start gap-2 text-slate-300 hover:text-white transition-colors break-all"
+                    >
+                      <Mail size={14} className="text-blue-400 shrink-0 mt-0.5" />
+                      <span>{institution.contact_email}</span>
+                    </a>
+                  )}
+                  {officeHours && (
+                    <div className="flex items-start gap-2 text-slate-300">
+                      <Clock size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                      <span className="leading-snug">{officeHours}</span>
+                    </div>
+                  )}
+                  {institution.address && (
+                    <div className="flex items-start gap-2 text-slate-400">
+                      <MapPin size={14} className="text-blue-400 shrink-0 mt-0.5" />
+                      <span className="leading-snug">{institution.address}</span>
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-black text-white line-clamp-1">{institution.name}</p>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                    {institution.address || 'গুগল ম্যাপে প্রতিষ্ঠানের অবস্থান দেখুন'}
-                  </p>
-                </div>
-              </a>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Bottom Powered By Bar */}
         <div className="border-t border-slate-800/90">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-xs text-slate-400 text-center sm:text-left">
             <span>
               © {toBnDigit(new Date().getFullYear())} {institution.name}। সর্বস্বত্ব সংরক্ষিত।
             </span>
