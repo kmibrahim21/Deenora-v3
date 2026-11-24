@@ -666,8 +666,33 @@ export default async function handler(req, res) {
         console.warn('Error fetching hifz_records in parents API:', hifzErr);
       }
 
+      // Strip large public_site content (e.g. base64 gallery_urls) from returned institution payload
+      let sanitizedInstitution = student.institutions;
+      if (sanitizedInstitution && typeof sanitizedInstitution === 'object') {
+        const instClone = { ...sanitizedInstitution };
+        if (instClone.config_json) {
+          let parsedCfg: any = instClone.config_json;
+          if (typeof parsedCfg === 'string') {
+            try {
+              parsedCfg = JSON.parse(parsedCfg);
+            } catch {
+              parsedCfg = {};
+            }
+          }
+          if (parsedCfg && typeof parsedCfg === 'object' && 'public_site' in parsedCfg) {
+            const { public_site: _omittedPublicSite, ...restCfg } = parsedCfg;
+            instClone.config_json = restCfg;
+          }
+        }
+        sanitizedInstitution = instClone;
+      }
+      const sanitizedStudent = {
+        ...student,
+        institutions: sanitizedInstitution,
+      };
+
       return res.status(200).json({
-        student,
+        student: sanitizedStudent,
         children,
         attendance: attendance || [],
         fees: fees || [],
@@ -677,7 +702,7 @@ export default async function handler(req, res) {
         notices: notices || [],
         events: upcomingEvents || [],
         classTotal: classTotal || 0,
-        institution: student.institutions,
+        institution: sanitizedInstitution,
         notifications: notifications || [],
         hifz_records: hifzRecords || []
       });

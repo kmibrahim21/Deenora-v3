@@ -57,10 +57,16 @@ export function extractStudentExtraFields(student?: Student | null): StudentExtr
   if (student.notes && student.notes.includes(ADM_TAG_PREFIX)) {
     try {
       const startIndex = student.notes.indexOf(ADM_TAG_PREFIX);
-      const endIndex = student.notes.indexOf(ADM_TAG_SUFFIX, startIndex);
-      if (startIndex !== -1 && endIndex !== -1) {
-        const jsonStr = student.notes.substring(startIndex + ADM_TAG_PREFIX.length, endIndex);
+      const closingObjIndex = student.notes.indexOf('}]', startIndex);
+      if (startIndex !== -1 && closingObjIndex !== -1) {
+        const jsonStr = student.notes.substring(startIndex + ADM_TAG_PREFIX.length, closingObjIndex + 1);
         parsedFromNotes = JSON.parse(jsonStr);
+      } else {
+        const endIndex = student.notes.indexOf(ADM_TAG_SUFFIX, startIndex);
+        if (startIndex !== -1 && endIndex !== -1) {
+          const jsonStr = student.notes.substring(startIndex + ADM_TAG_PREFIX.length, endIndex);
+          parsedFromNotes = JSON.parse(jsonStr);
+        }
       }
     } catch (e) {
       console.warn('Failed to parse extra fields from notes:', e);
@@ -97,13 +103,19 @@ export function extractStudentExtraFields(student?: Student | null): StudentExtr
   };
 }
 
+const stripAdmExtraAndArtifacts = (notes: string): string =>
+  notes
+    .replace(/\[ADM_EXTRA:\{[^\n]*?\}\]/g, '')
+    .replace(/\[ADM_EXTRA:.*?\]/g, '')
+    .replace(/^\s*[}\]]+\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 /**
  * Embeds extra fields into the notes string while preserving existing notes and other tags like [ACC_START:...]
  */
 export function packStudentNotesWithExtra(currentNotes: string | undefined | null, extra: StudentExtraFields): string {
-  let cleanNotes = currentNotes || '';
-  const regex = /\[ADM_EXTRA:.*?\]/g;
-  cleanNotes = cleanNotes.replace(regex, '').trim();
+  const cleanNotes = stripAdmExtraAndArtifacts(currentNotes || '');
 
   const cleanExtra: Record<string, string> = {};
   for (const [k, v] of Object.entries(extra)) {
@@ -133,10 +145,7 @@ export function packStudentNotesWithExtra(currentNotes: string | undefined | nul
  */
 export function getDisplayNotes(notes?: string | null): string {
   if (!notes) return '';
-  return notes
-    .replace(/\[ADM_EXTRA:.*?\]/g, '')
-    .replace(/\[ACC_START:.*?\]/g, '')
-    .trim();
+  return stripAdmExtraAndArtifacts(notes.replace(/\[ACC_START:.*?\]/g, ''));
 }
 
 export interface HifzParaProgressItem {

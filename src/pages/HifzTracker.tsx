@@ -1378,21 +1378,40 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
       if (!error && prevRows && prevRows.length > 0) {
         const last = prevRows[0] as HifzRecord;
         const isIada = last.grade === 'iada';
-        const nextPageFrom = isIada
+        const isHifzDept = defaultDept === 'hifz';
+        let nextParaNo: number | '' = last.para_no != null ? Number(last.para_no) : 1;
+        let nextPageFrom = isIada
           ? (last.page_from ?? 1)
           : last.page_to != null
             ? Number(last.page_to) + 1
             : last.page_from != null
               ? Number(last.page_from) + 1
               : 1;
+        let nextPageTo = isIada ? (last.page_to ?? nextPageFrom) : nextPageFrom;
+
+        if (isHifzDept) {
+          if (!isIada && nextPageFrom > 20) {
+            if (typeof nextParaNo === 'number' && nextParaNo < 30) {
+              nextParaNo = nextParaNo + 1;
+              nextPageFrom = 1;
+              nextPageTo = 1;
+            } else {
+              nextPageFrom = 20;
+              nextPageTo = 20;
+            }
+          } else {
+            nextPageFrom = clampInt(Number(nextPageFrom), 1, 20);
+            nextPageTo = clampInt(Number(nextPageTo), nextPageFrom, 20);
+          }
+        }
         const parsedLastAmukhta = parseAmukhtaFields(last.amukhta_para, last.amukhta_amount);
 
         setEntryForm({
           department: defaultDept,
-          para_no: last.para_no ?? 1,
+          para_no: nextParaNo,
           surah_name: last.surah_name || '',
           page_from: nextPageFrom,
-          page_to: nextPageFrom,
+          page_to: nextPageTo,
           lines_count: last.lines_count ?? 15,
           sabqi_status: 'done',
           sabqi_pages: last.sabqi_pages ?? '',
@@ -3144,18 +3163,33 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       <input
                         type="number"
                         min={1}
+                        max={entryForm.department === 'hifz' ? 20 : undefined}
                         inputMode="numeric"
                         value={entryForm.page_from}
                         onChange={(e) => {
-                          const val = e.target.value === '' ? '' : Number(e.target.value);
-                          setEntryForm((f) => ({
-                            ...f,
-                            page_from: val,
-                            page_to:
-                              val !== '' && (f.page_to === '' || Number(f.page_to) < Number(val))
-                                ? val
-                                : f.page_to,
-                          }));
+                          const raw = e.target.value === '' ? '' : Number(e.target.value);
+                          setEntryForm((f) => {
+                            const val =
+                              raw === ''
+                                ? ''
+                                : f.department === 'hifz'
+                                  ? clampInt(raw, 1, 20)
+                                  : Math.max(1, Math.round(raw));
+                            const curTo =
+                              f.page_to === ''
+                                ? ''
+                                : f.department === 'hifz'
+                                  ? clampInt(Number(f.page_to), 1, 20)
+                                  : Number(f.page_to);
+                            return {
+                              ...f,
+                              page_from: val,
+                              page_to:
+                                val !== '' && (curTo === '' || curTo < val)
+                                  ? val
+                                  : curTo,
+                            };
+                          });
                         }}
                         placeholder="1"
                         className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
@@ -3174,14 +3208,21 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       <input
                         type="number"
                         min={1}
+                        max={entryForm.department === 'hifz' ? 20 : undefined}
                         inputMode="numeric"
                         value={entryForm.page_to}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const raw = e.target.value === '' ? '' : Number(e.target.value);
                           setEntryForm((f) => ({
                             ...f,
-                            page_to: e.target.value === '' ? '' : Number(e.target.value),
-                          }))
-                        }
+                            page_to:
+                              raw === ''
+                                ? ''
+                                : f.department === 'hifz'
+                                  ? clampInt(raw, 1, 20)
+                                  : Math.max(1, Math.round(raw)),
+                          }));
+                        }}
                         placeholder="1"
                         className={`w-full h-10 px-3 rounded-xl border font-bold text-xs sm:text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500 ${
                           isDark
@@ -3199,6 +3240,31 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                       onClick={() =>
                         setEntryForm((f) => {
                           const base = Number(f.page_to || f.page_from || 0);
+                          if (f.department === 'hifz') {
+                            if (base >= 20) {
+                              const curPara = Number(f.para_no || 0);
+                              if (curPara >= 1 && curPara < 30) {
+                                return {
+                                  ...f,
+                                  para_no: curPara + 1,
+                                  page_from: 1,
+                                  page_to: 1,
+                                };
+                              }
+                              return {
+                                ...f,
+                                page_from: f.page_from === '' ? 1 : clampInt(Number(f.page_from), 1, 20),
+                                page_to: 20,
+                              };
+                            }
+                            const nextTo = clampInt(base + 1, 1, 20);
+                            const nextFrom = f.page_from === '' ? 1 : clampInt(Number(f.page_from), 1, nextTo);
+                            return {
+                              ...f,
+                              page_from: nextFrom,
+                              page_to: nextTo,
+                            };
+                          }
                           return {
                             ...f,
                             page_from: f.page_from === '' ? 1 : f.page_from,

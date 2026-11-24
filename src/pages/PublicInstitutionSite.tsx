@@ -588,7 +588,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
   const { institution, classes, notices, exams, teachers = [], stats } = siteData;
   const ps = institution.public_site || {};
   const hasSafeLogo = isSafeImageSrc(institution.logo_url) && !logoError;
-  const verifiedIdentifier = ps.slug || institution.institute_code || '';
+  const headerSubtitle = (institution.address || ps.tagline || '').trim();
   const isAdmissionOpen = ps.admission_open !== false;
   const admissionNote = (ps.admission_note || '').trim();
   const aboutText = (ps.about || '').trim();
@@ -659,15 +659,15 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
 
       {/* Section 1B — Sticky Glassmorphic Navbar */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-16 flex items-center justify-between gap-2.5 sm:gap-4 lg:gap-6">
-          {/* Brand Zone (2-line mobile friendly) */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 lg:py-0 lg:h-16 flex flex-col lg:flex-row items-center lg:justify-between gap-2.5 lg:gap-6">
+          {/* Brand Zone — Centered & spacious on mobile, left-aligned horizontal on desktop */}
           <a
             href="#home"
             onClick={(e) => {
               e.preventDefault();
               scrollToSection('home');
             }}
-            className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 lg:flex-initial"
+            className="flex flex-col lg:flex-row items-center justify-center lg:justify-start text-center lg:text-left gap-1.5 lg:gap-3 min-w-0 max-w-full lg:flex-initial"
           >
             {hasSafeLogo ? (
               <img
@@ -675,23 +675,25 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                 alt={institution.name}
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
+                className="w-10 h-10 lg:w-11 lg:h-11 rounded-2xl object-cover border border-slate-200 bg-white shrink-0 shadow-xs"
               />
             ) : (
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <GraduationCap size={20} />
               </div>
             )}
-            <div className="min-w-0">
-              <span className="block text-sm sm:text-base font-black text-[#1E3A8A] leading-tight line-clamp-1">
+            <div className="min-w-0 max-w-full">
+              <span className="block text-[15px] sm:text-base font-black text-[#1E3A8A] leading-snug line-clamp-2 lg:line-clamp-1">
                 {institution.name}
               </span>
-              {(verifiedIdentifier || institution.address) && (
-                <span className="mt-0.5 flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-[#059669] truncate">
-                  <ShieldCheck size={11} className="shrink-0" />
-                  <span className="truncate">
-                    {verifiedIdentifier ? toBnDigit(verifiedIdentifier) : institution.address}
-                  </span>
+              {headerSubtitle && (
+                <span className="mt-0.5 flex items-center justify-center lg:justify-start gap-1 text-[11px] font-bold text-[#059669] max-w-full">
+                  {institution.address ? (
+                    <MapPin size={11} className="shrink-0" />
+                  ) : (
+                    <ShieldCheck size={11} className="shrink-0" />
+                  )}
+                  <span className="truncate">{headerSubtitle}</span>
                 </span>
               )}
             </div>
@@ -714,12 +716,12 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
             ))}
           </nav>
 
-          {/* Primary CTA + Mobile Menu Toggle */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Primary CTA + Mobile Menu Toggle — Balanced centered row on mobile, right-aligned on desktop */}
+          <div className="flex items-center justify-center lg:justify-end gap-2 shrink-0 w-full lg:w-auto pt-1.5 lg:pt-0 border-t border-slate-100 lg:border-t-0">
             <button
               type="button"
               onClick={() => scrollToSection('admission')}
-              className="h-9 px-3 sm:h-10 sm:px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
+              className="h-9 px-4 lg:h-10 lg:px-4 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-xs sm:text-sm font-black shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
             >
               অনলাইন ভর্তি
             </button>
@@ -728,9 +730,10 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-label="মেনু"
               aria-expanded={mobileMenuOpen}
-              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 flex items-center justify-center transition-colors cursor-pointer"
+              className="lg:hidden h-9 px-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#1E3A8A] hover:border-blue-200 inline-flex items-center justify-center gap-1.5 text-xs font-black transition-colors cursor-pointer"
             >
-              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+              {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+              <span>{mobileMenuOpen ? 'বন্ধ' : 'মেনু'}</span>
             </button>
           </div>
         </div>
@@ -777,7 +780,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
             {/* Left Column — Editorial Pitch & KPI Stats */}
             <div className="lg:col-span-7 space-y-5 sm:space-y-6">
               {/* Top Meta Pills */}
-              <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 text-xs font-bold">
                 {isAdmissionOpen ? (
                   <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#059669] shadow-xs">
                     <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
@@ -806,20 +809,20 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
 
               {/* Bold Headline */}
               <h1
-                className="text-3xl sm:text-4xl lg:text-[2.75rem] font-black leading-[1.18] tracking-tight text-[#0F172A]"
+                className="text-center lg:text-left text-3xl sm:text-4xl lg:text-[2.75rem] font-black leading-[1.18] tracking-tight text-[#0F172A]"
                 style={{ textWrap: 'balance' }}
               >
                 {institution.name}
               </h1>
 
               {/* Tagline */}
-              <p className="text-sm sm:text-base lg:text-lg text-slate-600 leading-relaxed max-w-2xl font-medium">
+              <p className="text-center lg:text-left mx-auto lg:mx-0 text-sm sm:text-base lg:text-lg text-slate-600 leading-relaxed max-w-2xl font-medium">
                 {ps.tagline ||
                   'দ্বীনি ও আধুনিক শিক্ষার সমন্বয়ে নৈতিক ও আদর্শ মানুষ গড়ার নির্ভরযোগ্য প্রতিষ্ঠান। অনলাইনে ভর্তি আবেদন, সর্বশেষ নোটিশ ও পরীক্ষার ফলাফল জানুন মুহূর্তেই।'}
               </p>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-3 pt-1">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center lg:justify-start gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => scrollToSection('admission')}
@@ -839,7 +842,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
               </div>
 
               {/* 3 Compact Stat Pills */}
-              <div className="pt-2 grid grid-cols-3 gap-2.5 sm:gap-4 max-w-xl">
+              <div className="pt-2 grid grid-cols-3 gap-2.5 sm:gap-4 max-w-xl mx-auto lg:mx-0">
                 <div className="rounded-2xl bg-white border border-slate-200/80 p-3 sm:p-4 shadow-xs text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-between gap-2">
                     <span className="text-lg sm:text-2xl font-black tabular-nums leading-none text-[#1E3A8A]">
@@ -933,11 +936,6 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                           <ShieldCheck size={13} />
                           <span>ডিজিটাল শিক্ষাঙ্গন</span>
                         </span>
-                        {verifiedIdentifier && (
-                          <span className="text-xs font-black text-blue-100 tabular-nums">
-                            কোড: {toBnDigit(verifiedIdentifier)}
-                          </span>
-                        )}
                       </div>
                       <div>
                         <h2 className="text-lg sm:text-xl font-black leading-snug">
@@ -1913,8 +1911,8 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-8 sm:gap-9">
             {/* Column 1 — Logo & Summary */}
-            <div className="lg:col-span-4 space-y-4">
-              <div className="flex items-center gap-3">
+            <div className="lg:col-span-4 space-y-4 text-center sm:text-left">
+              <div className="flex flex-col sm:flex-row items-center gap-3">
                 {hasSafeLogo ? (
                   <img
                     src={institution.logo_url}
@@ -1932,11 +1930,6 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                   <h3 className="text-base sm:text-lg font-black text-white leading-snug">
                     {institution.name}
                   </h3>
-                  {verifiedIdentifier && (
-                    <p className="text-xs font-bold text-emerald-400">
-                      প্রতিষ্ঠান কোড: {toBnDigit(verifiedIdentifier)}
-                    </p>
-                  )}
                 </div>
               </div>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed line-clamp-4">
@@ -1946,7 +1939,7 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
               </p>
 
               {(facebookUrl || youtubeUrl) && (
-                <div className="flex flex-wrap items-center gap-2 pt-1">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                   {facebookUrl && (
                     <a
                       href={facebookUrl}
