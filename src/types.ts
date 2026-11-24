@@ -597,6 +597,7 @@ export type View =
   | 'admission-form'
   | 'academic-documents'
   | 'profile-settings'
+  | 'automation-permissions'
   | 'donations'
   | 'question-builder'
   | 'chat'

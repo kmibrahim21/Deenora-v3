@@ -109,11 +109,12 @@ const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
   "certificates": "academic-documents",
   "id-cards": "academic-documents",
   "class-routine": "academic-documents",
-  "question-builder": "academic-documents",
 
   // Account / Settings sub-views -> parent is account
   "academic-documents": "account",
+  "question-builder": "account",
   "profile-settings": "account",
+  "automation-permissions": "account",
   "academic-year": "account",
   "academic-calendar": "account",
   "data-management": "account",
@@ -705,6 +706,8 @@ const AuthenticatedApp: React.FC = () => {
       "admin-voice-service",
       "messages",
       "academic-year",
+      "profile-settings",
+      "automation-permissions",
       "hostel-management"
     ];
 
@@ -1354,6 +1357,18 @@ const AuthenticatedApp: React.FC = () => {
       case "profile-settings":
         return (
           <ProfileSettings
+            mode="profile"
+            lang={lang}
+            madrasah={madrasah}
+            onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onProfileUpdate={refreshMadrasah}
+            setStatusModal={setStatusModal}
+          />
+        );
+      case "automation-permissions":
+        return (
+          <ProfileSettings
+            mode="automation"
             lang={lang}
             madrasah={madrasah}
             onBack={() => handleBack(role === 'super_admin' || role === 'manager' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}

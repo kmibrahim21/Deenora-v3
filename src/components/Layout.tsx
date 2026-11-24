@@ -153,7 +153,7 @@ const Layout: React.FC<LayoutProps> = ({
 
   const isTabActive = (tab: string) => {
     if (tab === 'home' && currentView === 'home') return true;
-    if (tab === 'account' && (currentView === 'account' || currentView === 'teacheraccount' || currentView === 'super-account' || currentView === 'admin-tutorials' || currentView === 'tutorials' || currentView === 'academic-documents' || currentView === 'academic-calendar')) return true;
+    if (tab === 'account' && (currentView === 'account' || currentView === 'teacheraccount' || currentView === 'super-account' || currentView === 'admin-tutorials' || currentView === 'tutorials' || currentView === 'academic-documents' || currentView === 'academic-calendar' || currentView === 'profile-settings' || currentView === 'automation-permissions')) return true;
     if (tab === 'voice-service' && currentView === 'admin-voice-service') return true;
     if (tab === 'list' && (currentView === 'admin-panel' || currentView === 'admin-institutions')) return true;
     if (tab === 'institutions' && currentView === 'admin-institutions') return true;

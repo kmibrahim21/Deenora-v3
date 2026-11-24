@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart, Eye, EyeOff, Building2, Banknote, BookOpen, BedDouble } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, FileQuestion, Clock, Heart, Eye, EyeOff, Building2, Banknote, BookOpen, BedDouble } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -253,6 +253,7 @@ const Account: React.FC<AccountProps> = ({
       live_chat: configObj.modules?.live_chat === true,
       hifz_tracker: configObj.modules?.hifz_tracker === true,
       hostel_management: configObj.modules?.hostel_management === true,
+      question_bank: configObj.modules?.question_bank === true,
       public_website: configObj.modules?.public_website === true,
     };
   }, [madrasah]);
@@ -1800,6 +1801,17 @@ const Account: React.FC<AccountProps> = ({
                     />
                   )}
 
+                  {modules.question_bank && (
+                    <ActionCard
+                      icon={FileQuestion}
+                      title={lang === 'bn' ? 'প্রশ্ন ব্যাংক' : 'Question Bank'}
+                      subtitle={lang === 'bn' ? 'প্রশ্নপত্র ও অটো বিল্ডার' : 'Paper Maker & Bank'}
+                      colorClass="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400"
+                      onClick={() => setView('question-builder')}
+                      dark={madrasah?.theme === 'dark'}
+                    />
+                  )}
+
                   <ActionCard
                     icon={Key}
                     title={lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password'}
@@ -1868,6 +1880,18 @@ const Account: React.FC<AccountProps> = ({
           />
         )}
 
+        {/* Question Bank Card */}
+        {(modules.question_bank || isSuperAdmin) && (
+          <ActionCard
+            icon={FileQuestion}
+            title={lang === 'bn' ? 'প্রশ্ন ব্যাংক' : 'Question Bank'}
+            subtitle={lang === 'bn' ? 'প্রশ্নপত্র ও অটো বিল্ডার' : 'Paper Maker & Bank'}
+            colorClass="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400"
+            onClick={() => setView('question-builder')}
+            dark={madrasah?.theme === 'dark'}
+          />
+        )}
+
         {!isTeacher && (
           <>
             <ActionCard
@@ -1876,6 +1900,15 @@ const Account: React.FC<AccountProps> = ({
               subtitle={t('branding', lang)}
               colorClass="bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400"
               onClick={() => setView('profile-settings')}
+              dark={madrasah?.theme === 'dark'}
+            />
+
+            <ActionCard
+              icon={Sliders}
+              title={lang === 'bn' ? 'অটোমেশন ও পারমিশন' : 'Automation & Permissions'}
+              subtitle={lang === 'bn' ? 'SMS, পুশ ও আইডি জেনারেটর' : 'SMS, Push & ID Tools'}
+              colorClass="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
+              onClick={() => setView('automation-permissions')}
               dark={madrasah?.theme === 'dark'}
             />
             

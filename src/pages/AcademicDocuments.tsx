@@ -7,8 +7,7 @@ import {
   ShieldCheck,
   Sparkles,
   Lock,
-  ChevronRight,
-  FileQuestion
+  ChevronRight
 } from 'lucide-react';
 import { Language, Institution, Profile, View } from 'types';
 import { hasAdmissionFormAccess } from 'utils/packageUtils';
@@ -42,23 +41,8 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
   const hasCertificates = modulesConfig.certificates ?? true;
   const hasClassRoutine = modulesConfig.class_routine ?? false;
   const hasIdCards = modulesConfig.id_cards ?? false;
-  const hasQuestionBank = (modulesConfig.question_bank === true) || isSuperAdmin;
 
   const allModules = [
-    {
-      id: 'question-builder' as View,
-      title: lang === 'bn' ? 'প্রশ্ন ব্যাংক ও প্রশ্নপত্র মেকার' : 'Question Bank & Paper Studio',
-      subtitle: lang === 'bn' ? '৬২,০০০+ প্রশ্ন ও অটো বিল্ডার' : '62,000+ Questions & Builder',
-      desc: lang === 'bn' ? 'নূরানী, বেফাক, আলিয়া ও NCTB প্রশ্নপত্র ড্র্যাগ-অ্যান্ড-ড্রপে তৈরি ও প্রিন্ট করুন' : 'Create & print customized exam question papers with Noorani, Befaq & NCTB banks',
-      icon: Sparkles,
-      colorClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400',
-      borderHover: 'hover:border-indigo-300 dark:hover:border-indigo-500/50',
-      iconBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-      restricted: !hasQuestionBank,
-      badge: !hasQuestionBank ? (lang === 'bn' ? 'লকড' : 'Locked') : (lang === 'bn' ? '✨ নতুন' : '✨ New'),
-      show: hasQuestionBank,
-      onClick: () => onNavigate('question-builder'),
-    },
     {
       id: 'admission-form' as View,
       title: lang === 'bn' ? 'ভর্তি ফরম' : 'Admission Form',

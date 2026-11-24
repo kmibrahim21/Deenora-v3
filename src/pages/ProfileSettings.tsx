@@ -28,7 +28,11 @@ import {
   BellRing,
   Send,
   Save,
-  CheckCircle2
+  CheckCircle2,
+  Printer,
+  Moon,
+  Sun,
+  Sliders
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
@@ -43,9 +47,13 @@ interface Props {
   onBack: () => void;
   onProfileUpdate?: () => void;
   setStatusModal: (s: any) => void;
+  mode?: 'profile' | 'automation';
 }
 
-const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpdate, setStatusModal }) => {
+const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpdate, setStatusModal, mode = 'profile' }) => {
+  const isAutomationMode = mode === 'automation';
+  const [localTheme, setLocalTheme] = useState<'dark' | 'default'>(madrasah?.theme === 'dark' ? 'dark' : 'default');
+  const [togglingTheme, setTogglingTheme] = useState(false);
   const [newName, setNewName] = useState(madrasah?.name || '');
   const [newAddress, setNewAddress] = useState(madrasah?.address || '');
   const [newPhone, setNewPhone] = useState(madrasah?.phone || '');
@@ -95,33 +103,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [classesList, setClassesList] = useState<any[]>([]);
 
   useEffect(() => {
-    if (madrasah) {
-      setNewName(madrasah.name || '');
-      setNewAddress(madrasah.address || '');
-      setNewPhone(madrasah.phone || '');
-      setNewContactEmail(madrasah.contact_email || '');
-      setLogoUrl(madrasah.logo_url || '');
-      setVoiceSenderId(madrasah.voice_sender_id || '');
-      const config = typeof madrasah.config_json === 'string'
-        ? (() => { try { return JSON.parse(madrasah.config_json); } catch(e) { return {}; } })()
-        : (madrasah.config_json || {});
-      setArabicCalligraphyUrl(config.arabic_calligraphy_url || '');
-      setArabicCalligraphyWidth(config.arabic_calligraphy_width || 100);
-      setNewPin(config.user_pin || '');
-      setSignatureUrl(config.signature_url || '');
-      setFeatureStudentAttSms(config.features?.student_attendance_sms ?? false);
-      setFeatureFeeSms(config.features?.fee_collection_sms ?? false);
-      setFeatureTeacherSalarySms(config.features?.teacher_salary_sms ?? false);
-      setFeatureTeacherDeduction(config.features?.teacher_attendance_deduction ?? false);
-      setReceiptPrintMode(config.features?.receipt_print_mode ?? false);
-      setPrinterPaperSize(config.features?.printer_paper_size ?? 'A4');
-      setFeatureDeleteClass(config.features?.delete_class ?? false);
-      setFeatureDeleteAccounting(config.features?.delete_accounting ?? false);
-    }
-  }, [madrasah]);
-
-  useEffect(() => {
-    if (!madrasah?.id) return;
+    if (!madrasah?.id || !isAutomationMode) return;
     supabase
       .from('classes')
       .select('id, class_name, sort_order, created_at')
@@ -137,11 +119,11 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           setClassesList(sorted);
         }
       });
-  }, [madrasah?.id]);
+  }, [madrasah?.id, isAutomationMode]);
 
   useEffect(() => {
     const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
-    if (!madrasah?.id || !isParentPortalActive) return;
+    if (!madrasah?.id || !isParentPortalActive || !isAutomationMode) return;
     let isMounted = true;
     NotificationService.getSettings(madrasah.id)
       .then((settings) => {
@@ -160,7 +142,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     return () => {
       isMounted = false;
     };
-  }, [madrasah?.id]);
+  }, [madrasah?.id, isAutomationMode]);
 
   const handleSaveNotifSettings = async () => {
     if (!madrasah?.id) return;
@@ -546,7 +528,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     }
   };
 
-  const isDark = madrasah?.theme === 'dark';
+  const isDark = localTheme === 'dark';
   const parsedConfig = React.useMemo(() => {
     if (!madrasah?.config_json) return {};
     if (typeof madrasah.config_json === 'string') {
@@ -618,6 +600,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
   useEffect(() => {
     if (!madrasah) return;
+    setLocalTheme(madrasah.theme === 'dark' ? 'dark' : 'default');
     const parsedConfig = typeof madrasah.config_json === 'string'
       ? (() => { try { return JSON.parse(madrasah.config_json); } catch (e) { return {}; } })()
       : (madrasah.config_json || {});
@@ -647,6 +630,43 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     setFeatureDeleteAccounting(feats.delete_accounting ?? false);
   }, [madrasah]);
 
+  const handleToggleTheme = async () => {
+    if (!madrasah || togglingTheme) return;
+    const nextTheme: 'dark' | 'default' = localTheme === 'dark' ? 'default' : 'dark';
+    setLocalTheme(nextTheme);
+    setTogglingTheme(true);
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
+    try {
+      requestManager.invalidatePattern(`institution:${madrasah.id}`);
+      requestManager.invalidatePattern('dashboard_');
+
+      try {
+        await fetch('/api/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update-theme', institutionId: madrasah.id, theme: nextTheme })
+        });
+      } catch (backendErr) {
+        console.warn('Backend admin theme update error:', backendErr);
+      }
+
+      try {
+        await supabase.from('institutions').update({ theme: nextTheme }).eq('id', madrasah.id);
+      } catch (e) {}
+
+      if (onProfileUpdate) onProfileUpdate();
+    } catch (err) {
+      console.warn('Theme toggle error:', err);
+    } finally {
+      setTogglingTheme(false);
+    }
+  };
+
   const handleUpdate = async () => {
     if (!madrasah) return;
     setSaving(true);
@@ -655,26 +675,42 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         ? (() => { try { return JSON.parse(madrasah.config_json); } catch (e) { return {}; } })()
         : (madrasah.config_json || {});
 
-      const updatedConfig = { 
-        ...currentConfigObj, 
-        user_pin: newPin.trim(), 
-        signature_url: signatureUrl,
-        signature_height: signatureHeight,
-        arabic_calligraphy_url: arabicCalligraphyUrl,
-        arabic_calligraphy_width: arabicCalligraphyWidth,
-        name_english: nameEnglish.trim(),
-        features: {
-          ...(currentConfigObj.features || {}),
-          student_attendance_sms: featureStudentAttSms,
-          fee_collection_sms: featureFeeSms,
-          teacher_salary_sms: featureTeacherSalarySms,
-          teacher_attendance_deduction: featureTeacherDeduction,
-          receipt_print_mode: receiptPrintMode,
-          printer_paper_size: printerPaperSize,
-          delete_class: featureDeleteClass,
-          delete_accounting: featureDeleteAccounting
-        }
-      };
+      const existingFeatures = currentConfigObj.features || {};
+
+      const updatedConfig = isAutomationMode
+        ? {
+            ...currentConfigObj,
+            features: {
+              ...existingFeatures,
+              student_attendance_sms: featureStudentAttSms,
+              fee_collection_sms: featureFeeSms,
+              teacher_salary_sms: featureTeacherSalarySms,
+              teacher_attendance_deduction: featureTeacherDeduction,
+              delete_class: featureDeleteClass,
+              delete_accounting: featureDeleteAccounting
+            }
+          }
+        : {
+            ...currentConfigObj,
+            user_pin: newPin.trim() || currentConfigObj.user_pin || '',
+            signature_url: signatureUrl,
+            signature_height: signatureHeight,
+            arabic_calligraphy_url: arabicCalligraphyUrl,
+            arabic_calligraphy_width: arabicCalligraphyWidth,
+            name_english: nameEnglish.trim(),
+            features: {
+              ...existingFeatures,
+              receipt_print_mode: receiptPrintMode,
+              printer_paper_size: printerPaperSize
+            }
+          };
+
+      const nextName = isAutomationMode ? (madrasah.name || '') : newName.trim();
+      const nextAddress = isAutomationMode ? (madrasah.address || null) : (newAddress.trim() || null);
+      const nextPhone = isAutomationMode ? (madrasah.phone || '') : newPhone.trim();
+      const nextContactEmail = isAutomationMode ? (madrasah.contact_email || null) : (newContactEmail.trim() || null);
+      const nextVoiceSenderId = isAutomationMode ? (madrasah.voice_sender_id || null) : (voiceSenderId.trim() || null);
+      const nextLogoUrl = isAutomationMode ? (madrasah.logo_url || '') : logoUrl;
       
       requestManager.invalidatePattern(`institution:${madrasah.id}`);
       requestManager.invalidatePattern('institution');
@@ -687,12 +723,12 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           body: JSON.stringify({
             action: 'update-settings',
             institutionId: madrasah.id,
-            name: newName.trim(),
-            address: newAddress.trim() || null,
-            phone: newPhone.trim(),
-            contact_email: newContactEmail.trim() || null,
-            voice_sender_id: voiceSenderId.trim() || null,
-            logo_url: logoUrl,
+            name: nextName,
+            address: nextAddress,
+            phone: nextPhone,
+            contact_email: nextContactEmail,
+            voice_sender_id: nextVoiceSenderId,
+            logo_url: nextLogoUrl,
             config_json: updatedConfig
           })
         });
@@ -708,21 +744,21 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
       if (!updateSuccess) {
         const { error } = await supabase.from('institutions').update({ 
-          name: newName.trim(), 
-          address: newAddress.trim() || null,
-          phone: newPhone.trim(), 
-          contact_email: newContactEmail.trim() || null,
-          voice_sender_id: voiceSenderId.trim() || null,
-          logo_url: logoUrl,
+          name: nextName, 
+          address: nextAddress,
+          phone: nextPhone, 
+          contact_email: nextContactEmail,
+          voice_sender_id: nextVoiceSenderId,
+          logo_url: nextLogoUrl,
           config_json: updatedConfig
         }).eq('id', madrasah.id);
         
         if (error) throw error;
       }
 
-      // Auto-save notification settings if loaded and Parent Portal is active
+      // Auto-save notification settings if loaded and Parent Portal is active in automation mode
       const isParentPortalActive = Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true);
-      if (isParentPortalActive && notifSettingsLoaded) {
+      if (isAutomationMode && isParentPortalActive && notifSettingsLoaded) {
         NotificationService.saveSettings(madrasah.id, {
           attendance_notify_enabled: notifAttendanceEnabled,
           fee_notify_enabled: notifFeeEnabled,
@@ -739,16 +775,16 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         const cachedData = OfflineService.getCache('profile');
         if (cachedData) {
           if (cachedData.id === madrasah.id) {
-            OfflineService.setCache('profile', { ...cachedData, name: newName.trim(), address: newAddress.trim(), phone: newPhone.trim(), contact_email: newContactEmail.trim(), config_json: updatedConfig });
+            OfflineService.setCache('profile', { ...cachedData, name: nextName, address: nextAddress, phone: nextPhone, contact_email: nextContactEmail, config_json: updatedConfig });
           } else if (cachedData.madrasah && cachedData.madrasah.id === madrasah.id) {
             OfflineService.setCache('profile', {
               ...cachedData,
               madrasah: {
                 ...cachedData.madrasah,
-                name: newName.trim(),
-                address: newAddress.trim(),
-                phone: newPhone.trim(),
-                contact_email: newContactEmail.trim(),
+                name: nextName,
+                address: nextAddress,
+                phone: nextPhone,
+                contact_email: nextContactEmail,
                 config_json: updatedConfig
               }
             });
@@ -757,7 +793,14 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       } catch(e) {}
 
       if (onProfileUpdate) onProfileUpdate();
-      setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: lang === 'bn' ? 'প্রোফাইল সেটিংস সফলভাবে সেভ হয়েছে' : 'Profile updated successfully' });
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সাফল্য',
+        message: isAutomationMode
+          ? (lang === 'bn' ? 'অটোমেশন ও পারমিশন সফলভাবে সেভ হয়েছে' : 'Automation & permissions saved successfully')
+          : (lang === 'bn' ? 'প্রোফাইল সেটিংস সফলভাবে সেভ হয়েছে' : 'Profile updated successfully')
+      });
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
 
@@ -1009,8 +1052,16 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
             <ChevronLeft size={20} />
           </motion.button>
           <div className="min-w-0">
-            <h1 className="text-xl font-black font-noto tracking-tight truncate">{lang === 'bn' ? 'প্রোফাইল সেটিংস' : 'Profile Settings'}</h1>
-            <p className="text-[10px] font-bold text-slate-400 font-noto uppercase tracking-wider">{lang === 'bn' ? 'ব্র্যান্ডিং এবং তথ্য আপডেট' : 'Edit branding and info'}</p>
+            <h1 className="text-xl font-black font-noto tracking-tight truncate">
+              {isAutomationMode
+                ? (lang === 'bn' ? 'অটোমেশন ও পারমিশন' : 'Automation & Permissions')
+                : (lang === 'bn' ? 'প্রোফাইল সেটিংস' : 'Profile Settings')}
+            </h1>
+            <p className="text-[10px] font-bold text-slate-400 font-noto uppercase tracking-wider truncate">
+              {isAutomationMode
+                ? (lang === 'bn' ? 'SMS, পুশ নোটিফিকেশন, পারমিশন ও আইডি জেনারেটর' : 'SMS, Push Notifications, Permissions & ID Tools')
+                : (lang === 'bn' ? 'প্রতিষ্ঠানের ব্র্যান্ডিং, তথ্য ও প্রিন্ট সেটিংস' : 'Institution branding, info & print settings')}
+            </p>
           </div>
         </div>
         <div className="hidden md:block">
@@ -1024,6 +1075,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       <div className="flex-1 overflow-y-auto w-full">
         <div className="max-w-3xl mx-auto p-4 md:p-8 pb-32 space-y-8">
           
+          {!isAutomationMode && (
+          <>
           {/* Logo Hero Section */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -1240,93 +1293,171 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                 </div>
               </div>
 
-               {/* Features Toggle Card */}
-               <div className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-[#F1F5F9] border-slate-200/50'}`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
-                    <Zap size={20} />
+              {/* Theme & Receipt Print Mode Card */}
+              <div className={`p-6 md:p-8 rounded-[2.5rem] border space-y-5 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-lg shadow-slate-200/40'}`}>
+                <div className="flex items-center gap-3 mb-1">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                    <Printer size={20} />
                   </div>
-                  <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>{lang === 'bn' ? 'স্মার্ট অটোমেশন' : 'Smart Automation'}</h3>
+                  <div>
+                    <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>
+                      {lang === 'bn' ? 'থিম ও প্রিন্ট সেটিংস' : 'Theme & Print Settings'}
+                    </h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                      {lang === 'bn' ? 'অ্যাপ থিম ও রশিদ প্রিন্ট মোড' : 'Appearance & receipt printer'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  {[
-                    { label: lang === 'bn' ? 'হাজিরা SMS' : 'Attendance SMS', description: lang === 'bn' ? 'শিক্ষার্থীদের হাজিরার পর SMS যাবে' : 'Auto SMS on attendance', checked: featureStudentAttSms, setter: setFeatureStudentAttSms },
-                    { label: lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee SMS', description: lang === 'bn' ? 'বেতন আদায়ের পর SMS যাবে' : 'Auto SMS on fee collection', checked: featureFeeSms, setter: setFeatureFeeSms },
-                    { label: lang === 'bn' ? 'শিক্ষক বেতন SMS' : 'Teacher Salary SMS', description: lang === 'bn' ? 'শিক্ষক বেতন প্রদানের পর SMS যাবে' : 'Auto SMS on teacher salary', checked: featureTeacherSalarySms, setter: setFeatureTeacherSalarySms },
-                    { label: lang === 'bn' ? 'শিক্ষক বেতন কর্তন' : 'Teacher Deduction', description: lang === 'bn' ? 'হাজিরার উপর ভিত্তি করে বেতন কর্তন' : 'Auto-deduct by attendance', checked: featureTeacherDeduction, setter: setFeatureTeacherDeduction },
-                    { label: lang === 'bn' ? 'রশিদ প্রিন্ট মোড' : 'Receipt Print Mode', description: lang === 'bn' ? 'ডাউনলোডের পরিবর্তে সরাসরি প্রিন্ট করুন' : 'Direct print instead of download', checked: receiptPrintMode, setter: setReceiptPrintMode },
-                  ].map((feature, idx) => (
-                    <div key={idx} className="space-y-3">
-                      <label className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.02] ${feature.checked ? (isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white border-blue-100 shadow-md shadow-blue-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/60 border-transparent')}`}>
-                        <div className="relative inline-flex items-center">
-                          <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => feature.setter(e.target.checked)} />
-                          <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-[#2563EB] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-blue-400' : 'text-[#2563EB]') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
-                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
-                        </div>
-                      </label>
-                      
-                      {feature.label === (lang === 'bn' ? 'রশিদ প্রিন্ট মোড' : 'Receipt Print Mode') && feature.checked && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 space-y-3"
-                        >
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'প্রিন্ট পেপার সাইজ' : 'Printer Paper Size'}</label>
-                          <div className="grid grid-cols-4 gap-2">
-                            {['58mm', '80mm', 'A4', 'A5'].map((size) => (
-                              <button
-                                key={size}
-                                onClick={() => setPrinterPaperSize(size)}
-                                className={`py-2 rounded-xl text-[10px] font-black transition-all border ${
-                                  printerPaperSize === size 
-                                    ? (isDark ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600')
-                                    : (isDark ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-white border-slate-100 text-slate-400')
-                                }`}
-                              >
-                                {size}
-                              </button>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
+                {/* Theme Toggle */}
+                <div className={`flex items-center justify-between gap-4 p-4 rounded-[1.5rem] border transition-all ${isDark ? 'bg-slate-800/60 border-slate-700/60' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-blue-50 text-[#2563EB]'}`}>
+                      {isDark ? <Moon size={18} /> : <Sun size={18} />}
                     </div>
-                  ))}
+                    <div className="min-w-0">
+                      <p className={`text-xs font-black font-noto ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                        {lang === 'bn' ? 'ডার্ক মোড থিম' : 'Dark Mode Theme'}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">
+                        {isDark ? (lang === 'bn' ? 'ডার্ক থিম সক্রিয়' : 'Dark theme active') : (lang === 'bn' ? 'লাইট থিম সক্রিয়' : 'Light theme active')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleToggleTheme}
+                    disabled={togglingTheme}
+                    className={`w-12 h-6.5 shrink-0 rounded-full p-1 transition-colors relative ${isDark ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                  >
+                    <div className={`w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-transform ${isDark ? 'translate-x-5.5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {/* Receipt Print Mode Toggle */}
+                <div className="space-y-3">
+                  <label className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 ${receiptPrintMode ? (isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50/40 border-blue-200 shadow-sm') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-100')}`}>
+                    <div className="relative inline-flex items-center">
+                      <input type="checkbox" className="peer sr-only" checked={receiptPrintMode} onChange={(e) => setReceiptPrintMode(e.target.checked)} />
+                      <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-[#2563EB] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-black transition-colors ${receiptPrintMode ? (isDark ? 'text-blue-400' : 'text-[#2563EB]') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>
+                        {lang === 'bn' ? 'রশিদ প্রিন্ট মোড' : 'Receipt Print Mode'}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">
+                        {lang === 'bn' ? 'ডাউনলোডের পরিবর্তে সরাসরি প্রিন্ট করুন' : 'Direct print instead of download'}
+                      </p>
+                    </div>
+                  </label>
+
+                  {receiptPrintMode && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/15 space-y-3"
+                    >
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                        {lang === 'bn' ? 'প্রিন্ট পেপার সাইজ' : 'Printer Paper Size'}
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {['58mm', '80mm', 'A4', 'A5'].map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => setPrinterPaperSize(size)}
+                            className={`py-2 rounded-xl text-[10px] font-black transition-all border ${
+                              printerPaperSize === size
+                                ? (isDark ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600')
+                                : (isDark ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-white border-slate-100 text-slate-400')
+                            }`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+          </>
+          )}
+
+          {isAutomationMode && (
+          <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Smart Automation Card */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-lg shadow-slate-200/40'}`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{lang === 'bn' ? 'স্মার্ট অটোমেশন' : 'Smart Automation'}</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'bn' ? 'স্বয়ংক্রিয় SMS ও বেতন নিয়ন্ত্রণ' : 'Auto SMS & salary rules'}</p>
                 </div>
               </div>
 
-               {/* Admin Permissions Card */}
-               <div className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-[#FFF1F2] border-rose-200/50'}`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600'}`}>
-                    <Shield size={20} />
-                  </div>
-                  <div>
-                    <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>{lang === 'bn' ? 'অ্যাডমিন পারমিশন' : 'Admin Permissions'}</h3>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'bn' ? 'সতর্কতার সাথে ব্যবহার করুন' : 'Use with caution'}</p>
-                  </div>
-                </div>
+              <div className="space-y-4">
+                {[
+                  { label: lang === 'bn' ? 'হাজিরা SMS' : 'Attendance SMS', description: lang === 'bn' ? 'শিক্ষার্থীদের হাজিরার পর SMS যাবে' : 'Auto SMS on attendance', checked: featureStudentAttSms, setter: setFeatureStudentAttSms },
+                  { label: lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee SMS', description: lang === 'bn' ? 'বেতন আদায়ের পর SMS যাবে' : 'Auto SMS on fee collection', checked: featureFeeSms, setter: setFeatureFeeSms },
+                  { label: lang === 'bn' ? 'শিক্ষক বেতন SMS' : 'Teacher Salary SMS', description: lang === 'bn' ? 'শিক্ষক বেতন প্রদানের পর SMS যাবে' : 'Auto SMS on teacher salary', checked: featureTeacherSalarySms, setter: setFeatureTeacherSalarySms },
+                  { label: lang === 'bn' ? 'শিক্ষক বেতন কর্তন' : 'Teacher Deduction', description: lang === 'bn' ? 'হাজিরার উপর ভিত্তি করে বেতন কর্তন' : 'Auto-deduct by attendance', checked: featureTeacherDeduction, setter: setFeatureTeacherDeduction },
+                ].map((feature, idx) => (
+                  <label key={idx} className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.01] ${feature.checked ? (isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50/40 border-blue-200 shadow-sm') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-100')}`}>
+                    <div className="relative inline-flex items-center">
+                      <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => feature.setter(e.target.checked)} />
+                      <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-[#2563EB] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-blue-400' : 'text-[#2563EB]') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </motion.div>
 
-                <div className="space-y-4">
-                  {[
-                    { key: 'delete_class' as const, label: lang === 'bn' ? 'ক্লাস ডিলিট' : 'Delete Class', description: lang === 'bn' ? 'ক্লাস ডিলিট করার অপশন চালু করুন' : 'Enable option to delete classes', checked: featureDeleteClass },
-                    { key: 'delete_accounting' as const, label: lang === 'bn' ? 'হিসাব ইতিহাস ডিলিট' : 'Delete Accounting History', description: lang === 'bn' ? 'হিসাবের লেনদেন ডিলিট করুন' : 'Enable option to delete transactions', checked: featureDeleteAccounting },
-                  ].map((feature, idx) => (
-                    <label key={idx} className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.02] ${feature.checked ? (isDark ? 'bg-rose-500/10 border-rose-500/30' : 'bg-white border-rose-200 shadow-md shadow-rose-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/60 border-transparent')}`}>
-                      <div className="relative inline-flex items-center">
-                        <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => handleToggleAdminFeature(feature.key, e.target.checked)} />
-                        <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-rose-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-rose-400' : 'text-rose-600') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
-                      </div>
-                    </label>
-                  ))}
+            {/* Admin Permissions Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.08 }}
+              className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-[#FFF1F2] border-rose-200/50'}`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600'}`}>
+                  <Shield size={20} />
                 </div>
+                <div>
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{lang === 'bn' ? 'অ্যাডমিন পারমিশন' : 'Admin Permissions'}</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'bn' ? 'সতর্কতার সাথে ব্যবহার করুন (অটো-সেভ)' : 'Use with caution (Auto-saved)'}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {[
+                  { key: 'delete_class' as const, label: lang === 'bn' ? 'ক্লাস ডিলিট' : 'Delete Class', description: lang === 'bn' ? 'ক্লাস ডিলিট করার অপশন চালু করুন' : 'Enable option to delete classes', checked: featureDeleteClass },
+                  { key: 'delete_accounting' as const, label: lang === 'bn' ? 'হিসাব ইতিহাস ডিলিট' : 'Delete Accounting History', description: lang === 'bn' ? 'হিসাবের লেনদেন ডিলিট করুন' : 'Enable option to delete transactions', checked: featureDeleteAccounting },
+                ].map((feature, idx) => (
+                  <label key={idx} className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.01] ${feature.checked ? (isDark ? 'bg-rose-500/10 border-rose-500/30' : 'bg-white border-rose-200 shadow-md shadow-rose-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/70 border-transparent')}`}>
+                    <div className="relative inline-flex items-center">
+                      <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => handleToggleAdminFeature(feature.key, e.target.checked)} />
+                      <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-rose-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-rose-400' : 'text-rose-600') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
+                    </div>
+                  </label>
+                ))}
               </div>
             </motion.div>
           </div>
@@ -1903,9 +2034,11 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
               </div>
             )}
           </AnimatePresence>
+          </>
+          )}
 
           {/* Premium Branding Section */}
-          {isPremiumPackage && (
+          {!isAutomationMode && isPremiumPackage && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
