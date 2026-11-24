@@ -60,6 +60,7 @@ export interface Institution {
       biometric_device_sync?: boolean;
       question_bank?: boolean;
       hifz_tracker?: boolean;
+      hostel_management?: boolean;
       public_website?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
@@ -253,6 +254,8 @@ export interface Profile {
     can_manage_settings?: boolean;
     can_view_reports?: boolean;
     can_send_messages?: boolean;
+    can_manage_hostel?: boolean;
+    is_hostel_kitchen?: boolean;
     voice_dashboard?: boolean;
     donations?: boolean;
     allowed_classes?: string[];
@@ -512,6 +515,8 @@ export interface TeacherPermissions {
   can_manage_teachers?: boolean;
   can_upload_student_photos?: boolean;
   can_send_messages?: boolean;
+  can_manage_hostel?: boolean;
+  is_hostel_kitchen?: boolean;
   allowed_classes?: string[];
   teacher_id_number?: string;
 }
@@ -596,7 +601,94 @@ export type View =
   | 'question-builder'
   | 'chat'
   | 'marketer-portal'
-  | 'hifz-tracker';
+  | 'hifz-tracker'
+  | 'hostel-management';
+
+export type HostelRoomGender = 'male' | 'female' | 'any';
+export type HostelResidentialType = 'residential' | 'non_residential' | 'day_care';
+export type HostelFeeCategory = 'full_paid' | 'half_free' | 'lillah_free';
+
+export interface HostelRoom {
+  id: string;
+  institution_id: string;
+  building_name: string;
+  floor_name?: string | null;
+  room_number: string;
+  room_title?: string | null;
+  gender: HostelRoomGender;
+  capacity: number;
+  monthly_seat_fee: number;
+  warden_name?: string | null;
+  warden_phone?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HostelAllocation {
+  id: string;
+  institution_id: string;
+  student_id: string;
+  room_id?: string | null;
+  seat_number?: string | null;
+  residential_type: HostelResidentialType;
+  fee_category: HostelFeeCategory;
+  monthly_boarding_fee: number;
+  status: 'active' | 'vacated';
+  allocated_at?: string | null;
+  vacated_at?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type HostelMealStatus = 'present' | 'half' | 'off';
+export type HostelNightRollStatus = 'present' | 'leave' | 'absent';
+
+export interface HostelMealLog {
+  id?: string;
+  institution_id: string;
+  student_id: string;
+  log_date: string; // YYYY-MM-DD
+  morning?: HostelMealStatus;
+  noon?: HostelMealStatus;
+  night?: HostelMealStatus;
+  morning_status?: HostelMealStatus;
+  noon_status?: HostelMealStatus;
+  night_status?: HostelMealStatus;
+  night_roll_status?: HostelNightRollStatus | null;
+  note?: string | null;
+  notes?: string | null;
+  recorded_by?: string | null;
+  marked_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HostelLeave {
+  id: string;
+  institution_id: string;
+  student_id: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  from_date?: string | null;
+  to_date?: string | null;
+  leave_from?: string | null;
+  leave_to?: string | null;
+  out_date?: string | null;
+  expected_return?: string | null;
+  expected_return_date?: string | null;
+  actual_return?: string | null;
+  return_date?: string | null;
+  reason?: string | null;
+  guardian_name?: string | null;
+  guardian_relation?: string | null;
+  guardian_phone?: string | null;
+  approved_by?: string | null;
+  status?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface HifzRecord {
   id: string;

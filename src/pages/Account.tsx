@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart, Eye, EyeOff, Building2, Banknote, BookOpen } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart, Eye, EyeOff, Building2, Banknote, BookOpen, BedDouble } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -252,6 +252,7 @@ const Account: React.FC<AccountProps> = ({
       exam_routine: configObj.modules?.exam_routine ?? true,
       live_chat: configObj.modules?.live_chat === true,
       hifz_tracker: configObj.modules?.hifz_tracker === true,
+      hostel_management: configObj.modules?.hostel_management === true,
       public_website: configObj.modules?.public_website === true,
     };
   }, [madrasah]);
@@ -1788,6 +1789,17 @@ const Account: React.FC<AccountProps> = ({
                     />
                   )}
 
+                  {modules.hostel_management && (
+                    <ActionCard
+                      icon={BedDouble}
+                      title={lang === 'bn' ? 'হোস্টেল ও আবাসিক' : 'Hostel & Residential'}
+                      subtitle={lang === 'bn' ? 'রুম, সিট ও লিল্লাহ তালিকা' : 'Rooms, Seats & Lillah'}
+                      colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
+                      onClick={() => setView('hostel-management')}
+                      dark={madrasah?.theme === 'dark'}
+                    />
+                  )}
+
                   <ActionCard
                     icon={Key}
                     title={lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password'}
@@ -1840,6 +1852,18 @@ const Account: React.FC<AccountProps> = ({
             subtitle={lang === 'bn' ? 'দৈনিক সবক ও রিপোর্ট' : 'Daily Sabaq & Reports'}
             colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
             onClick={() => setView('hifz-tracker')}
+            dark={madrasah?.theme === 'dark'}
+          />
+        )}
+
+        {/* Hostel & Residential Management Card */}
+        {(modules.hostel_management || isSuperAdmin) && (
+          <ActionCard
+            icon={BedDouble}
+            title={lang === 'bn' ? 'হোস্টেল ও আবাসিক' : 'Hostel & Residential'}
+            subtitle={lang === 'bn' ? 'রুম, সিট ও লিল্লাহ তালিকা' : 'Rooms, Seats & Lillah'}
+            colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
+            onClick={() => setView('hostel-management')}
             dark={madrasah?.theme === 'dark'}
           />
         )}

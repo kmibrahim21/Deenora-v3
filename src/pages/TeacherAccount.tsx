@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff, UserCheck, Banknote, Settings, Edit3, BookOpen } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp, Eye, EyeOff, UserCheck, Banknote, Settings, Edit3, BookOpen, BedDouble, Utensils } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
@@ -144,6 +144,7 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
       messages: configObj.modules?.messages ?? true,
       live_chat: configObj.modules?.live_chat === true,
       hifz_tracker: configObj.modules?.hifz_tracker === true,
+      hostel_management: configObj.modules?.hostel_management === true,
       teacher_attendance: configObj.teacher_attendance || {}
     };
   }, [madrasah?.config_json]);
@@ -901,6 +902,32 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                       dark={isDark}
                     />
                   )}
+
+                  {/* Hostel & Meal Attendance Card (Warden Teachers) */}
+                  {modules.hostel_management && (teacherInfo?.permissions?.can_manage_hostel || profile?.permissions?.can_manage_hostel) && (
+                    <ActionCard
+                      icon={BedDouble}
+                      title={lang === 'bn' ? 'হোস্টেল ও মিল হাজিরা' : 'Hostel & Meal Attendance'}
+                      subtitle={lang === 'bn' ? 'আবাসিক ও দৈনিক মিল' : 'Rooms & Daily Meals'}
+                      colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
+                      onClick={() => setView('hostel-management')}
+                      dark={isDark}
+                    />
+                  )}
+
+                  {/* Live Cook / Kitchen Dashboard Card */}
+                  {modules.hostel_management &&
+                    (teacherInfo?.permissions?.is_hostel_kitchen || profile?.permissions?.is_hostel_kitchen) &&
+                    !(teacherInfo?.permissions?.can_manage_hostel || profile?.permissions?.can_manage_hostel) && (
+                      <ActionCard
+                        icon={Utensils}
+                        title={lang === 'bn' ? 'বাবুর্চি / কিচেন ড্যাশবোর্ড' : 'Cook Kitchen Dashboard'}
+                        subtitle={lang === 'bn' ? 'আজকের লাইভ মিল সংখ্যা' : 'Live Meal Counts'}
+                        colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+                        onClick={() => setView('hostel-management')}
+                        dark={isDark}
+                      />
+                    )}
 
                   {/* Teacher Management Card for permitted staff */}
                   {teacherInfo?.permissions?.can_manage_teachers && (

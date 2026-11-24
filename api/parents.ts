@@ -666,6 +666,59 @@ export default async function handler(req, res) {
         console.warn('Error fetching hifz_records in parents API:', hifzErr);
       }
 
+      // 8. Hostel Allocation (with room/warden details) & Recent Gate Passes / Leaves (Strictly scoped to verified student & institution)
+      let hostelAllocation: any = null;
+      let hostelLeaves: any[] = [];
+      try {
+        const { data: allocRows } = await supabase
+          .from('hostel_allocations')
+          .select('id, institution_id, student_id, room_id, seat_number, residential_type, fee_category, monthly_boarding_fee, status, allocated_at')
+          .eq('student_id', studentId)
+          .eq('institution_id', student.institution_id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(2);
+
+        if (allocRows && allocRows.length > 0) {
+          const activeAlloc = allocRows.find((a: any) => !!a.room_id) || allocRows[0];
+          let roomDetails: any = null;
+          if (activeAlloc.room_id) {
+            const { data: roomRow } = await supabase
+              .from('hostel_rooms')
+              .select('id, building_name, floor_name, room_number, room_title, warden_name, warden_phone')
+              .eq('id', activeAlloc.room_id)
+              .eq('institution_id', student.institution_id)
+              .maybeSingle();
+            if (roomRow) {
+              roomDetails = roomRow;
+            }
+          }
+          hostelAllocation = {
+            ...activeAlloc,
+            room: roomDetails,
+            hostel_rooms: roomDetails,
+          };
+        }
+      } catch (hostelAllocErr) {
+        console.warn('Error fetching hostel_allocations in parents API:', hostelAllocErr);
+      }
+
+      try {
+        const { data: leaveRows } = await supabase
+          .from('hostel_leaves')
+          .select('*')
+          .eq('student_id', studentId)
+          .eq('institution_id', student.institution_id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (leaveRows && Array.isArray(leaveRows)) {
+          hostelLeaves = leaveRows;
+        }
+      } catch (hostelLeaveErr) {
+        console.warn('Error fetching hostel_leaves in parents API:', hostelLeaveErr);
+      }
+
       // Strip large public_site content (e.g. base64 gallery_urls) from returned institution payload
       let sanitizedInstitution = student.institutions;
       if (sanitizedInstitution && typeof sanitizedInstitution === 'object') {
@@ -704,7 +757,9 @@ export default async function handler(req, res) {
         classTotal: classTotal || 0,
         institution: sanitizedInstitution,
         notifications: notifications || [],
-        hifz_records: hifzRecords || []
+        hifz_records: hifzRecords || [],
+        hostel_allocation: hostelAllocation,
+        hostel_leaves: hostelLeaves || []
       });
     }
 

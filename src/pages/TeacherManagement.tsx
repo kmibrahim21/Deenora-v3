@@ -41,7 +41,9 @@ import {
   AlertTriangle,
   Camera,
   ListOrdered,
-  CreditCard
+  CreditCard,
+  BedDouble,
+  Utensils
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SmartDatePicker } from '../components/common/SmartDatePicker';
@@ -87,6 +89,8 @@ const initialPermissions: TeacherPermissions = {
   can_manage_teachers: false,
   can_upload_student_photos: false,
   can_send_messages: false,
+  can_manage_hostel: false,
+  is_hostel_kitchen: false,
   allowed_classes: [],
 };
 
@@ -2139,12 +2143,26 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         icon: <TrendingUp size={14} />,
                         module: "accounting",
                       },
+                      {
+                        key: "can_manage_hostel",
+                        label: lang === "bn" ? "হোস্টেল ও মিল হাজিরা" : "Hostel & Meal Attendance",
+                        icon: <BedDouble size={14} />,
+                        module: "hostel_management",
+                      },
+                      {
+                        key: "is_hostel_kitchen",
+                        label: lang === "bn" ? "বাবুর্চি / কিচেন ড্যাশবোর্ড" : "Cook Kitchen View",
+                        icon: <Utensils size={14} />,
+                        module: "hostel_management",
+                      },
                     ].filter((perm: any) => {
                       if (role === 'super_admin') return true;
 
                       // 1. Check Institution Modules
-                      const modules = madrasah?.config_json?.modules || {};
-                      if (perm.module && modules[perm.module as keyof typeof modules] === false) {
+                      const modules: Record<string, any> = (madrasah?.config_json?.modules as any) || {};
+                      if (perm.module === 'hostel_management') {
+                        if (modules.hostel_management !== true) return false;
+                      } else if (perm.module && modules[perm.module] === false) {
                         return false;
                       }
 

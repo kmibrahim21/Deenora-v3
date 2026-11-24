@@ -19,6 +19,12 @@ import {
   MONTH_DEFINITIONS
 } from '../../utils/feeCategoryHelper';
 import { CompactMonthPicker } from './CompactMonthPicker';
+import {
+  fetchSingleStudentHostelFeeInfo,
+  getHostelResidentialBadge,
+  getHostelFeeCategoryBadge,
+  StudentHostelFeeInfo,
+} from '../../utils/hostelFeeHelper';
 
 interface StudentAccountingDetailProps {
   student: any;
@@ -38,6 +44,26 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [accStartDate, setAccStartDate] = useState<string>('');
   const [isUpdatingAccStart, setIsUpdatingAccStart] = useState(false);
+  const isHostelEnabled = Boolean(madrasah?.config_json?.modules?.hostel_management === true);
+  const [hostelInfo, setHostelInfo] = useState<StudentHostelFeeInfo | null>(() => student?.hostel_info || null);
+
+  useEffect(() => {
+    if (!isHostelEnabled || !madrasah?.id || !student?.student_id) {
+      setHostelInfo(null);
+      return;
+    }
+    if (student?.hostel_info) {
+      setHostelInfo(student.hostel_info);
+      return;
+    }
+    let cancelled = false;
+    fetchSingleStudentHostelFeeInfo(madrasah.id, student.student_id, student.notes).then((info) => {
+      if (!cancelled) setHostelInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isHostelEnabled, madrasah?.id, student?.student_id, student?.notes, student?.hostel_info]);
 
   useEffect(() => {
     if (student?.notes) {
@@ -793,6 +819,32 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                 <span className={`px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
                   {lang === 'bn' ? 'রোল' : 'Roll'}: {student.roll || '-'}
                 </span>
+                {isHostelEnabled && hostelInfo && (() => {
+                  const rBadge = getHostelResidentialBadge(hostelInfo.residential_type, lang, isDark);
+                  const fBadge = getHostelFeeCategoryBadge(hostelInfo.fee_category, lang, isDark);
+                  return (
+                    <>
+                      <span className={`px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-black font-noto border ${rBadge.cls}`}>
+                        {rBadge.label}
+                      </span>
+                      {(hostelInfo.residential_type !== 'non_residential' || hostelInfo.fee_category !== 'full_paid') && (
+                        <span className={`px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-black font-noto border ${fBadge.cls}`}>
+                          {fBadge.label}
+                        </span>
+                      )}
+                      {hostelInfo.room_number && (
+                        <span className={`px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-bold font-noto border ${isDark ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                          {lang === 'bn' ? `রুম ${hostelInfo.room_number}` : `Room ${hostelInfo.room_number}`}{hostelInfo.seat_number ? ` · ${hostelInfo.seat_number}` : ''}
+                        </span>
+                      )}
+                      {hostelInfo.suggested_hostel_fee > 0 && (
+                        <span className={`px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-black font-noto border ${isDark ? 'bg-teal-500/15 border-teal-500/30 text-teal-300' : 'bg-teal-50 border-teal-200 text-teal-700'}`}>
+                          {lang === 'bn' ? `প্রস্তাবিত হোস্টেল ফি: ৳${hostelInfo.suggested_hostel_fee}` : `Hostel Fee: ৳${hostelInfo.suggested_hostel_fee}`}
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

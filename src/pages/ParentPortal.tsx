@@ -59,6 +59,9 @@ import {
   VolumeX,
   Copy,
   Check,
+  BedDouble,
+  Building2,
+  DoorOpen,
 } from 'lucide-react';
 import { ChatApp } from './ChatApp';
 import { useBackHandler } from '../utils/backHandler';
@@ -326,6 +329,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [notices, setNotices] = useState<any[]>(() => initialCache?.notices || []);
   const [events, setEvents] = useState<any[]>(() => initialCache?.events || []);
   const [hifzRecords, setHifzRecords] = useState<HifzRecord[]>(() => initialCache?.hifz_records || []);
+  const [hostelAllocation, setHostelAllocation] = useState<any>(() => initialCache?.hostel_allocation || null);
+  const [hostelLeaves, setHostelLeaves] = useState<any[]>(() => initialCache?.hostel_leaves || []);
+  const [showHostelModal, setShowHostelModal] = useState<boolean>(false);
   const [hifzDeptFilter, setHifzDeptFilter] = useState<'all' | 'hifz' | 'nazera' | 'qaida'>('all');
   const [classTotal, setClassTotal] = useState<number>(() => initialCache?.classTotal || 0);
   const [loading, setLoading] = useState<boolean>(() => !initialCache?.student);
@@ -345,8 +351,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
   const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false);
-  const [notifFilter, setNotifFilter] = useState<'all' | 'attendance' | 'fee' | 'hifz' | 'unread'>('all');
+  const [notifFilter, setNotifFilter] = useState<'all' | 'attendance' | 'fee' | 'hifz' | 'hostel' | 'unread'>('all');
   const [markingAllRead, setMarkingAllRead] = useState<boolean>(false);
+
+  useBackHandler(
+    'parent-hostel-modal',
+    () => {
+      setShowHostelModal(false);
+      return true;
+    },
+    showHostelModal,
+    50
+  );
 
   const unreadNotifCount = useMemo(() => {
     return appNotifications.filter(n => !n.is_read).length;
@@ -558,6 +574,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     setNotices(data.notices || []);
     setEvents(data.events || []);
     setHifzRecords(Array.isArray(data.hifz_records) ? data.hifz_records : []);
+    setHostelAllocation(data.hostel_allocation || null);
+    setHostelLeaves(Array.isArray(data.hostel_leaves) ? data.hostel_leaves : []);
     setClassTotal(data.classTotal || 0);
     if (data.notifications && Array.isArray(data.notifications)) {
       setAppNotifications(data.notifications);
@@ -989,6 +1007,16 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return Boolean(modules.hifz_tracker === true || hifzRecords.length > 0);
   }, [modules.hifz_tracker, hifzRecords.length]);
 
+  const showHostelCard = useMemo(() => {
+    return Boolean(hostelAllocation || modules.hostel_management === true || hostelLeaves.length > 0);
+  }, [hostelAllocation, modules.hostel_management, hostelLeaves.length]);
+
+  const activeHostelLeave = useMemo(() => {
+    return hostelLeaves.find((l: any) => l.status === 'active' || l.status === 'approved') || null;
+  }, [hostelLeaves]);
+
+  const latestHostelLeave = hostelLeaves[0] || null;
+
   const hifzParaProgress = useMemo(() => {
     const base = computeHifzParaProgress(hifzRecords, student);
     return {
@@ -1354,6 +1382,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       ...(showHifzDiary || appNotifications.some(n => n.type === 'hifz')
                         ? [{ id: 'hifz', label: 'হিফজ ও সবক', count: appNotifications.filter(n => n.type === 'hifz').length }]
                         : []),
+                      ...(showHostelCard || appNotifications.some(n => n.type === 'hostel')
+                        ? [{ id: 'hostel', label: 'হোস্টেল ও গেট পাস', count: appNotifications.filter(n => n.type === 'hostel').length }]
+                        : []),
                       { id: 'attendance', label: 'হাজিরা', count: appNotifications.filter(n => n.type === 'attendance').length },
                       { id: 'fee', label: 'ফি আদায়', count: appNotifications.filter(n => n.type === 'fee').length },
                       { id: 'unread', label: 'অপঠিত', count: unreadNotifCount },
@@ -1399,6 +1430,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       if (notifFilter === 'attendance') return n.type === 'attendance';
                       if (notifFilter === 'fee') return n.type === 'fee';
                       if (notifFilter === 'hifz') return n.type === 'hifz';
+                      if (notifFilter === 'hostel') return n.type === 'hostel';
                       return true;
                     });
 
@@ -1413,7 +1445,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                               {notifFilter === 'unread' ? 'কোনো অপঠিত নোটিফিকেশন নেই' : 'কোনো নোটিফিকেশন পাওয়া যায়নি'}
                             </p>
                             <p className="text-xs text-slate-400 font-noto mt-0.5">
-                              হাজিরা অনুপস্থিতি, ফি আদায় বা সবকের সকল বার্তা এখানে সংরক্ষিত থাকবে।
+                              হাজিরা অনুপস্থিতি, ফি আদায়, গেট পাস বা সবকের সকল বার্তা এখানে সংরক্ষিত থাকবে।
                             </p>
                           </div>
                         </div>
@@ -1425,6 +1457,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       const isAttendance = notif.type === 'attendance';
                       const isFee = notif.type === 'fee';
                       const isHifz = notif.type === 'hifz';
+                      const isHostel = notif.type === 'hostel';
 
                       return (
                         <div
@@ -1435,6 +1468,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                               setShowNotificationCenter(false);
                               setActiveTab('notices');
                               setActiveNoticeTab('hifz');
+                            } else if (isHostel) {
+                              setShowNotificationCenter(false);
+                              setShowHostelModal(true);
                             }
                           }}
                           className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
@@ -1446,7 +1482,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           <div className="flex items-start gap-3">
                             {/* Icon badge */}
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              isHifz
+                              isHostel
+                                ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                : isHifz
                                 ? 'bg-teal-100 text-teal-700 border border-teal-200'
                                 : isAttendance
                                 ? 'bg-amber-100 text-amber-700 border border-amber-200'
@@ -1454,7 +1492,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                                 : 'bg-blue-100 text-blue-700 border border-blue-200'
                             }`}>
-                              {isHifz ? (
+                              {isHostel ? (
+                                <BedDouble size={18} />
+                              ) : isHifz ? (
                                 <BookOpen size={18} />
                               ) : isAttendance ? (
                                 <AlertTriangle size={18} />
@@ -1468,12 +1508,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                             {/* Content */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <h4 className={`text-xs font-black font-noto leading-tight ${isUnread ? 'text-slate-900' : 'text-slate-700'}`}>
                                     {notif.title}
                                   </h4>
                                   <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                                    isHifz
+                                    isHostel
+                                      ? 'bg-indigo-100 text-indigo-800'
+                                      : isHifz
                                       ? 'bg-teal-100 text-teal-800'
                                       : isAttendance 
                                       ? 'bg-amber-100 text-amber-800' 
@@ -1481,7 +1523,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                       ? 'bg-emerald-100 text-emerald-800' 
                                       : 'bg-blue-100 text-blue-800'
                                   }`}>
-                                    {isHifz ? 'হিফজ ও সবক' : isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
+                                    {isHostel ? 'হোস্টেল ও গেট পাস' : isHifz ? 'হিফজ ও সবক' : isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
                                   </span>
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-400 font-noto shrink-0">
@@ -1497,7 +1539,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 <div className="mt-2 flex items-center gap-1.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                                   <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider font-noto">
-                                    {isHifz ? 'অপঠিত (ট্যাপ করে সবক ডায়েরি দেখুন)' : 'অপঠিত (ক্লিক করে পঠিত করুন)'}
+                                    {isHostel ? 'অপঠিত (ট্যাপ করে হোস্টেল তথ্য দেখুন)' : isHifz ? 'অপঠিত (ট্যাপ করে সবক ডায়েরি দেখুন)' : 'অপঠিত (ক্লিক করে পঠিত করুন)'}
                                   </span>
                                 </div>
                               )}
@@ -1515,6 +1557,197 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   <button
                     onClick={() => setShowNotificationCenter(false)}
                     className="font-black text-slate-700 hover:text-blue-600 cursor-pointer"
+                  >
+                    বন্ধ করুন
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Hostel & Gate Pass Detail Modal */}
+        <AnimatePresence>
+          {showHostelModal && (
+            <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, y: 40, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 40, scale: 0.98 }}
+                className="w-full max-w-lg bg-white rounded-t-[2.2rem] sm:rounded-[2.2rem] shadow-2xl border border-slate-100 max-h-[88vh] flex flex-col overflow-hidden"
+              >
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/80 via-white to-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                      <BedDouble size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 font-noto leading-tight">হোস্টেল ও গেট পাস তথ্য</h3>
+                      <p className="text-[11px] font-bold text-slate-400 font-noto">{student?.student_name || ''}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHostelModal(false)}
+                    className="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+                  {hostelAllocation ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-3 py-1 rounded-xl border text-xs font-black font-noto ${
+                          hostelAllocation.residential_type === 'residential'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : hostelAllocation.residential_type === 'day_care'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {hostelAllocation.residential_type === 'residential'
+                            ? 'আবাসিক (Residential)'
+                            : hostelAllocation.residential_type === 'day_care'
+                            ? 'ডে-কেয়ার (Day-Care)'
+                            : 'অনাবাসিক'}
+                        </span>
+                        <span className={`px-3 py-1 rounded-xl border text-xs font-black font-noto ${
+                          hostelAllocation.fee_category === 'lillah_free'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : hostelAllocation.fee_category === 'half_free'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                          {hostelAllocation.fee_category === 'lillah_free'
+                            ? 'লিল্লাহ ফ্রি'
+                            : hostelAllocation.fee_category === 'half_free'
+                            ? 'অর্ধ-ফ্রি'
+                            : 'পূর্ণ ফি'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                          <p className="text-[10px] font-bold text-slate-400 font-noto">ভবন ও তলা</p>
+                          <p className="text-xs font-black text-slate-900 font-noto mt-1">
+                            {hostelAllocation.hostel_rooms?.building_name || 'মূল ভবন'}
+                            {hostelAllocation.hostel_rooms?.floor_name ? ` · ${hostelAllocation.hostel_rooms.floor_name}` : ''}
+                          </p>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                          <p className="text-[10px] font-bold text-slate-400 font-noto">রুম ও সিট নম্বর</p>
+                          <p className="text-xs font-black text-indigo-700 font-noto mt-1">
+                            {hostelAllocation.hostel_rooms?.room_number
+                              ? `রুম ${toBanglaNum(hostelAllocation.hostel_rooms.room_number)}`
+                              : 'নির্ধারিত নয়'}
+                            {hostelAllocation.seat_number ? ` · সিট ${toBanglaNum(hostelAllocation.seat_number)}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      {(hostelAllocation.hostel_rooms?.warden_name || hostelAllocation.hostel_rooms?.warden_phone) && (
+                        <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-indigo-600/80 font-noto">নেগরান শিক্ষক (Warden)</p>
+                            <p className="text-sm font-black text-indigo-950 font-noto truncate mt-0.5">
+                              {hostelAllocation.hostel_rooms?.warden_name || 'নেগরান'}
+                            </p>
+                            {hostelAllocation.hostel_rooms?.warden_phone && (
+                              <p className="text-xs font-bold text-indigo-700 font-mono mt-0.5">
+                                {hostelAllocation.hostel_rooms.warden_phone}
+                              </p>
+                            )}
+                          </div>
+                          {hostelAllocation.hostel_rooms?.warden_phone && (
+                            <a
+                              href={`tel:${hostelAllocation.hostel_rooms.warden_phone}`}
+                              className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black font-noto flex items-center gap-1.5 shadow-sm hover:bg-indigo-700 active:scale-95 transition-all shrink-0"
+                            >
+                              <PhoneCall size={14} />
+                              <span>কল করুন</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs font-bold text-slate-500 font-noto">
+                      এখনও কোনো আবাসিক রুম বা সিট বরাদ্দ করা হয়নি।
+                    </div>
+                  )}
+
+                  {/* Gate Pass & Leave History */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider font-noto flex items-center gap-1.5">
+                        <DoorOpen size={14} className="text-indigo-600" /> গেট পাস ও ছুটির ইতিহাস
+                      </h4>
+                      <span className="text-[10px] font-bold text-slate-400 font-noto">
+                        সর্বমোট {toBanglaNum(hostelLeaves.length)} টি
+                      </span>
+                    </div>
+
+                    {hostelLeaves.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {hostelLeaves.map((lv: any) => {
+                          const isOut = lv.status === 'active' || lv.status === 'approved';
+                          const isReturned = lv.status === 'returned';
+                          const leaveFrom = lv.leave_from || lv.start_date || '';
+                          const expectedRet = lv.expected_return || lv.end_date || '';
+                          return (
+                            <div key={lv.id} className="p-4 rounded-2xl border border-slate-100 bg-white shadow-sm space-y-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black font-noto border ${
+                                  isOut
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                    : isReturned
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}>
+                                  {isOut ? 'বাইরে আছেন (ছুটিতে)' : isReturned ? 'হোস্টেলে ফিরে এসেছেন' : lv.status}
+                                </span>
+                                {leaveFrom && (
+                                  <span className="text-[10px] font-bold text-slate-400 font-noto">
+                                    যাওয়া: {toBanglaNum(leaveFrom)}
+                                    {expectedRet ? ` → ফেরা: ${toBanglaNum(expectedRet)}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                              {(lv.guardian_name || lv.guardian_phone) && (
+                                <p className="text-xs font-bold text-slate-700 font-noto">
+                                  অভিভাবক: {lv.guardian_name || '—'}
+                                  {lv.guardian_relation ? ` (${lv.guardian_relation})` : ''}
+                                  {lv.guardian_phone ? ` · ${lv.guardian_phone}` : ''}
+                                </p>
+                              )}
+                              {lv.reason && (
+                                <p className="text-[11px] font-medium text-slate-500 font-noto">
+                                  কারণ: {lv.reason}
+                                </p>
+                              )}
+                              {isReturned && lv.actual_return && (
+                                <p className="text-[10px] font-black text-emerald-700 font-noto">
+                                  প্রকৃত প্রত্যাবর্তন: {new Date(lv.actual_return).toLocaleString('bn-BD')}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs font-bold text-slate-400 font-noto">
+                        এখনও কোনো গেট পাস ইস্যু করা হয়নি।
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex justify-end px-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowHostelModal(false)}
+                    className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-black font-noto cursor-pointer"
                   >
                     বন্ধ করুন
                   </button>
@@ -1814,6 +2047,148 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       className="bg-white/60 border border-dashed border-emerald-200 p-5 rounded-3xl text-center text-xs font-bold text-slate-500 font-noto cursor-pointer hover:bg-emerald-50/30 transition-colors"
                     >
                       এখনও কোনো সবক রেকর্ড যুক্ত হয়নি। উস্তাদ সবক যুক্ত করলে এখানে দেখা যাবে।
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Hostel & Residential Info Card (Shown when allocated or module enabled) */}
+              {showHostelCard && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                      <BedDouble size={14} className="text-indigo-600" /> হোস্টেল ও আবাসিক তথ্য
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowHostelModal(true)}
+                      className="text-[11px] font-black text-indigo-600 hover:text-indigo-700 font-noto flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>বিস্তারিত</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+
+                  {hostelAllocation ? (
+                    <div
+                      onClick={() => setShowHostelModal(true)}
+                      className="bg-white border border-indigo-100 p-5 rounded-[2rem] shadow-soft hover:shadow-premium transition-all cursor-pointer space-y-3.5 text-left"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-2.5 py-1 rounded-xl border text-[10px] font-black font-noto ${
+                            hostelAllocation.residential_type === 'residential'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : hostelAllocation.residential_type === 'day_care'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {hostelAllocation.residential_type === 'residential'
+                              ? 'আবাসিক'
+                              : hostelAllocation.residential_type === 'day_care'
+                              ? 'ডে-কেয়ার'
+                              : 'অনাবাসিক'}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded-xl border text-[10px] font-black font-noto ${
+                            hostelAllocation.fee_category === 'lillah_free'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : hostelAllocation.fee_category === 'half_free'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}>
+                            {hostelAllocation.fee_category === 'lillah_free'
+                              ? 'লিল্লাহ ফ্রি'
+                              : hostelAllocation.fee_category === 'half_free'
+                              ? 'অর্ধ-ফ্রি'
+                              : 'পূর্ণ ফি'}
+                          </span>
+                        </div>
+                        {activeHostelLeave ? (
+                          <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black font-noto">
+                            বাইরে আছেন (গেট পাস)
+                          </span>
+                        ) : latestHostelLeave?.status === 'returned' ? (
+                          <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black font-noto">
+                            ফিরে এসেছেন
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-black font-noto">
+                            হোস্টেলে অবস্থানরত
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                          <p className="text-[10px] font-bold text-slate-400 font-noto flex items-center gap-1">
+                            <Building2 size={11} className="text-indigo-500" /> রুম ও সিট
+                          </p>
+                          <p className="text-xs font-black text-slate-900 font-noto mt-0.5">
+                            {hostelAllocation.hostel_rooms?.room_number
+                              ? `রুম ${toBanglaNum(hostelAllocation.hostel_rooms.room_number)}`
+                              : 'নির্ধারিত নয়'}
+                            {hostelAllocation.seat_number ? ` · সিট ${toBanglaNum(hostelAllocation.seat_number)}` : ''}
+                          </p>
+                          {(hostelAllocation.hostel_rooms?.building_name || hostelAllocation.hostel_rooms?.floor_name) && (
+                            <p className="text-[10px] font-bold text-slate-500 font-noto mt-0.5 truncate">
+                              {[hostelAllocation.hostel_rooms?.building_name, hostelAllocation.hostel_rooms?.floor_name].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-slate-400 font-noto">নেগরান (Warden)</p>
+                            <p className="text-xs font-black text-slate-900 font-noto mt-0.5 truncate">
+                              {hostelAllocation.hostel_rooms?.warden_name || 'নির্ধারিত নয়'}
+                            </p>
+                            {hostelAllocation.hostel_rooms?.warden_phone && (
+                              <p className="text-[10px] font-bold text-slate-500 font-mono mt-0.5 truncate">
+                                {hostelAllocation.hostel_rooms.warden_phone}
+                              </p>
+                            )}
+                          </div>
+                          {hostelAllocation.hostel_rooms?.warden_phone && (
+                            <a
+                              href={`tel:${hostelAllocation.hostel_rooms.warden_phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm hover:bg-indigo-700 active:scale-95 transition-all shrink-0"
+                              title="নেগরানকে কল করুন"
+                            >
+                              <PhoneCall size={15} />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-indigo-700/80 font-noto flex items-center gap-1">
+                              <DoorOpen size={11} /> গেট পাস স্ট্যাটাস
+                            </p>
+                            <p className="text-xs font-black text-indigo-950 font-noto mt-0.5 truncate">
+                              {activeHostelLeave
+                                ? `ফেরা: ${toBanglaNum(activeHostelLeave.expected_return || activeHostelLeave.end_date || '—')}`
+                                : latestHostelLeave
+                                ? `${latestHostelLeave.status === 'returned' ? 'ফিরে এসেছেন' : latestHostelLeave.status}`
+                                : 'কোনো ছুটি নেই'}
+                            </p>
+                            {latestHostelLeave && (
+                              <p className="text-[10px] font-bold text-indigo-600 font-noto mt-0.5 truncate">
+                                {toBanglaNum(latestHostelLeave.leave_from || latestHostelLeave.start_date || '')}
+                                {hostelLeaves.length > 1 ? ` · মোট ${toBanglaNum(hostelLeaves.length)} টি` : ''}
+                              </p>
+                            )}
+                          </div>
+                          <ChevronRight size={16} className="text-indigo-500 shrink-0" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => setShowHostelModal(true)}
+                      className="bg-white/60 border border-dashed border-indigo-200 p-5 rounded-3xl text-center text-xs font-bold text-slate-500 font-noto cursor-pointer hover:bg-indigo-50/30 transition-colors"
+                    >
+                      এখনও কোনো আবাসিক সিট বরাদ্দ করা হয়নি। হোস্টেল সিট বরাদ্দ হলে রুম, নেগরান ও গেট পাসের তথ্য এখানে দেখা যাবে।
                     </div>
                   )}
                 </div>

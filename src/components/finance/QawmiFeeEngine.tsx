@@ -23,6 +23,15 @@ import {
 import { FeeCategoryManagerModal } from './FeeCategoryManagerModal';
 import { CompactMonthPicker } from './CompactMonthPicker';
 import { FeeCategoryMigrationModal } from './FeeCategoryMigrationModal';
+import {
+  fetchInstitutionHostelFeeMap,
+  fetchSingleStudentHostelFeeInfo,
+  resolveStudentHostelInfo,
+  getHostelResidentialBadge,
+  getHostelFeeCategoryBadge,
+  HOSTEL_FEE_ITEM_NAME_BN,
+  StudentHostelFeeInfo,
+} from '../../utils/hostelFeeHelper';
 
 interface QawmiFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -49,6 +58,7 @@ export const clearGlobalQawmiFeeCache = () => {
 export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
   const isTeacher = role === 'teacher';
   const canViewReports = !isTeacher || !!profile?.permissions?.can_view_reports;
+  const isHostelEnabled = Boolean(madrasah?.config_json?.modules?.hostel_management === true);
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
 
   const activeYearId = React.useMemo(() => {
@@ -284,8 +294,13 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        const hostelFeeMap: Map<string, StudentHostelFeeInfo> = isHostelEnabled
+          ? await fetchInstitutionHostelFeeMap(madrasah.id)
+          : new Map();
         
         const correctedData = filteredData.map((student: any) => {
+            const hostelInfo = isHostelEnabled ? resolveStudentHostelInfo(student, hostelFeeMap) : null;
             const studentSettings = allSettings?.filter(as => as.student_id === student.student_id) || [];
             
             // Calculate previous due
@@ -374,6 +389,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                 total_settled: totalSettled,
                 balance_due: balanceDue,
                 status: status,
+                hostel_info: hostelInfo,
                 fee_items: studentFeeStructures.map(fs => {
                     const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
                     return {
@@ -487,7 +503,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     
-    const enabledStructures = structures.filter(s => {
+    const enabledStructures: any[] = structures.filter(s => {
         const setting = settings?.find(set => set.fee_structure_id === s.id);
         const isEnabled = setting ? setting.is_enabled : true;
         const isApplicable = isStructureApplicableForMonth(s, selectedMonth, madrasah);
@@ -499,6 +515,29 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         }
         return s;
     });
+
+    if (isHostelEnabled) {
+      let hostelInfo: StudentHostelFeeInfo | null = student.hostel_info || null;
+      if (!hostelInfo && student.student_id) {
+        hostelInfo = await fetchSingleStudentHostelFeeInfo(madrasah.id, student.student_id, student.notes);
+        setSelectedStudent((prev: any) =>
+          prev && prev.student_id === student.student_id ? { ...prev, hostel_info: hostelInfo } : prev
+        );
+      }
+      if (hostelInfo && hostelInfo.suggested_hostel_fee > 0) {
+        const alreadyHasHostelItem = enabledStructures.some(
+          (item) => item.id === 'hostel_boarding_fee' || item.fee_name === HOSTEL_FEE_ITEM_NAME_BN
+        );
+        if (!alreadyHasHostelItem) {
+          enabledStructures.push({
+            id: 'hostel_boarding_fee',
+            fee_name: HOSTEL_FEE_ITEM_NAME_BN,
+            amount: hostelInfo.suggested_hostel_fee,
+            isHostelFee: true,
+          });
+        }
+      }
+    }
 
     setAvailableFeeItems(enabledStructures);
 
@@ -632,7 +671,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       // Trigger 58mm Thermal Receipt Modal if Receipt Print Mode is enabled in settings
       if ((madrasah?.config_json as any)?.features?.receipt_print_mode) {
         const feeCategories = selectedFeeCategories.length > 0 
-          ? selectedFeeCategories.map(c => ({ name: c, amount: totalAmt + totalDiscount }))
+          ? selectedFeeCategories.map(c => {
+              const matched = availableFeeItems.find((fi: any) => (fi.fee_name || fi.name) === c);
+              return { name: c, amount: selectedFeeCategories.length === 1 ? (totalAmt + totalDiscount) : (Number(matched?.amount) || (totalAmt + totalDiscount)) };
+            })
           : [{ name: lang === 'bn' ? 'কওমি ফি / অনুদান' : 'Fee Collection', amount: totalAmt + totalDiscount }];
 
         setThermalReceiptData({
@@ -1053,6 +1095,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         const isPartial = item.status === 'partial';
                         const isUnpaid = item.status === 'unpaid';
                         const hasBalance = balance > 0;
+                        const isDarkTheme = madrasah.theme === 'dark';
+                        const hostelInfo: StudentHostelFeeInfo | null = isHostelEnabled ? (item.hostel_info || null) : null;
+                        const resBadge = hostelInfo ? getHostelResidentialBadge(hostelInfo.residential_type, lang, isDarkTheme) : null;
+                        const feeCatBadge = hostelInfo ? getHostelFeeCategoryBadge(hostelInfo.fee_category, lang, isDarkTheme) : null;
+                        const canCollectHostelOnly = isNoFeeSet && Boolean(hostelInfo && hostelInfo.suggested_hostel_fee > 0);
                         
                         return (
                         <div key={item.student_id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -1067,6 +1114,28 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                            >
                              {item.student_name}
                            </h5>
+                           {hostelInfo && resBadge && (
+                             <div className="flex flex-wrap items-center gap-1 mb-1">
+                               <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-black font-noto ${resBadge.cls}`}>
+                                 {resBadge.label}
+                               </span>
+                               {feeCatBadge && (hostelInfo.residential_type !== 'non_residential' || hostelInfo.fee_category !== 'full_paid') && (
+                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-black font-noto ${feeCatBadge.cls}`}>
+                                   {feeCatBadge.label}
+                                 </span>
+                               )}
+                               {hostelInfo.room_number && (
+                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-bold font-noto ${isDarkTheme ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
+                                   {lang === 'bn' ? `রুম ${hostelInfo.room_number}` : `Rm ${hostelInfo.room_number}`}
+                                 </span>
+                               )}
+                               {hostelInfo.suggested_hostel_fee > 0 && (
+                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-black font-noto ${isDarkTheme ? 'bg-teal-500/20 text-teal-300 border-teal-500/30' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
+                                   {lang === 'bn' ? `হোস্টেল ৳${hostelInfo.suggested_hostel_fee}` : `Hostel ৳${hostelInfo.suggested_hostel_fee}`}
+                                 </span>
+                               )}
+                             </div>
+                           )}
                            <div className="flex items-center gap-2">
                               <p className="text-[10px] text-slate-400 font-bold uppercase">জমা: ৳{paid}</p>
                               <p className="text-[10px] text-red-500 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
@@ -1105,16 +1174,16 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         )}
                        <button 
                           onClick={() => { setSelectedStudent(item); initializeFeeCollection(item); setShowFeeCollection(true); }} 
-                          disabled={isFullyPaid || isNoFeeSet || isPartial}
+                          disabled={isFullyPaid || (isNoFeeSet && !canCollectHostelOnly) || isPartial}
                           className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${
                             isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : 
                             isPartial ? (madrasah.theme === 'dark' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-600 border border-rose-200') :
-                            isNoFeeSet ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 
+                            (isNoFeeSet && !canCollectHostelOnly) ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 
                             isUnpaid ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 
                             'bg-[#2563EB] text-white active:scale-95 shadow-blue-200'
                           }`}
                        >
-                          {(isFullyPaid || isPartial) ? (lang === 'bn' ? 'পরিশোধিত' : 'PAID') : isNoFeeSet ? (lang === 'bn' ? 'ফি নেই' : 'No Fee') : (lang === 'bn' ? 'ফি জমা' : 'Collect')}
+                          {(isFullyPaid || isPartial) ? (lang === 'bn' ? 'পরিশোধিত' : 'PAID') : (isNoFeeSet && !canCollectHostelOnly) ? (lang === 'bn' ? 'ফি নেই' : 'No Fee') : (lang === 'bn' ? 'ফি জমা' : 'Collect')}
                        </button>
                      </div>
                   </div>
@@ -1206,6 +1275,33 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     <div className={`p-6 rounded-3xl border text-center ${madrasah.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                         <p className="text-[10px] font-black text-slate-400 uppercase mb-1">শিক্ষার্থীর নাম</p>
                         <h4 className={`text-xl font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{selectedStudent.student_name}</h4>
+                        {isHostelEnabled && selectedStudent.hostel_info && (() => {
+                          const hInfo: StudentHostelFeeInfo = selectedStudent.hostel_info;
+                          const isDarkModal = madrasah.theme === 'dark';
+                          const rBadge = getHostelResidentialBadge(hInfo.residential_type, lang, isDarkModal);
+                          const fBadge = getHostelFeeCategoryBadge(hInfo.fee_category, lang, isDarkModal);
+                          return (
+                            <div className="mt-2 space-y-1.5">
+                              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-black font-noto ${rBadge.cls}`}>{rBadge.label}</span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-black font-noto ${fBadge.cls}`}>{fBadge.label}</span>
+                                {hInfo.room_number && (
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-bold font-noto ${isDarkModal ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
+                                    {lang === 'bn' ? `রুম ${hInfo.room_number}` : `Room ${hInfo.room_number}`}{hInfo.seat_number ? ` · ${hInfo.seat_number}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                              {hInfo.residential_type !== 'non_residential' && (hInfo.monthly_seat_fee > 0 || hInfo.monthly_boarding_fee > 0) && (
+                                <p className={`text-[10px] font-bold font-noto ${isDarkModal ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  {lang === 'bn'
+                                    ? `সিট ৳${hInfo.monthly_seat_fee} + বোর্ডিং ৳${hInfo.monthly_boarding_fee} → প্রস্তাবিত ৳${hInfo.suggested_hostel_fee}`
+                                    : `Seat ৳${hInfo.monthly_seat_fee} + Boarding ৳${hInfo.monthly_boarding_fee} → Suggested ৳${hInfo.suggested_hostel_fee}`}
+                                  {hInfo.fee_category === 'half_free' ? (lang === 'bn' ? ' (৫০% ছাড়)' : ' (50% off)') : hInfo.fee_category === 'lillah_free' ? (lang === 'bn' ? ' (লিল্লাহ ফ্রি)' : ' (Lillah Free)') : ''}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div className="grid grid-cols-3 gap-2 mt-4">
                             <div className={`p-2.5 rounded-2xl border shadow-sm ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                               <p className="text-[7px] font-black text-slate-400 uppercase"> প্রদেয় </p>

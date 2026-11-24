@@ -83,6 +83,7 @@ const MarketerPortal = React.lazy(() =>
   import("pages/MarketerPortal").then((m) => ({ default: m.MarketerPortal }))
 );
 const HifzTracker = React.lazy(() => import("pages/HifzTracker"));
+const HostelManagement = React.lazy(() => import("pages/HostelManagement"));
 const PublicInstitutionSite = React.lazy(() => import("pages/PublicInstitutionSite"));
 
 function getPublicSiteCode(): string | null {
@@ -122,6 +123,7 @@ const VIEW_PARENT_MAP: Partial<Record<View, View>> = {
   "admin-tutorials": "account",
   "messages": "account",
   "hifz-tracker": "account",
+  "hostel-management": "account",
 
   // Students & Classes hierarchy
   "student-form": "students",
@@ -638,6 +640,40 @@ const AuthenticatedApp: React.FC = () => {
     );
   }
 
+  // Dedicated distraction-free Live Kitchen Dashboard for Cook staff (is_hostel_kitchen without full hostel admin)
+  const isKitchenOnlyStaff =
+    profile?.role === "teacher" &&
+    profile?.permissions?.is_hostel_kitchen === true &&
+    !profile?.permissions?.can_manage_hostel &&
+    parsedConfig?.modules?.hostel_management === true;
+
+  if (isKitchenOnlyStaff) {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 text-center">
+            <div className="w-12 h-12 border-4 border-amber-500/30 border-t-amber-500 rounded-full animate-spin mb-4" />
+            <h3 className="text-white font-black tracking-widest text-xs uppercase opacity-80">
+              {lang === "bn" ? "কিচেন ড্যাশবোর্ড লোড হচ্ছে..." : "LOADING KITCHEN DASHBOARD..."}
+            </h3>
+          </div>
+        }
+      >
+        <div className={`min-h-screen w-full ${madrasah?.theme === "dark" ? "bg-[#0F172A]" : "bg-[#F8FAFC]"} px-4 py-4 sm:p-6`}>
+          <HostelManagement
+            madrasah={madrasah}
+            onBack={handleLogout}
+            onLogout={handleLogout}
+            lang={lang}
+            activeYear={selectedYear || activeYear}
+            profile={profile}
+            kitchenOnlyMode={true}
+          />
+        </div>
+      </Suspense>
+    );
+  }
+
   const renderView = () => {
     const role = profile?.role || "accountant";
     
@@ -668,7 +704,8 @@ const AuthenticatedApp: React.FC = () => {
       "admin-tutorials",
       "admin-voice-service",
       "messages",
-      "academic-year"
+      "academic-year",
+      "hostel-management"
     ];
 
     if (
@@ -1121,6 +1158,61 @@ const AuthenticatedApp: React.FC = () => {
             lang={lang}
             activeYear={selectedYear || activeYear}
             teacherInfo={profile?.role === "teacher" ? profile : null}
+          />
+        );
+      }
+      case "hostel-management": {
+        const isSuperAdminOrManager = role === 'super_admin' || role === 'manager';
+        let configObj: any = madrasah?.config_json;
+        if (typeof configObj === 'string') {
+          try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
+        }
+        const isModuleEnabled = isSuperAdminOrManager || configObj?.modules?.hostel_management === true;
+        const isPermittedTeacher =
+          role !== 'teacher' ||
+          profile?.permissions?.can_manage_hostel === true ||
+          profile?.permissions?.is_hostel_kitchen === true;
+        const hasHostelAccess = isModuleEnabled && isPermittedTeacher;
+        if (!hasHostelAccess) {
+          return (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[420px]">
+              <div className="w-16 h-16 bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center mb-4">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">
+                {lang === 'bn' ? 'হোস্টেল ও আবাসিক পারমিশন প্রয়োজন' : 'Hostel & Residential Access Required'}
+              </h2>
+              <p className="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
+                {!isModuleEnabled
+                  ? (lang === 'bn'
+                      ? 'আপনার প্রতিষ্ঠানে হোস্টেল ও আবাসিক ব্যবস্থাপনা মডিউলটি এখনো সক্রিয় করা হয়নি। এটি সক্রিয় করতে সুপার অ্যাডমিনের সাথে যোগাযোগ করুন।'
+                      : 'Hostel & Residential Management is not enabled for your institution. Please contact the super admin.')
+                  : (lang === 'bn'
+                      ? 'হোস্টেল ও মিল হাজিরা ব্যবহারের জন্য আপনার অ্যাকাউন্টে অনুমতি প্রয়োজন। মাদ্রাসা অ্যাডমিনের সাথে যোগাযোগ করুন।'
+                      : 'You do not have hostel permission on your staff account. Please contact your admin.')}
+              </p>
+              <button
+                onClick={() => handleBack(role === 'teacher' ? 'teacheraccount' : 'account')}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-all"
+              >
+                {lang === 'bn' ? 'ফিরে যান' : 'Go Back'}
+              </button>
+            </div>
+          );
+        }
+        const cookOnly =
+          role === 'teacher' &&
+          profile?.permissions?.is_hostel_kitchen === true &&
+          !profile?.permissions?.can_manage_hostel;
+        return (
+          <HostelManagement
+            madrasah={madrasah}
+            onBack={() => handleBack(role === 'teacher' ? 'teacheraccount' : 'account')}
+            onLogout={handleLogout}
+            lang={lang}
+            activeYear={selectedYear || activeYear}
+            profile={profile}
+            kitchenOnlyMode={cookOnly}
           />
         );
       }

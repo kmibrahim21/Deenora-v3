@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, MessageSquareText, Library, LayoutDashboard, FileText, Radio, Heart, FileQuestion } from 'lucide-react';
+import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, MessageSquareText, Library, LayoutDashboard, FileText, Radio, Heart, FileQuestion, BedDouble } from 'lucide-react';
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
@@ -88,6 +88,7 @@ const Layout: React.FC<LayoutProps> = ({
         live_chat: configObj.modules?.live_chat === true || isSuperAdmin,
         question_bank: configObj.modules?.question_bank === true || isSuperAdmin,
         hifz_tracker: configObj.modules?.hifz_tracker === true || isSuperAdmin,
+        hostel_management: configObj.modules?.hostel_management === true || isSuperAdmin,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',
@@ -127,7 +128,8 @@ const Layout: React.FC<LayoutProps> = ({
       'academic-year': true,
       'class-routine': modules.modules.class_routine,
       'certificates': modules.modules.certificates,
-      'donations': modules.modules.donations
+      'donations': modules.modules.donations,
+      'hostel-management': modules.modules.hostel_management
     };
 
     return moduleMap[module] ?? true;
@@ -175,6 +177,7 @@ const Layout: React.FC<LayoutProps> = ({
     if (tab === 'data-management' && currentView === 'data-management') return true;
     if (tab === 'academic-year' && currentView === 'academic-year') return true;
     if (tab === 'question-builder' && currentView === 'question-builder') return true;
+    if (tab === 'hostel-management' && currentView === 'hostel-management') return true;
     return false;
   };
 
@@ -325,6 +328,12 @@ const Layout: React.FC<LayoutProps> = ({
                 <button onClick={() => setView('library')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('library') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <Library size={22} strokeWidth={isTabActive('library') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'লাইব্রেরী' : 'Library'}</span>
+                </button>
+              )}
+              {(isSuperAdmin || role === 'madrasah_admin' || role === 'accountant' || hasPermission('can_manage_hostel') || hasPermission('is_hostel_kitchen')) && modules.modules.hostel_management && (
+                <button onClick={() => setView('hostel-management')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('hostel-management') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <BedDouble size={22} strokeWidth={isTabActive('hostel-management') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'হোস্টেল ও আবাসিক' : 'Hostel'}</span>
                 </button>
               )}
               {modules.modules.messages && (isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_messages')) && (

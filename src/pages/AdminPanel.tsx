@@ -408,6 +408,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     live_chat: false,
     question_bank: false,
     hifz_tracker: false,
+    hostel_management: false,
     public_website: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
@@ -531,6 +532,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       live_chat: false,
       question_bank: false,
       hifz_tracker: false,
+      hostel_management: false,
       public_website: false,
     };
 
@@ -682,6 +684,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (fStr.includes('বায়োমেট্রিক') || fStr.includes('biometric')) dynamicModules.biometric_device_sync = true;
       if (fStr.includes('ব্যাকআপ') || fStr.includes('backup')) dynamicModules.backup_restore = true;
       if (fStr.includes('হিফজ') || fStr.includes('সবক') || fStr.includes('hifz')) dynamicModules.hifz_tracker = true;
+      if (fStr.includes('হোস্টেল') || fStr.includes('আবাসিক') || fStr.includes('hostel') || fStr.includes('boarding')) dynamicModules.hostel_management = true;
       return dynamicModules;
     }
 
@@ -2220,6 +2223,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         live_chat: userModules.live_chat ?? false,
         question_bank: userModules.question_bank ?? false,
         hifz_tracker: userModules.hifz_tracker ?? false,
+        hostel_management: userModules.hostel_management ?? false,
         public_website: userModules.public_website ?? false,
         ...userModules
       });
@@ -2244,6 +2248,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         live_chat: false,
         question_bank: false,
         hifz_tracker: false,
+        hostel_management: false,
         public_website: false,
       });
     }
@@ -4952,6 +4957,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       biometric_device_sync: 'Biometric Device',
                                       question_bank: 'Question Bank',
                                       hifz_tracker: 'Hifz & Sabaq Tracker',
+                                      hostel_management: 'Hostel & Residential Management',
                                       public_website: 'Public Website',
                                     };
 
