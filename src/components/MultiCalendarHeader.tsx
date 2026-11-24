@@ -16,8 +16,8 @@ const MultiCalendarHeader: React.FC<MultiCalendarHeaderProps> = ({ madrasah }) =
   const isDark = madrasah?.theme === 'dark';
 
   return (
-    <div className="px-4 py-4 bg-transparent shrink-0">
-      <div className="grid grid-cols-3 gap-2 md:gap-4">
+    <div className="px-4 md:px-6 lg:px-8 pt-4 pb-2 md:py-4 bg-transparent shrink-0">
+      <div className="grid grid-cols-3 gap-2 md:gap-4 lg:gap-5">
         {/* English Date */}
         <div className={`flex items-center gap-2 backdrop-blur-xl border p-2.5 lg:p-4 rounded-2xl lg:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all flex-1 min-w-0 group ${isDark ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white/40 border-white/60'}`}>
           <div className={`w-8 h-8 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/10 text-blue-600'}`}>

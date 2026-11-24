@@ -412,10 +412,17 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     }
   }, [dataVersion, institutionId, madrasah?.id, activeYearId]);
 
+  const topKpiCount =
+    (canManageStudents ? 2 : 0) +
+    1 +
+    (canSendSMS ? 1 : 0) +
+    (canUseVoice && modules.modules.voice_broadcast ? 1 : 0);
+  const showDonationsCard = Boolean(canManageAccounting && onNavigateToDonations && modules.modules.donations);
+
   return (
     <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-20 lg:pb-8">
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 lg:gap-6 px-1">
+      <div className={`grid grid-cols-2 sm:grid-cols-3 ${topKpiCount === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 lg:gap-5 px-1 md:px-0`}>
 
         {canManageStudents && (
           <button onClick={onNavigateToClasses} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 active:scale-95 transition-all border`}>
@@ -454,7 +461,11 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           <button 
             type="button"
             onClick={onNavigateToAttendance} 
-            className={`col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2 ${
+            className={`col-span-1 sm:col-span-3 ${
+              topKpiCount === 5
+                ? (showDonationsCard ? 'lg:col-span-2' : 'lg:col-span-3')
+                : 'lg:col-span-2'
+            } ${
               madrasah?.theme === 'dark' 
                 ? 'bg-slate-800/90 border-slate-700 hover:bg-slate-800 hover:border-blue-500/40' 
                 : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'

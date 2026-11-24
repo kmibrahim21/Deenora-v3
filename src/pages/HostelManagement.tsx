@@ -15,7 +15,6 @@ import {
   Clock,
   DoorOpen,
   Edit3,
-  Heart,
   Home,
   Loader2,
   LogOut,
@@ -44,7 +43,6 @@ import {
   AcademicYear,
   Class,
   HostelAllocation,
-  HostelFeeCategory,
   HostelLeave,
   HostelMealLog,
   HostelMealStatus,
@@ -222,7 +220,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
   const [dirSearch, setDirSearch] = useState('');
   const [dirClassFilter, setDirClassFilter] = useState('all');
   const [dirResFilter, setDirResFilter] = useState<'all' | HostelResidentialType>('all');
-  const [dirFeeFilter, setDirFeeFilter] = useState<'all' | HostelFeeCategory>('all');
 
   // Room Add/Edit Modal
   const [roomModalOpen, setRoomModalOpen] = useState(false);
@@ -235,7 +232,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     room_title: '',
     gender: 'male' as HostelRoomGender,
     capacity: '6',
-    monthly_seat_fee: '0',
     warden_name: '',
     warden_phone: '',
     is_active: true,
@@ -251,8 +247,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
   const [assignClassFilter, setAssignClassFilter] = useState('all');
   const [assignStudentId, setAssignStudentId] = useState('');
   const [assignSeatNumber, setAssignSeatNumber] = useState('');
-  const [assignFeeCategory, setAssignFeeCategory] = useState<HostelFeeCategory>('full_paid');
-  const [assignMonthlyFee, setAssignMonthlyFee] = useState('0');
   const [assignNotes, setAssignNotes] = useState('');
   const [assignSaving, setAssignSaving] = useState(false);
 
@@ -264,7 +258,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
   } | null>(null);
   const [transferToRoomId, setTransferToRoomId] = useState('');
   const [transferSeatNumber, setTransferSeatNumber] = useState('');
-  const [transferSyncFee, setTransferSyncFee] = useState(true);
   const [transferSaving, setTransferSaving] = useState(false);
 
   // Vacate Seat Modal
@@ -282,8 +275,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     currentResType: HostelResidentialType;
   } | null>(null);
   const [editResType, setEditResType] = useState<HostelResidentialType>('residential');
-  const [editFeeCategory, setEditFeeCategory] = useState<HostelFeeCategory>('full_paid');
-  const [editMonthlyFee, setEditMonthlyFee] = useState('0');
   const [editStudentNotes, setEditStudentNotes] = useState('');
   const [editStudentSaving, setEditStudentSaving] = useState(false);
 
@@ -503,8 +494,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       const residentialType: HostelResidentialType = alloc
         ? alloc.residential_type
         : normalizeResidentialType(extra.residential_status);
-      const feeCategory: HostelFeeCategory = alloc?.fee_category || 'full_paid';
-      const monthlyBoardingFee = alloc ? Number(alloc.monthly_boarding_fee || 0) : 0;
       const room = alloc?.room_id ? roomMap.get(alloc.room_id) || null : null;
       const className = classMap.get(student.class_id)?.class_name || '';
 
@@ -514,8 +503,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         room,
         className,
         residentialType,
-        feeCategory,
-        monthlyBoardingFee,
       };
     });
   }, [students, activeAllocationByStudent, roomMap, classMap]);
@@ -533,8 +520,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
     const activeBoarders = directoryRows.filter((row) => row.residentialType === 'residential').length;
     const availableSeats = Math.max(0, totalBeds - seatedCount);
-    const lillahCount = directoryRows.filter((row) => row.feeCategory === 'lillah_free').length;
-    const halfFreeCount = directoryRows.filter((row) => row.feeCategory === 'half_free').length;
+    const dayCareCount = directoryRows.filter((row) => row.residentialType === 'day_care').length;
 
     return {
       totalRooms,
@@ -542,8 +528,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       seatedCount,
       activeBoarders,
       availableSeats,
-      lillahCount,
-      halfFreeCount,
+      dayCareCount,
     };
   }, [rooms, allocationsByRoom, directoryRows]);
 
@@ -577,7 +562,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     return directoryRows.filter((row) => {
       if (dirClassFilter !== 'all' && row.student.class_id !== dirClassFilter) return false;
       if (dirResFilter !== 'all' && row.residentialType !== dirResFilter) return false;
-      if (dirFeeFilter !== 'all' && row.feeCategory !== dirFeeFilter) return false;
       if (!q) return true;
       return (
         row.student.student_name.toLowerCase().includes(q) ||
@@ -587,35 +571,25 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         (row.room?.room_number || '').toLowerCase().includes(q)
       );
     });
-  }, [directoryRows, dirClassFilter, dirResFilter, dirFeeFilter, dirSearch]);
+  }, [directoryRows, dirClassFilter, dirResFilter, dirSearch]);
 
   // Directory counts for filter chips
   const dirCounts = useMemo(() => {
     let residential = 0;
     let non_residential = 0;
     let day_care = 0;
-    let full_paid = 0;
-    let half_free = 0;
-    let lillah_free = 0;
 
     for (const row of directoryRows) {
       if (dirClassFilter !== 'all' && row.student.class_id !== dirClassFilter) continue;
       if (row.residentialType === 'residential') residential++;
       else if (row.residentialType === 'day_care') day_care++;
       else non_residential++;
-
-      if (row.feeCategory === 'lillah_free') lillah_free++;
-      else if (row.feeCategory === 'half_free') half_free++;
-      else full_paid++;
     }
     return {
       total: residential + non_residential + day_care,
       residential,
       non_residential,
       day_care,
-      full_paid,
-      half_free,
-      lillah_free,
     };
   }, [directoryRows, dirClassFilter]);
 
@@ -666,7 +640,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       room_title: '',
       gender: 'male',
       capacity: '6',
-      monthly_seat_fee: '0',
       warden_name: '',
       warden_phone: '',
       is_active: true,
@@ -683,7 +656,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       room_title: room.room_title || '',
       gender: room.gender || 'male',
       capacity: String(room.capacity ?? 6),
-      monthly_seat_fee: String(room.monthly_seat_fee ?? 0),
       warden_name: room.warden_name || '',
       warden_phone: room.warden_phone || '',
       is_active: room.is_active !== false,
@@ -698,7 +670,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     const buildingName = roomForm.building_name.trim();
     const roomNumber = roomForm.room_number.trim();
     const capacityNum = parseInt(roomForm.capacity, 10);
-    const feeNum = parseFloat(roomForm.monthly_seat_fee || '0');
 
     if (!buildingName || !roomNumber) {
       showToast('error', isBn ? 'ভবনের নাম ও রুম নম্বর অবশ্যই দিতে হবে।' : 'Building name and room number are required.');
@@ -706,10 +677,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     }
     if (isNaN(capacityNum) || capacityNum < 1 || capacityNum > 200) {
       showToast('error', isBn ? 'সিট সংখ্যা ১ থেকে ২০০ এর মধ্যে হতে হবে।' : 'Capacity must be between 1 and 200.');
-      return;
-    }
-    if (isNaN(feeNum) || feeNum < 0) {
-      showToast('error', isBn ? 'মাসিক সিট ফি ০ বা তার বেশি হতে হবে।' : 'Monthly seat fee must be 0 or greater.');
       return;
     }
 
@@ -745,7 +712,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
     setRoomSaving(true);
     try {
-      const payload = {
+      const basePayload = {
         institution_id: madrasah.id,
         building_name: buildingName,
         floor_name: roomForm.floor_name.trim() || null,
@@ -753,7 +720,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         room_title: roomForm.room_title.trim() || null,
         gender: roomForm.gender,
         capacity: capacityNum,
-        monthly_seat_fee: feeNum,
         warden_name: roomForm.warden_name.trim() || null,
         warden_phone: roomForm.warden_phone.trim() || null,
         is_active: roomForm.is_active,
@@ -761,15 +727,19 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       };
 
       if (editingRoom) {
+        // Preserve any existing monthly_seat_fee in DB without modifying fee data from Hostel Management
         const { error } = await supabase
           .from('hostel_rooms')
-          .update(payload)
+          .update(basePayload)
           .eq('id', editingRoom.id)
           .eq('institution_id', madrasah.id);
         if (error) throw error;
         showToast('success', isBn ? 'রুমের তথ্য সফলভাবে আপডেট হয়েছে।' : 'Room updated successfully.');
       } else {
-        const { error } = await supabase.from('hostel_rooms').insert(payload);
+        const { error } = await supabase.from('hostel_rooms').insert({
+          ...basePayload,
+          monthly_seat_fee: 0,
+        });
         if (error) throw error;
         showToast('success', isBn ? 'নতুন রুম সফলভাবে যোগ করা হয়েছে।' : 'New room added successfully.');
       }
@@ -824,21 +794,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     setAssignClassFilter('all');
     setAssignStudentId('');
     setAssignSeatNumber(getNextSeatSuggestion(room.id, room.capacity));
-    setAssignFeeCategory('full_paid');
-    setAssignMonthlyFee(String(room.monthly_seat_fee ?? 0));
     setAssignNotes('');
-  };
-
-  const computeSuggestedFee = (baseFee: number, category: HostelFeeCategory): string => {
-    if (category === 'lillah_free') return '0';
-    if (category === 'half_free') return String(Math.round(baseFee / 2));
-    return String(baseFee);
-  };
-
-  const handleAssignFeeCategoryChange = (cat: HostelFeeCategory) => {
-    setAssignFeeCategory(cat);
-    const baseFee = Number(assignModalRoom?.monthly_seat_fee || 0);
-    setAssignMonthlyFee(computeSuggestedFee(baseFee, cat));
   };
 
   const assignableStudents = useMemo(() => {
@@ -880,12 +836,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       return;
     }
 
-    const feeNum = parseFloat(assignMonthlyFee || '0');
-    if (isNaN(feeNum) || feeNum < 0) {
-      showToast('error', isBn ? 'সঠিক মাসিক ফি দিন।' : 'Please enter a valid monthly fee.');
-      return;
-    }
-
     const student = studentMap.get(assignStudentId);
     if (!student) return;
 
@@ -914,8 +864,8 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         room_id: assignModalRoom.id,
         seat_number: assignSeatNumber.trim() || null,
         residential_type: 'residential',
-        fee_category: assignFeeCategory,
-        monthly_boarding_fee: feeNum,
+        fee_category: existingAlloc?.fee_category || 'full_paid',
+        monthly_boarding_fee: existingAlloc ? Number(existingAlloc.monthly_boarding_fee || 0) : 0,
         status: 'active',
         allocated_at: today,
         notes: assignNotes.trim() || null,
@@ -969,7 +919,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       setTransferToRoomId('');
       setTransferSeatNumber('');
     }
-    setTransferSyncFee(false);
   };
 
   const handleConfirmTransfer = async (e: React.FormEvent) => {
@@ -1000,19 +949,15 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         .eq('institution_id', madrasah.id);
       if (closeErr) throw closeErr;
 
-      const nextFee = transferSyncFee
-        ? Number(computeSuggestedFee(Number(destRoom.monthly_seat_fee || 0), transferTarget.allocation.fee_category))
-        : Number(transferTarget.allocation.monthly_boarding_fee || 0);
-
-      // 2. Create new active allocation in target room
+      // 2. Create new active allocation in target room (preserving existing fee fields untouched)
       const { error: insertErr } = await supabase.from('hostel_allocations').insert({
         institution_id: madrasah.id,
         student_id: transferTarget.student.id,
         room_id: destRoom.id,
         seat_number: transferSeatNumber.trim() || null,
         residential_type: 'residential',
-        fee_category: transferTarget.allocation.fee_category,
-        monthly_boarding_fee: nextFee,
+        fee_category: transferTarget.allocation.fee_category || 'full_paid',
+        monthly_boarding_fee: Number(transferTarget.allocation.monthly_boarding_fee || 0),
         status: 'active',
         allocated_at: today,
         notes: transferTarget.allocation.notes || null,
@@ -1068,7 +1013,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     }
   };
 
-  // Tab 2: Quick Update Student Residential & Fee Category
+  // Tab 2: Quick Update Student Residential Status
   const openEditStudentModal = (row: (typeof directoryRows)[number]) => {
     setEditStudentTarget({
       student: row.student,
@@ -1076,20 +1021,12 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       currentResType: row.residentialType,
     });
     setEditResType(row.residentialType);
-    setEditFeeCategory(row.feeCategory);
-    setEditMonthlyFee(String(row.monthlyBoardingFee ?? 0));
     setEditStudentNotes(row.allocation?.notes || '');
   };
 
   const handleSaveStudentDirectory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!madrasah?.id || !editStudentTarget) return;
-
-    const feeNum = parseFloat(editMonthlyFee || '0');
-    if (isNaN(feeNum) || feeNum < 0) {
-      showToast('error', isBn ? 'মাসিক ফি ০ বা তার বেশি হতে হবে।' : 'Monthly fee must be 0 or greater.');
-      return;
-    }
 
     setEditStudentSaving(true);
     try {
@@ -1117,20 +1054,19 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
             room_id: null,
             seat_number: null,
             residential_type: editResType,
-            fee_category: editFeeCategory,
-            monthly_boarding_fee: feeNum,
+            fee_category: allocation.fee_category || 'full_paid',
+            monthly_boarding_fee: Number(allocation.monthly_boarding_fee || 0),
             status: 'active',
             allocated_at: today,
             notes: editStudentNotes.trim() || null,
           });
           if (insertErr) throw insertErr;
         } else {
+          // Preserve existing DB fee_category & monthly_boarding_fee untouched
           const { error: updErr } = await supabase
             .from('hostel_allocations')
             .update({
               residential_type: editResType,
-              fee_category: editFeeCategory,
-              monthly_boarding_fee: feeNum,
               room_id: shouldKeepRoom ? allocation.room_id : null,
               seat_number: shouldKeepRoom ? allocation.seat_number : null,
               notes: editStudentNotes.trim() || null,
@@ -1147,8 +1083,8 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
           room_id: null,
           seat_number: null,
           residential_type: editResType,
-          fee_category: editFeeCategory,
-          monthly_boarding_fee: feeNum,
+          fee_category: 'full_paid',
+          monthly_boarding_fee: 0,
           status: 'active',
           allocated_at: today,
           notes: editStudentNotes.trim() || null,
@@ -1161,8 +1097,8 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       showToast(
         'success',
         isBn
-          ? `${student.student_name}-এর আবাসিক ও ফি তথ্য আপডেট হয়েছে।`
-          : `Updated residential & fee profile for ${student.student_name}.`
+          ? `${student.student_name}-এর আবাসিক তথ্য আপডেট হয়েছে।`
+          : `Updated residential status for ${student.student_name}.`
       );
       setEditStudentTarget(null);
       await fetchAllData(true);
@@ -1206,31 +1142,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       cls: isDark
         ? 'bg-slate-700/70 text-slate-300 border-slate-600'
         : 'bg-slate-100 text-slate-600 border-slate-200',
-    };
-  };
-
-  const feeBadge = (cat: HostelFeeCategory) => {
-    if (cat === 'lillah_free') {
-      return {
-        label: isBn ? 'লিল্লাহ/ফ্রি' : 'Lillah / Free',
-        cls: isDark
-          ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-          : 'bg-rose-50 text-rose-700 border-rose-200',
-      };
-    }
-    if (cat === 'half_free') {
-      return {
-        label: isBn ? 'অর্ধ-ফ্রি' : 'Half-Free',
-        cls: isDark
-          ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-          : 'bg-purple-50 text-purple-700 border-purple-200',
-      };
-    }
-    return {
-      label: isBn ? 'পূর্ণ ফি' : 'Full Paid',
-      cls: isDark
-        ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-        : 'bg-blue-50 text-blue-700 border-blue-200',
     };
   };
 
@@ -1572,21 +1483,54 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     []
   );
 
+  // Fast 1-tap full-day Present / Leave-Off toggle (syncs all 3 meals + night roll)
+  const handleToggleFullDay = useCallback(
+    (
+      studentId: string,
+      currentStatuses: { morning: HostelMealStatus; noon: HostelMealStatus; night: HostelMealStatus }
+    ) => {
+      const isAllOff =
+        currentStatuses.morning === 'off' &&
+        currentStatuses.noon === 'off' &&
+        currentStatuses.night === 'off';
+      const nextMealState: HostelMealStatus = isAllOff ? 'present' : 'off';
+
+      setMealDraft((prev) => ({
+        ...prev,
+        [studentId]: {
+          morning: nextMealState,
+          noon: nextMealState,
+          night: nextMealState,
+        },
+      }));
+      setNightRollDraft((prev) => ({
+        ...prev,
+        [studentId]: isAllOff ? 'present' : 'leave',
+      }));
+      setMealDirty(true);
+    },
+    []
+  );
+
   const handleMarkAllPresent = useCallback(() => {
     const nextDraft: Record<
       string,
       { morning: HostelMealStatus; noon: HostelMealStatus; night: HostelMealStatus }
     > = {};
+    const nextNightDraft: Record<string, HostelNightRollStatus> = {};
     let markedCount = 0;
     for (const row of mealEligibleRows) {
       if (row.isOnLeave) {
         nextDraft[row.student.id] = { morning: 'off', noon: 'off', night: 'off' };
+        nextNightDraft[row.student.id] = 'leave';
       } else {
         nextDraft[row.student.id] = { morning: 'present', noon: 'present', night: 'present' };
+        nextNightDraft[row.student.id] = 'present';
         markedCount++;
       }
     }
     setMealDraft(nextDraft);
+    setNightRollDraft(nextNightDraft);
     setMealDirty(true);
     showToast(
       'success',
@@ -1603,8 +1547,16 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     try {
       const nowIso = new Date().toISOString();
 
-      const buildPayload = (style: 'short' | 'status', includeOptionalMeta: boolean) =>
+      const buildPayload = (
+        style: 'short' | 'status',
+        includeOptionalMeta: boolean,
+        includeNightRoll: boolean
+      ) =>
         mealEligibleRows.map((row) => {
+          const allOff =
+            row.statuses.morning === 'off' &&
+            row.statuses.noon === 'off' &&
+            row.statuses.night === 'off';
           const base: Record<string, any> = {
             institution_id: madrasah.id,
             student_id: row.student.id,
@@ -1619,6 +1571,19 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
             base.noon_status = row.statuses.noon;
             base.night_status = row.statuses.night;
           }
+          if (includeNightRoll) {
+            const draftedNight = nightRollDraft[row.student.id];
+            const savedNight = row.savedLog?.night_roll_status;
+            base.night_roll_status =
+              draftedNight ||
+              (allOff
+                ? 'leave'
+                : savedNight === 'present' || savedNight === 'leave' || savedNight === 'absent'
+                ? savedNight
+                : row.isOnLeave
+                ? 'leave'
+                : 'present');
+          }
           if (includeOptionalMeta) {
             base.notes = row.isOnLeave ? 'ছুটিতে' : null;
             base.marked_by = profile?.id || null;
@@ -1629,14 +1594,25 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
       let style = mealColumnStyleRef.current;
       let includeMeta = true;
+      let includeNightRoll = true;
 
       let res = await supabase
         .from('hostel_meal_logs')
-        .upsert(buildPayload(style, includeMeta), {
+        .upsert(buildPayload(style, includeMeta, includeNightRoll), {
           onConflict: 'institution_id,student_id,log_date',
         });
 
-      // Defensive fallback if live Supabase table uses morning_status/noon_status/night_status or omits marked_by/updated_at
+      // Defensive fallback if night_roll_status column is not yet present
+      if (res.error && String(res.error.message || '').toLowerCase().includes('night_roll_status')) {
+        includeNightRoll = false;
+        res = await supabase
+          .from('hostel_meal_logs')
+          .upsert(buildPayload(style, includeMeta, includeNightRoll), {
+            onConflict: 'institution_id,student_id,log_date',
+          });
+      }
+
+      // Defensive fallback if live Supabase table uses morning_status/noon_status/night_status
       if (res.error) {
         const msg = String(res.error.message || '').toLowerCase();
         if (msg.includes('morning') || msg.includes('noon') || msg.includes('night')) {
@@ -1644,7 +1620,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
           mealColumnStyleRef.current = style;
           res = await supabase
             .from('hostel_meal_logs')
-            .upsert(buildPayload(style, includeMeta), {
+            .upsert(buildPayload(style, includeMeta, includeNightRoll), {
               onConflict: 'institution_id,student_id,log_date',
             });
         }
@@ -1656,7 +1632,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
           includeMeta = false;
           res = await supabase
             .from('hostel_meal_logs')
-            .upsert(buildPayload(style, includeMeta), {
+            .upsert(buildPayload(style, includeMeta, includeNightRoll), {
               onConflict: 'institution_id,student_id,log_date',
             });
         }
@@ -1666,12 +1642,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
       setMealDraft({});
       setMealDirty(false);
+      setNightRollDraft({});
+      setNightRollDirty(false);
       await fetchMealData(mealDate, true);
       showToast(
         'success',
         isBn
-          ? `${toBnDigit(mealEligibleRows.length)} জন শিক্ষার্থীর মিল হাজিরা সফলভাবে সংরক্ষিত হয়েছে।`
-          : `Saved daily meal attendance for ${mealEligibleRows.length} students.`
+          ? `${toBnDigit(mealEligibleRows.length)} জন শিক্ষার্থীর হোস্টেল ও মিল হাজিরা সংরক্ষিত হয়েছে।`
+          : `Saved daily hostel & meal attendance for ${mealEligibleRows.length} students.`
       );
     } catch (err: any) {
       console.error('Save meal logs error:', err);
@@ -1682,7 +1660,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     } finally {
       setMealSaving(false);
     }
-  }, [madrasah?.id, mealEligibleRows, mealDate, profile?.id, fetchMealData, isBn, showToast]);
+  }, [madrasah?.id, mealEligibleRows, mealDate, nightRollDraft, profile?.id, fetchMealData, isBn, showToast]);
 
   const handleRefreshKitchen = useCallback(async () => {
     await Promise.all([fetchAllData(true), fetchMealData(mealDate, true)]);
@@ -2255,6 +2233,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
     ];
 
     const isTodaySelected = mealDate === getTodayDateString();
+    const hasAttendanceLogged = mealSummary.loggedCount > 0;
     const attendanceComplete =
       mealSummary.totalEligible > 0 && mealSummary.loggedCount >= mealSummary.totalEligible;
 
@@ -2362,8 +2341,8 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
           {/* Attendance Progress Status Bar */}
           <div
-            className={`mt-3.5 rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-              attendanceComplete
+            className={`mt-3.5 rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+              hasAttendanceLogged
                 ? isDark
                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
                   : 'bg-emerald-50 border-emerald-200 text-emerald-900'
@@ -2372,30 +2351,51 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 : 'bg-amber-50 border-amber-200 text-amber-900'
             }`}
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-start sm:items-center gap-2.5">
               <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                  attendanceComplete
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                  hasAttendanceLogged
                     ? 'bg-emerald-600 text-white'
                     : 'bg-amber-500 text-white'
                 }`}
               >
-                {attendanceComplete ? <CheckCircle2 size={17} /> : <Clock size={17} />}
+                {hasAttendanceLogged ? <CheckCircle2 size={18} /> : <Clock size={18} />}
               </div>
               <div>
-                <p className="text-sm sm:text-base font-black leading-tight">
-                  {isBn
-                    ? `হাজিরা নেওয়া হয়েছে ${formatNum(mealSummary.loggedCount, isBn)} / মোট আবাসিক ${formatNum(mealSummary.totalEligible, isBn)}`
-                    : `Attendance Logged ${mealSummary.loggedCount} / Total Boarders ${mealSummary.totalEligible}`}
-                </p>
-                <p className="text-[11px] font-semibold opacity-80 mt-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black ${
+                      hasAttendanceLogged
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    {hasAttendanceLogged
+                      ? isBn
+                        ? 'হাজিরা সম্পন্ন ✓'
+                        : 'Attendance Completed ✓'
+                      : isBn
+                      ? 'আজকের হাজিরা পেন্ডিং'
+                      : "Today's Attendance Pending"}
+                  </span>
+                  <span className="text-xs sm:text-sm font-black">
+                    {isBn
+                      ? `হাজিরা: ${formatNum(mealSummary.loggedCount, isBn)} / মোট আবাসিক: ${formatNum(mealSummary.totalEligible, isBn)} জন`
+                      : `Logged: ${mealSummary.loggedCount} / Active Boarders: ${mealSummary.totalEligible}`}
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold opacity-85 mt-1">
                   {attendanceComplete
                     ? isBn
                       ? 'সকল আবাসিক ও ডে-কেয়ার শিক্ষার্থীর আজকের মিল হাজিরা নিশ্চিত করা হয়েছে।'
                       : 'All active residential & day-care meal logs are confirmed for this date.'
+                    : hasAttendanceLogged
+                    ? isBn
+                      ? 'আবাসিক হাজিরা আপডেট করা হয়েছে। বাকি উপস্থিত শিক্ষার্থীদের রান্নার হিসাবে ধরা হয়েছে।'
+                      : 'Attendance has been submitted. Remaining non-leave boarders are included in counts.'
                     : isBn
-                    ? 'যাদের হাজিরা এখনো সেভ হয়নি (ছুটিতে না থাকলে), তাদের রান্নার হিসাবে উপস্থিত ধরা হয়েছে।'
-                    : 'Unlogged non-leave active boarders are counted as present by default.'}
+                    ? 'আজকের হাজিরা এখনো সেভ হয়নি — মোট সক্রিয় আবাসিক (ছুটি বাদে) অনুযায়ী সম্ভাব্য রান্নার হিসাব দেখানো হচ্ছে।'
+                    : "Today's attendance is not saved yet — showing estimated count from active non-leave boarders."}
                 </p>
               </div>
             </div>
@@ -2858,24 +2858,19 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
           <div
             className={`col-span-2 sm:col-span-1 rounded-2xl border p-3.5 flex items-center justify-between sm:block ${
-              isDark ? 'bg-slate-800/70 border-slate-700/80' : 'bg-rose-50/60 border-rose-100'
+              isDark ? 'bg-slate-800/70 border-slate-700/80' : 'bg-teal-50/60 border-teal-100'
             }`}
           >
             <div className="flex items-center sm:justify-between gap-2">
-              <Heart size={16} className="text-rose-600 dark:text-rose-400 shrink-0 sm:order-2" />
+              <Sun size={16} className="text-teal-600 dark:text-teal-400 shrink-0 sm:order-2" />
               <span className={`text-xs sm:text-[11px] font-bold sm:order-1 ${isDark ? 'text-slate-300 sm:text-slate-400' : 'text-slate-700 sm:text-slate-600'}`}>
-                {isBn ? 'লিল্লাহ / ফ্রি বোর্ডিং' : 'Lillah / Free'}
+                {isBn ? 'ডে-কেয়ার শিক্ষার্থী' : 'Day-Care Students'}
               </span>
             </div>
             <div className="sm:mt-1.5 flex items-baseline gap-1.5">
-              <span className="text-2xl font-black tabular-nums text-rose-700 dark:text-rose-300">
-                {formatNum(kpis.lillahCount, isBn)}
+              <span className="text-2xl font-black tabular-nums text-teal-700 dark:text-teal-300">
+                {formatNum(kpis.dayCareCount, isBn)}
               </span>
-              {kpis.halfFreeCount > 0 && (
-                <span className={`text-[10.5px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  (+{formatNum(kpis.halfFreeCount, isBn)} {isBn ? 'অর্ধ-ফ্রি' : 'half'})
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -2895,7 +2890,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
               id: 'directory' as HostelTab,
               icon: Users,
               shortLabel: isBn ? 'আবাসিক তালিকা' : 'Residential',
-              fullLabel: isBn ? 'আবাসিক ও লিল্লাহ তালিকা' : 'Residential & Lillah',
+              fullLabel: isBn ? 'আবাসিক তালিকা' : 'Residential Directory',
             },
             {
               id: 'meals' as HostelTab,
@@ -3056,7 +3051,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <p className={`text-xs sm:text-sm max-w-md mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {isBn
                       ? 'প্রথমে ভবন ও রুম নম্বর দিয়ে রুম তৈরি করুন, এরপর আবাসিক শিক্ষার্থীদের সিট বরাদ্দ করুন।'
-                      : 'Create hostel rooms with building, capacity, and monthly fee, then allocate seats to boarders.'}
+                      : 'Create hostel rooms with building and bed capacity, then allocate seats to boarders.'}
                   </p>
                   <button
                     type="button"
@@ -3130,15 +3125,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                     }`}
                                   >
                                     {genderLabel(room.gender)}
-                                  </span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                      isDark
-                                        ? 'bg-blue-500/15 border-blue-500/30 text-blue-300'
-                                        : 'bg-blue-50 border-blue-200 text-blue-700'
-                                    }`}
-                                  >
-                                    ৳{formatNum(Number(room.monthly_seat_fee || 0), isBn)}/{isBn ? 'মাস' : 'mo'}
                                   </span>
                                 </div>
                               </div>
@@ -3252,7 +3238,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
                                 {occupants.map(({ allocation, student }) => {
                                   const clsName = classMap.get(student.class_id)?.class_name || '';
-                                  const fb = feeBadge(allocation.fee_category);
                                   return (
                                     <div
                                       key={allocation.id}
@@ -3281,9 +3266,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                                 • {isBn ? 'রোল' : 'Roll'} {formatNum(student.roll, isBn)}
                                               </span>
                                             )}
-                                            <span className={`px-1.5 py-0.2 rounded-md border text-[9.5px] font-bold ${fb.cls}`}>
-                                              {fb.label}
-                                            </span>
                                           </div>
                                         </div>
                                       </div>
@@ -3462,51 +3444,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     </button>
                   ))}
                 </div>
-
-                {/* Fee Category Filter Pills */}
-                <div className="flex sm:flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
-                  <span className={`shrink-0 whitespace-nowrap text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {isBn ? 'ফি:' : 'Fee:'}
-                  </span>
-                  {(
-                    [
-                      { id: 'all', label: isBn ? 'সকল ফি' : 'All Fees', count: dirCounts.total },
-                      { id: 'full_paid', label: isBn ? 'পূর্ণ ফি' : 'Full Paid', count: dirCounts.full_paid },
-                      { id: 'half_free', label: isBn ? 'অর্ধ-ফ্রি' : 'Half-Free', count: dirCounts.half_free },
-                      {
-                        id: 'lillah_free',
-                        label: isBn ? 'লিল্লাহ/এতিম' : 'Lillah / Free',
-                        count: dirCounts.lillah_free,
-                      },
-                    ] as const
-                  ).map((pill) => (
-                    <button
-                      key={pill.id}
-                      type="button"
-                      onClick={() => setDirFeeFilter(pill.id)}
-                      className={`shrink-0 whitespace-nowrap min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                        dirFeeFilter === pill.id
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                          : isDark
-                          ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span>{pill.label}</span>
-                      <span
-                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-black tabular-nums ${
-                          dirFeeFilter === pill.id
-                            ? 'bg-white/20 text-white'
-                            : isDark
-                            ? 'bg-slate-700 text-slate-300'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {formatNum(pill.count, isBn)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Directory List */}
@@ -3527,7 +3464,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
                   {filteredDirectory.map((row) => {
                     const rb = resBadge(row.residentialType);
-                    const fb = feeBadge(row.feeCategory);
                     return (
                       <div
                         key={row.student.id}
@@ -3553,9 +3489,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               </h4>
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${rb.cls}`}>
                                 {rb.label}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${fb.cls}`}>
-                                {fb.label}
                               </span>
                             </div>
 
@@ -3593,15 +3526,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
-                          <div className="text-left sm:text-right">
-                            <span className={`block text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                              {isBn ? 'বোর্ডিং ফি/মাস' : 'Boarding Fee/mo'}
-                            </span>
-                            <span className="text-sm font-black tabular-nums text-emerald-700 dark:text-emerald-400">
-                              ৳{formatNum(row.monthlyBoardingFee, isBn)}
-                            </span>
-                          </div>
+                        <div className="flex items-center justify-end gap-2 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
                           <button
                             type="button"
                             onClick={() => openEditStudentModal(row)}
@@ -3971,7 +3896,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       </h3>
                       <p className={`text-xs sm:text-sm max-w-md mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         {isBn
-                          ? 'প্রথমে "রুম ও সিট বোর্ড" অথবা "আবাসিক ও লিল্লাহ তালিকা" থেকে শিক্ষার্থীদের আবাসিক বা ডে-কেয়ার হিসেবে নির্ধারণ করুন।'
+                          ? 'প্রথমে "রুম ও সিট বোর্ড" অথবা "আবাসিক তালিকা" থেকে শিক্ষার্থীদের আবাসিক বা ডে-কেয়ার হিসেবে নির্ধারণ করুন।'
                           : 'Assign students as Residential or Day-Care in Tab 1 or Tab 2 first.'}
                       </p>
                     </div>
@@ -4001,12 +3926,16 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                         const noonPill = mealPillStyle(row.statuses.noon, row.isOnLeave);
                         const nightPill = mealPillStyle(row.statuses.night, row.isOnLeave);
                         const isDrafted = Boolean(mealDraft[row.student.id]);
+                        const isAllOff =
+                          row.statuses.morning === 'off' &&
+                          row.statuses.noon === 'off' &&
+                          row.statuses.night === 'off';
 
                         return (
                           <div
                             key={row.student.id}
-                            className={`rounded-2xl border p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all ${
-                              row.isOnLeave
+                            className={`rounded-2xl border p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all ${
+                              row.isOnLeave || isAllOff
                                 ? isDark
                                   ? 'bg-rose-950/20 border-rose-500/30'
                                   : 'bg-rose-50/40 border-rose-200/80'
@@ -4089,47 +4018,85 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               </div>
                             </div>
 
-                            {/* 3 Fast 1-Tap Meal Toggle Pills: Morning, Noon, Night */}
-                            <div className="grid grid-cols-3 gap-2 md:w-[345px] shrink-0">
-                              {(
-                                [
-                                  {
-                                    key: 'morning' as MealKey,
-                                    title: isBn ? 'সকাল' : 'Morning',
-                                    pill: morningPill,
-                                  },
-                                  {
-                                    key: 'noon' as MealKey,
-                                    title: isBn ? 'দুপুর' : 'Noon',
-                                    pill: noonPill,
-                                  },
-                                  {
-                                    key: 'night' as MealKey,
-                                    title: isBn ? 'রাত' : 'Night',
-                                    pill: nightPill,
-                                  },
-                                ] as const
-                              ).map((m) => (
-                                <button
-                                  key={m.key}
-                                  type="button"
-                                  onClick={() =>
-                                    handleToggleMealStatus(row.student.id, row.statuses, m.key)
-                                  }
-                                  className={`min-h-[54px] px-2 py-2.5 rounded-xl border text-center transition-all active:scale-95 cursor-pointer select-none ${m.pill.cls}`}
-                                >
-                                  <span className="block text-[10px] font-bold opacity-80 leading-none">
-                                    {m.title}
-                                  </span>
-                                  <span className="mt-1.5 flex items-center justify-center gap-1 text-xs font-black leading-none">
-                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.pill.dotCls}`} />
-                                    <span className="whitespace-nowrap">{m.pill.label}</span>
-                                  </span>
-                                  <span className="block mt-0.5 text-[9.5px] font-extrabold opacity-75 tabular-nums">
-                                    {m.pill.weight}
-                                  </span>
-                                </button>
-                              ))}
+                            {/* 1-Tap Full-Day Attendance Toggle + 3 Individual Meal Toggle Pills */}
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFullDay(row.student.id, row.statuses)}
+                                title={
+                                  isAllOff
+                                    ? isBn
+                                      ? 'পুরো দিন উপস্থিত করুন'
+                                      : 'Mark full day present'
+                                    : isBn
+                                    ? 'পুরো দিন বন্ধ / ছুটি করুন'
+                                    : 'Mark full day off / leave'
+                                }
+                                className={`min-h-[42px] sm:min-h-[54px] px-3 py-2 rounded-xl border text-xs font-black inline-flex sm:flex-col items-center justify-center gap-1.5 sm:gap-0.5 transition-all active:scale-95 cursor-pointer select-none sm:w-[92px] ${
+                                  isAllOff
+                                    ? isDark
+                                      ? 'bg-rose-600 text-white border-rose-500 shadow-xs'
+                                      : 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                    : isDark
+                                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
+                                    : 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                }`}
+                              >
+                                <span className="text-[10px] font-bold opacity-85 leading-none">
+                                  {isBn ? 'পুরো দিন' : 'Full Day'}
+                                </span>
+                                <span className="whitespace-nowrap leading-none">
+                                  {isAllOff
+                                    ? isBn
+                                      ? 'ছুটি/বন্ধ'
+                                      : 'Off/Leave'
+                                    : isBn
+                                    ? 'উপস্থিত ✓'
+                                    : 'Present ✓'}
+                                </span>
+                              </button>
+
+                              <div className="grid grid-cols-3 gap-2 sm:w-[320px]">
+                                {(
+                                  [
+                                    {
+                                      key: 'morning' as MealKey,
+                                      title: isBn ? 'সকাল' : 'Morning',
+                                      pill: morningPill,
+                                    },
+                                    {
+                                      key: 'noon' as MealKey,
+                                      title: isBn ? 'দুপুর' : 'Noon',
+                                      pill: noonPill,
+                                    },
+                                    {
+                                      key: 'night' as MealKey,
+                                      title: isBn ? 'রাত' : 'Night',
+                                      pill: nightPill,
+                                    },
+                                  ] as const
+                                ).map((m) => (
+                                  <button
+                                    key={m.key}
+                                    type="button"
+                                    onClick={() =>
+                                      handleToggleMealStatus(row.student.id, row.statuses, m.key)
+                                    }
+                                    className={`min-h-[54px] px-2 py-2.5 rounded-xl border text-center transition-all active:scale-95 cursor-pointer select-none ${m.pill.cls}`}
+                                  >
+                                    <span className="block text-[10px] font-bold opacity-80 leading-none">
+                                      {m.title}
+                                    </span>
+                                    <span className="mt-1.5 flex items-center justify-center gap-1 text-xs font-black leading-none">
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.pill.dotCls}`} />
+                                      <span className="whitespace-nowrap">{m.pill.label}</span>
+                                    </span>
+                                    <span className="block mt-0.5 text-[9.5px] font-extrabold opacity-75 tabular-nums">
+                                      {m.pill.weight}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         );
@@ -5044,7 +5011,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold mb-1">
                       {isBn ? 'ধরন (লিঙ্গ)' : 'Gender'}
@@ -5072,19 +5039,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       required
                       value={roomForm.capacity}
                       onChange={(e) => setRoomForm({ ...roomForm, capacity: e.target.value })}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {isBn ? 'মাসিক সিট ফি (৳)' : 'Monthly Fee (৳)'}
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="1"
-                      value={roomForm.monthly_seat_fee}
-                      onChange={(e) => setRoomForm({ ...roomForm, monthly_seat_fee: e.target.value })}
                       className={inputCls}
                     />
                   </div>
@@ -5236,9 +5190,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                             type="button"
                             onClick={() => {
                               setAssignStudentId(row.student.id);
-                              if (row.allocation?.fee_category) {
-                                handleAssignFeeCategoryChange(row.allocation.fee_category);
-                              }
                             }}
                             className={`w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-left transition-colors cursor-pointer ${
                               selected
@@ -5271,47 +5222,18 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   </div>
                 </div>
 
-                {/* Seat No, Fee Category, Monthly Boarding Fee */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {isBn ? 'সিট নম্বর' : 'Seat Number'}
-                    </label>
-                    <input
-                      type="text"
-                      value={assignSeatNumber}
-                      onChange={(e) => setAssignSeatNumber(e.target.value)}
-                      placeholder={isBn ? 'যেমন: ১' : 'e.g. 1'}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {isBn ? 'ফি ক্যাটাগরি' : 'Fee Category'}
-                    </label>
-                    <select
-                      value={assignFeeCategory}
-                      onChange={(e) => handleAssignFeeCategoryChange(e.target.value as HostelFeeCategory)}
-                      className={inputCls}
-                    >
-                      <option value="full_paid">{isBn ? 'পূর্ণ ফি' : 'Full Paid'}</option>
-                      <option value="half_free">{isBn ? 'অর্ধ-ফ্রি' : 'Half-Free'}</option>
-                      <option value="lillah_free">{isBn ? 'পূর্ণ লিল্লাহ/এতিম' : 'Lillah / Free'}</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1">
-                      {isBn ? 'মাসিক ফি (৳)' : 'Monthly Fee (৳)'}
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="1"
-                      value={assignMonthlyFee}
-                      onChange={(e) => setAssignMonthlyFee(e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
+                {/* Seat Number */}
+                <div>
+                  <label className="block text-xs font-bold mb-1">
+                    {isBn ? 'সিট নম্বর' : 'Seat Number'}
+                  </label>
+                  <input
+                    type="text"
+                    value={assignSeatNumber}
+                    onChange={(e) => setAssignSeatNumber(e.target.value)}
+                    placeholder={isBn ? 'যেমন: ১' : 'e.g. 1'}
+                    className={inputCls}
+                  />
                 </div>
 
                 <div>
@@ -5433,20 +5355,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                         className={inputCls}
                       />
                     </div>
-
-                    <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={transferSyncFee}
-                        onChange={(e) => setTransferSyncFee(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>
-                        {isBn
-                          ? 'নতুন রুমের মাসিক ফি অনুযায়ী বোর্ডিং ফি আপডেট করুন'
-                          : 'Adjust boarding fee to target room rate'}
-                      </span>
-                    </label>
                   </>
                 )}
 
@@ -5577,7 +5485,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
           document.body
         )}
 
-      {/* ===================== MODAL: UPDATE RESIDENTIAL & FEE PROFILE ===================== */}
+      {/* ===================== MODAL: UPDATE RESIDENTIAL STATUS ===================== */}
       {editStudentTarget &&
         createPortal(
           <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
@@ -5593,7 +5501,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       {editStudentTarget.student.student_name}
                     </h3>
                     <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {isBn ? 'আবাসিক ধরন ও ফি ক্যাটাগরি আপডেট' : 'Update Residential & Fee Category'}
+                      {isBn ? 'আবাসিক ধরন আপডেট' : 'Update Residential Status'}
                     </p>
                   </div>
                 </div>
@@ -5623,10 +5531,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => {
-                          setEditResType(opt.id);
-                          if (opt.id === 'non_residential') setEditMonthlyFee('0');
-                        }}
+                        onClick={() => setEditResType(opt.id)}
                         className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                           editResType === opt.id
                             ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
@@ -5650,53 +5555,6 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold mb-1.5">
-                    {isBn ? 'ফি ক্যাটাগরি' : 'Fee Category'}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        { id: 'full_paid', label: isBn ? 'পূর্ণ ফি' : 'Full Paid' },
-                        { id: 'half_free', label: isBn ? 'অর্ধ-ফ্রি' : 'Half-Free' },
-                        { id: 'lillah_free', label: isBn ? 'লিল্লাহ/ফ্রি' : 'Lillah Free' },
-                      ] as const
-                    ).map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => {
-                          setEditFeeCategory(opt.id);
-                          if (opt.id === 'lillah_free') setEditMonthlyFee('0');
-                        }}
-                        className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          editFeeCategory === opt.id
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                            : isDark
-                            ? 'bg-slate-800 border-slate-700 text-slate-300'
-                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold mb-1">
-                    {isBn ? 'মাসিক বোর্ডিং / খানা ফি (৳)' : 'Monthly Boarding Fee (৳)'}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="1"
-                    value={editMonthlyFee}
-                    onChange={(e) => setEditMonthlyFee(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-
-                <div>
                   <label className="block text-xs font-bold mb-1">
                     {isBn ? 'মন্তব্য (ঐচ্ছিক)' : 'Notes (Optional)'}
                   </label>
@@ -5704,7 +5562,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     type="text"
                     value={editStudentNotes}
                     onChange={(e) => setEditStudentNotes(e.target.value)}
-                    placeholder={isBn ? 'যেমন: এতিম / লিল্লাহ বোর্ডিং অনুমোদিত' : 'e.g. Orphan / Lillah approved'}
+                    placeholder={isBn ? 'যেমন: হোস্টেল বা ডে-কেয়ার সংক্রান্ত নোট' : 'e.g. Hostel or day-care note'}
                     className={inputCls}
                   />
                 </div>

@@ -389,22 +389,59 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     paymentDetails?: any;
   } | null>(null);
 
-  const handleOpenThermalReceipt = (entry: LedgerEntry) => {
+  const resolveReceiptMeta = (entry: LedgerEntry) => {
     const description = entry.description || '';
-    
+
+    // Parse fee items categories
+    const categoriesMatch = description.split(' - ')[0];
+    const categories = categoriesMatch ? categoriesMatch.trim() : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+
+    const isAdmissionFee = /ভর্তি|admission/i.test(categories) || /ভর্তি|admission/i.test(description);
+    const isMonthlyFee = /মাসিক|বেতন|monthly|tuition/i.test(categories);
+
     // Parse months from description
-    let monthText = new Date().toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' });
     const monthsMatch = description.match(/Month[s]?:\s*([^\)]+)/i);
-    if (monthsMatch && monthsMatch[1]) monthText = monthsMatch[1];
-    
+    let monthText: string;
+    let receiptTitle: string | undefined;
+
+    if (monthsMatch && monthsMatch[1]?.trim()) {
+      if (isAdmissionFee && !isMonthlyFee) {
+        monthText = lang === 'bn' ? 'ভর্তি রসিদ' : 'Admission Receipt';
+        receiptTitle = lang === 'bn' ? 'ভর্তি রসিদ' : 'ADMISSION RECEIPT';
+      } else {
+        monthText = monthsMatch[1].trim();
+        if (isAdmissionFee) {
+          receiptTitle = lang === 'bn' ? 'ভর্তি ও ফি রসিদ' : 'ADMISSION & FEE RECEIPT';
+        }
+      }
+    } else if (isAdmissionFee) {
+      monthText = lang === 'bn' ? 'ভর্তি রসিদ' : 'Admission Receipt';
+      receiptTitle = lang === 'bn' ? 'ভর্তি রসিদ' : 'ADMISSION RECEIPT';
+    } else if (entry.transaction_date) {
+      const txDate = new Date(entry.transaction_date.includes('T') ? entry.transaction_date : `${entry.transaction_date}T00:00:00`);
+      monthText = !isNaN(txDate.getTime())
+        ? txDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+        : (lang === 'bn' ? 'এককালীন ফি' : 'One-Time Fee');
+    } else {
+      monthText = lang === 'bn' ? 'এককালীন ফি' : 'One-Time Fee';
+    }
+
     // Parse discount from description
     let discount = 0;
     const discountMatch = description.match(/(?:ছাড়|Discount):\s*৳?([0-9.]+)/i);
     if (discountMatch && discountMatch[1]) discount = parseFloat(discountMatch[1]);
-    
-    // Parse fee items categories
-    const categoriesMatch = description.split(' - ')[0];
-    const categories = categoriesMatch ? categoriesMatch : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+
+    return {
+      categories,
+      monthText,
+      receiptTitle,
+      isAdmissionOnly: isAdmissionFee && !isMonthlyFee,
+      discount,
+    };
+  };
+
+  const handleOpenThermalReceipt = (entry: LedgerEntry) => {
+    const { categories, monthText, receiptTitle, isAdmissionOnly, discount } = resolveReceiptMeta(entry);
 
     const receiptStudent = {
       ...student,
@@ -412,6 +449,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       total_paid: entry.amount,
       balance_due: 0,
       discount: discount,
+      receipt_title: receiptTitle,
+      is_admission_receipt: isAdmissionOnly,
       fee_items: [
          { name: categories, amount: entry.amount + discount }
       ]
@@ -436,21 +475,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const handleDownloadReceipt = async (entry: LedgerEntry, mode: 'print' | 'download' = 'download') => {
     setIsDownloading(true);
     try {
-      const description = entry.description || '';
-      
-      // Parse months from description
-      let monthText = 'Multiple Months';
-      const monthsMatch = description.match(/Month[s]?:\s*([^\)]+)/i);
-      if (monthsMatch && monthsMatch[1]) monthText = monthsMatch[1];
-      
-      // Parse discount from description
-      let discount = 0;
-      const discountMatch = description.match(/(?:ছাড়|Discount):\s*৳?([0-9.]+)/i);
-      if (discountMatch && discountMatch[1]) discount = parseFloat(discountMatch[1]);
-      
-      // Parse fee items categories
-      const categoriesMatch = description.split(' - ')[0];
-      const categories = categoriesMatch ? categoriesMatch : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+      const { categories, monthText, receiptTitle, isAdmissionOnly, discount } = resolveReceiptMeta(entry);
+
       const rawCategories = categories.split(',').map(s => s.trim()).filter(Boolean);
       const totalAmountWithDiscount = entry.amount + discount;
 
@@ -468,6 +494,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         total_paid: entry.amount,
         balance_due: 0,
         discount: discount,
+        receipt_title: receiptTitle,
+        is_admission_receipt: isAdmissionOnly,
         fee_items: feeItems
       };
       
@@ -477,7 +505,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
          madrasah,
          lang,
          undefined,
-         mode === 'print'
+         mode === 'print',
+         receiptTitle
       );
     } catch (err) {
       console.error(err);
@@ -570,7 +599,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         (q) => q.select('id, transaction_date, amount, category, description')
           .eq('institution_id', madrasah.id)
           .eq('category', 'Student Fee')
-          .ilike('description', `%${student.student_name} (${className} | Roll: ${roll} | Month%`)
+          .ilike('description', `%${student.student_name} (${className} | Roll: ${roll}%`)
           .order('transaction_date', { ascending: false })
           .order('id', { ascending: false })
           .limit(1000),

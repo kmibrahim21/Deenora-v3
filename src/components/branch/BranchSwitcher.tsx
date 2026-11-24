@@ -21,6 +21,7 @@ interface BranchSwitcherProps {
   activeBranchId: string | null;
   onSwitchBranch: (branchId: string) => void;
   compact?: boolean;
+  align?: 'left' | 'right';
 }
 
 export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
@@ -28,7 +29,8 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
   lang,
   activeBranchId,
   onSwitchBranch,
-  compact = false
+  compact = false,
+  align = 'left'
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [branches, setBranches] = useState<BranchItem[]>([]);
@@ -107,16 +109,16 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 
   return (
     <>
-      <div className="relative inline-block text-left" ref={dropdownRef}>
+      <div className="relative inline-block max-w-full text-left" ref={dropdownRef}>
         <button
           type="button"
           onClick={() => {
             setIsOpen(!isOpen);
             if (!isOpen) fetchBranches();
           }}
-          className={`flex items-center gap-2 rounded-xl transition-all font-noto ${
+          className={`flex items-center gap-2 max-w-full rounded-xl transition-all font-noto whitespace-nowrap ${
             compact 
-              ? 'px-2.5 py-1 text-xs border' 
+              ? 'px-2.5 py-1.5 text-xs border' 
               : 'px-3.5 py-2 text-sm border shadow-sm'
           } ${
             isDark 
@@ -126,21 +128,21 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
           title={lang === 'bn' ? 'শাখা পরিবর্তন ও পরিচালনা' : 'Switch Branch'}
         >
           <Building2 size={compact ? 14 : 16} className="text-blue-500 shrink-0" />
-          <span className="font-bold truncate max-w-[150px] md:max-w-[220px]">
+          <span className="font-bold truncate max-w-[130px] sm:max-w-[170px] lg:max-w-[220px]">
             {currentBranch.name}
           </span>
           {hasMultiple && (
-            <span className="px-1.5 py-0.2 text-[10px] font-black rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <span className="px-1.5 py-0.2 text-[10px] font-black rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
               {branches.length}
             </span>
           )}
-          <ChevronDown size={compact ? 12 : 14} className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={compact ? 12 : 14} className={`text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {/* Dropdown Menu */}
         {isOpen && (
           <div 
-            className={`absolute left-0 mt-2 w-72 md:w-80 rounded-2xl border shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
+            className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-72 md:w-80 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-xl z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
               isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'
             }`}
           >

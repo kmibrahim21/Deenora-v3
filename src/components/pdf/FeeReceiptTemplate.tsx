@@ -6,14 +6,35 @@ interface FeeReceiptProps {
   madrasah: any;
   lang: 'en' | 'bn';
   receiptId?: string;
+  receiptTitle?: string;
 }
 
-export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, madrasah, lang, receiptId: propReceiptId }) => {
+export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, madrasah, lang, receiptId: propReceiptId, receiptTitle }) => {
   const isBangla = lang === 'bn';
   const config = madrasah?.config_json || {};
   const receiptId = React.useMemo(() => propReceiptId || `#REC-${Date.now().toString().slice(-6)}`, [propReceiptId]);
+
+  const rawFeeItems: Array<{ name?: string; category_name?: string }> = Array.isArray(student?.fee_items) ? student.fee_items : [];
+  const hasAdmissionInItems = rawFeeItems.some(item => /ভর্তি|admission/i.test(`${item?.name || ''} ${item?.category_name || ''}`));
+  const hasMonthlyInItems = rawFeeItems.some(item => /মাসিক|বেতন|monthly|tuition/i.test(`${item?.name || ''} ${item?.category_name || ''}`));
+  const isAdmissionMonthLabel = /ভর্তি|admission/i.test(month || '');
+  const isOneTimeMonthLabel = /এককালীন|one[\s-]?time/i.test(month || '');
+  const isAdmissionReceipt = Boolean(
+    student?.is_admission_receipt ||
+    isAdmissionMonthLabel ||
+    (hasAdmissionInItems && !hasMonthlyInItems)
+  );
+  const isNonMonthlyReceipt = isAdmissionReceipt || isOneTimeMonthLabel;
+
+  const resolvedTitle =
+    receiptTitle ||
+    student?.receipt_title ||
+    (isAdmissionReceipt
+      ? (isBangla ? 'ভর্তি রসিদ' : 'ADMISSION RECEIPT')
+      : (isBangla ? 'ফি পেমেন্ট মানি রিসিট' : 'FEE PAYMENT RECEIPT'));
+
   const t = {
-    title: isBangla ? 'ফি পেমেন্ট মানি রিসিট' : 'FEE PAYMENT RECEIPT',
+    title: resolvedTitle,
     receiptNo: isBangla ? 'রিসিট নং' : 'Receipt No',
     date: isBangla ? 'তারিখ' : 'Date',
     studentDetails: isBangla ? 'শিক্ষার্থীর বিবরণ:' : 'Student Details:',
@@ -21,12 +42,16 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     class: isBangla ? 'শ্রেণি' : 'Class',
     roll: isBangla ? 'রোল' : 'Roll',
     section: isBangla ? 'শাখা' : 'Section',
-    month: isBangla ? 'মাস' : 'Month',
+    month: isNonMonthlyReceipt ? (isBangla ? 'ধরন' : 'Type') : (isBangla ? 'মাস' : 'Month'),
     description: isBangla ? 'বিবরণ' : 'Description',
     amount: isBangla ? 'পরিমাণ' : 'Amount',
-    monthlyFees: isBangla ? 'মাসিক ফি ও অন্যান্য চার্জ' : 'Monthly Fees & Other Charges',
+    monthlyFees: isAdmissionReceipt
+      ? (isBangla ? 'ভর্তি ফি ও অন্যান্য চার্জ' : 'Admission Fee & Other Charges')
+      : (isBangla ? 'মাসিক ফি ও অন্যান্য চার্জ' : 'Monthly Fees & Other Charges'),
     discount: isBangla ? 'ডিসকাউন্ট (ছাড়)' : 'Discount Applied',
-    totalPaid: isBangla ? 'মোট জমা (এই মাসে)' : 'Total Paid (This Month)',
+    totalPaid: isNonMonthlyReceipt
+      ? (isBangla ? 'মোট জমা' : 'Total Paid')
+      : (isBangla ? 'মোট জমা (এই মাসে)' : 'Total Paid (This Month)'),
     balanceDue: isBangla ? 'বকেয়া' : 'Balance Due',
     previousDue: isBangla ? 'পূর্বের বকেয়া' : 'Previous Due',
     authSignature: isBangla ? 'হিসাব রক্ষক' : 'Accounts Officer',

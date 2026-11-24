@@ -3,7 +3,7 @@ import { supabase } from 'supabase';
 import { Institution, Class, Student, UserRole, Profile } from 'types';
 import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone, Check, Printer, Layers, Sparkles, GraduationCap } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
-import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
+import { generateClassFeeReportPDF, generateFeeReceiptPDF, generateFeeReceiptPDF_Universal } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { OfflineService } from '../../services/OfflineService';
 import { ThermalReceiptPreviewModal } from './ThermalReceiptPreviewModal';
@@ -133,6 +133,15 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     month: string;
     receiptId?: string;
     paymentDetails?: any;
+  } | null>(null);
+  const [recentCollectedReceipt, setRecentCollectedReceipt] = useState<{
+    student: any;
+    month: string;
+    receiptTitle?: string;
+    isAdmission: boolean;
+    paidAmount: number;
+    discount: number;
+    feeItems: Array<{ name: string; amount: number }>;
   } | null>(null);
   const [structureSelectedClass, setStructureSelectedClass] = useState<string>('');
   const [showStructureClassDropdown, setShowStructureClassDropdown] = useState(false);
@@ -679,37 +688,64 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       setDiscount('');
       setSelectedStudent(null);
 
-      // Trigger 58mm Thermal Receipt Modal after successful payment
+      // Prepare Receipt Data & trigger Thermal Modal (if enabled) or Instant Receipt PDF Banner
       const previousDue = Math.max(0, Number(currentStudent.balance_due || 0));
       const currentDue = Math.max(0, previousDue - totalAmt - totalDiscount);
-      const feeCategories = selectedFeeCategories.length > 0 
+      const collectedFeeItems = selectedFeeCategories.length > 0 
         ? selectedFeeCategories.map(c => {
             const matched = availableFeeItems.find((fi: any) => (fi.fee_name || fi.name) === c);
             return { name: c, amount: selectedFeeCategories.length === 1 ? (totalAmt + totalDiscount) : (Number(matched?.amount) || (totalAmt + totalDiscount)) };
           })
         : [{ name: lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Fee Collection', amount: totalAmt + totalDiscount }];
 
-      setThermalReceiptData({
-        student: {
-          ...currentStudent,
-          class_name: className,
-          total_paid: totalAmt,
-          total_payable: totalAmt + totalDiscount,
-          balance_due: currentDue,
-          discount: totalDiscount,
-          previous_due: previousDue,
-          fee_items: feeCategories,
-        },
-        month: selectedMonth,
-        paymentDetails: {
-          paidAmount: totalAmt,
-          discount: totalDiscount,
-          previousDue: previousDue,
-          currentDue: currentDue,
-          paymentMethod: 'Cash',
-          feeItems: feeCategories,
-        }
+      const hasAdmissionItem = collectedFeeItems.some(fi => /ভর্তি|admission/i.test(fi.name));
+      const hasMonthlyItem = collectedFeeItems.some(fi => /মাসিক|বেতন|monthly|tuition/i.test(fi.name));
+      const isAdmissionOnly = hasAdmissionItem && !hasMonthlyItem;
+      const receiptPeriodLabel = isAdmissionOnly
+        ? (lang === 'bn' ? 'ভর্তি রসিদ' : 'Admission Receipt')
+        : selectedMonth;
+      const receiptTitle = isAdmissionOnly
+        ? (lang === 'bn' ? 'ভর্তি রসিদ' : 'ADMISSION RECEIPT')
+        : (hasAdmissionItem ? (lang === 'bn' ? 'ভর্তি ও ফি রসিদ' : 'ADMISSION & FEE RECEIPT') : undefined);
+
+      const receiptStudentPayload = {
+        ...currentStudent,
+        class_name: className,
+        total_paid: totalAmt,
+        total_payable: totalAmt + totalDiscount,
+        balance_due: currentDue,
+        discount: totalDiscount,
+        previous_due: previousDue,
+        fee_items: collectedFeeItems,
+        receipt_title: receiptTitle,
+        is_admission_receipt: isAdmissionOnly,
+      };
+
+      setRecentCollectedReceipt({
+        student: receiptStudentPayload,
+        month: receiptPeriodLabel,
+        receiptTitle,
+        isAdmission: hasAdmissionItem,
+        paidAmount: totalAmt,
+        discount: totalDiscount,
+        feeItems: collectedFeeItems,
       });
+
+      if ((madrasah?.config_json as any)?.features?.receipt_print_mode) {
+        setThermalReceiptData({
+          student: receiptStudentPayload,
+          month: receiptPeriodLabel,
+          paymentDetails: {
+            paidAmount: totalAmt,
+            discount: totalDiscount,
+            previousDue: previousDue,
+            currentDue: currentDue,
+            paymentMethod: 'Cash',
+            feeItems: collectedFeeItems,
+          }
+        });
+        setShowThermalModal(true);
+      }
 
       const sId = currentStudent.student_id;
 
@@ -884,12 +920,46 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     }
   };
 
+  const handleDownloadRecentReceiptPDF = async () => {
+    if (!recentCollectedReceipt) return;
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    try {
+      await generateFeeReceiptPDF_Universal(
+        recentCollectedReceipt.student,
+        recentCollectedReceipt.month,
+        madrasah,
+        lang,
+        (p) => setDownloadProgress(p),
+        false,
+        recentCollectedReceipt.receiptTitle
+      );
+    } catch (error) {
+      console.error('Recent Receipt Download Error:', error);
+      setActionError(lang === 'bn' ? 'রসিদ ডাউনলোড করতে সমস্যা হয়েছে।' : 'Error downloading PDF');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
   const handleDownloadReceipt = async (student: any, downloadLang: 'en' | 'bn' = lang, mode: 'print' | 'download' = 'download') => {
+    const className = classes.find(c => c.id === student.class_id)?.class_name || student.class_name || '';
+    const feeCats = student.fee_items && student.fee_items.length > 0
+      ? student.fee_items
+      : [{ name: downloadLang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee', amount: Number(student.total_payable || student.total_paid || 0) }];
+    const hasAdmission = feeCats.some((fi: any) => /ভর্তি|admission/i.test(fi?.name || ''));
+    const hasMonthly = feeCats.some((fi: any) => /মাসিক|বেতন|monthly|tuition/i.test(fi?.name || ''));
+    const isAdmissionOnly = hasAdmission && !hasMonthly;
+    const periodLabel = isAdmissionOnly
+      ? (downloadLang === 'bn' ? 'ভর্তি রসিদ' : 'Admission Receipt')
+      : selectedMonth;
+    const receiptTitle = isAdmissionOnly
+      ? (downloadLang === 'bn' ? 'ভর্তি রসিদ' : 'ADMISSION RECEIPT')
+      : undefined;
+
     if (mode === 'print') {
-      const className = classes.find(c => c.id === student.class_id)?.class_name || student.class_name || '';
       const previousDue = Math.max(0, Number(student.balance_due || 0));
-      const feeCats = student.fee_items || [{ name: downloadLang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee', amount: Number(student.total_payable || student.total_paid || 0) }];
-      
       setThermalReceiptData({
         student: {
           ...student,
@@ -897,9 +967,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           section: student.student_type || '',
           previous_due: previousDue,
           fee_items: feeCats,
-          discount: Number(student.discount || 0)
+          discount: Number(student.discount || 0),
+          receipt_title: receiptTitle,
+          is_admission_receipt: isAdmissionOnly,
         },
-        month: selectedMonth,
+        month: periodLabel,
         paymentDetails: {
           paidAmount: Number(student.total_paid || 0),
           discount: Number(student.discount || 0),
@@ -913,22 +985,24 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       return;
     }
 
-    const className = classes.find(c => c.id === student.class_id)?.class_name || '';
     setIsDownloading(true);
     setDownloadProgress(0);
     try {
-        await generateFeeReceiptPDF(
+        await generateFeeReceiptPDF_Universal(
             { 
               ...student, 
               class_name: className, 
               section: student.student_type ? student.student_type : '',
-              discount: Number(student.discount || 0)
+              discount: Number(student.discount || 0),
+              receipt_title: receiptTitle,
+              is_admission_receipt: isAdmissionOnly,
             },
-            selectedMonth,
+            periodLabel,
             madrasah,
             downloadLang,
             (p) => setDownloadProgress(p),
-            false
+            false,
+            receiptTitle
         );
     } catch (error) {
         console.error('Download error:', error);
@@ -1130,8 +1204,6 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         const isUnpaid = item.status === 'unpaid';
                         const hasBalance = balance > 0;
                         const hostelInfo: StudentHostelFeeInfo | null = isHostelEnabled ? (item.hostel_info || null) : null;
-                        const resBadge = hostelInfo ? getHostelResidentialBadge(hostelInfo.residential_type, lang, isDark) : null;
-                        const feeCatBadge = hostelInfo ? getHostelFeeCategoryBadge(hostelInfo.fee_category, lang, isDark) : null;
                         const canCollectHostelOnly = isNoFeeSet && Boolean(hostelInfo && hostelInfo.suggested_hostel_fee > 0);
 
                         return (
@@ -1147,28 +1219,6 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                            >
                              {item.student_name}
                            </h5>
-                           {hostelInfo && resBadge && (
-                             <div className="flex flex-wrap items-center gap-1 mb-1">
-                               <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-black font-noto ${resBadge.cls}`}>
-                                 {resBadge.label}
-                               </span>
-                               {feeCatBadge && (hostelInfo.residential_type !== 'non_residential' || hostelInfo.fee_category !== 'full_paid') && (
-                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-black font-noto ${feeCatBadge.cls}`}>
-                                   {feeCatBadge.label}
-                                 </span>
-                               )}
-                               {hostelInfo.room_number && (
-                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-bold font-noto ${isDark ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
-                                   {lang === 'bn' ? `রুম ${hostelInfo.room_number}` : `Rm ${hostelInfo.room_number}`}
-                                 </span>
-                               )}
-                               {hostelInfo.suggested_hostel_fee > 0 && (
-                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-black font-noto ${isDark ? 'bg-teal-500/20 text-teal-300 border-teal-500/30' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
-                                   {lang === 'bn' ? `হোস্টেল ৳${hostelInfo.suggested_hostel_fee}` : `Hostel ৳${hostelInfo.suggested_hostel_fee}`}
-                                 </span>
-                               )}
-                             </div>
-                           )}
                            <div className="flex items-center gap-2">
                               <p className="text-[9px] text-red-500 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
                               {isNoFeeSet && !canCollectHostelOnly && <span className={`text-[7px] px-1.5 py-0.5 rounded-md font-black uppercase ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>No Fee Set</span>}
@@ -1568,6 +1618,58 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     </div>
                     </div>
                 </div>
+            </div>
+         )}
+
+         {/* Instant Receipt PDF Download Banner after Fee Collection */}
+         {recentCollectedReceipt && !showThermalModal && (
+            <div className={`fixed bottom-20 sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-[950] sm:max-w-md rounded-2xl border shadow-2xl p-4 animate-in slide-in-from-bottom-4 duration-300 ${isDark ? 'bg-slate-900 border-emerald-500/30 text-white' : 'bg-white border-emerald-200 text-slate-900'}`}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={22} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black font-noto text-emerald-600 dark:text-emerald-400">
+                        {recentCollectedReceipt.isAdmission
+                          ? (lang === 'bn' ? 'ভর্তি ফি সংগ্রহ সফল হয়েছে!' : 'Admission Fee Collected!')
+                          : (lang === 'bn' ? 'ফি সংগ্রহ সফল হয়েছে!' : 'Fee Collected Successfully!')}
+                      </p>
+                      <p className={`text-sm font-black font-noto truncate mt-0.5 ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {recentCollectedReceipt.student?.student_name} · ৳{recentCollectedReceipt.paidAmount.toLocaleString()}
+                      </p>
+                      <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 font-noto truncate">
+                        {recentCollectedReceipt.feeItems.map(i => i.name).join(', ')}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRecentCollectedReceipt(null)}
+                      aria-label={lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-400 hover:bg-slate-100'}`}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={handleDownloadRecentReceiptPDF}
+                      disabled={isDownloading}
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-xs font-black font-noto flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-60"
+                    >
+                      {isDownloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                      <span>
+                        {recentCollectedReceipt.isAdmission
+                          ? (lang === 'bn' ? 'ভর্তি রসিদ PDF ডাউনলোড করুন' : 'Download Admission Receipt PDF')
+                          : (lang === 'bn' ? 'রসিদ PDF ডাউনলোড করুন' : 'Download Receipt PDF')}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
          )}
 

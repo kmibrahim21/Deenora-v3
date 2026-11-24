@@ -189,10 +189,10 @@ const Layout: React.FC<LayoutProps> = ({
       
       {/* Desktop Sidebar */}
       {role !== 'parent' && (
-        <aside className={`hidden md:flex flex-col w-72 border-r z-20 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
-          <div className="p-6 flex items-center gap-4 border-b border-inherit">
+        <aside className={`hidden md:flex flex-col md:w-64 lg:w-72 border-r z-20 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
+          <div className="h-20 px-5 flex items-center gap-3.5 border-b border-inherit shrink-0">
           <div className="relative shrink-0">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-sm border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+            <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-sm border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
               {isSystemStaff ? (
                 <ShieldCheck size={24} className="text-[#2563EB]" />
               ) : (
@@ -216,24 +216,12 @@ const Layout: React.FC<LayoutProps> = ({
             <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 ${madrasah?.theme === 'dark' ? 'border-slate-900' : 'border-white'} ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className={`text-lg font-black leading-tight tracking-tight font-noto line-clamp-3 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
+            <h1 className={`text-base font-black leading-snug tracking-tight font-noto truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
               {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
             </h1>
-            {!isSystemStaff && madrasah && onSwitchBranch ? (
-              <div className="mt-1">
-                <BranchSwitcher
-                  madrasah={madrasah}
-                  lang={lang}
-                  activeBranchId={activeBranchId || null}
-                  onSwitchBranch={onSwitchBranch}
-                  compact
-                />
-              </div>
-            ) : (
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
-                {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
-              </p>
-            )}
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-0.5 font-noto truncate">
+              {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
+            </p>
           </div>
         </div>
 
@@ -425,14 +413,23 @@ const Layout: React.FC<LayoutProps> = ({
 
         {/* Desktop Top Bar */}
         {role !== 'parent' && (
-          <header className={`hidden md:flex flex-none h-20 px-8 items-center justify-between relative z-10 border-b ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md`}>
-            <div className="flex-1 flex items-center gap-4">
-              <h1 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
+          <header className={`hidden md:flex flex-none h-20 px-6 lg:px-8 items-center justify-between gap-4 relative z-30 border-b ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md`}>
+            <div className="min-w-0 flex-1 flex items-center gap-3">
+              <h1 className={`text-base lg:text-lg font-black font-noto tracking-tight truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
                 {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || 'Deenora')}
               </h1>
             </div>
-          <div className="flex items-center gap-4">
-            <button onClick={hardReload} className="flex items-center gap-2 px-4 py-2.5 rounded-2xl active:scale-95 transition-all shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40 bg-gradient-to-br from-[#4facfe] to-[#0082ff] text-white hover:brightness-110">
+          <div className="flex items-center gap-2.5 lg:gap-3 shrink-0">
+            {!isSystemStaff && madrasah && onSwitchBranch && (
+              <BranchSwitcher
+                madrasah={madrasah}
+                lang={lang}
+                activeBranchId={activeBranchId || null}
+                onSwitchBranch={onSwitchBranch}
+                align="right"
+              />
+            )}
+            <button onClick={hardReload} className="flex items-center gap-2 px-4 py-2.5 rounded-2xl active:scale-95 transition-all shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40 bg-gradient-to-br from-[#4facfe] to-[#0082ff] text-white hover:brightness-110 shrink-0 whitespace-nowrap">
               <RefreshCw size={18} strokeWidth={2.5} />
               <span className="text-xs font-bold font-noto tracking-wider">{lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}</span>
             </button>
@@ -443,7 +440,7 @@ const Layout: React.FC<LayoutProps> = ({
         {(currentView === 'home' || currentView === 'admin-dashboard') && role !== 'parent' && <MultiCalendarHeader madrasah={madrasah} />}
 
         {isHistoricalMode && selectedYear && (
-          <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 md:px-8 py-2.5 flex items-center justify-between gap-3 text-amber-600 dark:text-amber-400 text-xs font-bold animate-in slide-in-from-top duration-300">
+          <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 md:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-3 text-amber-600 dark:text-amber-400 text-xs font-bold animate-in slide-in-from-top duration-300">
             <div className="flex items-center gap-2 min-w-0">
               <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
               <p className="truncate font-noto">
@@ -464,7 +461,7 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         )}
 
-        <main className={`flex-1 overflow-y-auto w-full custom-scrollbar ${(role === 'parent' || currentView === 'chat') ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={(role !== 'parent' && currentView !== 'chat') ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
+        <main className={`flex-1 overflow-y-auto w-full custom-scrollbar ${(role === 'parent' || currentView === 'chat') ? 'p-0' : 'px-5 md:px-6 lg:px-8 pt-4 pb-[calc(11rem+env(safe-area-inset-bottom,0px))] md:pb-8'}`}>
           {children}
         </main>
 

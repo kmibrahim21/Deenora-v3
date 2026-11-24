@@ -1,17 +1,24 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Save, User as UserIcon, Phone, List, Hash, Loader2, ChevronDown, Camera, X, Check, UserCheck, AlertCircle, BookOpen, Calendar } from 'lucide-react';
+import { ArrowLeft, Save, User as UserIcon, Phone, List, Hash, Loader2, ChevronDown, Camera, X, Check, UserCheck, AlertCircle, BookOpen, Calendar, Home } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
 import { OfflineService } from 'services/OfflineService';
 import { CacheService } from 'services/cacheService';
 import { requestManager } from 'services/RequestManager';
-import { Student, Class, Language, Institution } from 'types';
+import { Student, Class, Language, Institution, HostelResidentialType } from 'types';
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { extractStudentExtraFields, packStudentNotesWithExtra } from 'utils/studentExtraFields';
+import { normalizeHostelResidentialType } from 'utils/hostelFeeHelper';
 import { DobPicker } from '../components/common/DobPicker';
 import { checkStudentLimit } from '../utils/studentLimitChecker';
+
+const residentialTypeToNoteLabel = (type: HostelResidentialType): string => {
+  if (type === 'residential') return 'আবাসিক (Residential)';
+  if (type === 'day_care') return 'ডে-কেয়ার (Day-Care)';
+  return 'অনাবাসিক (Non-Residential)';
+};
 
 interface StudentFormProps {
   student?: Student | null;
@@ -59,12 +66,15 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [permanentAddress, setPermanentAddress] = useState(initialExtra.permanent_address || '');
   const [previousInstitution, setPreviousInstitution] = useState(initialExtra.previous_institution || '');
   const [previousClass, setPreviousClass] = useState(initialExtra.previous_class || '');
+  const [residentialType, setResidentialType] = useState<HostelResidentialType>(() =>
+    normalizeHostelResidentialType(initialExtra.residential_status)
+  );
 
-  
   const [hasManualBioId, setHasManualBioId] = useState(Boolean(student?.biometric_id || initialExtra?.biometric_id));
   const [errorModal, setErrorModal] = useState<{show: boolean, message: string}>({show: false, message: ''});
 
   const isDark = madrasah?.theme === 'dark';
+  const isHostelEnabled = Boolean((madrasah?.config_json as any)?.modules?.hostel_management);
 
   const handleBiometricIdChange = (val: string) => {
     setHasManualBioId(true);
@@ -145,6 +155,31 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
     fetchClasses();
     fetchAcademicYears();
   }, [madrasah?.id]);
+
+  // Hydrate residential status from active hostel allocation when editing (keeps StudentForm synced with HostelManagement)
+  useEffect(() => {
+    let active = true;
+    if (!isEditing || !student?.id || !madrasah?.id || !isHostelEnabled || !navigator.onLine) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('hostel_allocations')
+          .select('residential_type')
+          .eq('institution_id', madrasah.id)
+          .eq('student_id', student.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (active && data?.residential_type) {
+          setResidentialType(normalizeHostelResidentialType(data.residential_type));
+        }
+      } catch {
+        // Ignore gracefully if hostel tables are not set up yet
+      }
+    })();
+    return () => { active = false; };
+  }, [isEditing, student?.id, madrasah?.id, isHostelEnabled]);
 
   const fetchAcademicYears = async () => {
     if (!madrasah?.id) return;
@@ -269,7 +304,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
       // Pack extra admission fields into notes as fallback so data is NEVER lost regardless of DB schema state
       const existingNotes = isEditing ? (student?.notes || '') : '';
-      const packedNotes = packStudentNotesWithExtra(existingNotes, extraFields);
+      const residentialLabel = residentialTypeToNoteLabel(residentialType);
+      const packedNotes = packStudentNotesWithExtra(existingNotes, {
+        ...initialExtra,
+        ...extraFields,
+        residential_status: residentialLabel,
+      });
 
       const payload: any = {
         student_name: name.trim(),
@@ -342,9 +382,69 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         ...payload,
         ...mergedStudent,
         ...extraFields,
+        residential_status: residentialLabel,
         notes: packedNotes || mergedStudent.notes || null,
         id: mergedStudent.id || student?.id || payload.id || '',
       };
+
+      // Auto-sync Hostel Management allocation when hostel_management module is active
+      if (isHostelEnabled && navigator.onLine && madrasah?.id && enrichedStudent.id) {
+        try {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const nowIso = new Date().toISOString();
+          const { data: activeAllocs, error: allocFetchErr } = await supabase
+            .from('hostel_allocations')
+            .select('id, room_id, seat_number, residential_type')
+            .eq('institution_id', madrasah.id)
+            .eq('student_id', enrichedStudent.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false });
+
+          if (!allocFetchErr) {
+            const activeAlloc = (activeAllocs || [])[0] || null;
+            if (residentialType === 'residential' || residentialType === 'day_care') {
+              if (activeAlloc) {
+                const keepRoom = residentialType === 'residential' && Boolean(activeAlloc.room_id);
+                await supabase
+                  .from('hostel_allocations')
+                  .update({
+                    residential_type: residentialType,
+                    room_id: keepRoom ? activeAlloc.room_id : null,
+                    seat_number: keepRoom ? activeAlloc.seat_number : null,
+                    updated_at: nowIso,
+                  })
+                  .eq('id', activeAlloc.id)
+                  .eq('institution_id', madrasah.id);
+              } else {
+                await supabase.from('hostel_allocations').insert({
+                  institution_id: madrasah.id,
+                  student_id: enrichedStudent.id,
+                  room_id: null,
+                  seat_number: null,
+                  residential_type: residentialType,
+                  fee_category: 'full_paid',
+                  monthly_boarding_fee: 0,
+                  status: 'active',
+                  allocated_at: todayStr,
+                });
+              }
+            } else if (activeAlloc) {
+              await supabase
+                .from('hostel_allocations')
+                .update({
+                  status: 'vacated',
+                  vacated_at: todayStr,
+                  updated_at: nowIso,
+                })
+                .eq('institution_id', madrasah.id)
+                .eq('student_id', enrichedStudent.id)
+                .eq('status', 'active');
+            }
+          }
+        } catch (hostelSyncErr) {
+          console.warn('Hostel allocation auto-sync skipped:', hostelSyncErr);
+        }
+      }
       
       // Cache Invalidation
       if (madrasah) {
@@ -685,6 +785,61 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   value={phone2} 
                   onChange={(e) => handlePhoneChange(e.target.value, setPhone2)} 
                 />
+              </div>
+            </div>
+
+            {/* Residential / Non-Residential / Day-Care Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-2">
+                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider`}>
+                  <Home size={11} className="text-[#2563EB]" />
+                  {lang === 'bn' ? 'আবাসিক ধরন' : 'Residential Status'}
+                </label>
+                {isHostelEnabled && residentialType !== 'non_residential' && (
+                  <span className={`text-[10px] font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    {lang === 'bn' ? 'হোস্টেলে স্বয়ংক্রিয়ভাবে যুক্ত হবে' : 'Auto-synced to Hostel'}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {(
+                  [
+                    {
+                      id: 'non_residential' as HostelResidentialType,
+                      label: lang === 'bn' ? 'অনাবাসিক' : 'Non-Residential',
+                    },
+                    {
+                      id: 'residential' as HostelResidentialType,
+                      label: lang === 'bn' ? 'আবাসিক' : 'Residential',
+                    },
+                    {
+                      id: 'day_care' as HostelResidentialType,
+                      label: lang === 'bn' ? 'ডে-কেয়ার' : 'Day-Care',
+                    },
+                  ] as const
+                ).map((opt) => {
+                  const active = residentialType === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setResidentialType(opt.id)}
+                      className={`h-[48px] px-3 rounded-[1.1rem] border-2 text-xs sm:text-sm font-black font-noto transition-all active:scale-[0.98] cursor-pointer ${
+                        active
+                          ? opt.id === 'residential'
+                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                            : opt.id === 'day_care'
+                            ? 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-500/20'
+                            : 'bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-600/20'
+                          : isDark
+                          ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
+                          : 'bg-slate-50 border-slate-100 text-slate-700 hover:border-blue-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

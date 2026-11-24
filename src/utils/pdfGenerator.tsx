@@ -1285,9 +1285,10 @@ export const generateFeeReceiptPDF = async (
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
-    isPrintMode: boolean = false
+    isPrintMode: boolean = false,
+    receiptTitle?: string
 ) => {
-    return generateFeeReceiptPDF_Universal(student, month, madrasah, lang, onProgress, isPrintMode);
+    return generateFeeReceiptPDF_Universal(student, month, madrasah, lang, onProgress, isPrintMode, receiptTitle);
 };
 
 export const generateFeeReceiptPDF_Universal = async (
@@ -1296,7 +1297,8 @@ export const generateFeeReceiptPDF_Universal = async (
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
-    isPrintMode: boolean = false
+    isPrintMode: boolean = false,
+    receiptTitle?: string
 ) => {
     onProgress?.(10);
     const container = document.createElement('div');
@@ -1309,23 +1311,46 @@ export const generateFeeReceiptPDF_Universal = async (
     // Paper size from config
     const paperSize = (madrasah?.config_json as any)?.features?.printer_paper_size || 'A4';
     
-    // Convert month string (YYYY-MM) to month name if needed
+    // Convert strict YYYY-MM string to month name (and format YYYY-MM-DD dates cleanly without breaking hyphenated labels like "One-Time Fee")
     let displayMonth = month;
-    if (month && month.includes('-')) {
-        const [year, monthNum] = month.split('-');
-        const monthIndex = parseInt(monthNum) - 1;
+    const trimmedMonth = (month || '').trim();
+    if (/^\d{4}-\d{2}$/.test(trimmedMonth)) {
+        const [year, monthNum] = trimmedMonth.split('-');
+        const monthIndex = parseInt(monthNum, 10) - 1;
         const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
         const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         
-        if (lang === 'bn') {
-            displayMonth = `${monthNamesBn[monthIndex]}, ${year.replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d)])}`;
-        } else {
-            displayMonth = `${monthNamesEn[monthIndex]}, ${year}`;
+        if (monthIndex >= 0 && monthIndex < 12) {
+            if (lang === 'bn') {
+                displayMonth = `${monthNamesBn[monthIndex]}, ${year.replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d, 10)])}`;
+            } else {
+                displayMonth = `${monthNamesEn[monthIndex]}, ${year}`;
+            }
+        }
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedMonth)) {
+        const dt = new Date(`${trimmedMonth}T00:00:00`);
+        if (!isNaN(dt.getTime())) {
+            displayMonth = dt.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
         }
     }
+
+    const resolvedReceiptTitle = receiptTitle || student?.receipt_title;
     
     await new Promise<void>((resolve) => {
-        root.render(<FeeReceiptTemplate student={student} month={displayMonth} madrasah={madrasah} lang={lang} receiptId={receiptId} />);
+        root.render(
+            <FeeReceiptTemplate
+                student={student}
+                month={displayMonth}
+                madrasah={madrasah}
+                lang={lang}
+                receiptId={receiptId}
+                receiptTitle={resolvedReceiptTitle}
+            />
+        );
         setTimeout(resolve, 500);
     });
     onProgress?.(40);
@@ -1457,7 +1482,8 @@ export const generateFeeReceiptPDF_Universal = async (
             }, 1000);
         }
     } else {
-        await saveJsPdf(doc, `Receipt-${student.student_name}-${month}.pdf`);
+        const safeMonthFile = (month || 'Receipt').replace(/[\/\\:*?"<>|]/g, '-').trim();
+        await saveJsPdf(doc, `Receipt-${student.student_name}-${safeMonthFile}.pdf`);
     }
     
     onProgress?.(95);
