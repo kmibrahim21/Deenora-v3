@@ -2634,21 +2634,21 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
   if (kitchenOnlyMode) {
     return (
       <div
-        className={`min-h-screen w-full font-noto ${
+        className={`min-h-screen w-full max-w-full overflow-x-clip pb-10 font-noto ${
           isDark ? 'bg-slate-950 text-white' : 'bg-slate-100/90 text-slate-900'
         }`}
       >
         {/* Floating Toast */}
         {toast && (
           <div
-            className={`fixed top-5 right-5 z-[9999] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-sm font-bold animate-in slide-in-from-top-3 duration-200 ${
+            className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-5 sm:max-w-md z-[9999] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-sm font-bold animate-in slide-in-from-top-3 duration-200 ${
               toast.type === 'success'
                 ? 'bg-emerald-600 text-white border-emerald-500'
                 : 'bg-rose-600 text-white border-rose-500'
             }`}
           >
-            {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-            <span>{toast.text}</span>
+            {toast.type === 'success' ? <CheckCircle2 size={18} className="shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+            <span className="leading-snug">{toast.text}</span>
           </div>
         )}
 
@@ -2721,24 +2721,24 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5 font-noto animate-in fade-in duration-300">
+    <div className="w-full max-w-6xl mx-auto overflow-x-clip pb-24 sm:pb-10 space-y-4 sm:space-y-5 font-noto animate-in fade-in duration-300">
       {/* Floating Toast */}
       {toast && (
         <div
-          className={`fixed top-5 right-5 z-[9999] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-sm font-bold animate-in slide-in-from-top-3 duration-200 ${
+          className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-5 sm:max-w-md z-[9999] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-sm font-bold animate-in slide-in-from-top-3 duration-200 ${
             toast.type === 'success'
               ? 'bg-emerald-600 text-white border-emerald-500'
               : 'bg-rose-600 text-white border-rose-500'
           }`}
         >
-          {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-          <span>{toast.text}</span>
+          {toast.type === 'success' ? <CheckCircle2 size={18} className="shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+          <span className="leading-snug">{toast.text}</span>
         </div>
       )}
 
       {/* Top Header */}
       <div className={`rounded-3xl border p-4 sm:p-5 shadow-xs ${cardSurface}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -2755,11 +2755,11 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
               <BedDouble size={22} />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight truncate">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base sm:text-xl font-black tracking-tight leading-snug">
                 {isBn ? 'হোস্টেল ও আবাসিক ব্যবস্থাপনা' : 'Hostel & Residential Management'}
               </h1>
-              <p className={`text-xs font-medium truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              <p className={`text-[11px] sm:text-xs font-medium leading-snug mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {isBn
                   ? 'রুম, সিট বরাদ্দ, আবাসিক তালিকা ও দৈনিক মিল-কিচেন'
                   : 'Rooms, seat allocation, residential directory & daily kitchen meals'}
@@ -2767,7 +2767,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -2777,20 +2777,22 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 }
               }}
               disabled={refreshing || mealLoading}
-              className={`h-10 px-3.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                activeTab === 'rooms' && !schemaMissing ? '' : 'flex-1 sm:flex-none'
+              } ${
                 isDark
                   ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
                   : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
             >
               <RefreshCw size={15} className={refreshing || mealLoading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">{isBn ? 'রিফ্রেশ' : 'Refresh'}</span>
+              <span>{isBn ? 'রিফ্রেশ' : 'Refresh'}</span>
             </button>
             {activeTab === 'rooms' && !schemaMissing && (
               <button
                 type="button"
                 onClick={openAddRoomModal}
-                className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shadow-md shadow-blue-600/20 active:scale-95 transition-all cursor-pointer"
+                className="flex-1 sm:flex-none h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 active:scale-95 transition-all cursor-pointer"
               >
                 <Plus size={16} />
                 <span>{isBn ? 'নতুন রুম' : 'Add Room'}</span>
@@ -2832,7 +2834,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
               </span>
               <Users size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
             </div>
-            <div className="mt-1.5 flex items-baseline gap-1.5">
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
               <span className="text-2xl font-black tabular-nums text-emerald-700 dark:text-emerald-300">
                 {formatNum(kpis.activeBoarders, isBn)}
               </span>
@@ -2854,19 +2856,23 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
             </div>
           </div>
 
-          <div className={`col-span-2 sm:col-span-1 rounded-2xl border p-3.5 ${isDark ? 'bg-slate-800/70 border-slate-700/80' : 'bg-rose-50/60 border-rose-100'}`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                {isBn ? 'লিল্লাহ/ফ্রি' : 'Lillah / Free'}
+          <div
+            className={`col-span-2 sm:col-span-1 rounded-2xl border p-3.5 flex items-center justify-between sm:block ${
+              isDark ? 'bg-slate-800/70 border-slate-700/80' : 'bg-rose-50/60 border-rose-100'
+            }`}
+          >
+            <div className="flex items-center sm:justify-between gap-2">
+              <Heart size={16} className="text-rose-600 dark:text-rose-400 shrink-0 sm:order-2" />
+              <span className={`text-xs sm:text-[11px] font-bold sm:order-1 ${isDark ? 'text-slate-300 sm:text-slate-400' : 'text-slate-700 sm:text-slate-600'}`}>
+                {isBn ? 'লিল্লাহ / ফ্রি বোর্ডিং' : 'Lillah / Free'}
               </span>
-              <Heart size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />
             </div>
-            <div className="mt-1.5 flex items-baseline gap-1.5">
+            <div className="sm:mt-1.5 flex items-baseline gap-1.5">
               <span className="text-2xl font-black tabular-nums text-rose-700 dark:text-rose-300">
                 {formatNum(kpis.lillahCount, isBn)}
               </span>
               {kpis.halfFreeCount > 0 && (
-                <span className={`text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                <span className={`text-[10.5px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                   (+{formatNum(kpis.halfFreeCount, isBn)} {isBn ? 'অর্ধ-ফ্রি' : 'half'})
                 </span>
               )}
@@ -2875,29 +2881,33 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         </div>
       </div>
 
-      {/* 4-Tab Bar */}
+      {/* 4-Tab Bar (Smooth Horizontal Scrollable Pill Strip on Mobile, 4-Col Grid on sm+) */}
       <div className={`rounded-2xl border p-1.5 shadow-xs ${cardSurface}`}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5">
+        <div className="flex sm:grid sm:grid-cols-4 gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
           {[
             {
               id: 'rooms' as HostelTab,
               icon: BedDouble,
-              label: isBn ? 'রুম ও সিট বোর্ড' : 'Rooms & Seats',
+              shortLabel: isBn ? 'রুম ও সিট' : 'Rooms & Seats',
+              fullLabel: isBn ? 'রুম ও সিট বোর্ড' : 'Rooms & Seats',
             },
             {
               id: 'directory' as HostelTab,
               icon: Users,
-              label: isBn ? 'আবাসিক ও লিল্লাহ তালিকা' : 'Residential & Lillah',
+              shortLabel: isBn ? 'আবাসিক তালিকা' : 'Residential',
+              fullLabel: isBn ? 'আবাসিক ও লিল্লাহ তালিকা' : 'Residential & Lillah',
             },
             {
               id: 'meals' as HostelTab,
               icon: Utensils,
-              label: isBn ? 'মিল ও বাবুর্চি ড্যাশবোর্ড' : 'Meals & Kitchen',
+              shortLabel: isBn ? 'মিল ও বাবুর্চি' : 'Meals & Cook',
+              fullLabel: isBn ? 'মিল ও বাবুর্চি ড্যাশবোর্ড' : 'Meals & Kitchen',
             },
             {
               id: 'gatepass' as HostelTab,
               icon: ShieldCheck,
-              label: isBn ? 'গেট পাস ও রাতের হাজিরা' : 'Gate Pass & Night Roll',
+              shortLabel: isBn ? 'গেট পাস ও হাজিরা' : 'Gate Pass',
+              fullLabel: isBn ? 'গেট পাস ও রাতের হাজিরা' : 'Gate Pass & Night Roll',
             },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -2907,16 +2917,17 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                className={`shrink-0 whitespace-nowrap min-h-[42px] flex items-center justify-center gap-2 px-3.5 sm:px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] cursor-pointer ${
                   active
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25'
                     : isDark
                     ? 'text-slate-300 hover:bg-slate-800'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Icon size={16} className="shrink-0" />
-                <span className="truncate">{tab.label}</span>
+                <span className="lg:hidden">{tab.shortLabel}</span>
+                <span className="hidden lg:inline truncate">{tab.fullLabel}</span>
               </button>
             );
           })}
@@ -2990,7 +3001,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
                   {(
                     [
                       { id: 'all', label: isBn ? 'সকল' : 'All' },
@@ -3003,9 +3014,9 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       key={g.id}
                       type="button"
                       onClick={() => setRoomGenderFilter(g.id)}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      className={`shrink-0 whitespace-nowrap min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 cursor-pointer ${
                         roomGenderFilter === g.id
-                          ? 'bg-blue-600 text-white border-blue-600'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : isDark
                           ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                           : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -3015,7 +3026,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     </button>
                   ))}
 
-                  <label className={`inline-flex items-center gap-1.5 text-xs font-bold cursor-pointer px-2 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  <label className={`shrink-0 whitespace-nowrap min-h-[38px] inline-flex items-center gap-1.5 text-xs font-bold cursor-pointer px-2.5 rounded-xl border ${isDark ? 'border-slate-700/80 text-slate-300' : 'border-slate-200/80 text-slate-600'}`}>
                     <input
                       type="checkbox"
                       checked={showInactiveRooms}
@@ -3092,9 +3103,9 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                   {isBn ? toBnDigit(room.room_number) : room.room_number}
                                 </span>
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <h3 className="text-base font-black truncate">
+                                  <h3 className="text-sm sm:text-base font-black leading-snug break-words">
                                     {room.room_title ||
                                       `${room.building_name} - ${isBn ? 'রুম' : 'Room'} ${
                                         isBn ? toBnDigit(room.room_number) : room.room_number
@@ -3106,7 +3117,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                     </span>
                                   )}
                                 </div>
-                                <p className={`text-xs font-medium mt-0.5 truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                <p className={`text-xs font-medium mt-0.5 leading-snug ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                                   {room.building_name}
                                   {room.floor_name ? ` • ${room.floor_name}` : ''}
                                 </p>
@@ -3133,30 +3144,30 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => openEditRoomModal(room)}
                                 title={isBn ? 'রুম সম্পাদনা' : 'Edit Room'}
-                                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors active:scale-95 cursor-pointer ${
                                   isDark
                                     ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-blue-400'
                                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-blue-600 hover:bg-blue-50'
                                 }`}
                               >
-                                <Edit3 size={14} />
+                                <Edit3 size={15} />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setDeleteRoomTarget(room)}
                                 title={isBn ? 'রুম মুছুন' : 'Delete Room'}
-                                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors active:scale-95 cursor-pointer ${
                                   isDark
                                     ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-rose-400'
                                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-rose-600 hover:bg-rose-50'
                                 }`}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={15} />
                               </button>
                             </div>
                           </div>
@@ -3209,9 +3220,9 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               {room.warden_phone && (
                                 <a
                                   href={`tel:${room.warden_phone}`}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 transition-colors tabular-nums"
+                                  className="inline-flex items-center gap-1.5 min-h-[34px] px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 active:scale-95 transition-all tabular-nums"
                                 >
-                                  <Phone size={12} />
+                                  <Phone size={13} />
                                   <span>{room.warden_phone}</span>
                                 </a>
                               )}
@@ -3238,32 +3249,32 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                   : 'No students assigned to this room yet.'}
                               </div>
                             ) : (
-                              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-0.5">
+                              <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
                                 {occupants.map(({ allocation, student }) => {
                                   const clsName = classMap.get(student.class_id)?.class_name || '';
                                   const fb = feeBadge(allocation.fee_category);
                                   return (
                                     <div
                                       key={allocation.id}
-                                      className={`rounded-2xl border px-3 py-2 flex items-center justify-between gap-2 ${
+                                      className={`rounded-2xl border p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
                                         isDark
                                           ? 'bg-slate-800/50 border-slate-700/70'
                                           : 'bg-white border-slate-200/80'
                                       }`}
                                     >
-                                      <div className="flex items-center gap-2.5 min-w-0">
-                                        <span className="w-7 h-7 rounded-xl bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 text-[11px] font-black flex items-center justify-center shrink-0">
+                                      <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                                        <span className="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 text-xs font-black flex items-center justify-center shrink-0">
                                           {allocation.seat_number
                                             ? isBn
                                               ? toBnDigit(allocation.seat_number)
                                               : allocation.seat_number
                                             : '#'}
                                         </span>
-                                        <div className="min-w-0">
-                                          <p className="text-xs sm:text-sm font-bold truncate">
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-xs sm:text-sm font-bold leading-snug break-words">
                                             {student.student_name}
                                           </p>
-                                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">
                                             {clsName && <span>{clsName}</span>}
                                             {student.roll != null && (
                                               <span>
@@ -3277,32 +3288,46 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                         </div>
                                       </div>
 
-                                      <div className="flex items-center gap-1 shrink-0">
+                                      <div className="flex items-center justify-end gap-1.5 shrink-0">
+                                        {student.guardian_phone && (
+                                          <a
+                                            href={`tel:${student.guardian_phone}`}
+                                            title={student.guardian_phone}
+                                            className={`min-h-[34px] px-2.5 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 transition-colors active:scale-95 ${
+                                              isDark
+                                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                                                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                            }`}
+                                          >
+                                            <Phone size={12} />
+                                            <span className="sm:hidden">{isBn ? 'কল' : 'Call'}</span>
+                                          </a>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => openTransferModal(allocation, student, room)}
                                           title={isBn ? 'রুম পরিবর্তন' : 'Transfer Room'}
-                                          className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                                          className={`min-h-[34px] px-2.5 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 transition-colors active:scale-95 cursor-pointer ${
                                             isDark
                                               ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-blue-500/20'
                                               : 'bg-blue-50/70 border-blue-200/80 text-blue-700 hover:bg-blue-100'
                                           }`}
                                         >
                                           <ArrowRightLeft size={12} />
-                                          <span className="hidden sm:inline">{isBn ? 'পরিবর্তন' : 'Move'}</span>
+                                          <span>{isBn ? 'পরিবর্তন' : 'Move'}</span>
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => setVacateTarget({ allocation, student, room })}
                                           title={isBn ? 'সিট খালি করুন' : 'Vacate Seat'}
-                                          className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                                          className={`min-h-[34px] px-2.5 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 transition-colors active:scale-95 cursor-pointer ${
                                             isDark
                                               ? 'bg-slate-800 border-slate-700 text-rose-300 hover:bg-rose-500/20'
                                               : 'bg-rose-50/70 border-rose-200/80 text-rose-700 hover:bg-rose-100'
                                           }`}
                                         >
                                           <UserMinus size={12} />
-                                          <span className="hidden sm:inline">{isBn ? 'খালি' : 'Vacate'}</span>
+                                          <span>{isBn ? 'খালি' : 'Vacate'}</span>
                                         </button>
                                       </div>
                                     </div>
@@ -3389,23 +3414,23 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 </div>
 
                 {/* Residential Type Filter Pills */}
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex sm:flex-wrap items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
                   {(
                     [
                       { id: 'all', label: isBn ? 'সকল' : 'All', count: dirCounts.total },
                       {
                         id: 'residential',
-                        label: isBn ? 'আবাসিক (Residential)' : 'Residential',
+                        label: isBn ? 'আবাসিক' : 'Residential',
                         count: dirCounts.residential,
                       },
                       {
                         id: 'non_residential',
-                        label: isBn ? 'অনাবাসিক (Non-Residential)' : 'Non-Residential',
+                        label: isBn ? 'অনাবাসিক' : 'Non-Residential',
                         count: dirCounts.non_residential,
                       },
                       {
                         id: 'day_care',
-                        label: isBn ? 'ডে-কেয়ার (Day-Care)' : 'Day-Care',
+                        label: isBn ? 'ডে-কেয়ার' : 'Day-Care',
                         count: dirCounts.day_care,
                       },
                     ] as const
@@ -3414,7 +3439,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       key={pill.id}
                       type="button"
                       onClick={() => setDirResFilter(pill.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                      className={`shrink-0 whitespace-nowrap min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                         dirResFilter === pill.id
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : isDark
@@ -3439,9 +3464,9 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 </div>
 
                 {/* Fee Category Filter Pills */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800">
-                  <span className={`text-[11px] font-bold mr-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {isBn ? 'ফি ক্যাটাগরি:' : 'Fee Category:'}
+                <div className="flex sm:flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
+                  <span className={`shrink-0 whitespace-nowrap text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {isBn ? 'ফি:' : 'Fee:'}
                   </span>
                   {(
                     [
@@ -3450,7 +3475,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       { id: 'half_free', label: isBn ? 'অর্ধ-ফ্রি' : 'Half-Free', count: dirCounts.half_free },
                       {
                         id: 'lillah_free',
-                        label: isBn ? 'পূর্ণ লিল্লাহ/এতিম' : 'Lillah / Orphan Free',
+                        label: isBn ? 'লিল্লাহ/এতিম' : 'Lillah / Free',
                         count: dirCounts.lillah_free,
                       },
                     ] as const
@@ -3459,7 +3484,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       key={pill.id}
                       type="button"
                       onClick={() => setDirFeeFilter(pill.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                      className={`shrink-0 whitespace-nowrap min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                         dirFeeFilter === pill.id
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                           : isDark
@@ -3523,7 +3548,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <h4 className="text-sm sm:text-base font-black truncate">
+                              <h4 className="text-sm sm:text-base font-black leading-snug break-words">
                                 {row.student.student_name}
                               </h4>
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${rb.cls}`}>
@@ -3534,16 +3559,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               </span>
                             </div>
 
-                            <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            <div className={`mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                               <span>
                                 {row.className}
                                 {row.student.roll != null
                                   ? ` • ${isBn ? 'রোল' : 'Roll'} ${formatNum(row.student.roll, isBn)}`
                                   : ''}
                               </span>
-                              {row.student.guardian_phone && (
-                                <span className="tabular-nums">{row.student.guardian_phone}</span>
-                              )}
                               {row.room ? (
                                 <span className="text-indigo-600 dark:text-indigo-400 font-bold">
                                   {isBn ? 'রুম' : 'Room'} {isBn ? toBnDigit(row.room.room_number) : row.room.room_number}
@@ -3558,11 +3580,20 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                   {isBn ? 'রুম বরাদ্দ হয়নি' : 'No room assigned'}
                                 </span>
                               ) : null}
+                              {row.student.guardian_phone && (
+                                <a
+                                  href={`tel:${row.student.guardian_phone}`}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 transition-colors tabular-nums"
+                                >
+                                  <Phone size={11} />
+                                  <span>{row.student.guardian_phone}</span>
+                                </a>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
                           <div className="text-left sm:text-right">
                             <span className={`block text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                               {isBn ? 'বোর্ডিং ফি/মাস' : 'Boarding Fee/mo'}
@@ -3574,13 +3605,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                           <button
                             type="button"
                             onClick={() => openEditStudentModal(row)}
-                            className={`h-9 px-3.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                            className={`min-h-[38px] px-4 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                               isDark
                                 ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-blue-500/20'
                                 : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
                             }`}
                           >
-                            <Edit3 size={13} />
+                            <Edit3 size={14} />
                             <span>{isBn ? 'আপডেট' : 'Update'}</span>
                           </button>
                         </div>
@@ -3594,14 +3625,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
           {/* ===================== TAB 3: DAILY MEAL ATTENDANCE & LIVE KITCHEN ===================== */}
           {activeTab === 'meals' && (
-            <div className="space-y-4 pb-20 sm:pb-6">
+            <div className="space-y-4">
               {/* Sub-View Switcher: Daily Meal Attendance vs Live Cook Dashboard */}
               <div className={`rounded-2xl border p-1.5 shadow-xs ${cardSurface}`}>
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setMealSubView('attendance')}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                    className={`min-h-[42px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-[0.98] cursor-pointer ${
                       mealSubView === 'attendance'
                         ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
                         : isDark
@@ -3610,14 +3641,15 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     }`}
                   >
                     <Utensils size={16} className="shrink-0" />
-                    <span className="truncate">
+                    <span className="sm:hidden">{isBn ? 'মিল হাজিরা' : 'Meal Roll'}</span>
+                    <span className="hidden sm:inline truncate">
                       {isBn ? 'দৈনিক মিল হাজিরা ও ছুটি' : 'Daily Meal Attendance'}
                     </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setMealSubView('kitchen')}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                    className={`min-h-[42px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-[0.98] cursor-pointer ${
                       mealSubView === 'kitchen'
                         ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm shadow-orange-500/20'
                         : isDark
@@ -3626,7 +3658,8 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     }`}
                   >
                     <ChefHat size={16} className="shrink-0" />
-                    <span className="truncate">
+                    <span className="sm:hidden">{isBn ? 'বাবুর্চি ভিউ' : 'Kitchen View'}</span>
+                    <span className="hidden sm:inline truncate">
                       {isBn ? 'লাইভ বাবুর্চি ড্যাশবোর্ড' : 'Live Kitchen View'}
                     </span>
                   </button>
@@ -3719,15 +3752,19 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       </div>
                     </div>
 
-                    <div className={`col-span-2 sm:col-span-1 rounded-2xl border p-3 ${isDark ? 'bg-indigo-500/10 border-indigo-500/25' : 'bg-indigo-50/70 border-indigo-200/80'}`}>
-                      <span className={`block text-[11px] font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-800'}`}>
+                    <div
+                      className={`col-span-2 sm:col-span-1 rounded-2xl border p-3.5 sm:p-3 flex items-center justify-between sm:block ${
+                        isDark ? 'bg-indigo-500/10 border-indigo-500/25' : 'bg-indigo-50/70 border-indigo-200/80'
+                      }`}
+                    >
+                      <span className={`block text-xs sm:text-[11px] font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-800'}`}>
                         {isBn ? 'রাত (খাবার)' : 'Night'}
                       </span>
-                      <div className="mt-1 flex items-baseline gap-1.5">
+                      <div className="sm:mt-1 flex items-baseline gap-1.5">
                         <span className="text-xl font-black tabular-nums text-indigo-700 dark:text-indigo-300">
                           {formatMealCount(mealSummary.night.cookCount, isBn)}
                         </span>
-                        <span className="text-[10px] font-bold opacity-75">
+                        <span className="text-[10.5px] font-bold opacity-75">
                           ({formatNum(mealSummary.night.full, isBn)}+{formatNum(mealSummary.night.half, isBn)}{isBn ? 'হাফ' : 'h'})
                         </span>
                       </div>
@@ -3996,7 +4033,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <h4 className="text-sm font-black truncate">
+                                  <h4 className="text-sm font-black leading-snug break-words">
                                     {row.student.student_name}
                                   </h4>
                                   {row.residentialType === 'day_care' && (
@@ -4020,7 +4057,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                 </div>
 
                                 <div
-                                  className={`mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] font-semibold ${
+                                  className={`mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold ${
                                     isDark ? 'text-slate-400' : 'text-slate-500'
                                   }`}
                                 >
@@ -4038,6 +4075,15 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                         ? ` (${isBn ? toBnDigit(row.allocation.seat_number) : row.allocation.seat_number})`
                                         : ''}
                                     </span>
+                                  )}
+                                  {row.student.guardian_phone && (
+                                    <a
+                                      href={`tel:${row.student.guardian_phone}`}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold tabular-nums"
+                                    >
+                                      <Phone size={10} />
+                                      <span>{row.student.guardian_phone}</span>
+                                    </a>
                                   )}
                                 </div>
                               </div>
@@ -4070,16 +4116,16 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                   onClick={() =>
                                     handleToggleMealStatus(row.student.id, row.statuses, m.key)
                                   }
-                                  className={`px-2 py-2 rounded-xl border text-center transition-all active:scale-95 cursor-pointer select-none ${m.pill.cls}`}
+                                  className={`min-h-[54px] px-2 py-2.5 rounded-xl border text-center transition-all active:scale-95 cursor-pointer select-none ${m.pill.cls}`}
                                 >
-                                  <span className="block text-[10px] font-bold opacity-75 leading-none">
+                                  <span className="block text-[10px] font-bold opacity-80 leading-none">
                                     {m.title}
                                   </span>
-                                  <span className="mt-1 flex items-center justify-center gap-1 text-xs font-black leading-none">
+                                  <span className="mt-1.5 flex items-center justify-center gap-1 text-xs font-black leading-none">
                                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.pill.dotCls}`} />
-                                    <span className="truncate">{m.pill.label}</span>
+                                    <span className="whitespace-nowrap">{m.pill.label}</span>
                                   </span>
-                                  <span className="block mt-0.5 text-[9.5px] font-extrabold opacity-70 tabular-nums">
+                                  <span className="block mt-0.5 text-[9.5px] font-extrabold opacity-75 tabular-nums">
                                     {m.pill.weight}
                                   </span>
                                 </button>
@@ -4091,13 +4137,26 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     </div>
                   )}
 
-                  {/* Sticky Bottom Save Bar when unsaved changes exist */}
-                  {mealDirty && mealEligibleRows.length > 0 && (
-                    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.5rem)] max-w-xl">
-                      <div className="rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white px-4 py-3 shadow-2xl border border-slate-700 flex items-center justify-between gap-3">
+                  {/* Sticky Bottom Save Bar (Always reachable on mobile above bottom nav; shown on desktop when unsaved) */}
+                  {mealEligibleRows.length > 0 && (
+                    <div
+                      className={`sticky bottom-24 md:bottom-4 z-30 pt-2 ${
+                        mealDirty ? '' : 'md:hidden'
+                      }`}
+                    >
+                      <div className="max-w-xl mx-auto rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white px-4 py-3 shadow-2xl border border-slate-700/90 flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-xs sm:text-sm font-black truncate">
-                            {isBn ? 'মিল হাজিরায় পরিবর্তন করা হয়েছে' : 'Unsaved Meal Attendance'}
+                          <p className="text-xs sm:text-sm font-black truncate flex items-center gap-1.5">
+                            {mealDirty && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />}
+                            <span>
+                              {mealDirty
+                                ? isBn
+                                  ? 'মিল হাজিরায় পরিবর্তন হয়েছে'
+                                  : 'Unsaved Meal Attendance'
+                                : isBn
+                                ? 'আজকের মিল হিসাব'
+                                : 'Today’s Meal Summary'}
+                            </span>
                           </p>
                           <p className="text-[11px] text-slate-300 font-semibold truncate">
                             {isBn
@@ -4109,7 +4168,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                           type="button"
                           onClick={handleSaveMealLogs}
                           disabled={mealSaving}
-                          className="h-10 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-black inline-flex items-center gap-1.5 shrink-0 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                          className="min-h-[42px] px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-black inline-flex items-center gap-1.5 shrink-0 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-60"
                         >
                           {mealSaving ? (
                             <Loader2 size={15} className="animate-spin" />
@@ -4128,14 +4187,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
 
           {/* ===================== TAB 4: GATE PASS & NIGHT ROLL CALL (PHASE 3) ===================== */}
           {activeTab === 'gatepass' && (
-            <div className="space-y-4 pb-20 sm:pb-6">
+            <div className="space-y-4">
               {/* Sub-View Switcher: Gate Pass vs Night Roll Call */}
               <div className={`rounded-2xl border p-1.5 shadow-xs ${cardSurface}`}>
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setGatePassSubView('leaves')}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                    className={`min-h-[42px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-[0.98] cursor-pointer ${
                       gatePassSubView === 'leaves'
                         ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
                         : isDark
@@ -4144,14 +4203,15 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     }`}
                   >
                     <ShieldCheck size={16} className="shrink-0" />
-                    <span className="truncate">
+                    <span className="sm:hidden">{isBn ? 'গেট পাস' : 'Gate Pass'}</span>
+                    <span className="hidden sm:inline truncate">
                       {isBn ? 'গেট পাস / বাড়ি যাওয়ার ছুটি' : 'Gate Pass & Leaves'}
                     </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setGatePassSubView('night_roll')}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                    className={`min-h-[42px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-[0.98] cursor-pointer ${
                       gatePassSubView === 'night_roll'
                         ? 'bg-gradient-to-r from-slate-800 to-indigo-700 text-white shadow-sm shadow-indigo-600/20'
                         : isDark
@@ -4160,7 +4220,8 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     }`}
                   >
                     <Moon size={16} className="shrink-0" />
-                    <span className="truncate">
+                    <span className="sm:hidden">{isBn ? 'রাতের হাজিরা' : 'Night Roll'}</span>
+                    <span className="hidden sm:inline truncate">
                       {isBn ? 'রাতের নেগরানি হাজিরা' : 'Night Roll Call'}
                     </span>
                   </button>
@@ -4188,7 +4249,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     {/* Top Action & Filter Bar */}
                     <div className={`rounded-3xl border p-4 space-y-3.5 shadow-xs ${cardSurface}`}>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
                           {(
                             [
                               { id: 'all', label: isBn ? 'সকল' : 'All', count: leaveCounts.all },
@@ -4200,7 +4261,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                               key={pill.id}
                               type="button"
                               onClick={() => setLeaveStatusFilter(pill.id)}
-                              className={`px-3.5 py-2 rounded-xl text-xs font-black border inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                              className={`shrink-0 whitespace-nowrap min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-black border inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                                 leaveStatusFilter === pill.id
                                   ? pill.id === 'out'
                                     ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
@@ -4231,7 +4292,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                         <button
                           type="button"
                           onClick={openIssueGatePassModal}
-                          className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black inline-flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer shrink-0"
+                          className="w-full sm:w-auto min-h-[42px] px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black inline-flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer shrink-0"
                         >
                           <Plus size={16} />
                           <span>{isBn ? 'নতুন গেট পাস ইস্যু' : 'Issue Gate Pass'}</span>
@@ -4325,7 +4386,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="flex flex-wrap items-center gap-1.5">
-                                        <h4 className="text-sm sm:text-base font-black truncate">
+                                        <h4 className="text-sm sm:text-base font-black leading-snug break-words">
                                           {stu?.student_name || (isBn ? 'শিক্ষার্থী' : 'Student')}
                                         </h4>
                                         <span
@@ -4756,7 +4817,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                 key={row.student.id}
                                 className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                               >
-                                <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
                                   <span className="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 text-xs font-black flex items-center justify-center shrink-0">
                                     {row.allocation?.seat_number
                                       ? isBn
@@ -4764,9 +4825,9 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                         : row.allocation.seat_number
                                       : '#'}
                                   </span>
-                                  <div className="min-w-0">
+                                  <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                      <p className="text-sm font-black truncate">
+                                      <p className="text-sm font-black leading-snug break-words">
                                         {row.student.student_name}
                                       </p>
                                       {row.isOnLeave && (
@@ -4775,17 +4836,28 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                         </span>
                                       )}
                                     </div>
-                                    <p className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                                      {row.className}
-                                      {row.student.roll != null
-                                        ? ` • ${isBn ? 'রোল' : 'Roll'} ${formatNum(row.student.roll, isBn)}`
-                                        : ''}
-                                    </p>
+                                    <div className={`mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                      <span>
+                                        {row.className}
+                                        {row.student.roll != null
+                                          ? ` • ${isBn ? 'রোল' : 'Roll'} ${formatNum(row.student.roll, isBn)}`
+                                          : ''}
+                                      </span>
+                                      {row.student.guardian_phone && (
+                                        <a
+                                          href={`tel:${row.student.guardian_phone}`}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold tabular-nums"
+                                        >
+                                          <Phone size={10} />
+                                          <span>{row.student.guardian_phone}</span>
+                                        </a>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
                                 {/* 3 Fast 1-Tap Status Buttons: Present, Leave, Absent */}
-                                <div className="grid grid-cols-3 gap-1.5 sm:w-[295px] shrink-0">
+                                <div className="grid grid-cols-3 gap-2 sm:w-[300px] shrink-0">
                                   {(
                                     [
                                       {
@@ -4811,7 +4883,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                                         key={opt.id}
                                         type="button"
                                         onClick={() => handleSetNightRollStatus(row.student.id, opt.id)}
-                                        className={`h-9 px-2 rounded-xl border text-xs font-black transition-all active:scale-95 cursor-pointer ${
+                                        className={`min-h-[42px] px-2 rounded-xl border text-xs font-black transition-all active:scale-95 cursor-pointer whitespace-nowrap ${
                                           active
                                             ? opt.activeCls
                                             : isDark
@@ -4832,13 +4904,26 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     </div>
                   )}
 
-                  {/* Sticky Bottom Save Bar for Night Roll Call */}
-                  {nightRollDirty && nightRollRows.length > 0 && (
-                    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.5rem)] max-w-xl">
-                      <div className="rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white px-4 py-3 shadow-2xl border border-slate-700 flex items-center justify-between gap-3">
+                  {/* Sticky Bottom Save Bar for Night Roll Call (Always reachable on mobile above bottom nav) */}
+                  {nightRollRows.length > 0 && (
+                    <div
+                      className={`sticky bottom-24 md:bottom-4 z-30 pt-2 ${
+                        nightRollDirty ? '' : 'md:hidden'
+                      }`}
+                    >
+                      <div className="max-w-xl mx-auto rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white px-4 py-3 shadow-2xl border border-slate-700/90 flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-xs sm:text-sm font-black truncate">
-                            {isBn ? 'রাতের হাজিরায় পরিবর্তন করা হয়েছে' : 'Unsaved Night Roll Call'}
+                          <p className="text-xs sm:text-sm font-black truncate flex items-center gap-1.5">
+                            {nightRollDirty && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />}
+                            <span>
+                              {nightRollDirty
+                                ? isBn
+                                  ? 'রাতের হাজিরায় পরিবর্তন হয়েছে'
+                                  : 'Unsaved Night Roll Call'
+                                : isBn
+                                ? 'রাতের হাজিরা সারসংক্ষেপ'
+                                : 'Night Roll Summary'}
+                            </span>
                           </p>
                           <p className="text-[11px] text-slate-300 font-semibold truncate">
                             {isBn
@@ -4850,7 +4935,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                           type="button"
                           onClick={handleSaveNightRoll}
                           disabled={nightRollSaving}
-                          className="h-10 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs sm:text-sm font-black inline-flex items-center gap-1.5 shrink-0 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                          className="min-h-[42px] px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs sm:text-sm font-black inline-flex items-center gap-1.5 shrink-0 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-60"
                         >
                           {nightRollSaving ? (
                             <Loader2 size={15} className="animate-spin" />
@@ -4872,16 +4957,17 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: ADD / EDIT ROOM ===================== */}
       {roomModalOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
             <div
-              className={`w-full max-w-lg rounded-3xl border shadow-2xl max-h-[90vh] overflow-y-auto ${cardSurface}`}
+              className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardSurface}`}
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit sticky top-0 bg-inherit z-10">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden shrink-0" />
+              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                     <Building2 size={18} />
                   </div>
-                  <h3 className="text-base font-black">
+                  <h3 className="text-base font-black truncate">
                     {editingRoom
                       ? isBn
                         ? 'রুমের তথ্য সম্পাদনা'
@@ -4894,13 +4980,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setRoomModalOpen(false)}
-                  className="w-8 h-8 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer"
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveRoom} className="p-5 space-y-4">
+              <form onSubmit={handleSaveRoom} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold mb-1">
@@ -5040,11 +5127,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <span>{isBn ? 'রুমটি সক্রিয় আছে (সিট বরাদ্দের জন্য উন্মুক্ত)' : 'Room is active for seat allocation'}</span>
                 </label>
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                </div>
+
+                <div className="shrink-0 border-t border-inherit px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setRoomModalOpen(false)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                    className={`min-h-[42px] px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
                       isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
                     }`}
                   >
@@ -5053,7 +5142,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <button
                     type="submit"
                     disabled={roomSaving}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-60 cursor-pointer"
+                    className="min-h-[42px] px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-60 active:scale-95 transition-all cursor-pointer"
                   >
                     {roomSaving && <Loader2 size={15} className="animate-spin" />}
                     <span>{editingRoom ? (isBn ? 'আপডেট করুন' : 'Update Room') : isBn ? 'রুম সংরক্ষণ করুন' : 'Save Room'}</span>
@@ -5068,16 +5157,17 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: ASSIGN SEAT ===================== */}
       {assignModalRoom &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
             <div
-              className={`w-full max-w-lg rounded-3xl border shadow-2xl max-h-[90vh] overflow-y-auto ${cardSurface}`}
+              className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardSurface}`}
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit sticky top-0 bg-inherit z-10">
-                <div>
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden shrink-0" />
+              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit shrink-0">
+                <div className="min-w-0">
                   <h3 className="text-base font-black">
                     {isBn ? 'সিট বরাদ্দ করুন' : 'Assign Seat'}
                   </h3>
-                  <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <p className={`text-xs font-medium truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {assignModalRoom.building_name} • {isBn ? 'রুম' : 'Room'}{' '}
                     {isBn ? toBnDigit(assignModalRoom.room_number) : assignModalRoom.room_number}
                   </p>
@@ -5085,13 +5175,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setAssignModalRoom(null)}
-                  className="w-8 h-8 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer"
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleConfirmAssignSeat} className="p-5 space-y-4">
+              <form onSubmit={handleConfirmAssignSeat} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {/* Student Filter + Picker */}
                 <div className="space-y-2.5">
                   <label className="block text-xs font-bold">
@@ -5236,11 +5327,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-1">
+                </div>
+
+                <div className="shrink-0 border-t border-inherit px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setAssignModalRoom(null)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                    className={`min-h-[42px] px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
                       isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
                     }`}
                   >
@@ -5249,7 +5342,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <button
                     type="submit"
                     disabled={assignSaving || !assignStudentId}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-50 cursor-pointer"
+                    className="min-h-[42px] px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
                   >
                     {assignSaving && <Loader2 size={15} className="animate-spin" />}
                     <span>{isBn ? 'বরাদ্দ নিশ্চিত করুন' : 'Confirm Assignment'}</span>
@@ -5264,9 +5357,10 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: TRANSFER ROOM ===================== */}
       {transferTarget &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
-            <div className={`w-full max-w-md rounded-3xl border shadow-2xl ${cardSurface}`}>
-              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit">
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
+            <div className={`w-full max-w-md rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardSurface}`}>
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden shrink-0" />
+              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit shrink-0">
                 <div className="flex items-center gap-2">
                   <ArrowRightLeft size={18} className="text-blue-600" />
                   <h3 className="text-base font-black">{isBn ? 'রুম পরিবর্তন' : 'Transfer Room'}</h3>
@@ -5274,13 +5368,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setTransferTarget(null)}
-                  className="w-8 h-8 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer"
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleConfirmTransfer} className="p-5 space-y-4">
+              <form onSubmit={handleConfirmTransfer} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 <div className={`rounded-2xl border p-3 text-xs space-y-1 ${isDark ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                   <p className="font-black text-sm">{transferTarget.student.student_name}</p>
                   <p className={isDark ? 'text-slate-400' : 'text-slate-600'}>
@@ -5355,11 +5450,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   </>
                 )}
 
-                <div className="flex items-center justify-end gap-2.5 pt-1">
+                </div>
+
+                <div className="shrink-0 border-t border-inherit px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setTransferTarget(null)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                    className={`min-h-[42px] px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
                       isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
                     }`}
                   >
@@ -5368,7 +5465,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <button
                     type="submit"
                     disabled={transferSaving || !transferToRoomId}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    className="min-h-[42px] px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
                   >
                     {transferSaving && <Loader2 size={15} className="animate-spin" />}
                     <span>{isBn ? 'স্থানান্তর করুন' : 'Confirm Transfer'}</span>
@@ -5383,44 +5480,47 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: VACATE SEAT CONFIRM ===================== */}
       {vacateTarget &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
-            <div className={`w-full max-w-sm rounded-3xl border shadow-2xl p-5 space-y-4 ${cardSurface}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center shrink-0">
-                  <UserMinus size={22} />
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
+            <div className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl overflow-hidden ${cardSurface}`}>
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden" />
+              <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center shrink-0">
+                    <UserMinus size={22} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-black">{isBn ? 'সিট খালি করবেন?' : 'Vacate Seat?'}</h3>
+                    <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {vacateTarget.student.student_name} • {isBn ? 'রুম' : 'Room'}{' '}
+                      {isBn ? toBnDigit(vacateTarget.room.room_number) : vacateTarget.room.room_number}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-black">{isBn ? 'সিট খালি করবেন?' : 'Vacate Seat?'}</h3>
-                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {vacateTarget.student.student_name} • {isBn ? 'রুম' : 'Room'}{' '}
-                    {isBn ? toBnDigit(vacateTarget.room.room_number) : vacateTarget.room.room_number}
-                  </p>
+                <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {isBn
+                    ? 'এই শিক্ষার্থীর বর্তমান সিটটি খালি করা হবে এবং পূর্ববর্তী বরাদ্দের ইতিহাস সংরক্ষিত থাকবে।'
+                    : 'This student will be removed from the room and their seat history will remain preserved.'}
+                </p>
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setVacateTarget(null)}
+                    className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                      isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {isBn ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={vacateSaving}
+                    onClick={handleConfirmVacate}
+                    className="min-h-[42px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-60 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {vacateSaving && <Loader2 size={14} className="animate-spin" />}
+                    <span>{isBn ? 'হ্যাঁ, খালি করুন' : 'Yes, Vacate'}</span>
+                  </button>
                 </div>
-              </div>
-              <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                {isBn
-                  ? 'এই শিক্ষার্থীর বর্তমান সিটটি খালি করা হবে এবং পূর্ববর্তী বরাদ্দের ইতিহাস সংরক্ষিত থাকবে।'
-                  : 'This student will be removed from the room and their seat history will remain preserved.'}
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setVacateTarget(null)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
-                    isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
-                  }`}
-                >
-                  {isBn ? 'বাতিল' : 'Cancel'}
-                </button>
-                <button
-                  type="button"
-                  disabled={vacateSaving}
-                  onClick={handleConfirmVacate}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
-                >
-                  {vacateSaving && <Loader2 size={14} className="animate-spin" />}
-                  <span>{isBn ? 'হ্যাঁ, খালি করুন' : 'Yes, Vacate'}</span>
-                </button>
               </div>
             </div>
           </div>,
@@ -5430,44 +5530,47 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: DELETE ROOM CONFIRM ===================== */}
       {deleteRoomTarget &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
-            <div className={`w-full max-w-sm rounded-3xl border shadow-2xl p-5 space-y-4 ${cardSurface}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center shrink-0">
-                  <Trash2 size={20} />
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
+            <div className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl overflow-hidden ${cardSurface}`}>
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden" />
+              <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center shrink-0">
+                    <Trash2 size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-black">{isBn ? 'রুম মুছে ফেলবেন?' : 'Delete Room?'}</h3>
+                    <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {deleteRoomTarget.building_name} • {isBn ? 'রুম' : 'Room'}{' '}
+                      {isBn ? toBnDigit(deleteRoomTarget.room_number) : deleteRoomTarget.room_number}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-black">{isBn ? 'রুম মুছে ফেলবেন?' : 'Delete Room?'}</h3>
-                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {deleteRoomTarget.building_name} • {isBn ? 'রুম' : 'Room'}{' '}
-                    {isBn ? toBnDigit(deleteRoomTarget.room_number) : deleteRoomTarget.room_number}
-                  </p>
+                <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {isBn
+                    ? 'আপনি কি নিশ্চিতভাবে এই রুমটি মুছে ফেলতে চান? রুমে শিক্ষার্থী থাকলে আগে সিট খালি করতে হবে।'
+                    : 'Are you sure you want to delete this room? Rooms with active students cannot be deleted.'}
+                </p>
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteRoomTarget(null)}
+                    className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                      isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {isBn ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingRoom}
+                    onClick={handleConfirmDeleteRoom}
+                    className="min-h-[42px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-60 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {deletingRoom && <Loader2 size={14} className="animate-spin" />}
+                    <span>{isBn ? 'মুছে ফেলুন' : 'Delete'}</span>
+                  </button>
                 </div>
-              </div>
-              <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                {isBn
-                  ? 'আপনি কি নিশ্চিতভাবে এই রুমটি মুছে ফেলতে চান? রুমে শিক্ষার্থী থাকলে আগে সিট খালি করতে হবে।'
-                  : 'Are you sure you want to delete this room? Rooms with active students cannot be deleted.'}
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteRoomTarget(null)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
-                    isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
-                  }`}
-                >
-                  {isBn ? 'বাতিল' : 'Cancel'}
-                </button>
-                <button
-                  type="button"
-                  disabled={deletingRoom}
-                  onClick={handleConfirmDeleteRoom}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
-                >
-                  {deletingRoom && <Loader2 size={14} className="animate-spin" />}
-                  <span>{isBn ? 'মুছে ফেলুন' : 'Delete'}</span>
-                </button>
               </div>
             </div>
           </div>,
@@ -5477,9 +5580,10 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: UPDATE RESIDENTIAL & FEE PROFILE ===================== */}
       {editStudentTarget &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
-            <div className={`w-full max-w-md rounded-3xl border shadow-2xl ${cardSurface}`}>
-              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit">
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
+            <div className={`w-full max-w-md rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardSurface}`}>
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden shrink-0" />
+              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                     <Home size={18} />
@@ -5496,13 +5600,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setEditStudentTarget(null)}
-                  className="w-8 h-8 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer"
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveStudentDirectory} className="p-5 space-y-4">
+              <form onSubmit={handleSaveStudentDirectory} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 <div>
                   <label className="block text-xs font-bold mb-1.5">
                     {isBn ? 'আবাসিক ধরন' : 'Residential Type'}
@@ -5604,11 +5709,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-1">
+                </div>
+
+                <div className="shrink-0 border-t border-inherit px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setEditStudentTarget(null)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                    className={`min-h-[42px] px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
                       isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
                     }`}
                   >
@@ -5617,7 +5724,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <button
                     type="submit"
                     disabled={editStudentSaving}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-60 cursor-pointer"
+                    className="min-h-[42px] px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 shadow-md shadow-blue-600/20 disabled:opacity-60 active:scale-95 transition-all cursor-pointer"
                   >
                     {editStudentSaving && <Loader2 size={15} className="animate-spin" />}
                     <span>{isBn ? 'সংরক্ষণ করুন' : 'Save Changes'}</span>
@@ -5632,18 +5739,19 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
       {/* ===================== MODAL: ISSUE GATE PASS ===================== */}
       {gatePassModalOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 font-noto">
-            <div className={`w-full max-w-lg rounded-3xl border shadow-2xl max-h-[90vh] overflow-y-auto ${cardSurface}`}>
-              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit sticky top-0 bg-inherit z-10">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+          <div className="fixed inset-0 z-[1000] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto">
+            <div className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardSurface}`}>
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mt-2.5 sm:hidden shrink-0" />
+              <div className="flex items-center justify-between px-5 py-4 border-b border-inherit shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                     <ShieldCheck size={18} />
                   </div>
-                  <div>
-                    <h3 className="text-base font-black">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-black truncate">
                       {isBn ? 'নতুন গেট পাস ইস্যু করুন' : 'Issue Hostel Gate Pass'}
                     </h3>
-                    <p className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <p className={`text-[11px] font-semibold truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                       {isBn ? 'বাড়ি যাওয়ার ছুটি ও অভিভাবক যাচাইকরণ' : 'Home leave & guardian handover'}
                     </p>
                   </div>
@@ -5651,13 +5759,14 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setGatePassModalOpen(false)}
-                  className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center cursor-pointer"
+                  className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              <form onSubmit={handleIssueGatePass} className="p-5 space-y-4">
+              <form onSubmit={handleIssueGatePass} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {/* Student Selector */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-black block">
@@ -5841,11 +5950,13 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                </div>
+
+                <div className="shrink-0 border-t border-inherit px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setGatePassModalOpen(false)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                    className={`min-h-[42px] px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
                       isDark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-600'
                     }`}
                   >
@@ -5854,7 +5965,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   <button
                     type="submit"
                     disabled={gatePassSaving}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black inline-flex items-center gap-2 shadow-md shadow-indigo-600/20 disabled:opacity-60 cursor-pointer"
+                    className="min-h-[42px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black inline-flex items-center gap-2 shadow-md shadow-indigo-600/20 disabled:opacity-60 active:scale-95 transition-all cursor-pointer"
                   >
                     {gatePassSaving && <Loader2 size={15} className="animate-spin" />}
                     <span>{isBn ? 'গেট পাস ইস্যু করুন' : 'Issue Gate Pass'}</span>
@@ -5882,7 +5993,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
             return (
               <div
                 id="hostel-gatepass-print-portal"
-                className="fixed inset-0 z-[1100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 font-noto"
+                className="fixed inset-0 z-[1100] bg-slate-950/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 font-noto"
               >
                 <style>{`
                   @media print {
@@ -5904,17 +6015,18 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                     }
                   }
                 `}</style>
-                <div className="w-full max-w-md space-y-3">
+                <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col gap-2.5 sm:gap-3 bg-slate-900/95 sm:bg-transparent rounded-t-3xl sm:rounded-none p-3 sm:p-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-0">
+                  <div className="no-print w-10 h-1 rounded-full bg-slate-600 mx-auto sm:hidden shrink-0" />
                   {/* Action Bar (hidden when printing) */}
-                  <div className="no-print flex items-center justify-between gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-lg">
-                    <span className="text-xs font-black">
+                  <div className="no-print shrink-0 flex items-center justify-between gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-lg">
+                    <span className="text-xs font-black truncate">
                       {isBn ? 'গেট পাস প্রিন্ট প্রিভিউ (A5 / থার্মাল)' : 'Gate Pass Print Preview'}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => window.print()}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer"
+                        className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black inline-flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                       >
                         <Printer size={14} />
                         <span>{isBn ? 'প্রিন্ট করুন' : 'Print'}</span>
@@ -5922,7 +6034,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                       <button
                         type="button"
                         onClick={() => setPrintGatePassTarget(null)}
-                        className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center cursor-pointer"
+                        className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center cursor-pointer"
                       >
                         <X size={15} />
                       </button>
@@ -5932,7 +6044,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
                   {/* Printable Slip Card */}
                   <div
                     id="hostel-gatepass-slip-card"
-                    className="bg-white text-slate-900 rounded-3xl border-2 border-slate-300 p-5 sm:p-6 shadow-2xl space-y-4"
+                    className="flex-1 overflow-y-auto bg-white text-slate-900 rounded-3xl border-2 border-slate-300 p-5 sm:p-6 shadow-2xl space-y-4"
                   >
                     {/* Institution Header */}
                     <div className="text-center border-b-2 border-dashed border-slate-300 pb-3 space-y-1">
