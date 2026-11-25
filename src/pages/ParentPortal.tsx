@@ -790,14 +790,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     try {
       const params = new URLSearchParams(window.location.search);
       const urlAction = params.get('action');
+      const urlType = params.get('type');
       const callIdParam = params.get('call_id');
-      if (urlAction === 'auto_voice_alert' && callIdParam) {
+      if (
+        (urlAction === 'auto_voice_alert' || urlType === 'auto_voice_alert' || String(callIdParam || '').startsWith('ivc_')) &&
+        callIdParam
+      ) {
         fetch(`/api/call?action=get_call_payload&call_id=${encodeURIComponent(callIdParam)}`)
           .then(r => r.ok ? r.json() : null)
           .then(fetched => {
             if (!fetched) return;
             const pObj = fetched?.payload || fetched || {};
-            if (pObj.audio_url) {
+            if (pObj.audio_url && pObj.type !== 'incoming_call') {
               triggerIncomingVoiceAlert({
                 call_id: pObj.call_id || callIdParam,
                 audio_url: pObj.audio_url,
@@ -816,9 +820,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     const handleVoiceEventPayload = (data: any) => {
       if (!data) return;
       const pObj = data?.payload || data;
-      if (pObj?.type === 'auto_voice_alert' || pObj?.audio_url) {
+      if (pObj?.type === 'incoming_call' || pObj?.type === 'ACCEPT_CALL_FROM_NOTIFICATION' || pObj?.type === 'REJECT_CALL_FROM_NOTIFICATION') {
+        return;
+      }
+      if (
+        pObj?.type === 'auto_voice_alert' ||
+        pObj?.type === 'AUTO_VOICE_ALERT' ||
+        pObj?.call_mode === 'internet_voice_broadcast' ||
+        (pObj?.audio_url && pObj?.type !== 'incoming_call')
+      ) {
         triggerIncomingVoiceAlert({
-          call_id: pObj.call_id,
+          call_id: pObj.call_id || pObj.callId,
           audio_url: pObj.audio_url,
           title: pObj.title,
           body: pObj.body,

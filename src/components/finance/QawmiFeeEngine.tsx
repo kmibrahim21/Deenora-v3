@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell, Edit3, Trash2, Calendar, Phone, Check, Printer, Layers, Sparkles } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell, Edit3, Trash2, Calendar, Phone, Check, Printer, Layers, Sparkles, Wifi, PhoneCall } from 'lucide-react';
+import {
+  hasInternetVoicePermission,
+  getInternetVoiceFeatureConfig,
+  sendInternetVoiceBroadcast,
+} from '../../utils/internetVoiceCall';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF, generateFeeReceiptPDF_Universal } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
@@ -60,6 +65,45 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   const canViewReports = !isTeacher || !!profile?.permissions?.can_view_reports;
   const isHostelEnabled = Boolean(madrasah?.config_json?.modules?.hostel_management === true);
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
+
+  // Zero-Cost Internet Voice Call Due Fee Reminder states
+  const canUseInternetVoiceCall = React.useMemo(
+    () => hasInternetVoicePermission(madrasah, role === 'super_admin'),
+    [madrasah, role]
+  );
+  const internetVoiceConfig = React.useMemo(
+    () => getInternetVoiceFeatureConfig(madrasah),
+    [madrasah]
+  );
+  const [approvedDueVoiceTemplate, setApprovedDueVoiceTemplate] = useState<any | null>(null);
+  const [sendingDueVoice, setSendingDueVoice] = useState(false);
+  const [showDueVoiceConfirmModal, setShowDueVoiceConfirmModal] = useState(false);
+  const [dueVoiceStatus, setDueVoiceStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!canUseInternetVoiceCall || !internetVoiceConfig.dueFeeEnabled || !internetVoiceConfig.dueFeeTemplateId || !madrasah?.id) {
+      setApprovedDueVoiceTemplate(null);
+      return;
+    }
+    let mounted = true;
+    supabase
+      .from('voice_templates')
+      .select('id, title, admin_status, provider_status')
+      .eq('id', internetVoiceConfig.dueFeeTemplateId)
+      .eq('institution_id', madrasah.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!mounted) return;
+        if (data && (data.admin_status || data.provider_status || 'approved') === 'approved') {
+          setApprovedDueVoiceTemplate(data);
+        } else {
+          setApprovedDueVoiceTemplate(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [madrasah?.id, canUseInternetVoiceCall, internetVoiceConfig.dueFeeEnabled, internetVoiceConfig.dueFeeTemplateId]);
 
   const activeYearId = React.useMemo(() => {
     if (!madrasah?.config_json) return null;
@@ -1120,8 +1164,61 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     {lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}
                  </button>
                )}
+
+               {/* Zero-Cost Due Fee Internet Voice Reminder Button */}
+               {canUseInternetVoiceCall && internetVoiceConfig.dueFeeEnabled && (() => {
+                 const dueCount = feesReport.filter((item: any) => Number(item.balance_due) > 0 && item.student_id).length;
+                 return (
+                   <button
+                     type="button"
+                     onClick={() => {
+                       if (!approvedDueVoiceTemplate) {
+                         setDueVoiceStatus({
+                           type: 'error',
+                           message: lang === 'bn'
+                             ? 'অ্যাকাউন্ট -> অটোমেশন ও পারমিশন থেকে সুপার অ্যাডমিন অনুমোদিত একটি ভয়েস টেমপ্লেট নির্বাচন করুন।'
+                             : 'Please select a Super Admin approved voice template in Account -> Automation & Permissions.',
+                         });
+                         return;
+                       }
+                       if (dueCount === 0) {
+                         setDueVoiceStatus({
+                           type: 'error',
+                           message: lang === 'bn' ? 'বর্তমান তালিকায় কোনো বকেয়া শিক্ষার্থী পাওয়া যায়নি।' : 'No students with due balance found.',
+                         });
+                         return;
+                       }
+                       setShowDueVoiceConfirmModal(true);
+                     }}
+                     disabled={loading || sendingDueVoice}
+                     title={approvedDueVoiceTemplate ? approvedDueVoiceTemplate.title : (lang === 'bn' ? 'ভয়েস টেমপ্লেট নির্বাচন করুন' : 'Select approved voice template')}
+                     className={`h-11 px-4 rounded-xl text-[11px] font-black flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 ${
+                       !approvedDueVoiceTemplate || dueCount === 0
+                         ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600 shadow-none')
+                         : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-indigo-500/20 hover:from-indigo-700 hover:to-blue-700'
+                     }`}
+                   >
+                     {sendingDueVoice ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}
+                     <span>{lang === 'bn' ? `বকেয়াদারদের ফ্রি ইন্টারনেট ভয়েস কল (${dueCount})` : `Due Fee Voice Call (${dueCount})`}</span>
+                   </button>
+                 );
+               })()}
             </div>
          </div>
+
+         {dueVoiceStatus && (
+            <div className={`p-4 border rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm mb-4 ${
+              dueVoiceStatus.type === 'success'
+                ? (madrasah.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-800')
+                : (madrasah.theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600')
+            }`}>
+               <div className={`${dueVoiceStatus.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white p-2 rounded-xl shrink-0`}>
+                  {dueVoiceStatus.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+               </div>
+               <div className="flex-1 font-noto">{dueVoiceStatus.message}</div>
+               <button type="button" onClick={() => setDueVoiceStatus(null)} className={`p-1.5 rounded-lg border active:scale-95 ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600'}`}><X size={14}/></button>
+            </div>
+         )}
 
          {actionError && (
             <div className={`p-4 border rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm mb-4 ${madrasah.theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
@@ -1647,6 +1744,77 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
               paymentDetails={thermalReceiptData.paymentDetails}
             />
          )}
+
+         {/* Due Fee Internet Voice Reminder Confirm Modal */}
+         {showDueVoiceConfirmModal && approvedDueVoiceTemplate && (() => {
+           const dueStudents = feesReport.filter((item: any) => Number(item.balance_due) > 0 && item.student_id);
+           const dueIds = Array.from(new Set(dueStudents.map((item: any) => item.student_id)));
+           return (
+             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+               <div className={`w-full max-w-md p-6 rounded-[2rem] border shadow-2xl space-y-5 ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-900'}`}>
+                 <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                   <PhoneCall size={22} />
+                 </div>
+                 <div className="space-y-1.5">
+                   <h3 className="text-lg font-black font-noto">
+                     {lang === 'bn' ? 'বকেয়াদারদের ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)' : 'Free Due Fee Internet Voice Reminder'}
+                   </h3>
+                   <p className="text-xs text-slate-500 dark:text-slate-400 font-noto leading-relaxed">
+                     {lang === 'bn'
+                       ? `বর্তমান তালিকার ${dueIds.length} জন বকেয়া শিক্ষার্থীর অভিভাবকের প্যারেন্ট পোর্টাল অ্যাপে "${approvedDueVoiceTemplate.title}" ভয়েস বার্তাটি বিনামূল্যে (০ টাকা) পাঠানো হবে।`
+                       : `Send "${approvedDueVoiceTemplate.title}" voice alert to guardians of ${dueIds.length} due students at zero cost.`}
+                   </p>
+                 </div>
+                 <div className="flex items-center gap-3 pt-1">
+                   <button
+                     type="button"
+                     onClick={() => setShowDueVoiceConfirmModal(false)}
+                     disabled={sendingDueVoice}
+                     className={`flex-1 py-3 rounded-xl font-black text-xs border ${madrasah.theme === 'dark' ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'}`}
+                   >
+                     {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                   </button>
+                   <button
+                     type="button"
+                     disabled={sendingDueVoice}
+                     onClick={async () => {
+                       setSendingDueVoice(true);
+                       try {
+                         const resJson = await sendInternetVoiceBroadcast({
+                           institutionId: madrasah.id,
+                           voiceTemplateId: approvedDueVoiceTemplate.id,
+                           studentIds: dueIds,
+                           title: lang === 'bn' ? 'বকেয়া ফি রিমাইন্ডার ভয়েস কল' : 'Due Fee Reminder Voice Call',
+                           body: lang === 'bn'
+                             ? `${madrasah.name} থেকে বকেয়া ফি পরিশোধের জন্য একটি জরুরি ভয়েস রিমাইন্ডার এসেছে।`
+                             : `Fee due reminder voice alert from ${madrasah.name}.`,
+                         });
+                         setDueVoiceStatus({
+                           type: 'success',
+                           message: lang === 'bn'
+                             ? `মোট ${resJson.total_targets} জন বকেয়া শিক্ষার্থীর অভিভাবককে ফ্রি ইন্টারনেট ভয়েস কল পাঠানো হয়েছে (${resJson.pushed_devices_count}টি ডিভাইসে পুশ)। খরচ: ০ টাকা।`
+                             : `Sent to ${resJson.total_targets} due students (${resJson.pushed_devices_count} devices pushed, 0 BDT cost).`,
+                         });
+                       } catch (err: any) {
+                         setDueVoiceStatus({
+                           type: 'error',
+                           message: err?.message || 'ভয়েস কল পাঠানো যায়নি।',
+                         });
+                       } finally {
+                         setSendingDueVoice(false);
+                         setShowDueVoiceConfirmModal(false);
+                       }
+                     }}
+                     className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 disabled:opacity-60"
+                   >
+                     {sendingDueVoice ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}
+                     <span>{lang === 'bn' ? 'এখনই পাঠান (০ টাকা)' : 'Send Now (0 BDT)'}</span>
+                   </button>
+                 </div>
+               </div>
+             </div>
+           );
+         })()}
       </div>
     );
   }

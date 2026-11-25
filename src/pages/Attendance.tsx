@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy, Copy, Laptop, Cpu, Upload, HardDrive } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy, Copy, Laptop, Cpu, Upload, HardDrive, Wifi, PhoneCall } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate, getTodayDateString, getTodayMonthString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -19,6 +19,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SmartDatePicker } from '../components/common/SmartDatePicker';
 import { CompactMonthPicker } from '../components/finance/CompactMonthPicker';
+import {
+  hasInternetVoicePermission,
+  getInternetVoiceFeatureConfig,
+  sendInternetVoiceBroadcast,
+} from '../utils/internetVoiceCall';
 
 interface AttendanceProps {
   lang: Language;
@@ -619,8 +624,30 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [showSmsTemplateDropdown, setShowSmsTemplateDropdown] = useState(false);
   const [showVoiceTemplateDropdown, setShowVoiceTemplateDropdown] = useState(false);
   const [sendingVoiceAlerts, setSendingVoiceAlerts] = useState(false);
+  const [sendingInternetVoiceAlerts, setSendingInternetVoiceAlerts] = useState(false);
   const [walletBalance, setWalletBalance] = useState(madrasah?.balance || 0);
   const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.45);
+
+  const canUseInternetVoiceCall = useMemo(
+    () => hasInternetVoicePermission(madrasah, Boolean((madrasah as any)?.is_super_admin)),
+    [madrasah]
+  );
+
+  const internetVoiceConfig = useMemo(
+    () => getInternetVoiceFeatureConfig(madrasah),
+    [madrasah]
+  );
+
+  const approvedAttendanceInternetVoice = useMemo(() => {
+    if (!internetVoiceConfig.attendanceTemplateId) return null;
+    return (
+      voiceTemplates.find(
+        (v) =>
+          v.id === internetVoiceConfig.attendanceTemplateId &&
+          (v.admin_status || v.provider_status || 'approved') === 'approved'
+      ) || null
+    );
+  }, [voiceTemplates, internetVoiceConfig.attendanceTemplateId]);
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
@@ -1662,6 +1689,22 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
       }
 
+      // Auto-send Zero-Cost Internet Voice Call for Absent students if enabled + auto_send is ON
+      if (
+        isOnline &&
+        canUseInternetVoiceCall &&
+        internetVoiceConfig.attendanceEnabled &&
+        internetVoiceConfig.attendanceAutoSend &&
+        approvedAttendanceInternetVoice
+      ) {
+        const autoAbsentees = students.filter(s => attendance[s.id] === 'absent');
+        if (autoAbsentees.length > 0) {
+          sendAbsentInternetVoiceAlerts(autoAbsentees, true).catch((ivErr) =>
+            console.warn('[Attendance] Auto internet voice alert notice:', ivErr)
+          );
+        }
+      }
+
       setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
       setSuccessMessage(lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.');
       setShowSuccessModal(true);
@@ -1924,6 +1967,113 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           setSendingVoiceAlerts(false);
         }
       }
+    });
+    setShowConfirmModal(true);
+  };
+
+  const sendAbsentInternetVoiceAlerts = async (customAbsents?: any[], skipConfirm: boolean = false) => {
+    if (!madrasah || !canUseInternetVoiceCall || !internetVoiceConfig.attendanceEnabled) return;
+
+    if (!approvedAttendanceInternetVoice) {
+      if (!skipConfirm) {
+        setErrorTitle(lang === 'bn' ? 'অনুমোদিত ভয়েস প্রয়োজন' : 'Approved Voice Required');
+        setErrorDetails(
+          lang === 'bn'
+            ? 'অ্যাকাউন্ট -> অটোমেশন ও পারমিশন থেকে সুপার অ্যাডমিন অনুমোদিত একটি ভয়েস টেমপ্লেট নির্বাচন করুন।'
+            : 'Please select a Super Admin approved voice template in Account -> Automation & Permissions.'
+        );
+        setShowErrorModal(true);
+      }
+      return;
+    }
+
+    const absents = customAbsents || students.filter(s => attendance[s.id] === 'absent');
+    if (absents.length === 0) {
+      if (!skipConfirm) {
+        setErrorTitle(lang === 'bn' ? 'শিক্ষার্থী নির্বাচন করুন' : 'No Selection');
+        setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত শিক্ষার্থী পাওয়া যায়নি!' : 'No absent students found!');
+        setShowErrorModal(true);
+      }
+      return;
+    }
+
+    const studentIds = Array.from(
+      new Set(absents.map((s) => s.student_id || s.id).filter(Boolean))
+    );
+    const targetPhones = Array.from(
+      new Set(
+        absents
+          .map((s) => {
+            const digits = String(s.guardian_phone || '').replace(/[^0-9]/g, '');
+            if (digits.length === 11 && digits.startsWith('01')) return digits;
+            if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+            if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+            return '';
+          })
+          .filter((p) => p.length === 11)
+      )
+    );
+
+    if (studentIds.length === 0 && targetPhones.length === 0) {
+      if (!skipConfirm) {
+        setErrorTitle(lang === 'bn' ? 'প্রাপক পাওয়া যায়নি' : 'No Targets');
+        setErrorDetails(lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থীদের কোনো অভিভাবক নম্বর পাওয়া যায়নি।' : 'No guardian contacts found for absent students.');
+        setShowErrorModal(true);
+      }
+      return;
+    }
+
+    const executeSend = async () => {
+      setSendingInternetVoiceAlerts(true);
+      try {
+        const resJson = await sendInternetVoiceBroadcast({
+          institutionId: madrasah.id,
+          voiceTemplateId: approvedAttendanceInternetVoice.id,
+          studentIds,
+          targetPhones,
+          title: lang === 'bn' ? 'অনুপস্থিতি ফ্রি ইন্টারনেট ভয়েস কল' : 'Absence Internet Voice Call',
+          body:
+            lang === 'bn'
+              ? `${madrasah.name} থেকে আজকের অনুপস্থিতি সংক্রান্ত ভয়েস বার্তা এসেছে। রিসিভ করে শুনুন।`
+              : `Absence voice alert from ${madrasah.name}.`,
+        });
+        if (!skipConfirm) {
+          setSuccessTitle(lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল সফল!' : 'Internet Voice Call Sent!');
+          setSuccessMessage(
+            lang === 'bn'
+              ? `মোট ${resJson.total_targets} জন অনুপস্থিত শিক্ষার্থীর অভিভাবককে ফ্রি ইন্টারনেট ভয়েস কল পাঠানো হয়েছে (${resJson.pushed_devices_count}টি ডিভাইসে রিয়েল-টাইম পুশ)। খরচ: ০ টাকা।`
+              : `Sent to ${resJson.total_targets} absent guardians (${resJson.pushed_devices_count} devices pushed, 0 BDT cost).`
+          );
+          setShowSuccessModal(true);
+        }
+      } catch (err: any) {
+        if (!skipConfirm) {
+          setErrorTitle(lang === 'bn' ? 'ইন্টারনেট ভয়েস কল ব্যর্থ' : 'Internet Voice Call Failed');
+          setErrorDetails(err?.message || 'Unknown error');
+          setShowErrorModal(true);
+        }
+      } finally {
+        setSendingInternetVoiceAlerts(false);
+      }
+    };
+
+    if (skipConfirm) {
+      await executeSend();
+      return;
+    }
+
+    setConfirmData({
+      title: lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)' : 'Free Internet Voice Call (0 BDT)',
+      message:
+        lang === 'bn'
+          ? `${absents.length} জন অনুপস্থিত শিক্ষার্থীর অভিভাবককে "${approvedAttendanceInternetVoice.title}" ভয়েস বার্তাটি ফ্রি ইন্টারনেট কলের মাধ্যমে পাঠাতে চান? (খরচ: ০ টাকা)`
+          : `Send free internet voice alert "${approvedAttendanceInternetVoice.title}" to ${absents.length} absent students' guardians? (Cost: 0 BDT)`,
+      icon: 'voice',
+      color: 'emerald',
+      action: async () => {
+        setShowConfirmModal(false);
+        await executeSend();
+      },
     });
     setShowConfirmModal(true);
   };
@@ -2538,6 +2688,55 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Zero-Cost Internet Voice Call for Absentees */}
+                                {canUseInternetVoiceCall && internetVoiceConfig.attendanceEnabled && (
+                                    <div className="pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (!isOnline) {
+                                                    setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                                                    setErrorDetails(lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল পাঠাতে ইন্টারনেট প্রয়োজন।' : 'Internet connection required.');
+                                                    setShowErrorModal(true);
+                                                    return;
+                                                }
+                                                sendAbsentInternetVoiceAlerts();
+                                            }}
+                                            disabled={sendingInternetVoiceAlerts || !isOnline || !approvedAttendanceInternetVoice}
+                                            className={`w-full h-14 px-4 font-black rounded-2xl flex items-center justify-center gap-2.5 text-xs sm:text-[13px] active:scale-95 transition-all border shadow-sm ${
+                                                !isOnline || !approvedAttendanceInternetVoice
+                                                    ? 'bg-slate-200/70 dark:bg-slate-800/60 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border-emerald-500 shadow-emerald-500/20'
+                                            }`}
+                                        >
+                                            {sendingInternetVoiceAlerts ? (
+                                                <Loader2 className="animate-spin" size={18} />
+                                            ) : (
+                                                <>
+                                                    <Wifi size={18} />
+                                                    <span>
+                                                        {lang === 'bn'
+                                                            ? 'অনুপস্থিতদের ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)'
+                                                            : 'Absent Free Internet Voice Call (0 BDT)'}
+                                                    </span>
+                                                    {approvedAttendanceInternetVoice && (
+                                                        <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold truncate max-w-[140px]">
+                                                            {approvedAttendanceInternetVoice.title}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
+                                        </button>
+                                        {!approvedAttendanceInternetVoice && (
+                                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1 px-2">
+                                                {lang === 'bn'
+                                                    ? '* অ্যাকাউন্ট -> অটোমেশন ও পারমিশন থেকে অনুমোদিত ভয়েস নির্বাচন করুন'
+                                                    : '* Configure an approved voice in Account -> Automation & Permissions'}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -2875,6 +3074,64 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                   )}
                               </div>
                           </div>
+
+                          {/* Zero-Cost Internet Voice Call for Daily Absentees */}
+                          {canUseInternetVoiceCall && internetVoiceConfig.attendanceEnabled && (
+                              <div className="pt-2">
+                                  <button
+                                      type="button"
+                                      onClick={() => {
+                                          if (!isOnline) {
+                                              setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                                              setErrorDetails(lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল পাঠাতে ইন্টারনেট প্রয়োজন।' : 'Internet connection required.');
+                                              setShowErrorModal(true);
+                                              return;
+                                          }
+                                          const mappedAbsents = onlyAbsents
+                                              .map(a => ({
+                                                  ...(a.students || {}),
+                                                  id: a.student_id || a.id || a.students?.id,
+                                                  student_name: a.student_name || a.students?.student_name || 'শিক্ষার্থী',
+                                                  guardian_phone: a.guardian_phone || a.students?.guardian_phone || '',
+                                                  roll: a.roll || a.students?.roll || ''
+                                              }))
+                                              .filter(s => s.id || (s.guardian_phone && s.guardian_phone.trim() !== ''));
+                                          sendAbsentInternetVoiceAlerts(mappedAbsents);
+                                      }}
+                                      disabled={sendingInternetVoiceAlerts || !isOnline || !approvedAttendanceInternetVoice}
+                                      className={`w-full h-14 px-4 font-black rounded-2xl flex items-center justify-center gap-2.5 text-xs sm:text-[13px] active:scale-95 transition-all border shadow-sm ${
+                                          !isOnline || !approvedAttendanceInternetVoice
+                                              ? 'bg-slate-200/70 dark:bg-slate-800/60 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed'
+                                              : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border-emerald-500 shadow-emerald-500/20'
+                                      }`}
+                                  >
+                                      {sendingInternetVoiceAlerts ? (
+                                          <Loader2 className="animate-spin" size={18} />
+                                      ) : (
+                                          <>
+                                              <Wifi size={18} />
+                                              <span>
+                                                  {lang === 'bn'
+                                                      ? 'অনুপস্থিতদের ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)'
+                                                      : 'Absent Free Internet Voice Call (0 BDT)'}
+                                              </span>
+                                              {approvedAttendanceInternetVoice && (
+                                                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold truncate max-w-[140px]">
+                                                      {approvedAttendanceInternetVoice.title}
+                                                  </span>
+                                              )}
+                                          </>
+                                      )}
+                                  </button>
+                                  {!approvedAttendanceInternetVoice && (
+                                      <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1 px-2">
+                                          {lang === 'bn'
+                                              ? '* অ্যাকাউন্ট -> অটোমেশন ও পারমিশন থেকে অনুমোদিত ভয়েস নির্বাচন করুন'
+                                              : '* Configure an approved voice in Account -> Automation & Permissions'}
+                                      </p>
+                                  )}
+                              </div>
+                          )}
                       </div>
                    </div>
                  )}

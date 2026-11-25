@@ -109,8 +109,14 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Listen for Service Worker incoming call actions & cross-tab events
   useEffect(() => {
     // Check if there is an active incoming call already in memory or localStorage
+    const isBulkVoice = (id?: string, payload?: any) =>
+      String(id || payload?.callId || payload?.call_id || '').trim().startsWith('ivc_') ||
+      payload?.type === 'auto_voice_alert' ||
+      payload?.call_mode === 'internet_voice_broadcast' ||
+      (Boolean(payload?.audio_url) && payload?.type !== 'incoming_call');
+
     const existingCall = voiceCallService.getActiveCall();
-    if (existingCall && callStatus === 'idle') {
+    if (existingCall && !isBulkVoice(existingCall.callId, existingCall) && callStatus === 'idle') {
       setActiveCall(existingCall);
       setCallStatus('incoming');
     }
@@ -118,7 +124,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       const bc = new BroadcastChannel('deenora_call_events');
       bc.onmessage = (event) => {
-        if (event.data?.type === 'INCOMING_CALL' && event.data.payload) {
+        if (event.data?.type === 'INCOMING_CALL' && event.data.payload && !isBulkVoice(event.data.payload.callId, event.data.payload)) {
           setActiveCall(event.data.payload);
           setIsCaller(false);
           setCallStatus('incoming');
@@ -136,6 +142,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const handleSwMessage = async (event: MessageEvent) => {
       if (!event.data) return;
+      if (event.data.type === 'AUTO_VOICE_ALERT' || String(event.data.callId || event.data.call_id || '').startsWith('ivc_')) {
+        return;
+      }
       if (event.data.type === 'ACCEPT_CALL_FROM_NOTIFICATION') {
         console.log('[CallContext] Received ACCEPT_CALL_FROM_NOTIFICATION from SW');
         native('stopRinging');
@@ -165,6 +174,14 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleAction = async (action: string, callId?: string) => {
       console.log(`Deenora: handleNativeCallAction ${action} for ${callId}`);
       const cleanAction = String(action || '').toLowerCase().trim();
+      if (
+        cleanAction === 'auto_voice_alert' ||
+        cleanAction === 'internet_voice_broadcast' ||
+        String(callId || '').trim().startsWith('ivc_')
+      ) {
+        console.log('[CallContext] Ignoring bulk internet voice alert in 1-to-1 handleAction:', { cleanAction, callId });
+        return;
+      }
 
       if (cleanAction === 'accept_call' || cleanAction === 'answer' || cleanAction === 'accept') {
         native('stopRinging');
@@ -228,6 +245,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         (window as any).handleNativeCallAction = (act: string, cId?: string) => {
           console.log(`Deenora: handleNativeCallAction ${act} for ${cId}`);
           const a = String(act || '').toLowerCase().trim();
+          if (a === 'auto_voice_alert' || a === 'internet_voice_broadcast' || String(cId || '').trim().startsWith('ivc_')) {
+            return false;
+          }
           if (a === 'answer' || a === 'accept' || a === 'accept_call') {
             setIsCaller(false);
             return voiceCallService.answerIncomingCall(cId);
@@ -266,6 +286,16 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     let action = params.get('action') || params.get('call_action');
+    const urlType = params.get('type');
+    if (
+      action === 'auto_voice_alert' ||
+      action === 'internet_voice_broadcast' ||
+      urlType === 'auto_voice_alert' ||
+      String(targetCallId || '').trim().startsWith('ivc_')
+    ) {
+      handledUrlRef.current = search;
+      return;
+    }
 
     if (!action) {
       if (answerVal === '1') {

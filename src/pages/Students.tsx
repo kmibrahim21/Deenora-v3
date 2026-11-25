@@ -958,7 +958,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                     {isLiveChatEnabled && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleVoiceCall(student); }} 
-                        title={lang === 'bn' ? 'অ্যাপ ভয়েস কল (গার্ডিয়ান অ্যাপে সরাসরি কথা বলুন)' : 'Direct In-App Voice Call to Guardian'}
+                        title={lang === 'bn' ? '১-টু-১ ডিরেক্ট অ্যাপ কল (অভিভাবকের সাথে সরাসরি কথা বলুন)' : '1-to-1 Direct App Call'}
                         className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-200 active:scale-90 transition-all hover:scale-105 hover:shadow-indigo-400 group"
                       >
                         <Mic size={14} className="group-hover:scale-110 transition-transform" />

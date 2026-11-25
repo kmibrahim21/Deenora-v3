@@ -177,11 +177,23 @@ export class VoiceCallService {
     return this.isCaller;
   }
 
+  private isBulkInternetVoiceAlert(callId?: string | null, payload?: any): boolean {
+    const cleanId = String(callId || payload?.call_id || payload?.callId || '').trim();
+    if (cleanId.startsWith('ivc_')) return true;
+    if (payload?.type === 'auto_voice_alert' || payload?.call_mode === 'internet_voice_broadcast') return true;
+    if (Boolean(payload?.audio_url) && payload?.type !== 'incoming_call') return true;
+    return false;
+  }
+
   /**
    * Trigger the web's answer flow — show call UI and connect WebRTC
    */
   public async answerIncomingCall(callId?: string): Promise<boolean> {
     console.log(`Deenora: answerIncomingCall for ${callId}`);
+    if (this.isBulkInternetVoiceAlert(callId)) {
+      console.log('[VoiceCall] Ignoring bulk internet voice alert in 1-to-1 answerIncomingCall:', callId);
+      return false;
+    }
 
     // EXPLICIT: Set role to 'callee' (not caller) for guardian answering
     this.isCaller = false;
@@ -260,6 +272,11 @@ export class VoiceCallService {
     const targetCallId = String(callId || '').trim();
     console.log(`Deenora: showIncomingCallUI for ${targetCallId || 'unspecified call'}`);
 
+    if (this.isBulkInternetVoiceAlert(targetCallId)) {
+      console.log('[VoiceCall] Ignoring bulk internet voice alert in 1-to-1 showIncomingCallUI:', targetCallId);
+      return false;
+    }
+
     // 1. Immediately subscribe to the dedicated call room and request offer re-send from caller
     if (targetCallId) {
       this.subscribeCallRoom(targetCallId);
@@ -328,6 +345,13 @@ export class VoiceCallService {
           const data = await res.json();
           if (data?.success && data?.payload) {
             const bp = data.payload;
+            if (this.isBulkInternetVoiceAlert(targetCallId, bp)) {
+              console.log('[VoiceCall] Payload is auto_voice_alert, routing to overlay instead of 1-to-1 modal:', targetCallId);
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('deenora:auto-voice-alert', { detail: bp }));
+              }
+              return false;
+            }
             payload = {
               callId: bp.callId || bp.call_id || targetCallId,
               institutionId: bp.institutionId || bp.institution_id || this.currentInstitutionId || '',
@@ -456,6 +480,11 @@ export class VoiceCallService {
   public async handleNativeAction(action: string, callId?: string): Promise<boolean> {
     const act = String(action || '').toLowerCase().trim();
     console.log('[VoiceCall] handleNativeAction invoked:', { action: act, callId });
+
+    if (act === 'auto_voice_alert' || act === 'internet_voice_broadcast' || this.isBulkInternetVoiceAlert(callId)) {
+      console.log('[VoiceCall] Skipping 1-to-1 handleNativeAction for bulk internet voice alert:', { action: act, callId });
+      return false;
+    }
 
     if (act === 'answer' || act === 'accept' || act === 'accept_call') {
       return await this.answerIncomingCall(callId);
@@ -730,7 +759,7 @@ export class VoiceCallService {
       const stored = localStorage.getItem('deenora_active_call_payload');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && Date.now() - (parsed.timestamp || 0) < 60000) {
+        if (parsed && !this.isBulkInternetVoiceAlert(parsed.callId, parsed) && Date.now() - (parsed.timestamp || 0) < 60000) {
           return parsed;
         }
       }
@@ -2160,6 +2189,9 @@ export class VoiceCallService {
    * Handle incoming call offer on Callee (Guardian / Teacher)
    */
   private async handleIncomingOffer(payload: CallPayload) {
+    if (this.isBulkInternetVoiceAlert(payload?.callId, payload)) {
+      return;
+    }
     // 1. Ignore if current user is the caller or we initiated this call
     if (this.isCaller || String(this.currentUserId) === String(payload.caller?.id)) {
       console.log('[VoiceCall] Incoming offer ignored: Current user is caller/initiator', {
@@ -3142,22 +3174,31 @@ if (typeof window !== 'undefined') {
   // Auto-detect ?answer=1&call_id=xxx or ?action=incoming_call on page load (fresh start case)
   try {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('answer') === '1') {
-      const targetCallId = params.get('call_id') || '__ANY__';
-      console.log('[VoiceCall] Page load detected ?answer=1 for call_id:', targetCallId);
-      voiceCallService.setPendingAutoAnswer(targetCallId);
-      if (targetCallId && targetCallId !== '__ANY__') {
-        voiceCallService.subscribeCallRoom(targetCallId);
-        voiceCallService.requestOffer(targetCallId);
+    const urlAction = params.get('action');
+    const urlType = params.get('type');
+    const urlCallId = params.get('call_id') || '';
+    const isBulkInternetVoice =
+      urlAction === 'auto_voice_alert' ||
+      urlType === 'auto_voice_alert' ||
+      urlCallId.startsWith('ivc_');
+
+    if (!isBulkInternetVoice) {
+      if (params.get('answer') === '1') {
+        const targetCallId = urlCallId || '__ANY__';
+        console.log('[VoiceCall] Page load detected ?answer=1 for call_id:', targetCallId);
+        voiceCallService.setPendingAutoAnswer(targetCallId);
+        if (targetCallId && targetCallId !== '__ANY__') {
+          voiceCallService.subscribeCallRoom(targetCallId);
+          voiceCallService.requestOffer(targetCallId);
+        }
+      } else if (
+        urlAction === 'incoming_call' ||
+        urlAction === 'incoming' ||
+        (params.get('fcm_tap') === '1' && urlCallId && params.get('answer') !== '1')
+      ) {
+        console.log('[VoiceCall] Page load detected incoming call from URL / notification tap:', urlCallId);
+        voiceCallService.showIncomingCallUI(urlCallId);
       }
-    } else if (
-      params.get('action') === 'incoming_call' ||
-      params.get('action') === 'incoming' ||
-      (params.get('fcm_tap') === '1' && params.get('call_id') && params.get('answer') !== '1')
-    ) {
-      const targetCallId = params.get('call_id') || '';
-      console.log('[VoiceCall] Page load detected incoming call from URL / notification tap:', targetCallId);
-      voiceCallService.showIncomingCallUI(targetCallId);
     }
   } catch {}
 }

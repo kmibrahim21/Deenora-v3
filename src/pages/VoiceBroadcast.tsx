@@ -51,6 +51,7 @@ import PaymentCheckout from '../components/PaymentCheckout';
 import { requestManager } from 'services/RequestManager';
 import { isValidUUID } from 'utils/validation';
 import { globalAudioPlayer } from '../utils/audioPlayer';
+import { normalizeVoiceAudioUrl } from '../utils/internetVoiceCall';
 
 interface VoiceBroadcastProps {
   lang: Language;
@@ -313,6 +314,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [allStudentsForBroadcast, setAllStudentsForBroadcast] = useState<Array<{ id: string; student_name: string; roll?: any; class_id?: string; guardian_phone?: string; guardian_phone_2?: string }>>([]);
   const [internetCallTitle, setInternetCallTitle] = useState<string>('');
   const [internetCallBody, setInternetCallBody] = useState<string>('');
+  const [historySubTab, setHistorySubTab] = useState<'internet_voice' | 'direct_voice'>('internet_voice');
   const [internetVoiceHistory, setInternetVoiceHistory] = useState<Array<{
     call_id: string;
     institution_id: string;
@@ -320,6 +322,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     institution_name: string;
     audio_url: string;
     created_at: string;
+    notification_ids?: string[];
     total_sent: number;
     received_count: number;
     pending_count: number;
@@ -327,15 +330,26 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }>>([]);
   const [isFetchingInternetHistory, setIsFetchingInternetHistory] = useState(false);
   const [expandedInternetCallId, setExpandedInternetCallId] = useState<string | null>(null);
+  const [internetHistoryDeleteConfirm, setInternetHistoryDeleteConfirm] = useState<{
+    call_id: string;
+    institution_id: string;
+    title: string;
+    notification_ids?: string[];
+  } | null>(null);
+  const [isDeletingInternetHistory, setIsDeletingInternetHistory] = useState(false);
 
   const fetchInternetVoiceHistory = async () => {
-    if (!canUseInternetVoiceCall || !madrasah?.id) return;
+    if (!canUseInternetVoiceCall) return;
+    if (!isSuperAdmin && (!madrasah?.id || !isValidUUID(madrasah.id))) return;
     setIsFetchingInternetHistory(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
+      const instQuery = madrasah?.id && isValidUUID(madrasah.id)
+        ? `&institution_id=${encodeURIComponent(madrasah.id)}`
+        : '';
       const res = await fetch(
-        `/api/call?action=get_internet_voice_history&institution_id=${encodeURIComponent(madrasah.id)}`,
+        `/api/call?action=get_internet_voice_history${instQuery}`,
         {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
@@ -355,11 +369,65 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
+  const confirmDeleteInternetHistory = async () => {
+    if (!internetHistoryDeleteConfirm) return;
+    setIsDeletingInternetHistory(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error(lang === 'bn' ? 'সেশন পাওয়া যায়নি। পুনরায় লগইন করুন।' : 'Session not found. Please log in again.');
+      }
+
+      const res = await fetch('/api/call?action=delete_internet_voice_history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          call_id: internetHistoryDeleteConfirm.call_id,
+          institution_id: internetHistoryDeleteConfirm.institution_id || madrasah?.id || '',
+          notification_ids: internetHistoryDeleteConfirm.notification_ids || [],
+        }),
+      });
+      const resJson = await res.json().catch(() => ({}));
+      if (!res.ok || !resJson.success) {
+        throw new Error(resJson.error || (lang === 'bn' ? 'ইতিহাস মুছে ফেলা যায়নি।' : 'Failed to delete call history.'));
+      }
+
+      const removedCallId = internetHistoryDeleteConfirm.call_id;
+      setInternetVoiceHistory((prev) => prev.filter((item) => item.call_id !== removedCallId));
+      if (expandedInternetCallId === removedCallId) {
+        setExpandedInternetCallId(null);
+      }
+      setInternetHistoryDeleteConfirm(null);
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'সফলভাবে মুছে ফেলা হয়েছে' : 'Deleted Successfully',
+        message: lang === 'bn' ? 'ইন্টারনেট ভয়েস কল ইতিহাস তালিকা থেকে মুছে দেওয়া হয়েছে।' : 'Internet voice call history removed successfully.',
+      });
+    } catch (err: any) {
+      console.error('Delete internet voice history error:', err);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'মুছে ফেলা ব্যর্থ' : 'Delete Failed',
+        message: err?.message || 'Failed to delete internet voice call history.',
+      });
+    } finally {
+      setIsDeletingInternetHistory(false);
+    }
+  };
+
   useEffect(() => {
     if (!canUseInternetVoiceCall && broadcastMode === 'internet_voice') {
       setBroadcastMode('gsm_voice');
     }
-  }, [canUseInternetVoiceCall, broadcastMode]);
+    if (!canUseInternetVoiceCall && historySubTab === 'internet_voice') {
+      setHistorySubTab('direct_voice');
+    }
+  }, [canUseInternetVoiceCall, broadcastMode, historySubTab]);
 
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
@@ -740,14 +808,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         fetchClasses();
         fetchTeachers();
         fetchAllStudentsForBroadcast();
-        if (canUseInternetVoiceCall) {
-          fetchInternetVoiceHistory();
-        }
       } 
       fetchVoices(); 
       fetchSenders(); 
     }
     if (activeTab === 'history') {
+      if (madrasah && isValidUUID(madrasah.id)) {
+        fetchAllStudentsForBroadcast();
+      }
       fetchHistory();
       fetchVoices();
       fetchSenders();
@@ -756,7 +824,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       fetchSystemSettings();
       fetchUserTransactions();
     }
-  }, [activeTab, madrasah?.id, madrasah?.balance, madrasah?.sms_balance, dataVersion, canUseInternetVoiceCall]);
+  }, [activeTab, madrasah?.id, madrasah?.balance, madrasah?.sms_balance, dataVersion]);
+
+  useEffect(() => {
+    if (activeTab === 'history' && historySubTab === 'internet_voice' && canUseInternetVoiceCall) {
+      fetchInternetVoiceHistory();
+    }
+  }, [activeTab, historySubTab, madrasah?.id, canUseInternetVoiceCall, dataVersion]);
 
   const fetchSystemSettings = async () => {
     const { data } = await supabase.from('system_settings').select('bkash_number, nagad_number, voice_rate').single();
@@ -1919,7 +1993,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       });
       setInternetCallTitle('');
       setInternetCallBody('');
-      fetchInternetVoiceHistory();
     } catch (err: any) {
       setStatusModal({
         show: true,
@@ -3207,127 +3280,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                 </div>
               </div>
             </div>
-
-            {canUseInternetVoiceCall && broadcastMode === 'internet_voice' && (
-              <div className="bg-white/95 backdrop-blur-md rounded-[2.2rem] p-5 sm:p-7 border border-emerald-200/80 shadow-bubble space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                      <History size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-sm sm:text-base font-black text-slate-900 font-noto">
-                        {lang === 'bn' ? 'ইন্টারনেট ভয়েস কল ইতিহাস' : 'Internet Voice Call History'}
-                      </h3>
-                      <p className="text-[11px] font-bold text-slate-500 font-noto">
-                        {lang === 'bn' ? 'কে কে কল রিসিভ করেছে এবং কতজন অপেক্ষমান তা দেখুন' : 'Track guardian receipt status for zero-cost calls'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={fetchInternetVoiceHistory}
-                    disabled={isFetchingInternetHistory}
-                    className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-black font-noto flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                  >
-                    <RefreshCw size={14} className={isFetchingInternetHistory ? 'animate-spin' : ''} />
-                    <span>{lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}</span>
-                  </button>
-                </div>
-
-                {isFetchingInternetHistory && internetVoiceHistory.length === 0 ? (
-                  <div className="py-8 flex items-center justify-center gap-2 text-slate-400 text-xs font-bold font-noto">
-                    <Loader2 size={18} className="animate-spin text-emerald-600" />
-                    <span>{lang === 'bn' ? 'কল ইতিহাস লোড হচ্ছে...' : 'Loading call history...'}</span>
-                  </div>
-                ) : internetVoiceHistory.length === 0 ? (
-                  <div className="py-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70">
-                    <p className="text-xs font-bold text-slate-500 font-noto">
-                      {lang === 'bn' ? 'এখনো কোনো ইন্টারনেট ভয়েস কল পাঠানো হয়নি।' : 'No internet voice calls sent yet.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {internetVoiceHistory.map((item) => {
-                      const isExpanded = expandedInternetCallId === item.call_id;
-                      return (
-                        <div key={item.call_id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h4 className="text-sm font-black text-slate-900 font-noto truncate">{item.title}</h4>
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black font-noto">
-                                  ০ টাকা
-                                </span>
-                              </div>
-                              <p className="text-[11px] font-bold text-slate-500 font-noto">
-                                {item.created_at ? new Date(item.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US') : ''}
-                              </p>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => setExpandedInternetCallId(isExpanded ? null : item.call_id)}
-                              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-[11px] font-black text-slate-700 font-noto flex items-center gap-1 cursor-pointer transition-all"
-                            >
-                              <Users size={13} className="text-emerald-600" />
-                              <span>{isExpanded ? (lang === 'bn' ? 'বন্ধ করুন' : 'Hide') : (lang === 'bn' ? 'প্রাপক তালিকা' : 'Recipients')}</span>
-                              <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="rounded-xl bg-white border border-slate-200 px-3 py-2 text-center">
-                              <p className="text-[10px] font-bold text-slate-500 font-noto">{lang === 'bn' ? 'মোট পাঠানো' : 'Total Sent'}</p>
-                              <p className="text-sm font-black text-slate-900">{item.total_sent}</p>
-                            </div>
-                            <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-center">
-                              <p className="text-[10px] font-bold text-emerald-700 font-noto">{lang === 'bn' ? 'রিসিভ করেছে' : 'Received'}</p>
-                              <p className="text-sm font-black text-emerald-800">{item.received_count}</p>
-                            </div>
-                            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-center">
-                              <p className="text-[10px] font-bold text-amber-700 font-noto">{lang === 'bn' ? 'অপেক্ষমান' : 'Pending'}</p>
-                              <p className="text-sm font-black text-amber-800">{item.pending_count}</p>
-                            </div>
-                          </div>
-
-                          {isExpanded && item.recipients && item.recipients.length > 0 && (
-                            <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-                              {item.recipients.map((rec, idx) => {
-                                const stMatch = rec.student_id
-                                  ? allStudentsForBroadcast.find((s) => s.id === rec.student_id)
-                                  : undefined;
-                                return (
-                                  <div key={`${rec.student_id || ''}_${rec.guardian_phone || idx}`} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                                    <div className="min-w-0">
-                                      <p className="font-bold text-slate-800 font-noto truncate">
-                                        {stMatch?.student_name || rec.guardian_phone || (lang === 'bn' ? 'অভিভাবক' : 'Guardian')}
-                                      </p>
-                                      {rec.guardian_phone && (
-                                        <p className="text-[10px] font-mono text-slate-500">{rec.guardian_phone}</p>
-                                      )}
-                                    </div>
-                                    {rec.received ? (
-                                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black font-noto shrink-0">
-                                        রিসিভ করেছে ✓
-                                      </span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black font-noto shrink-0">
-                                        অপেক্ষমান
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -3584,14 +3536,242 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
         {activeTab === 'history' && (
           <div className="space-y-4 animate-in slide-in-from-bottom-5">
-            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3 flex items-center gap-2">
-               <History size={12} /> {t('history', lang)}
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {loading ? (
-                <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" size={32} /></div>
-              ) : broadcastHistory.length > 0 ? (
-                broadcastHistory.map(h => (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
+                <History size={12} /> {t('history', lang)}
+              </h2>
+            </div>
+
+            {canUseInternetVoiceCall && (
+              <div className="grid grid-cols-2 gap-2.5 bg-slate-100/90 p-1.5 rounded-[1.8rem] border border-slate-200/80 max-w-xl">
+                <button
+                  type="button"
+                  onClick={() => setHistorySubTab('internet_voice')}
+                  className={`py-3 px-4 rounded-[1.4rem] text-xs sm:text-sm font-black font-noto flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    historySubTab === 'internet_voice'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  }`}
+                >
+                  <Wifi size={15} className="shrink-0" />
+                  <span>{lang === 'bn' ? 'ইন্টারনেট ভয়েস কল' : 'Internet Voice Call'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistorySubTab('direct_voice')}
+                  className={`py-3 px-4 rounded-[1.4rem] text-xs sm:text-sm font-black font-noto flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    historySubTab === 'direct_voice'
+                      ? 'bg-[#2563EB] text-white shadow-md shadow-blue-600/20'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  }`}
+                >
+                  <PhoneCall size={15} className="shrink-0" />
+                  <span>{lang === 'bn' ? 'ডিরেক্ট ভয়েস কল' : 'Direct Voice Call'}</span>
+                </button>
+              </div>
+            )}
+
+            {historySubTab === 'internet_voice' && canUseInternetVoiceCall && (
+              <div className="bg-white/95 backdrop-blur-md rounded-[2.2rem] p-5 sm:p-7 border border-emerald-200/80 shadow-bubble space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Wifi size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-slate-900 font-noto">
+                        {lang === 'bn' ? 'ইন্টারনেট ভয়েস কল ইতিহাস' : 'Internet Voice Call History'}
+                      </h3>
+                      <p className="text-[11px] font-bold text-slate-500 font-noto">
+                        {lang === 'bn' ? 'কে কে কল রিসিভ/শোনা হয়েছে এবং পাঠানো অবস্থা দেখুন' : 'Track guardian receipt status, audio playback, and records'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchInternetVoiceHistory}
+                    disabled={isFetchingInternetHistory}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-black font-noto flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <RefreshCw size={14} className={isFetchingInternetHistory ? 'animate-spin' : ''} />
+                    <span>{lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}</span>
+                  </button>
+                </div>
+
+                {isFetchingInternetHistory && internetVoiceHistory.length === 0 ? (
+                  <div className="py-12 flex items-center justify-center gap-2 text-slate-400 text-xs font-bold font-noto">
+                    <Loader2 size={20} className="animate-spin text-emerald-600" />
+                    <span>{lang === 'bn' ? 'কল ইতিহাস লোড হচ্ছে...' : 'Loading call history...'}</span>
+                  </div>
+                ) : internetVoiceHistory.length === 0 ? (
+                  <div className="py-16 text-center rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50/70">
+                    <Wifi className="w-9 h-9 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-500 font-noto">
+                      {lang === 'bn' ? 'এখনো কোনো ইন্টারনেট ভয়েস কল পাঠানো হয়নি।' : 'No internet voice calls sent yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {internetVoiceHistory.map((item) => {
+                      const isExpanded = expandedInternetCallId === item.call_id;
+                      const normalizedAudioUrl = normalizeVoiceAudioUrl(item.audio_url);
+                      const resolveRecipientLabel = (rec: { guardian_phone: string; student_id: string | null }) => {
+                        const cleanLast10 = String(rec.guardian_phone || '').replace(/\D/g, '').slice(-10);
+                        const stMatch =
+                          (rec.student_id ? allStudentsForBroadcast.find((s) => s.id === rec.student_id) : undefined) ||
+                          (cleanLast10
+                            ? allStudentsForBroadcast.find(
+                                (s) =>
+                                  String(s.guardian_phone || '').replace(/\D/g, '').slice(-10) === cleanLast10 ||
+                                  String(s.guardian_phone_2 || '').replace(/\D/g, '').slice(-10) === cleanLast10
+                              )
+                            : undefined);
+                        if (stMatch?.student_name) {
+                          return stMatch.roll ? `${stMatch.student_name} (${lang === 'bn' ? 'রোল' : 'Roll'}: ${stMatch.roll})` : stMatch.student_name;
+                        }
+                        return rec.guardian_phone || (lang === 'bn' ? 'অভিভাবক' : 'Guardian');
+                      };
+                      const previewRecipients = (item.recipients || []).slice(0, 2).map(resolveRecipientLabel);
+                      const remainingRecipientsCount = Math.max(0, (item.recipients?.length || 0) - previewRecipients.length);
+                      const isAllReceived = item.total_sent > 0 && item.received_count >= item.total_sent;
+                      const hasAnyReceived = item.received_count > 0;
+
+                      return (
+                        <div key={item.call_id} className="rounded-[1.8rem] border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-3.5 shadow-sm">
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm sm:text-[15px] font-black text-slate-900 font-noto break-words">{item.title}</h4>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black font-noto">
+                                  ০ টাকা
+                                </span>
+                                {isAllReceived ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black font-noto flex items-center gap-1">
+                                    <CheckCircle2 size={11} />
+                                    <span>{lang === 'bn' ? 'রিসিভড / শোনা হয়েছে' : 'Received / Listened'}</span>
+                                  </span>
+                                ) : hasAnyReceived ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-200 text-[10px] font-black font-noto">
+                                    {lang === 'bn' ? `রিসিভড (${item.received_count}/${item.total_sent})` : `Received (${item.received_count}/${item.total_sent})`}
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-black font-noto">
+                                    {lang === 'bn' ? 'পাঠানো হয়েছে' : 'Sent'}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] font-bold text-slate-500 font-noto flex items-center gap-1.5">
+                                <Clock size={12} className="text-slate-400 shrink-0" />
+                                <span>{item.created_at ? new Date(item.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US') : ''}</span>
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setInternetHistoryDeleteConfirm({
+                                  call_id: item.call_id,
+                                  institution_id: item.institution_id,
+                                  title: item.title,
+                                  notification_ids: item.notification_ids,
+                                })
+                              }
+                              className="w-9 h-9 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 flex items-center justify-center shrink-0 transition-all active:scale-95 cursor-pointer"
+                              title={lang === 'bn' ? 'রেকর্ড মুছে ফেলুন' : 'Delete Record'}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+
+                          <div className="rounded-xl bg-white border border-slate-200/90 px-3 py-2.5 space-y-1">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 font-noto">
+                              {lang === 'bn' ? 'শিক্ষার্থী / প্রাপক' : 'Student / Recipient'}
+                            </p>
+                            <p className="text-xs font-bold text-slate-800 font-noto break-words">
+                              {previewRecipients.length > 0
+                                ? `${previewRecipients.join(', ')}${remainingRecipientsCount > 0 ? (lang === 'bn' ? ` এবং আরও ${remainingRecipientsCount} জন` : ` +${remainingRecipientsCount} more`) : ''}`
+                                : (lang === 'bn' ? 'প্রাপক তথ্য নেই' : 'No recipient info')}
+                            </p>
+                          </div>
+
+                          {normalizedAudioUrl && (
+                            <div className="rounded-xl bg-white border border-slate-200/90 p-2.5 space-y-1.5">
+                              <p className="text-[10px] font-black text-slate-500 font-noto flex items-center gap-1.5 px-1">
+                                <Volume2 size={12} className="text-emerald-600" />
+                                <span>{lang === 'bn' ? 'ভয়েস অডিও প্লেয়ার' : 'Voice Audio Player'}</span>
+                              </p>
+                              <audio controls preload="none" src={normalizedAudioUrl} className="w-full h-9" />
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-white border border-slate-200 px-3 py-2 text-center">
+                              <p className="text-[10px] font-bold text-slate-500 font-noto">{lang === 'bn' ? 'মোট পাঠানো' : 'Total Sent'}</p>
+                              <p className="text-sm font-black text-slate-900">{item.total_sent}</p>
+                            </div>
+                            <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-center">
+                              <p className="text-[10px] font-bold text-emerald-700 font-noto">{lang === 'bn' ? 'রিসিভ করেছে' : 'Received'}</p>
+                              <p className="text-sm font-black text-emerald-800">{item.received_count}</p>
+                            </div>
+                            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-center">
+                              <p className="text-[10px] font-bold text-amber-700 font-noto">{lang === 'bn' ? 'অপেক্ষমান' : 'Pending'}</p>
+                              <p className="text-sm font-black text-amber-800">{item.pending_count}</p>
+                            </div>
+                          </div>
+
+                          {item.recipients && item.recipients.length > 0 && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedInternetCallId(isExpanded ? null : item.call_id)}
+                                className="w-full px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-[11px] font-black text-slate-700 font-noto flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                              >
+                                <Users size={13} className="text-emerald-600" />
+                                <span>{isExpanded ? (lang === 'bn' ? 'প্রাপক তালিকা বন্ধ করুন' : 'Hide Recipients') : (lang === 'bn' ? `বিস্তারিত প্রাপক তালিকা (${item.recipients.length})` : `View Recipients (${item.recipients.length})`)}</span>
+                                <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+
+                              {isExpanded && (
+                                <div className="mt-2.5 max-h-60 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                                  {item.recipients.map((rec, idx) => (
+                                    <div key={`${rec.student_id || ''}_${rec.guardian_phone || idx}`} className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs">
+                                      <div className="min-w-0">
+                                        <p className="font-bold text-slate-800 font-noto truncate">
+                                          {resolveRecipientLabel(rec)}
+                                        </p>
+                                        {rec.guardian_phone && (
+                                          <p className="text-[10px] font-mono text-slate-500">{rec.guardian_phone}</p>
+                                        )}
+                                      </div>
+                                      {rec.received ? (
+                                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black font-noto shrink-0">
+                                          {lang === 'bn' ? 'রিসিভড / শোনা হয়েছে ✓' : 'Received ✓'}
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-black font-noto shrink-0">
+                                          {lang === 'bn' ? 'পাঠানো হয়েছে' : 'Sent'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {historySubTab === 'direct_voice' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                {loading ? (
+                  <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" size={32} /></div>
+                ) : broadcastHistory.length > 0 ? (
+                  broadcastHistory.map(h => (
                   <div key={h.id} className="bg-white rounded-[2.2rem] border border-slate-100 shadow-bubble overflow-hidden transition-all">
                     <div className="p-5 cursor-pointer" onClick={() => handleExpandHistory(h)}>
                       <div className="flex justify-between items-start mb-4">
@@ -3941,7 +4121,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                    <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">{t('no_history', lang)}</p>
                 </div>
               )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -4242,6 +4423,43 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   onClick={() => setHistoryDeleteConfirm(null)} 
                   disabled={isDeleting}
                   className="w-full py-4 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest"
+                >
+                  {t('cancel', lang)}
+                </button>
+             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {internetHistoryDeleteConfirm && createPortal(
+        <div className="modal-overlay bg-[#080A12]/40 backdrop-blur-2xl animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-[0_40px_100px_rgba(239,68,68,0.2)] border border-red-50 text-center space-y-6 animate-in zoom-in-95 duration-500">
+             <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-inner border border-red-100">
+                <AlertTriangle size={40} />
+             </div>
+             <div>
+                <h3 className="text-xl font-black text-slate-800 font-noto">{t('confirm_delete', lang)}</h3>
+                <p className="text-xs font-bold text-slate-500 mt-2 px-3 leading-relaxed font-noto">
+                  {lang === 'bn'
+                    ? `"${internetHistoryDeleteConfirm.title}" ইন্টারনেট ভয়েস কল রেকর্ডটি কি স্থায়ীভাবে মুছে ফেলতে চান?`
+                    : `Are you sure you want to delete "${internetHistoryDeleteConfirm.title}" from Internet Voice Call history?`}
+                </p>
+             </div>
+             <div className="flex flex-col gap-3 pt-2">
+                <button 
+                  onClick={confirmDeleteInternetHistory} 
+                  disabled={isDeletingInternetHistory} 
+                  className="w-full py-5 bg-red-500 text-white font-black rounded-full shadow-xl shadow-red-100 active:scale-95 transition-all flex items-center justify-center text-md gap-3 cursor-pointer"
+                >
+                  {isDeletingInternetHistory ? <Loader2 className="animate-spin" size={22} /> : (
+                    <><Trash2 size={20} /> {t('delete', lang)}</>
+                  )}
+                </button>
+                <button 
+                  onClick={() => setInternetHistoryDeleteConfirm(null)} 
+                  disabled={isDeletingInternetHistory}
+                  className="w-full py-4 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest cursor-pointer"
                 >
                   {t('cancel', lang)}
                 </button>

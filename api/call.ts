@@ -1931,6 +1931,138 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // 4e. INSTITUTION ADMIN / SUPERADMIN DELETE SPECIFIC INTERNET VOICE CALL HISTORY RECORD
+  if (req.method === 'POST' && action === 'delete_internet_voice_history') {
+    try {
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return res.status(500).json({ success: false, error: 'Server configuration error' });
+      }
+
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+      }
+      const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (!bearerToken || bearerToken === 'undefined' || bearerToken === 'null') {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+      }
+
+      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${bearerToken}` },
+      });
+      if (!userRes.ok) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired token' });
+      }
+      const authUser = await userRes.json();
+      const userId = authUser?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: User not found' });
+      }
+
+      const sbHeaders = {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      };
+      const sbGet = async (path: string): Promise<any[]> => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders });
+          if (!r.ok) return [];
+          const j = await r.json();
+          return Array.isArray(j) ? j : [];
+        } catch {
+          return [];
+        }
+      };
+
+      const profiles = await sbGet(`profiles?select=id,institution_id,role,permissions&id=eq.${encodeURIComponent(userId)}&limit=1`);
+      const callerProfile = profiles[0];
+      if (!callerProfile) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Profile not found' });
+      }
+
+      const isSuperAdmin = callerProfile.role === 'super_admin' || callerProfile.role === 'manager';
+      let parsedPermissions: any = callerProfile.permissions || {};
+      if (typeof parsedPermissions === 'string') {
+        try { parsedPermissions = JSON.parse(parsedPermissions); } catch { parsedPermissions = {}; }
+      }
+      const isAllowedInstitutionRole =
+        callerProfile.role === 'madrasah_admin' ||
+        callerProfile.role === 'accountant' ||
+        (callerProfile.role === 'teacher' && Boolean(parsedPermissions?.can_use_voice_call || parsedPermissions?.voice_dashboard));
+
+      if (!isSuperAdmin && !isAllowedInstitutionRole) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions' });
+      }
+
+      const isUuid = (s: any) =>
+        typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+      const { call_id, institution_id, notification_ids } = req.body || {};
+      const requestedInstId = String(institution_id || '').trim();
+      if (requestedInstId && !isUuid(requestedInstId)) {
+        return res.status(400).json({ success: false, error: 'Invalid institution_id' });
+      }
+
+      const effectiveInstId = requestedInstId || (!isSuperAdmin ? callerProfile.institution_id : '');
+      if (!isSuperAdmin) {
+        if (!effectiveInstId) {
+          return res.status(403).json({ success: false, error: 'Forbidden: Institution access required' });
+        }
+        if (callerProfile.institution_id !== effectiveInstId) {
+          const instCheck = await sbGet(`institutions?select=id,config_json&id=eq.${encodeURIComponent(effectiveInstId)}&limit=1`);
+          let cfgObj: any = instCheck[0]?.config_json || {};
+          if (typeof cfgObj === 'string') {
+            try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; }
+          }
+          if (cfgObj?.parent_institution_id !== callerProfile.institution_id) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Access denied for this institution' });
+          }
+        }
+      }
+
+      const cleanCallId = String(call_id || '').trim();
+      const validIds = Array.isArray(notification_ids)
+        ? notification_ids.map((v: any) => String(v || '').trim()).filter((v: string) => isUuid(v)).slice(0, 500)
+        : [];
+
+      let deleteQuery = '';
+      if (cleanCallId && /^ivc_[0-9]+_[a-f0-9]+$/i.test(cleanCallId)) {
+        deleteQuery = `type=eq.auto_voice_alert&message=ilike.*${encodeURIComponent(cleanCallId)}*`;
+      } else if (validIds.length > 0) {
+        deleteQuery = `type=eq.auto_voice_alert&id=in.(${validIds.join(',')})`;
+      } else {
+        return res.status(400).json({ success: false, error: 'Valid call_id or notification_ids required' });
+      }
+
+      if (effectiveInstId) {
+        deleteQuery += `&institution_id=eq.${encodeURIComponent(effectiveInstId)}`;
+      }
+
+      const delRes = await fetch(`${SUPABASE_URL}/rest/v1/app_notifications?${deleteQuery}`, {
+        method: 'DELETE',
+        headers: {
+          ...sbHeaders,
+          Prefer: 'return=representation',
+        },
+      });
+
+      if (!delRes.ok) {
+        const errTxt = await delRes.text().catch(() => '');
+        return res.status(500).json({ success: false, error: errTxt || 'Failed to delete internet voice call history' });
+      }
+
+      const deletedRows = await delRes.json().catch(() => []);
+      return res.status(200).json({
+        success: true,
+        deleted_count: Array.isArray(deletedRows) ? deletedRows.length : 0,
+      });
+    } catch (err: any) {
+      console.error('[Call API] delete_internet_voice_history error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+    }
+  }
+
   // 5. GET CALL PAYLOAD FOR KILLED-STATE NOTIFICATION TAP
   if (action === 'get_call_payload' || (req.query && req.query.action === 'get_call_payload')) {
     const targetCallId = String(req.body?.call_id || req.query?.call_id || '').trim();
@@ -2119,6 +2251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           institution_name: string;
           audio_url: string;
           created_at: string;
+          notification_ids: string[];
           recipientMap: Map<string, { guardian_phone: string; student_id: string | null; received: boolean }>;
         }
 
@@ -2147,11 +2280,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               institution_name: String(parsed?.institution_name || 'প্রতিষ্ঠান'),
               audio_url: normalizeVoiceAudioUrl(parsed?.audio_url || ''),
               created_at: row.created_at,
+              notification_ids: [],
               recipientMap: new Map(),
             };
             grouped.set(callId, bucket);
           }
 
+          if (row.id) {
+            bucket.notification_ids.push(String(row.id));
+          }
           if (row.created_at && new Date(row.created_at).getTime() > new Date(bucket.created_at).getTime()) {
             bucket.created_at = row.created_at;
           }
@@ -2187,6 +2324,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               institution_name: item.institution_name,
               audio_url: item.audio_url,
               created_at: item.created_at,
+              notification_ids: item.notification_ids,
               total_sent,
               received_count,
               pending_count: Math.max(0, total_sent - received_count),

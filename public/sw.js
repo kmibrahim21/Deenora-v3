@@ -83,7 +83,42 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  // Check if incoming voice call push
+  // Bulk Internet Voice Alert (Zero-Cost Broadcast) — strictly separated from 1-to-1 incoming_call
+  if (
+    data.type === 'auto_voice_alert' ||
+    data.call_mode === 'internet_voice_broadcast' ||
+    String(data.call_id || data.callId || '').startsWith('ivc_')
+  ) {
+    const callId = data.call_id || data.callId || '';
+    const alertUrl = data.click_action || data.url || `/parent-portal?action=auto_voice_alert&call_id=${encodeURIComponent(callId)}`;
+    const options = {
+      body: data.body || 'প্রতিষ্ঠান থেকে একটি ভয়েস বার্তা এসেছে। শুনতে ট্যাপ করুন।',
+      icon: data.icon || '/Deenora192.png',
+      badge: '/Deenora192.png',
+      tag: `auto-voice-alert-${callId || Date.now()}`,
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [400, 200, 400],
+      data: {
+        type: 'auto_voice_alert',
+        call_id: callId,
+        audio_url: data.audio_url || '',
+        title: data.title || 'জরুরি ভয়েস বার্তা',
+        body: data.body || '',
+        institution_name: data.institution_name || '',
+        url: alertUrl
+      },
+      actions: [
+        { action: 'open_voice_alert', title: '🔊 শুনুন' }
+      ]
+    };
+    event.waitUntil(
+      self.registration.showNotification(data.title || 'প্রতিষ্ঠান থেকে ভয়েস বার্তা', options)
+    );
+    return;
+  }
+
+  // Check if 1-to-1 incoming voice call push
   if (data.type === 'incoming_call' || data.tag === 'incoming-voice-call' || (data.title && data.title.includes('ইনকামিং'))) {
     event.waitUntil(showCallNotification(data));
     return;
@@ -117,6 +152,30 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // 0. Bulk Internet Voice Alert click -> open Parent Portal voice overlay (never 1-to-1 WebRTC)
+      if (notifData.type === 'auto_voice_alert') {
+        for (const client of windowClients) {
+          if (client.url.includes(self.location.origin)) {
+            if ('focus' in client) {
+              client.focus();
+            }
+            client.postMessage({
+              type: 'AUTO_VOICE_ALERT',
+              call_id: notifData.call_id,
+              audio_url: notifData.audio_url,
+              title: notifData.title,
+              body: notifData.body,
+              institution_name: notifData.institution_name,
+            });
+            return;
+          }
+        }
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+        return;
+      }
+
       // 1. If user clicked "❌ কেটে দিন"
       if (action === 'decline') {
         dismissCallNotification();

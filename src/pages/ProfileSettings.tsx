@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ChevronLeft, 
   Edit3, 
@@ -32,7 +32,12 @@ import {
   Printer,
   Moon,
   Sun,
-  Sliders
+  Sliders,
+  Mic,
+  Square,
+  PhoneCall,
+  Wifi,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
@@ -40,6 +45,11 @@ import { Institution, Language } from '../types';
 import { requestManager } from '../services/RequestManager';
 import { NotificationService, DEFAULT_NOTIFICATION_SETTINGS } from '../services/NotificationService';
 import { packStudentNotesWithExtra } from '../utils/studentExtraFields';
+import {
+  hasInternetVoicePermission,
+  getInternetVoiceFeatureConfig,
+  uploadInternetVoiceTemplate,
+} from '../utils/internetVoiceCall';
 
 interface Props {
   madrasah: Institution | null;
@@ -77,6 +87,28 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
   const [featureDeleteClass, setFeatureDeleteClass] = useState((madrasah?.config_json as any)?.features?.delete_class ?? false);
   const [featureDeleteAccounting, setFeatureDeleteAccounting] = useState((madrasah?.config_json as any)?.features?.delete_accounting ?? false);
+
+  // Zero-Cost Internet Voice Call Automation & Permission states
+  const initialVoiceConfig = getInternetVoiceFeatureConfig(madrasah);
+  const [featureInternetVoiceAttendance, setFeatureInternetVoiceAttendance] = useState<boolean>(initialVoiceConfig.attendanceEnabled);
+  const [featureInternetVoiceAttendanceAutoSend, setFeatureInternetVoiceAttendanceAutoSend] = useState<boolean>(initialVoiceConfig.attendanceAutoSend);
+  const [featureInternetVoiceAttendanceTemplateId, setFeatureInternetVoiceAttendanceTemplateId] = useState<string>(initialVoiceConfig.attendanceTemplateId);
+  const [featureInternetVoiceDueFee, setFeatureInternetVoiceDueFee] = useState<boolean>(initialVoiceConfig.dueFeeEnabled);
+  const [featureInternetVoiceDueFeeTemplateId, setFeatureInternetVoiceDueFeeTemplateId] = useState<string>(initialVoiceConfig.dueFeeTemplateId);
+
+  const [voiceTemplatesList, setVoiceTemplatesList] = useState<any[]>([]);
+  const [loadingVoiceTemplates, setLoadingVoiceTemplates] = useState(false);
+  const [activeVoiceRecorderTarget, setActiveVoiceRecorderTarget] = useState<'attendance' | 'due_fee' | null>(null);
+  const [customVoiceTitle, setCustomVoiceTitle] = useState('');
+  const [customVoiceFile, setCustomVoiceFile] = useState<File | null>(null);
+  const [customVoiceDuration, setCustomVoiceDuration] = useState(0);
+  const [isRecordingCustomVoice, setIsRecordingCustomVoice] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isUploadingCustomVoice, setIsUploadingCustomVoice] = useState(false);
+  const customMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const customAudioChunksRef = useRef<Blob[]>([]);
+  const customRecordTimerRef = useRef<any>(null);
+  const customRecordStreamRef = useRef<MediaStream | null>(null);
 
   // Smartphone App Push Notification Configuration states
   const [notifSettingsLoaded, setNotifSettingsLoaded] = useState(false);
@@ -199,6 +231,214 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       alert('টেস্ট পুশ নোটিফিকেশন পাঠানো যায়নি: ' + err.message);
     } finally {
       setTestingNotifPush(false);
+    }
+  };
+
+  const canConfigureInternetVoice = useMemo(
+    () => hasInternetVoicePermission(madrasah, Boolean((madrasah as any)?.is_super_admin)),
+    [madrasah]
+  );
+
+  const approvedVoiceTemplates = useMemo(
+    () => voiceTemplatesList.filter((v) => (v.admin_status || v.provider_status || 'approved') === 'approved'),
+    [voiceTemplatesList]
+  );
+
+  const pendingVoiceTemplates = useMemo(
+    () => voiceTemplatesList.filter((v) => v.admin_status === 'pending'),
+    [voiceTemplatesList]
+  );
+
+  const customVoicePreviewUrl = useMemo(() => {
+    if (!customVoiceFile) return null;
+    return URL.createObjectURL(customVoiceFile);
+  }, [customVoiceFile]);
+
+  useEffect(() => {
+    return () => {
+      if (customVoicePreviewUrl) {
+        URL.revokeObjectURL(customVoicePreviewUrl);
+      }
+    };
+  }, [customVoicePreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (customRecordTimerRef.current) clearInterval(customRecordTimerRef.current);
+      if (customRecordStreamRef.current) {
+        customRecordStreamRef.current.getTracks().forEach((tr) => tr.stop());
+      }
+    };
+  }, []);
+
+  const fetchInstitutionVoiceTemplates = async () => {
+    if (!madrasah?.id) return;
+    setLoadingVoiceTemplates(true);
+    try {
+      const { data, error } = await supabase
+        .from('voice_templates')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        setVoiceTemplatesList(data);
+      } else {
+        const res = await fetch(`/api/awaj?action=templates&institution_id=${encodeURIComponent(madrasah.id)}`);
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          if (Array.isArray(json?.templates)) {
+            setVoiceTemplatesList(json.templates);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching voice templates in ProfileSettings:', err);
+    } finally {
+      setLoadingVoiceTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (madrasah?.id && isAutomationMode) {
+      fetchInstitutionVoiceTemplates();
+    }
+  }, [madrasah?.id, isAutomationMode]);
+
+  const openInlineVoiceRecorder = (target: 'attendance' | 'due_fee') => {
+    if (activeVoiceRecorderTarget === target) {
+      setActiveVoiceRecorderTarget(null);
+      return;
+    }
+    setActiveVoiceRecorderTarget(target);
+    setCustomVoiceTitle(
+      target === 'attendance'
+        ? (lang === 'bn' ? 'অনুপস্থিতি ফ্রি ইন্টারনেট ভয়েস' : 'Attendance Absence Voice')
+        : (lang === 'bn' ? 'বকেয়া ফি রিমাইন্ডার ভয়েস' : 'Due Fee Reminder Voice')
+    );
+    setCustomVoiceFile(null);
+    setCustomVoiceDuration(0);
+    setRecordingSeconds(0);
+  };
+
+  const startCustomVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      customRecordStreamRef.current = stream;
+      let recorderOptions: MediaRecorderOptions | undefined;
+      let recordedMimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus')) {
+          recorderOptions = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 24000 };
+          recordedMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported?.('audio/webm')) {
+          recorderOptions = { mimeType: 'audio/webm', audioBitsPerSecond: 24000 };
+        } else {
+          recorderOptions = { audioBitsPerSecond: 24000 };
+        }
+      }
+      const mediaRecorder = recorderOptions ? new MediaRecorder(stream, recorderOptions) : new MediaRecorder(stream);
+      customMediaRecorderRef.current = mediaRecorder;
+      customAudioChunksRef.current = [];
+      let secondsElapsed = 0;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          customAudioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blobType = mediaRecorder.mimeType || recordedMimeType || 'audio/webm';
+        const audioBlob = new Blob(customAudioChunksRef.current, { type: blobType });
+        const recordedFile = new File([audioBlob], `internet_voice_${Date.now()}.webm`, { type: blobType });
+        setCustomVoiceFile(recordedFile);
+        setCustomVoiceDuration(secondsElapsed);
+        stream.getTracks().forEach((tr) => tr.stop());
+        customRecordStreamRef.current = null;
+      };
+
+      mediaRecorder.start(200);
+      setIsRecordingCustomVoice(true);
+      setRecordingSeconds(0);
+      if (customRecordTimerRef.current) clearInterval(customRecordTimerRef.current);
+      customRecordTimerRef.current = setInterval(() => {
+        secondsElapsed += 1;
+        setRecordingSeconds(secondsElapsed);
+      }, 1000);
+    } catch {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'মাইক্রোফোন সমস্যা' : 'Microphone Error',
+        message: lang === 'bn' ? 'মাইক্রোফোন অনুমতি পাওয়া যায়নি। ব্রাউজার সেটিংস থেকে অনুমতি দিন।' : 'Microphone permission denied.',
+      });
+    }
+  };
+
+  const stopCustomVoiceRecording = () => {
+    if (customMediaRecorderRef.current && isRecordingCustomVoice) {
+      customMediaRecorderRef.current.stop();
+      setIsRecordingCustomVoice(false);
+      if (customRecordTimerRef.current) {
+        clearInterval(customRecordTimerRef.current);
+        customRecordTimerRef.current = null;
+      }
+    }
+  };
+
+  const handleUploadCustomInternetVoice = async () => {
+    if (!madrasah?.id || !activeVoiceRecorderTarget) return;
+    if (!customVoiceTitle.trim() || !customVoiceFile) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'তথ্য অসম্পূর্ণ' : 'Missing Details',
+        message: lang === 'bn' ? 'অনুগ্রহ করে ভয়েসের শিরোনাম দিন এবং অডিও রেকর্ড বা ফাইল নির্বাচন করুন।' : 'Please enter a title and record or choose an audio file.',
+      });
+      return;
+    }
+    setIsUploadingCustomVoice(true);
+    try {
+      const created = await uploadInternetVoiceTemplate({
+        institutionId: madrasah.id,
+        title: customVoiceTitle.trim(),
+        file: customVoiceFile,
+        duration: customVoiceDuration,
+        isSuperAdmin: Boolean((madrasah as any)?.is_super_admin),
+      });
+      setVoiceTemplatesList((prev) => [created, ...prev.filter((v) => v.id !== created.id)]);
+      if (created?.admin_status === 'approved') {
+        if (activeVoiceRecorderTarget === 'attendance') {
+          setFeatureInternetVoiceAttendanceTemplateId(created.id);
+        } else {
+          setFeatureInternetVoiceDueFeeTemplateId(created.id);
+        }
+      }
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'ভয়েস আপলোড সফল!' : 'Voice Uploaded!',
+        message:
+          created?.admin_status === 'approved'
+            ? (lang === 'bn' ? 'ভয়েস টেমপ্লেটটি সংরক্ষিত ও স্বয়ংক্রিয়ভাবে নির্বাচিত হয়েছে।' : 'Voice saved and selected.')
+            : (lang === 'bn'
+                ? 'কাস্টম ইন্টারনেট ভয়েস আপলোড হয়েছে এবং সুপার অ্যাডমিন অনুমোদনের জন্য পাঠানো হয়েছে। অনুমোদনের পর এটি ড্রপডাউনে ব্যবহারযোগ্য হবে।'
+                : 'Custom voice uploaded and submitted for Super Admin approval.'),
+      });
+      setCustomVoiceTitle('');
+      setCustomVoiceFile(null);
+      setCustomVoiceDuration(0);
+      setRecordingSeconds(0);
+      setActiveVoiceRecorderTarget(null);
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'আপলোড ব্যর্থ' : 'Upload Failed',
+        message: err?.message || 'ভয়েস আপলোড করা যায়নি।',
+      });
+    } finally {
+      setIsUploadingCustomVoice(false);
     }
   };
 
@@ -628,6 +868,12 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
 
     setFeatureDeleteClass(feats.delete_class ?? false);
     setFeatureDeleteAccounting(feats.delete_accounting ?? false);
+
+    setFeatureInternetVoiceAttendance(feats.internet_voice_attendance_enabled ?? false);
+    setFeatureInternetVoiceAttendanceAutoSend(feats.internet_voice_attendance_auto_send ?? false);
+    setFeatureInternetVoiceAttendanceTemplateId(String(feats.internet_voice_attendance_template_id || ''));
+    setFeatureInternetVoiceDueFee(feats.internet_voice_due_fee_enabled ?? false);
+    setFeatureInternetVoiceDueFeeTemplateId(String(feats.internet_voice_due_fee_template_id || ''));
   }, [madrasah]);
 
   const handleToggleTheme = async () => {
@@ -687,7 +933,12 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
               teacher_salary_sms: featureTeacherSalarySms,
               teacher_attendance_deduction: featureTeacherDeduction,
               delete_class: featureDeleteClass,
-              delete_accounting: featureDeleteAccounting
+              delete_accounting: featureDeleteAccounting,
+              internet_voice_attendance_enabled: featureInternetVoiceAttendance,
+              internet_voice_attendance_auto_send: featureInternetVoiceAttendanceAutoSend,
+              internet_voice_attendance_template_id: featureInternetVoiceAttendanceTemplateId,
+              internet_voice_due_fee_enabled: featureInternetVoiceDueFee,
+              internet_voice_due_fee_template_id: featureInternetVoiceDueFeeTemplateId,
             }
           }
         : {
@@ -1461,6 +1712,311 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
               </div>
             </motion.div>
           </div>
+
+          {/* Zero-Cost Internet Bulk Voice Call Automation Controls (Attendance & Due Fee) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.14 }}
+            className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'}`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                  <Wifi size={22} />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className={`text-base font-black font-noto tracking-tight ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                      {lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল অটোমেশন ও পারমিশন' : 'Zero-Cost Internet Voice Call Automation'}
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      {lang === 'bn' ? '০ টাকা / ফ্রি' : '0 BDT / Free'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-400 font-noto mt-0.5">
+                    {lang === 'bn'
+                      ? 'হাজিরা অনুপস্থিতি ও বকেয়া ফি রিমাইন্ডারে শুধুমাত্র সুপার অ্যাডমিন অনুমোদিত ভয়েস ব্যবহার করে ফ্রি ইন্টারনেট কল চালু/বন্ধ করুন'
+                      : 'Configure zero-cost internet voice calls for Attendance Absence & Fee Due Reminders'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={fetchInstitutionVoiceTemplates}
+                disabled={loadingVoiceTemplates}
+                className={`px-3.5 py-2 rounded-xl border text-xs font-black font-noto flex items-center gap-1.5 self-start sm:self-auto active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+              >
+                <RefreshCw size={14} className={loadingVoiceTemplates ? 'animate-spin' : ''} />
+                <span>{lang === 'bn' ? 'ভয়েস তালিকা রিফ্রেশ' : 'Refresh Voices'}</span>
+              </button>
+            </div>
+
+            {!canConfigureInternetVoice && (
+              <div className={`p-4 rounded-2xl border flex items-start gap-3 text-xs font-bold font-noto ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                <span>
+                  {lang === 'bn'
+                    ? 'ইন্টারনেট ভয়েস কল পাঠানোর জন্য সুপার অ্যাডমিন প্যানেল থেকে এই প্রতিষ্ঠানের "প্যারেন্ট পোর্টাল" এবং "লাইভ চ্যাট" মডিউল অ্যাক্টিভ থাকতে হবে।'
+                    : 'Parent Portal and Live Chat permissions must be enabled by Super Admin to broadcast zero-cost internet voice calls.'}
+                </span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Control 1: Attendance Absence Internet Voice Call */}
+              <div className={`p-5 rounded-3xl border space-y-4 transition-all ${featureInternetVoiceAttendance ? (isDark ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-emerald-50/40 border-emerald-200') : (isDark ? 'bg-slate-800/40 border-slate-700/60' : 'bg-slate-50/80 border-slate-200/80')}`}>
+                <label className="flex items-start gap-3.5 cursor-pointer">
+                  <div className="relative inline-flex items-center mt-0.5 shrink-0">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={featureInternetVoiceAttendance}
+                      onChange={(e) => setFeatureInternetVoiceAttendance(e.target.checked)}
+                    />
+                    <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-300'} peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner`}></div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-black font-noto ${featureInternetVoiceAttendance ? (isDark ? 'text-emerald-400' : 'text-emerald-800') : (isDark ? 'text-slate-200' : 'text-slate-800')}`}>
+                      {lang === 'bn' ? 'হাজিরা ফ্রি ইন্টারনেট ভয়েস কল (অনুপস্থিতি)' : 'Attendance Free Internet Voice Call (Absence)'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold font-noto mt-0.5">
+                      {lang === 'bn' ? 'হাজিরা পেজে অনুপস্থিত শিক্ষার্থীদের অভিভাবকদের ফ্রি ইন্টারনেট ভয়েস কল বাটন চালু করুন' : 'Enable zero-cost internet voice call alert for absent students in Attendance'}
+                    </p>
+                  </div>
+                </label>
+
+                {featureInternetVoiceAttendance && (
+                  <div className="space-y-3 pt-2 border-t border-emerald-500/15">
+                    <label className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer ${isDark ? 'bg-slate-900/60 border-slate-700 text-slate-300' : 'bg-white border-emerald-100 text-slate-700'}`}>
+                      <input
+                        type="checkbox"
+                        checked={featureInternetVoiceAttendanceAutoSend}
+                        onChange={(e) => setFeatureInternetVoiceAttendanceAutoSend(e.target.checked)}
+                        className="w-4 h-4 rounded accent-emerald-600"
+                      />
+                      <span className="text-xs font-bold font-noto">
+                        {lang === 'bn' ? 'হাজিরা সেভ করার সাথে সাথে অটো ফ্রি ভয়েস কল পাঠান' : 'Auto-send internet voice call when Attendance is saved'}
+                      </span>
+                    </label>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
+                        {lang === 'bn' ? 'সুপার অ্যাডমিন অনুমোদিত ভয়েস টেমপ্লেট নির্বাচন' : 'Select SuperAdmin-Approved Voice Template'}
+                      </label>
+                      <select
+                        value={featureInternetVoiceAttendanceTemplateId}
+                        onChange={(e) => setFeatureInternetVoiceAttendanceTemplateId(e.target.value)}
+                        className={`w-full h-11 px-3.5 rounded-xl border text-xs font-bold font-noto outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                      >
+                        <option value="">
+                          {approvedVoiceTemplates.length === 0
+                            ? (lang === 'bn' ? '-- কোনো অনুমোদিত ভয়েস পাওয়া যায়নি --' : '-- No approved voices found --')
+                            : (lang === 'bn' ? '-- অনুমোদিত ভয়েস নির্বাচন করুন --' : '-- Select approved voice --')}
+                        </option>
+                        {approvedVoiceTemplates.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.title} {v.provider_status === 'internet_only' ? '(ফ্রি ইন্টারনেট)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {pendingVoiceTemplates.length > 0 && (
+                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-noto px-1">
+                          {lang === 'bn'
+                            ? `${pendingVoiceTemplates.length}টি ভয়েস সুপার অ্যাডমিন অনুমোদনের অপেক্ষায় আছে।`
+                            : `${pendingVoiceTemplates.length} voice(s) pending Super Admin approval.`}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openInlineVoiceRecorder('attendance')}
+                      className={`w-full py-2.5 px-3 rounded-xl border text-xs font-black font-noto flex items-center justify-center gap-2 transition-all active:scale-95 ${isDark ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700' : 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}
+                    >
+                      <Mic size={15} />
+                      <span>
+                        {activeVoiceRecorderTarget === 'attendance'
+                          ? (lang === 'bn' ? 'রেকর্ডার বন্ধ করুন' : 'Close Recorder')
+                          : (lang === 'bn' ? 'কাস্টম ভয়েস রেকর্ড / আপলোড করুন (অনুমোদনের জন্য)' : 'Record / Upload Custom Voice (For Approval)')}
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Control 2: Due Fee Reminder Internet Voice Call */}
+              <div className={`p-5 rounded-3xl border space-y-4 transition-all ${featureInternetVoiceDueFee ? (isDark ? 'bg-indigo-500/5 border-indigo-500/30' : 'bg-indigo-50/40 border-indigo-200') : (isDark ? 'bg-slate-800/40 border-slate-700/60' : 'bg-slate-50/80 border-slate-200/80')}`}>
+                <label className="flex items-start gap-3.5 cursor-pointer">
+                  <div className="relative inline-flex items-center mt-0.5 shrink-0">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={featureInternetVoiceDueFee}
+                      onChange={(e) => setFeatureInternetVoiceDueFee(e.target.checked)}
+                    />
+                    <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-300'} peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner`}></div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-black font-noto ${featureInternetVoiceDueFee ? (isDark ? 'text-indigo-400' : 'text-indigo-800') : (isDark ? 'text-slate-200' : 'text-slate-800')}`}>
+                      {lang === 'bn' ? 'বকেয়া ফি রিমাইন্ডার ফ্রি ইন্টারনেট ভয়েস কল' : 'Due Fee Reminder Free Internet Voice Call'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold font-noto mt-0.5">
+                      {lang === 'bn' ? 'হিসাব / ফি পেজে বকেয়া থাকা অভিভাবকদের ফ্রি ইন্টারনেট ভয়েস রিমাইন্ডার বাটন চালু করুন' : 'Enable zero-cost internet voice due fee reminder button in Fee Collection'}
+                    </p>
+                  </div>
+                </label>
+
+                {featureInternetVoiceDueFee && (
+                  <div className="space-y-3 pt-2 border-t border-indigo-500/15">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
+                        {lang === 'bn' ? 'সুপার অ্যাডমিন অনুমোদিত ভয়েস টেমপ্লেট নির্বাচন' : 'Select SuperAdmin-Approved Voice Template'}
+                      </label>
+                      <select
+                        value={featureInternetVoiceDueFeeTemplateId}
+                        onChange={(e) => setFeatureInternetVoiceDueFeeTemplateId(e.target.value)}
+                        className={`w-full h-11 px-3.5 rounded-xl border text-xs font-bold font-noto outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                      >
+                        <option value="">
+                          {approvedVoiceTemplates.length === 0
+                            ? (lang === 'bn' ? '-- কোনো অনুমোদিত ভয়েস পাওয়া যায়নি --' : '-- No approved voices found --')
+                            : (lang === 'bn' ? '-- অনুমোদিত ভয়েস নির্বাচন করুন --' : '-- Select approved voice --')}
+                        </option>
+                        {approvedVoiceTemplates.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.title} {v.provider_status === 'internet_only' ? '(ফ্রি ইন্টারনেট)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {pendingVoiceTemplates.length > 0 && (
+                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-noto px-1">
+                          {lang === 'bn'
+                            ? `${pendingVoiceTemplates.length}টি ভয়েস সুপার অ্যাডমিন অনুমোদনের অপেক্ষায় আছে।`
+                            : `${pendingVoiceTemplates.length} voice(s) pending Super Admin approval.`}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openInlineVoiceRecorder('due_fee')}
+                      className={`w-full py-2.5 px-3 rounded-xl border text-xs font-black font-noto flex items-center justify-center gap-2 transition-all active:scale-95 ${isDark ? 'bg-slate-800 border-slate-700 text-indigo-400 hover:bg-slate-700' : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}
+                    >
+                      <Mic size={15} />
+                      <span>
+                        {activeVoiceRecorderTarget === 'due_fee'
+                          ? (lang === 'bn' ? 'রেকর্ডার বন্ধ করুন' : 'Close Recorder')
+                          : (lang === 'bn' ? 'কাস্টম ভয়েস রেকর্ড / আপলোড করুন (অনুমোদনের জন্য)' : 'Record / Upload Custom Voice (For Approval)')}
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Shared Inline Internet-Only Custom Voice Recorder & Uploader */}
+            {activeVoiceRecorderTarget && (
+              <div className={`p-5 rounded-3xl border space-y-4 ${isDark ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <PhoneCall size={16} className="text-emerald-600 dark:text-emerald-400" />
+                    <h4 className={`text-xs sm:text-sm font-black font-noto ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                      {activeVoiceRecorderTarget === 'attendance'
+                        ? (lang === 'bn' ? 'হাজিরা অনুপস্থিতির কাস্টম ইন্টারনেট ভয়েস রেকর্ড/আপলোড' : 'Record/Upload Attendance Internet Voice')
+                        : (lang === 'bn' ? 'বকেয়া ফি রিমাইন্ডারের কাস্টম ইন্টারনেট ভয়েস রেকর্ড/আপলোড' : 'Record/Upload Due Fee Internet Voice')}
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveVoiceRecorderTarget(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={customVoiceTitle}
+                    onChange={(e) => setCustomVoiceTitle(e.target.value)}
+                    placeholder={lang === 'bn' ? 'ভয়েসের শিরোনাম লিখুন...' : 'Voice template title...'}
+                    className={`h-11 px-4 rounded-xl border text-xs font-bold font-noto outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                  />
+
+                  <div className="flex items-center gap-2">
+                    {!isRecordingCustomVoice ? (
+                      <button
+                        type="button"
+                        onClick={startCustomVoiceRecording}
+                        className="flex-1 h-11 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black font-noto flex items-center justify-center gap-2 active:scale-95 transition-all"
+                      >
+                        <Mic size={15} />
+                        <span>{lang === 'bn' ? 'ভয়েস রেকর্ড করুন' : 'Record Voice'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={stopCustomVoiceRecording}
+                        className="flex-1 h-11 px-4 rounded-xl bg-slate-900 text-white text-xs font-black font-noto flex items-center justify-center gap-2 animate-pulse"
+                      >
+                        <Square size={14} className="fill-current text-rose-500" />
+                        <span>{lang === 'bn' ? `থামান (${recordingSeconds}s)` : `Stop (${recordingSeconds}s)`}</span>
+                      </button>
+                    )}
+
+                    <label className={`h-11 px-4 rounded-xl border text-xs font-black font-noto flex items-center justify-center gap-1.5 cursor-pointer ${isDark ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'}`}>
+                      <Upload size={14} />
+                      <span>{lang === 'bn' ? 'ফাইল' : 'File'}</span>
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] || null;
+                          setCustomVoiceFile(f);
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {customVoiceFile && customVoicePreviewUrl && (
+                  <div className="flex flex-col sm:flex-row items-center gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <audio controls src={customVoicePreviewUrl} className="w-full sm:flex-1 h-10" />
+                    <button
+                      type="button"
+                      onClick={handleUploadCustomInternetVoice}
+                      disabled={isUploadingCustomVoice || !customVoiceTitle.trim()}
+                      className="w-full sm:w-auto px-5 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black font-noto flex items-center justify-center gap-2 disabled:opacity-50 shrink-0"
+                    >
+                      {isUploadingCustomVoice ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      <span>{lang === 'bn' ? 'অনুমোদনের জন্য পাঠান' : 'Submit for Approval'}</span>
+                    </button>
+                  </div>
+                )}
+
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 font-noto">
+                  {lang === 'bn'
+                    ? '* রেকর্ডকৃত অডিও স্বয়ংক্রিয়ভাবে কম মেগাবাইটে (Opus 24kbps) কম্প্রেস হয়ে শুধুমাত্র ইন্টারনেট ভয়েস কলের জন্য সংরক্ষিত হবে এবং সুপার অ্যাডমিন অনুমোদনের পর ব্যবহার করা যাবে।'
+                    : '* Recorded audio is compressed (Opus 24kbps) for internet_only calls and requires Super Admin approval.'}
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={handleUpdate}
+                disabled={saving}
+                className="px-6 py-3 rounded-2xl bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                <span>{lang === 'bn' ? 'ইন্টারনেট ভয়েস সেটিংস সেভ করুন' : 'Save Voice Settings'}</span>
+              </button>
+            </div>
+          </motion.div>
 
           {/* Smartphone Push & In-App Notification Configuration Card - Only if Parent Portal is active */}
           {Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true) && (
