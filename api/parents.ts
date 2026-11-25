@@ -211,86 +211,157 @@ export default async function handler(req, res) {
         .select('*')
         .eq('student_id', studentId);
 
-      // 3. Exam Results
-      const engine = config.result_engine || 'school';
-      let resultsData: any[] = [];
-      let allSubjects: any[] = [];
-      const allClassStudentsMarks = new Map();
-      let isBefaq = engine === 'befaq';
-      
-      if (isBefaq) {
-        const { data: befaqData } = await supabase
+      // 3. Exam Results (Fetch and merge BOTH Befaq and standard exam_marks regardless of result_engine)
+      type NormalizedResultRow = {
+        source: 'befaq' | 'school';
+        exam_id: string;
+        subject_id: string;
+        marks_obtained: number;
+        examRecord: any;
+        subjectRecord: any;
+      };
+
+      const mergedResultRows: NormalizedResultRow[] = [];
+      let befaqSubjectsAll: any[] = [];
+      let schoolSubjectsAll: any[] = [];
+      const befaqClassStudentsMarks = new Map<string, Map<string, number>>();
+      const schoolClassStudentsMarks = new Map<string, Map<string, number>>();
+
+      // Fetch class peer IDs once (strictly scoped to student's class & institution)
+      let classStudentIds: string[] = [];
+      if (student.class_id) {
+        const { data: studentsInClass } = await supabase
+          .from('students')
+          .select('id')
+          .eq('class_id', student.class_id)
+          .eq('institution_id', student.institution_id);
+        classStudentIds = studentsInClass?.map(s => s.id) || [];
+      }
+
+      // 3A. Fetch Befaq results (befaq_results, with safe fallback to befaq_exam_marks if table exists)
+      let befaqRows: any[] = [];
+      let befaqMarksTable: 'befaq_results' | 'befaq_exam_marks' = 'befaq_results';
+      try {
+        const { data: befaqData, error: befaqErr } = await supabase
           .from('befaq_results')
-          .select('*, befaq_exams(exam_name, exam_year, created_at, is_published), befaq_subjects(subject_name, total_marks, passing_marks)')
+          .select('*, befaq_exams(exam_name, exam_year, created_at, is_published, institution_id), befaq_subjects(subject_name, total_marks, passing_marks)')
           .eq('student_id', studentId);
-        resultsData = befaqData || [];
-        
-        const examIds = Array.from(new Set(resultsData.map(r => r.exam_id).filter(Boolean)));
-        if (examIds.length > 0) {
+        if (!befaqErr && Array.isArray(befaqData) && befaqData.length > 0) {
+          befaqRows = befaqData;
+          befaqMarksTable = 'befaq_results';
+        } else {
+          const { data: altBefaqData, error: altBefaqErr } = await supabase
+            .from('befaq_exam_marks')
+            .select('*, befaq_exams(exam_name, exam_year, created_at, is_published, institution_id), befaq_subjects(subject_name, total_marks, passing_marks)')
+            .eq('student_id', studentId);
+          if (!altBefaqErr && Array.isArray(altBefaqData) && altBefaqData.length > 0) {
+            befaqRows = altBefaqData;
+            befaqMarksTable = 'befaq_exam_marks';
+          }
+        }
+      } catch (befaqFetchErr) {
+        console.warn('Parents API: optional befaq marks lookup skipped:', befaqFetchErr);
+      }
+
+      befaqRows.forEach(r => {
+        const examRec = Array.isArray(r.befaq_exams) ? r.befaq_exams[0] : r.befaq_exams;
+        const subRec = Array.isArray(r.befaq_subjects) ? r.befaq_subjects[0] : r.befaq_subjects;
+        if (examRec && (!examRec.institution_id || examRec.institution_id === student.institution_id)) {
+          mergedResultRows.push({
+            source: 'befaq',
+            exam_id: r.exam_id,
+            subject_id: r.subject_id,
+            marks_obtained: Number(r.marks_obtained) || 0,
+            examRecord: examRec,
+            subjectRecord: subRec,
+          });
+        }
+      });
+
+      const befaqExamIds = Array.from(new Set(befaqRows.map(r => r.exam_id).filter(Boolean)));
+      if (befaqExamIds.length > 0) {
+        try {
           const { data: subjects } = await supabase
             .from('befaq_subjects')
             .select('*')
-            .in('exam_id', examIds);
-          allSubjects = subjects || [];
-          
-          const { data: studentsInClass } = await supabase
-            .from('students')
-            .select('id')
-            .eq('class_id', student.class_id);
-          const classStudentIds = studentsInClass?.map(s => s.id) || [];
-          
+            .in('exam_id', befaqExamIds);
+          befaqSubjectsAll = subjects || [];
+
           if (classStudentIds.length > 0) {
             const { data: classMarks } = await supabase
-              .from('befaq_results')
+              .from(befaqMarksTable)
               .select('student_id, exam_id, marks_obtained')
-              .in('exam_id', examIds)
+              .in('exam_id', befaqExamIds)
               .in('student_id', classStudentIds);
-            
+
             classMarks?.forEach(m => {
-              if (!allClassStudentsMarks.has(m.exam_id)) {
-                allClassStudentsMarks.set(m.exam_id, new Map());
+              if (!befaqClassStudentsMarks.has(m.exam_id)) {
+                befaqClassStudentsMarks.set(m.exam_id, new Map());
               }
-              const studentSumMap = allClassStudentsMarks.get(m.exam_id);
+              const studentSumMap = befaqClassStudentsMarks.get(m.exam_id)!;
               studentSumMap.set(m.student_id, (studentSumMap.get(m.student_id) || 0) + Number(m.marks_obtained || 0));
             });
           }
+        } catch (befaqMetaErr) {
+          console.warn('Parents API: befaq subjects/ranks fetch error:', befaqMetaErr);
         }
-      } else {
-        const { data: schoolData } = await supabase
+      }
+
+      // 3B. Always also fetch standard exam_marks (exams + exam_subjects)
+      let schoolRows: any[] = [];
+      try {
+        const { data: schoolData, error: schoolErr } = await supabase
           .from('exam_marks')
-          .select('*, exams(exam_name, exam_date, is_published), exam_subjects(subject_name, full_marks, pass_marks)')
+          .select('*, exams(exam_name, exam_date, is_published, institution_id), exam_subjects(subject_name, full_marks, pass_marks)')
           .eq('student_id', studentId);
-        resultsData = schoolData || [];
-        
-        const examIds = Array.from(new Set(resultsData.map(r => r.exam_id).filter(Boolean)));
-        if (examIds.length > 0) {
+        if (!schoolErr && Array.isArray(schoolData)) {
+          schoolRows = schoolData;
+        }
+      } catch (schoolFetchErr) {
+        console.warn('Parents API: exam_marks lookup error:', schoolFetchErr);
+      }
+
+      schoolRows.forEach(r => {
+        const examRec = Array.isArray(r.exams) ? r.exams[0] : r.exams;
+        const subRec = Array.isArray(r.exam_subjects) ? r.exam_subjects[0] : r.exam_subjects;
+        if (examRec && (!examRec.institution_id || examRec.institution_id === student.institution_id)) {
+          mergedResultRows.push({
+            source: 'school',
+            exam_id: r.exam_id,
+            subject_id: r.subject_id,
+            marks_obtained: Number(r.marks_obtained) || 0,
+            examRecord: examRec,
+            subjectRecord: subRec,
+          });
+        }
+      });
+
+      const schoolExamIds = Array.from(new Set(schoolRows.map(r => r.exam_id).filter(Boolean)));
+      if (schoolExamIds.length > 0) {
+        try {
           const { data: subjects } = await supabase
             .from('exam_subjects')
             .select('*')
-            .in('exam_id', examIds);
-          allSubjects = subjects || [];
-          
-          const { data: studentsInClass } = await supabase
-            .from('students')
-            .select('id')
-            .eq('class_id', student.class_id);
-          const classStudentIds = studentsInClass?.map(s => s.id) || [];
-          
+            .in('exam_id', schoolExamIds);
+          schoolSubjectsAll = subjects || [];
+
           if (classStudentIds.length > 0) {
             const { data: classMarks } = await supabase
               .from('exam_marks')
               .select('student_id, exam_id, marks_obtained')
-              .in('exam_id', examIds)
+              .in('exam_id', schoolExamIds)
               .in('student_id', classStudentIds);
-            
+
             classMarks?.forEach(m => {
-              if (!allClassStudentsMarks.has(m.exam_id)) {
-                allClassStudentsMarks.set(m.exam_id, new Map());
+              if (!schoolClassStudentsMarks.has(m.exam_id)) {
+                schoolClassStudentsMarks.set(m.exam_id, new Map());
               }
-              const studentSumMap = allClassStudentsMarks.get(m.exam_id);
+              const studentSumMap = schoolClassStudentsMarks.get(m.exam_id)!;
               studentSumMap.set(m.student_id, (studentSumMap.get(m.student_id) || 0) + Number(m.marks_obtained || 0));
             });
           }
+        } catch (schoolMetaErr) {
+          console.warn('Parents API: school subjects/ranks fetch error:', schoolMetaErr);
         }
       }
 
@@ -406,8 +477,8 @@ export default async function handler(req, res) {
         .order('event_date', { ascending: true })
         .limit(10);
 
-      // Group results by exam
-      const examMap = new Map();
+      // Group merged results by exam (supporting both Befaq and standard exam_marks simultaneously)
+      const examMap = new Map<string, any>();
       
       const getSubjectGpaAndGrade = (obtained: number, full: number, pass: number) => {
         if (obtained < pass) return { gpa: 0, grade: 'F' };
@@ -421,18 +492,19 @@ export default async function handler(req, res) {
         return { gpa: 0.0, grade: 'F' };
       };
 
-      // Also get all subjects for these exams to ensure we show everything even if marks are missing
-      const examIds = Array.from(new Set((resultsData || []).map(r => r.exam_id).filter(Boolean)));
-
-      resultsData?.forEach(r => {
-        const examRecord = isBefaq ? r.befaq_exams : r.exams;
+      mergedResultRows.forEach(r => {
+        const isBefaqRow = r.source === 'befaq';
+        const examRecord = r.examRecord;
         if (examRecord && examRecord.is_published !== false) {
-          const examId = r.exam_id;
-          if (!examMap.has(examId)) {
-            examMap.set(examId, {
-              id: examId,
+          const examKey = `${r.source}:${r.exam_id}`;
+          if (!examMap.has(examKey)) {
+            examMap.set(examKey, {
+              id: r.exam_id,
+              _source: r.source,
               name: examRecord.exam_name,
-              date: isBefaq ? (examRecord.created_at || new Date().toISOString()) : examRecord.exam_date,
+              date: isBefaqRow
+                ? (examRecord.created_at || new Date().toISOString())
+                : (examRecord.exam_date || examRecord.created_at || new Date().toISOString()),
               marks: [],
               gpa: '0.00',
               gpa_grade: 'F',
@@ -441,14 +513,13 @@ export default async function handler(req, res) {
             });
           }
           
-          const subjectRecord = isBefaq ? r.befaq_subjects : r.exam_subjects;
-          const subInfo = Array.isArray(subjectRecord) ? subjectRecord[0] : subjectRecord;
+          const subInfo = r.subjectRecord;
           const obtained = Number(r.marks_obtained) || 0;
-          const full = isBefaq ? (subInfo?.total_marks || 100) : (subInfo?.full_marks || 100);
-          const pass = isBefaq ? (subInfo?.passing_marks || 33) : (subInfo?.pass_marks || 33);
+          const full = isBefaqRow ? (subInfo?.total_marks || 100) : (subInfo?.full_marks || 100);
+          const pass = isBefaqRow ? (subInfo?.passing_marks || 33) : (subInfo?.pass_marks || 33);
           const { gpa, grade } = getSubjectGpaAndGrade(obtained, full, pass);
 
-          examMap.get(examId).marks.push({
+          examMap.get(examKey).marks.push({
             subject_id: r.subject_id,
             subject: subInfo?.subject_name || 'অজানা বিষয়',
             obtained,
@@ -460,9 +531,14 @@ export default async function handler(req, res) {
         }
       });
 
-      // Fill in missing subjects for each exam
-      examMap.forEach((exam, examId) => {
-        const examSubjects = allSubjects.filter(s => s.exam_id === examId);
+      // Fill in missing subjects and compute GPA / Position for each exam
+      examMap.forEach((exam) => {
+        const isBefaqExam = exam._source === 'befaq';
+        const examId = exam.id;
+        const subjectsPool = isBefaqExam ? befaqSubjectsAll : schoolSubjectsAll;
+        const classMarksPool = isBefaqExam ? befaqClassStudentsMarks : schoolClassStudentsMarks;
+
+        const examSubjects = subjectsPool.filter(s => s.exam_id === examId);
         examSubjects.forEach(s => {
           const hasMark = exam.marks.some((m: any) => m.subject_id === s.id);
           if (!hasMark) {
@@ -470,8 +546,8 @@ export default async function handler(req, res) {
               subject_id: s.id,
               subject: s.subject_name || 'অজানা বিষয়',
               obtained: 0,
-              full: isBefaq ? (s.total_marks || 100) : (s.full_marks || 100),
-              pass: isBefaq ? (s.passing_marks || 33) : (s.pass_marks || 33),
+              full: isBefaqExam ? (s.total_marks || 100) : (s.full_marks || 100),
+              pass: isBefaqExam ? (s.passing_marks || 33) : (s.pass_marks || 33),
               gpa: 0,
               grade: 'F'
             });
@@ -499,8 +575,8 @@ export default async function handler(req, res) {
         exam.total_full = totalFullMarks;
 
         // Calculate Position
-        if (allClassStudentsMarks.has(examId)) {
-          const studentMarksMap = allClassStudentsMarks.get(examId);
+        if (classMarksPool.has(examId)) {
+          const studentMarksMap = classMarksPool.get(examId)!;
           const sortedStudents = Array.from(studentMarksMap.entries())
             .sort((a: any, b: any) => b[1] - a[1]);
           
@@ -532,9 +608,15 @@ export default async function handler(req, res) {
             else exam.gpa_grade = 'F';
           }
         }
+
+        delete exam._source;
       });
 
-      const examResults = Array.from(examMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const examResults = Array.from(examMap.values()).sort((a, b) => {
+        const tB = new Date(b.date || 0).getTime() || 0;
+        const tA = new Date(a.date || 0).getTime() || 0;
+        return tB - tA;
+      });
 
       // Lookup all children associated with this guardian phone (siblings)
       let children: any[] = [];

@@ -1171,7 +1171,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           <div className="flex flex-1 h-full w-full bg-slate-50 overflow-hidden relative">
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex w-72 flex-col border-r h-full fixed top-0 left-0 z-50 bg-white border-blue-100 shadow-sm">
+      <div className="hidden md:flex md:w-64 lg:w-72 flex-col border-r h-full fixed top-0 left-0 z-50 bg-white border-blue-100 shadow-sm">
         <div className="p-6 border-b border-blue-100/60 flex flex-col justify-center">
           <div className="flex items-center gap-4">
              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden shrink-0 bg-slate-50 border border-slate-100 relative">
@@ -1236,15 +1236,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         </div>
       </div>
 
-      <div className="flex-1 lg:ml-64 flex flex-col h-full overflow-hidden bg-blue-50/50 relative">
+      <div className="flex-1 min-w-0 md:ml-64 lg:ml-72 flex flex-col h-full overflow-hidden bg-blue-50/50 relative">
         {/* Top Header - Hidden when inside chat to give full native app screen space */}
         {activeTab !== 'chat' && (
           <header 
             className="px-5 md:px-8 pb-3 md:py-5 flex items-center justify-between bg-white/90 backdrop-blur-xl border-b border-slate-100 z-40 sticky top-0 shrink-0"
             style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
           >
-            <div className="flex items-center gap-3">
-              <div className="lg:hidden w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="md:hidden w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20 shrink-0">
                 <BookOpen size={20} />
               </div>
               <div>
