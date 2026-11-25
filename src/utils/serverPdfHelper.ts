@@ -65,10 +65,7 @@ export function wrapHtmlForPdf(contentHtml: string, title: string, orientation: 
           min-height: ${height};
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
-          font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
-        }
-        body, body * {
-          font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
+          font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif;
         }
         * {
           box-sizing: border-box;

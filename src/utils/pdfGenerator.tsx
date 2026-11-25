@@ -164,6 +164,147 @@ const loadImage = (url: string): Promise<string> => {
     });
 };
 
+const TRANSPARENT_PNG_PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+const loadImageSafe = async (url?: string | null): Promise<string | null> => {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('data:')) return trimmed;
+    if (imageCache[trimmed]) return imageCache[trimmed];
+
+    try {
+        return await loadImage(trimmed);
+    } catch {
+        try {
+            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(trimmed)}`;
+            const res = await fetch(proxyUrl);
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            if (!blob || blob.size === 0 || !blob.type.startsWith('image/')) return null;
+            const dataUrl = await new Promise<string | null>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(blob);
+            });
+            if (dataUrl) {
+                imageCache[trimmed] = dataUrl;
+                return dataUrl;
+            }
+        } catch (proxyErr) {
+            console.warn('Image proxy load failed:', trimmed, proxyErr);
+        }
+    }
+    return null;
+};
+
+const prepareMarksheetMadrasah = async (madrasah: any): Promise<any> => {
+    const prepared = madrasah ? { ...madrasah } : {};
+    let parsedCfg: any = prepared?.config_json;
+    if (typeof parsedCfg === 'string') {
+        try { parsedCfg = JSON.parse(parsedCfg); } catch { parsedCfg = {}; }
+    }
+    parsedCfg = parsedCfg && typeof parsedCfg === 'object' ? { ...parsedCfg } : {};
+
+    const rawLogoUrl = prepared?.logo_url || parsedCfg?.logo_url;
+    const rawSigUrl = parsedCfg?.signature_url;
+
+    const [safeLogo, safeSig] = await Promise.all([
+        loadImageSafe(rawLogoUrl),
+        loadImageSafe(rawSigUrl)
+    ]);
+
+    prepared.logo_url = safeLogo || null;
+    if (parsedCfg.logo_url !== undefined) parsedCfg.logo_url = safeLogo || null;
+    if (parsedCfg.signature_url !== undefined) parsedCfg.signature_url = safeSig || null;
+    prepared.config_json = parsedCfg;
+    return prepared;
+};
+
+const prepareMarksheetStudent = async (student: any, includePhoto: boolean): Promise<any> => {
+    if (!student) return student;
+    if (!includePhoto || !student.photo_url) {
+        return { ...student, photo_url: null };
+    }
+    const safePhoto = await loadImageSafe(student.photo_url);
+    return { ...student, photo_url: safePhoto };
+};
+
+const waitForElementReady = async (rootEl: HTMLElement, extraDelayMs: number = 350): Promise<void> => {
+    try {
+        if (typeof document !== 'undefined' && (document as any).fonts?.ready) {
+            await Promise.race([
+                (document as any).fonts.ready,
+                new Promise(resolve => setTimeout(resolve, 1200))
+            ]);
+        }
+    } catch {}
+
+    const imgs = Array.from(rootEl.querySelectorAll('img'));
+    await Promise.all(
+        imgs.map(
+            (img) =>
+                new Promise<void>((resolve) => {
+                    if (img.complete) return resolve();
+                    const timer = setTimeout(resolve, 1500);
+                    img.onload = () => { clearTimeout(timer); resolve(); };
+                    img.onerror = () => { clearTimeout(timer); resolve(); };
+                })
+        )
+    );
+    await new Promise(resolve => setTimeout(resolve, extraDelayMs));
+};
+
+const captureMarksheetPage = async (
+    el: HTMLElement,
+    preferFormat: 'png' | 'jpeg' = 'png',
+    pixelRatio: number = 2.5
+): Promise<string> => {
+    const captureOpts = {
+        pixelRatio,
+        backgroundColor: '#ffffff',
+        width: 794,
+        height: 1123,
+        skipFonts: true,
+        fontEmbedCSS: solaimanLipiFontEmbedCSS,
+        imagePlaceholder: TRANSPARENT_PNG_PLACEHOLDER,
+        style: {
+            boxShadow: 'none',
+            transform: 'scale(1)',
+            transformOrigin: 'top left',
+        },
+    };
+
+    if (preferFormat === 'png') {
+        try {
+            return await toPng(el, captureOpts);
+        } catch (pngErr) {
+            console.warn('Marksheet toPng failed, falling back to toJpeg:', pngErr);
+            return await toJpeg(el, { ...captureOpts, pixelRatio: Math.min(pixelRatio, 2), quality: 0.95 });
+        }
+    }
+
+    try {
+        return await toJpeg(el, { ...captureOpts, quality: 0.95 });
+    } catch (jpegErr) {
+        console.warn('Marksheet toJpeg failed, falling back to toPng:', jpegErr);
+        return await toPng(el, { ...captureOpts, pixelRatio: Math.min(pixelRatio, 2) });
+    }
+};
+
+const addCapturedImageToPdf = (
+    doc: jsPDF,
+    imgData: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+) => {
+    const format = imgData.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+    doc.addImage(imgData, format, x, y, width, height, undefined, 'FAST');
+};
+
 // --- ATTENDANCE REPORT GENERATOR ---
 export const generateAttendanceReportPDF = async (
     reportData: any[],
@@ -408,9 +549,14 @@ export const generateResultPDF = async (
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
-    templateId: 'classic' | 'premium' = 'classic'
+    _templateId: 'classic' | 'premium' = 'classic'
 ) => {
     onProgress?.(10);
+    const preparedMadrasah = await prepareMarksheetMadrasah(madrasah);
+    const includePhoto = preparedMadrasah?.config_json?.modules?.student_photo === true;
+    const preparedStudent = await prepareMarksheetStudent(student, includePhoto);
+    onProgress?.(25);
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -418,104 +564,34 @@ export const generateResultPDF = async (
     container.style.width = '794px';
     document.body.appendChild(container);
     const root = createRoot(container);
-    
-    await new Promise<void>((resolve) => {
-        if (templateId === 'premium') {
-            root.render(
-                <div id="pdf-wrapper">
-                    <PremiumResultSheetTemplate 
-                        exam={exam} 
-                        subjects={marks.map((m: any) => ({
-                            id: m.subject_id || m.id,
-                            subject_name: m.subject_name || m.name,
-                            full_marks: m.full_marks || 100,
-                            pass_marks: m.pass_marks || 33
-                        }))} 
-                        students={[]} 
-                        madrasah={madrasah} 
-                        lang={lang} 
-                        singleStudent={student} 
-                        singleStudentMarks={marks} 
-                    />
-                </div>
-            );
-        } else {
-            root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
-        }
-        setTimeout(resolve, 1500); // Increased timeout for font loading
-    });
-    onProgress?.(50);
 
-    const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
-    const fileName = `Result_${(student.student_name || student.name || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
-
-    // Try server-side PDF generation first with SolaimanLipi font
     try {
-        const fullHtml = wrapHtmlForPdf(targetEl.outerHTML, fileName, 'portrait');
-        const serverSuccess = await downloadServerPdf({
-            html: fullHtml,
-            format: 'a4',
-            orientation: 'portrait',
-            entity_type: 'result',
-            entity_id: `${exam?.id || 'exam'}_${student?.id || student?.roll_no || 'student'}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
-            filename: fileName,
-            is_published: exam?.is_published
+        await new Promise<void>((resolve) => {
+            root.render(<ResultSheetTemplate student={preparedStudent} exam={exam} marks={marks} madrasah={preparedMadrasah} lang={lang} />);
+            setTimeout(resolve, 150);
         });
-        if (serverSuccess) {
-            onProgress?.(100);
-            root.unmount();
-            document.body.removeChild(container);
-            return;
-        }
-    } catch (serverErr) {
-        console.warn('Server PDF generation failed for marksheet, falling back to client:', serverErr);
-    }
+        await waitForElementReady(container, 450);
+        onProgress?.(55);
 
-    let imgData: string | null = null;
-    try {
-        imgData = await toPng(targetEl, {
-            pixelRatio: 2,
-            backgroundColor: '#ffffff',
-            width: 794,
-            height: 1123,
-            skipFonts: true,
-            fontEmbedCSS: solaimanLipiFontEmbedCSS,
-        });
-    } catch (pngErr) {
-        console.warn('toPng failed for marksheet, trying toJpeg fallback:', pngErr);
-        try {
-            imgData = await toJpeg(targetEl, {
-                pixelRatio: 2,
-                quality: 0.95,
-                backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
-                skipFonts: true,
-                fontEmbedCSS: solaimanLipiFontEmbedCSS,
-            });
-        } catch (jpegErr) {
-            console.error('Both toPng and toJpeg failed for marksheet:', jpegErr);
-        }
-    }
+        const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+        const imgData = await captureMarksheetPage(targetEl, 'png', 2.5);
 
-    if (imgData) {
         onProgress?.(85);
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        
-        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-        
+        addCapturedImageToPdf(doc, imgData, 0, 0, pageWidth, pageHeight);
+
         onProgress?.(98);
-        const outFileName = `Result_${student.student_name || student.name || 'Student'}.pdf`;
-        await saveJsPdf(doc, outFileName);
+        const safeName = (student.student_name || student.name || 'Student').replace(/[\/\\:*?"<>|]/g, '_').trim() || 'Student';
+        await saveJsPdf(doc, `Result_${safeName}.pdf`);
+        onProgress?.(100);
+    } finally {
+        try { root.unmount(); } catch {}
+        if (document.body.contains(container)) {
+            document.body.removeChild(container);
+        }
     }
-    
-    root.unmount();
-    if (document.body.contains(container)) {
-        document.body.removeChild(container);
-    }
-    onProgress?.(100);
 };
 
 export const generateMassMarksheetPDF = async (
@@ -524,122 +600,113 @@ export const generateMassMarksheetPDF = async (
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
     onProgress?: (progress: number) => void,
-    templateId: 'classic' | 'premium' = 'classic',
+    _templateId: 'classic' | 'premium' = 'classic',
     layoutMode: 'a4_one' | 'a4_two' = 'a4_one'
 ) => {
     onProgress?.(2);
+    const preparedMadrasah = await prepareMarksheetMadrasah(madrasah);
+    const includePhoto = preparedMadrasah?.config_json?.modules?.student_photo === true;
+
+    const preparedList: any[] = [];
+    const BATCH_SIZE = 6;
+    for (let i = 0; i < preppedStudents.length; i += BATCH_SIZE) {
+        const chunk = preppedStudents.slice(i, i + BATCH_SIZE);
+        const resolvedChunk = await Promise.all(
+            chunk.map(async (std) => ({
+                ...std,
+                info: await prepareMarksheetStudent(std.info, includePhoto)
+            }))
+        );
+        preparedList.push(...resolvedChunk);
+    }
+    onProgress?.(12);
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '794px';
     document.body.appendChild(container);
     const root = createRoot(container);
-    
+
     try {
         await new Promise<void>((resolve) => {
             root.render(
                 <div id="pdf-wrapper">
-                    {preppedStudents.map((std, idx) => (
+                    {preparedList.map((std, idx) => (
                         <div key={idx} className="pdf-page-container">
-                            {templateId === 'premium' ? (
-                                <PremiumResultSheetTemplate 
-                                    exam={exam} 
-                                    subjects={std.marks.map((m: any) => ({
-                                        id: m.subject_id || m.id,
-                                        subject_name: m.subject_name || m.name,
-                                        full_marks: m.full_marks || 100,
-                                        pass_marks: m.pass_marks || 33
-                                    }))} 
-                                    students={[]} 
-                                    madrasah={madrasah} 
-                                    lang={lang} 
-                                    singleStudent={std.info} 
-                                    singleStudentMarks={std.marks} 
-                                />
-                            ) : (
-                                <ResultSheetTemplate 
-                                    student={std.info} 
-                                    exam={exam} 
-                                    marks={std.marks} 
-                                    madrasah={madrasah} 
-                                    lang={lang} 
-                                />
-                            )}
+                            <ResultSheetTemplate
+                                student={std.info}
+                                exam={exam}
+                                marks={std.marks}
+                                madrasah={preparedMadrasah}
+                                lang={lang}
+                            />
                         </div>
                     ))}
                 </div>
             );
-            setTimeout(resolve, 1200);
+            setTimeout(resolve, 250);
         });
-        onProgress?.(15);
+        await waitForElementReady(container, 500);
+        onProgress?.(22);
 
-        // Option 1: A4 Portrait (1 student per full A4 page)
+        const preferFmt: 'png' | 'jpeg' = preparedList.length > 15 ? 'jpeg' : 'png';
+        const ratio = preparedList.length > 25 ? 1.8 : 2.2;
+        const safeExamName = (exam?.exam_name || 'All').replace(/[\/\\:*?"<>|]/g, '_').trim() || 'All';
+
         if (layoutMode === 'a4_one') {
             const doc = new jsPDF('p', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.getWidth();
             const pageHeight = doc.internal.pageSize.getHeight();
-            
+
             const wrapper = container.querySelector('#pdf-wrapper');
             if (wrapper && wrapper.children.length > 0) {
                 const pages = Array.from(wrapper.children);
                 for (let i = 0; i < pages.length; i++) {
-                    const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
-                    const imgData = await toPng(pageElement, {
-                        pixelRatio: 2.2,
-                        backgroundColor: '#ffffff',
-                        width: 794,
-                        height: 1123,
-                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
-                    });
+                    const pageElement = (pages[i].querySelector('.print-container') || pages[i]) as HTMLElement;
+                    const imgData = await captureMarksheetPage(pageElement, preferFmt, ratio);
                     if (i > 0) doc.addPage('a4', 'p');
-                    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-                    onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
+                    addCapturedImageToPdf(doc, imgData, 0, 0, pageWidth, pageHeight);
+                    onProgress?.(22 + Math.floor(((i + 1) / pages.length) * 73));
                 }
             }
             onProgress?.(98);
-            await saveJsPdf(doc, `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+            await saveJsPdf(doc, `Mass_Marksheets_${safeExamName}.pdf`);
             onProgress?.(100);
             return;
         }
 
-        // Option 2: A4 Landscape (2 A4 portraits on 1 A4 landscape page)
         const doc = new jsPDF('l', 'mm', 'a4');
-        const pageWidth = doc.internal.pageSize.getWidth(); // 297
-        const pageHeight = doc.internal.pageSize.getHeight(); // 210
-        
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
         const wrapper = container.querySelector('#pdf-wrapper');
         if (wrapper && wrapper.children.length > 0) {
             const pages = Array.from(wrapper.children);
-            
             for (let i = 0; i < pages.length; i++) {
-                const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
-                
-                const imgData = await toPng(pageElement, {
-                    pixelRatio: 2.2,
-                    backgroundColor: '#ffffff',
-                    width: 794,
-                    height: 1123,
-                    fontEmbedCSS: solaimanLipiFontEmbedCSS,
-                });
-                
+                const pageElement = (pages[i].querySelector('.print-container') || pages[i]) as HTMLElement;
+                const imgData = await captureMarksheetPage(pageElement, preferFmt, ratio);
+
                 const isLeft = (i % 2 === 0);
                 if (i > 0 && isLeft) {
                     doc.addPage();
                 }
-                
+
                 const hw = pageWidth / 2;
-                doc.addImage(imgData, 'PNG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
-                onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
+                addCapturedImageToPdf(doc, imgData, isLeft ? 0 : hw, 0, hw, pageHeight);
+                onProgress?.(22 + Math.floor(((i + 1) / pages.length) * 73));
             }
         }
-        
+
         onProgress?.(98);
-        await saveJsPdf(doc, `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+        await saveJsPdf(doc, `Mass_Marksheets_${safeExamName}.pdf`);
         onProgress?.(100);
     } catch (err) {
         console.error("Error in generateMassMarksheetPDF:", err);
         throw err;
     } finally {
-        try { root.unmount(); } catch (e) {}
+        try { root.unmount(); } catch {}
         if (document.body.contains(container)) {
             document.body.removeChild(container);
         }
@@ -1588,6 +1655,11 @@ export const generateFinalIndividualResultPDF = async (
     onProgress?: (progress: number) => void
 ) => {
     onProgress?.(10);
+    const preparedMadrasah = await prepareMarksheetMadrasah(madrasah);
+    const includePhoto = preparedMadrasah?.config_json?.modules?.student_photo === true;
+    const preparedStudent = await prepareMarksheetStudent(student, includePhoto);
+    onProgress?.(25);
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -1595,122 +1667,67 @@ export const generateFinalIndividualResultPDF = async (
     container.style.width = '794px';
     document.body.appendChild(container);
     const root = createRoot(container);
-    
-    // Prepare data for ResultSheetTemplate
-    // ResultSheetTemplate expects exam object and marks array
-    const exam = { exam_name: title };
-    
-    // marks array: { subject_name, full_marks, pass_marks, marks_obtained, grade, grade_point }
-    const marks = subjects.map(sub => {
-        const obtained = student.marks[sub];
-        const val = parseFloat(obtained) || 0;
-        
-        // Calculate grade and gp for the weighted mark
-        // Usually final result weighted marks are out of their weight, but here we treat them as out of 100 or relative
-        // Actually, in FinalResults.tsx, percentage is calculated as (weightedSum / subjectMaxMarks) * 100
-        // We'll assume full marks is 100 for display purpose and calculate grade accordingly
-        
-        let gp = '0.00';
-        let grade = 'F';
-        if (val >= 80) { gp = '5.00'; grade = 'A+'; }
-        else if (val >= 70) { gp = '4.00'; grade = 'A'; }
-        else if (val >= 60) { gp = '3.50'; grade = 'A-'; }
-        else if (val >= 50) { gp = '3.00'; grade = 'B'; }
-        else if (val >= 40) { gp = '2.00'; grade = 'C'; }
-        else if (val >= 33) { gp = '1.00'; grade = 'D'; }
 
-        return {
-            subject_name: sub,
-            full_marks: 100,
-            pass_marks: 33,
-            marks_obtained: obtained,
-            grade: grade,
-            grade_point: gp
+    try {
+        const exam = { exam_name: title };
+
+        const marks = subjects.map(sub => {
+            const obtained = student.marks[sub];
+            const val = parseFloat(obtained) || 0;
+
+            let gp = '0.00';
+            let grade = 'F';
+            if (val >= 80) { gp = '5.00'; grade = 'A+'; }
+            else if (val >= 70) { gp = '4.00'; grade = 'A'; }
+            else if (val >= 60) { gp = '3.50'; grade = 'A-'; }
+            else if (val >= 50) { gp = '3.00'; grade = 'B'; }
+            else if (val >= 40) { gp = '2.00'; grade = 'C'; }
+            else if (val >= 33) { gp = '1.00'; grade = 'D'; }
+
+            return {
+                subject_name: sub,
+                full_marks: 100,
+                pass_marks: 33,
+                marks_obtained: obtained,
+                grade: grade,
+                grade_point: gp
+            };
+        });
+
+        const studentWithFinalData = {
+            ...preparedStudent,
+            gpa: student.gpa,
+            grade: student.grade,
+            merit_position: student.rank
         };
-    });
 
-    // We pass the calculated GPA and Grade into student object so template uses them
-    const studentWithFinalData = {
-        ...student,
-        gpa: student.gpa,
-        grade: student.grade,
-        merit_position: student.rank
-    };
-
-    await new Promise<void>((resolve) => {
-        root.render(<ResultSheetTemplate student={studentWithFinalData} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
-        setTimeout(resolve, 1500);
-    });
-    onProgress?.(50);
-
-    const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
-    const finalMarksheetFileName = `MarkSheet_${(student.student_name || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
-
-    // Try server-side generation first with SolaimanLipi font
-    try {
-        const fullHtml = wrapHtmlForPdf(targetEl.outerHTML, finalMarksheetFileName, 'portrait');
-        const serverSuccess = await downloadServerPdf({
-            html: fullHtml,
-            format: 'a4',
-            orientation: 'portrait',
-            entity_type: 'final_individual_result',
-            entity_id: `${student.id || student.roll_no || 'student'}_final_marksheet`.replace(/[^a-zA-Z0-9_-]/g, '_'),
-            filename: finalMarksheetFileName
+        await new Promise<void>((resolve) => {
+            root.render(<ResultSheetTemplate student={studentWithFinalData} exam={exam} marks={marks} madrasah={preparedMadrasah} lang={lang} />);
+            setTimeout(resolve, 150);
         });
-        if (serverSuccess) {
-            onProgress?.(100);
-            root.unmount();
-            document.body.removeChild(container);
-            return;
-        }
-    } catch (serverErr) {
-        console.warn('Server PDF generation failed for final individual marksheet, falling back to client:', serverErr);
-    }
+        await waitForElementReady(container, 450);
+        onProgress?.(55);
 
-    let imgData: string | null = null;
-    try {
-        imgData = await toJpeg(targetEl, {
-            pixelRatio: 2,
-            quality: 0.95,
-            backgroundColor: '#ffffff',
-            width: 794,
-            height: 1123,
-            skipFonts: true,
-            fontEmbedCSS: solaimanLipiFontEmbedCSS,
-        });
-    } catch (jpegErr) {
-        console.warn('toJpeg failed for final individual marksheet, trying toPng fallback:', jpegErr);
-        try {
-            imgData = await toPng(targetEl, {
-                pixelRatio: 2,
-                backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
-                skipFonts: true,
-                fontEmbedCSS: solaimanLipiFontEmbedCSS,
-            });
-        } catch (pngErr) {
-            console.error('Both toJpeg and toPng failed for final individual marksheet:', pngErr);
-        }
-    }
+        const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+        const finalMarksheetFileName = `MarkSheet_${(student.student_name || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
 
-    if (imgData) {
+        const imgData = await captureMarksheetPage(targetEl, 'png', 2.5);
+
         onProgress?.(85);
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        
-        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-        
+        addCapturedImageToPdf(doc, imgData, 0, 0, pageWidth, pageHeight);
+
         onProgress?.(98);
         await saveJsPdf(doc, finalMarksheetFileName);
+        onProgress?.(100);
+    } finally {
+        try { root.unmount(); } catch {}
+        if (document.body.contains(container)) {
+            document.body.removeChild(container);
+        }
     }
-
-    root.unmount();
-    if (document.body.contains(container)) {
-        document.body.removeChild(container);
-    }
-    onProgress?.(100);
 };
 
 // --- FINAL MASS MARKSHEETS GENERATOR ---
@@ -1724,6 +1741,20 @@ export const generateFinalMassMarksheetsPDF = async (
     layoutMode: 'a4_one' | 'a4_two' = 'a4_one'
 ) => {
     onProgress?.(5);
+    const preparedMadrasah = await prepareMarksheetMadrasah(madrasah);
+    const includePhoto = preparedMadrasah?.config_json?.modules?.student_photo === true;
+
+    const preparedStudentsList: any[] = [];
+    const BATCH_SIZE = 6;
+    for (let i = 0; i < students.length; i += BATCH_SIZE) {
+        const chunk = students.slice(i, i + BATCH_SIZE);
+        const resolvedChunk = await Promise.all(
+            chunk.map(async (student) => await prepareMarksheetStudent(student, includePhoto))
+        );
+        preparedStudentsList.push(...resolvedChunk);
+    }
+    onProgress?.(15);
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -1735,7 +1766,7 @@ export const generateFinalMassMarksheetsPDF = async (
     try {
         const exam = { exam_name: title };
 
-        const preppedStudents = students.map(student => {
+        const preppedStudents = preparedStudentsList.map(student => {
             const marks = subjects.map(sub => {
                 const obtained = student.marks[sub];
                 const val = parseFloat(obtained) || 0;
@@ -1777,43 +1808,38 @@ export const generateFinalMassMarksheetsPDF = async (
                                 student={item.studentWithFinalData} 
                                 exam={exam} 
                                 marks={item.marks} 
-                                madrasah={madrasah} 
+                                madrasah={preparedMadrasah} 
                                 lang={lang} 
                             />
                         </div>
                     ))}
                 </div>
             );
-            setTimeout(resolve, 1200);
+            setTimeout(resolve, 250);
         });
+        await waitForElementReady(container, 500);
         onProgress?.(25);
 
         const wrapper = container.querySelector('#pdf-wrapper');
         const massFileName = `All_Final_Marksheets_${title.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+        const preferFmt: 'png' | 'jpeg' = preppedStudents.length > 15 ? 'jpeg' : 'png';
+        const ratio = preppedStudents.length > 25 ? 1.8 : 2.2;
 
-        // Option: 2 marksheets side-by-side on 1 A4 landscape page
         if (layoutMode === 'a4_two') {
             const doc = new jsPDF('l', 'mm', 'a4');
-            const pageWidth = doc.internal.pageSize.getWidth(); // 297
-            const pageHeight = doc.internal.pageSize.getHeight(); // 210
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
 
             if (wrapper && wrapper.children.length > 0) {
                 const pages = Array.from(wrapper.children);
                 for (let i = 0; i < pages.length; i++) {
-                    const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
-                    const imgData = await toJpeg(pageElement, {
-                        pixelRatio: 2.2,
-                        quality: 0.95,
-                        backgroundColor: '#ffffff',
-                        width: 794,
-                        height: 1123,
-                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
-                    });
+                    const pageElement = (pages[i].querySelector('.print-container') || pages[i]) as HTMLElement;
+                    const imgData = await captureMarksheetPage(pageElement, preferFmt, ratio);
 
                     const isLeft = (i % 2 === 0);
                     if (i > 0 && isLeft) doc.addPage('a4', 'l');
                     const hw = pageWidth / 2;
-                    doc.addImage(imgData, 'JPEG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
+                    addCapturedImageToPdf(doc, imgData, isLeft ? 0 : hw, 0, hw, pageHeight);
                     onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
                 }
             }
@@ -1823,7 +1849,6 @@ export const generateFinalMassMarksheetsPDF = async (
             return;
         }
 
-        // Option: 1 marksheet per A4 portrait page (a4_one)
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -1831,18 +1856,11 @@ export const generateFinalMassMarksheetsPDF = async (
         if (wrapper && wrapper.children.length > 0) {
             const pages = Array.from(wrapper.children);
             for (let i = 0; i < pages.length; i++) {
-                const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
-                const imgData = await toJpeg(pageElement, {
-                    pixelRatio: 2.2,
-                    quality: 0.95,
-                    backgroundColor: '#ffffff',
-                    width: 794,
-                    height: 1123,
-                    fontEmbedCSS: solaimanLipiFontEmbedCSS,
-                });
+                const pageElement = (pages[i].querySelector('.print-container') || pages[i]) as HTMLElement;
+                const imgData = await captureMarksheetPage(pageElement, preferFmt, ratio);
 
                 if (i > 0) doc.addPage('a4', 'p');
-                doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                addCapturedImageToPdf(doc, imgData, 0, 0, pageWidth, pageHeight);
                 onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
             }
         }
@@ -1854,7 +1872,7 @@ export const generateFinalMassMarksheetsPDF = async (
         console.error("Error in generateFinalMassMarksheetsPDF:", err);
         throw err;
     } finally {
-        try { root.unmount(); } catch (e) {}
+        try { root.unmount(); } catch {}
         if (document.body.contains(container)) {
             document.body.removeChild(container);
         }

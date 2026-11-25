@@ -1,4 +1,5 @@
 import React from "react";
+import { solaimanLipiBase64 } from "../../utils/fonts";
 
 interface ResultSheetProps {
   student: any;
@@ -150,21 +151,21 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
       {/* Fonts Import & Print Styles */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Inter:wght@400;600;700;800&family=Tiro+Bangla&family=JetBrains+Mono:wght@500;700&display=swap');
         @font-face {
           font-family: 'SolaimanLipi';
-          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype');
           font-weight: normal;
           font-style: normal;
           font-display: swap;
         }
         @font-face {
           font-family: 'SolaimanLipi';
-          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+          src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype');
           font-weight: bold;
           font-style: normal;
           font-display: swap;
         }
-        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Inter:wght@400;600;700;800&family=Tiro+Bangla&family=JetBrains+Mono:wght@500;700&display=swap');
         .font-solaiman, .font-solaiman * { font-family: 'SolaimanLipi', 'Hind Siliguri', sans-serif !important; }
         .font-tiro { font-family: 'Tiro Bangla', serif; }
         .font-noto { font-family: 'SolaimanLipi', 'Hind Siliguri', sans-serif; }
@@ -482,7 +483,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
           {/* Smart Teacher Remarks & Guidance */}
           {(student.smart_remarks || student.teacher_remarks || student.remarks) && (
-            <div className="mb-2 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-blue-50/80 rounded-xl px-3.5 py-2 border border-blue-200/80 text-left shadow-xs">
+            <div className="mb-2 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-blue-50/80 rounded-xl px-3.5 py-2 border border-blue-200/80 text-left shadow-sm">
               <div className="flex items-center justify-between text-[11px] font-black text-[#1E3A8A] uppercase tracking-wider mb-1">
                 <span className="flex items-center gap-1.5">
                   <span className="text-amber-500">✍️</span>

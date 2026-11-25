@@ -170,8 +170,10 @@ export default async function handler(req: Request, res: Response) {
     }
 
     // Direct stream fallback if Supabase signed URL is unavailable
+    const rawFileName = typeof filename === 'string' && filename.trim() ? filename.trim() : 'document.pdf';
+    const asciiSafeFileName = rawFileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_') || 'document.pdf';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${typeof filename === 'string' ? filename : 'document.pdf'}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiSafeFileName}"; filename*=UTF-8''${encodeURIComponent(rawFileName)}`);
     return res.status(200).send(Buffer.from(pdfBuffer));
 
   } catch (error: any) {

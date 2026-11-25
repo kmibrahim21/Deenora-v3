@@ -2417,7 +2417,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
     }
   };
 
-  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, templateId: 'classic' | 'premium' = selectedResultTemplate, layoutMode: 'a4_one' | 'a4_two' = marksheetLayoutMode) => {
+  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, _templateId: 'classic' | 'premium' = 'classic', layoutMode: 'a4_one' | 'a4_two' = marksheetLayoutMode) => {
     if (!selectedExam || !madrasah) return;
     
     setIsDownloading(true);
@@ -2436,7 +2436,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
       const validStudents = currentRanking.filter((item: any) => students.find(st => st.id === item.student_id));
       
       if (validStudents.length === 0) {
-        alert(downloadLang === 'bn' ? 'মার্কশীট তৈরির জন্য কোনো শিক্ষার্থী পাওয়া যায়নি।' : 'No students found for marksheets.');
+        setModalMode('error');
+        setSuccessTitle(downloadLang === 'bn' ? 'কোনো শিক্ষার্থী পাওয়া যায়নি' : 'No Students Found');
+        setSuccessMessage(downloadLang === 'bn' ? 'মার্কশীট তৈরির জন্য কোনো শিক্ষার্থী পাওয়া যায়নি।' : 'No students found for marksheets.');
+        setShowSuccessModal(true);
         return;
       }
 
@@ -2524,12 +2527,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
           madrasah,
           downloadLang,
           (p) => setDownloadProgress(p),
-          templateId,
+          'classic',
           layoutMode
       );
     } catch (error) {
       console.error('Download error:', error);
-      alert(downloadLang === 'bn' ? 'মার্কশীট ডাউনলোডে সমস্যা হয়েছে।' : 'Error downloading PDF');
+      setModalMode('error');
+      setSuccessTitle(downloadLang === 'bn' ? 'ডাউনলোড ব্যর্থ' : 'Download Failed');
+      setSuccessMessage(downloadLang === 'bn' ? 'মার্কশীট ডাউনলোডে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Error downloading PDF. Please try again.');
+      setShowSuccessModal(true);
     } finally {
       setIsDownloading(false);
       setDownloadProgress(0);
@@ -2617,7 +2623,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({
                     {lang === 'bn' ? 'ফলাফল' : 'Result'}
                 </button>
                 <button onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium', lMode?: 'a4_two' | 'a4_one') => handleDownloadMassMarksheets(l, tId || 'classic', lMode));
+                    setDownloadAction(() => (l: 'en' | 'bn', _tId?: 'classic' | 'premium', lMode?: 'a4_two' | 'a4_one') => handleDownloadMassMarksheets(l, 'classic', lMode));
                     setDownloadActionType('marksheet');
                     setShowDownloadLangModal(true);
                 }} className="px-2.5 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center border border-purple-100 hover:bg-purple-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
@@ -4670,11 +4676,14 @@ const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
                                                         madrasah,
                                                         lang,
                                                         (p) => setDownloadProgress(p),
-                                                        selectedResultTemplate
+                                                        'classic'
                                                     );
                                                   } catch (pdfErr) {
                                                     console.error('Error generating marksheet:', pdfErr);
-                                                    alert(lang === 'bn' ? 'মার্কশিট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।' : 'Failed to generate marksheet. Please try again.');
+                                                    setModalMode('error');
+                                                    setSuccessTitle(lang === 'bn' ? 'ডাউনলোড ব্যর্থ' : 'Download Failed');
+                                                    setSuccessMessage(lang === 'bn' ? 'মার্কশিট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।' : 'Failed to generate marksheet. Please try again.');
+                                                    setShowSuccessModal(true);
                                                   } finally {
                                                     setIsDownloading(false);
                                                     setDownloadProgress(0);
