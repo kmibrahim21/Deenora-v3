@@ -1481,23 +1481,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, error: 'Valid voice template audio URL is missing' });
       }
 
-      // 3. Fetch institution display name and verify Parent Portal + Live Chat permissions
-      const instRows = await sbGet(`institutions?select=id,name,config_json&id=eq.${encodeURIComponent(institution_id)}&limit=1`);
+      // 3. Fetch institution display name and verify Internet Voice Call module permission
+      const instRows = await sbGet(`institutions?select=id,name,config_json,is_super_admin&id=eq.${encodeURIComponent(institution_id)}&limit=1`);
       const instRow = instRows[0];
       const institutionName = String(instRow?.name || 'প্রতিষ্ঠান').trim();
 
-      if (!isSuperAdmin) {
+      if (!isSuperAdmin && !instRow?.is_super_admin) {
         let instCfg: any = instRow?.config_json || {};
         if (typeof instCfg === 'string') {
           try { instCfg = JSON.parse(instCfg); } catch { instCfg = {}; }
         }
         const cfgMods = instCfg?.modules || {};
-        const hasParentPortal = cfgMods.parent_portal === true || instCfg.parent_portal === true;
-        const hasLiveChat = cfgMods.live_chat === true || instCfg.live_chat === true;
-        if (!hasParentPortal || !hasLiveChat) {
+        if (cfgMods.internet_voice_call !== true) {
           return res.status(403).json({
             success: false,
-            error: 'ইন্টারনেট ভয়েস কল ব্যবহারের জন্য সুপার অ্যাডমিন প্যানেল থেকে প্যারেন্ট পোর্টাল এবং লাইভ চ্যাট পারমিশন অ্যাক্টিভ থাকতে হবে।',
+            error: 'ইন্টারনেট ভয়েস কল ব্যবহারের জন্য সুপার অ্যাডমিন প্যানেল থেকে "Internet Voice Call" পারমিশন অ্যাক্টিভ থাকতে হবে।',
           });
         }
       }

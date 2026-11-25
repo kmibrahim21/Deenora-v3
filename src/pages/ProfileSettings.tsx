@@ -299,10 +299,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   };
 
   useEffect(() => {
-    if (madrasah?.id && isAutomationMode) {
+    if (madrasah?.id && isAutomationMode && canConfigureInternetVoice) {
       fetchInstitutionVoiceTemplates();
     }
-  }, [madrasah?.id, isAutomationMode]);
+  }, [madrasah?.id, isAutomationMode, canConfigureInternetVoice]);
 
   const openInlineVoiceRecorder = (target: 'attendance' | 'due_fee') => {
     if (activeVoiceRecorderTarget === target) {
@@ -934,11 +934,15 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
               teacher_attendance_deduction: featureTeacherDeduction,
               delete_class: featureDeleteClass,
               delete_accounting: featureDeleteAccounting,
-              internet_voice_attendance_enabled: featureInternetVoiceAttendance,
-              internet_voice_attendance_auto_send: featureInternetVoiceAttendanceAutoSend,
-              internet_voice_attendance_template_id: featureInternetVoiceAttendanceTemplateId,
-              internet_voice_due_fee_enabled: featureInternetVoiceDueFee,
-              internet_voice_due_fee_template_id: featureInternetVoiceDueFeeTemplateId,
+              ...(canConfigureInternetVoice
+                ? {
+                    internet_voice_attendance_enabled: featureInternetVoiceAttendance,
+                    internet_voice_attendance_auto_send: featureInternetVoiceAttendanceAutoSend,
+                    internet_voice_attendance_template_id: featureInternetVoiceAttendanceTemplateId,
+                    internet_voice_due_fee_enabled: featureInternetVoiceDueFee,
+                    internet_voice_due_fee_template_id: featureInternetVoiceDueFeeTemplateId,
+                  }
+                : {}),
             }
           }
         : {
@@ -1713,7 +1717,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
             </motion.div>
           </div>
 
-          {/* Zero-Cost Internet Bulk Voice Call Automation Controls (Attendance & Due Fee) */}
+          {/* Zero-Cost Internet Bulk Voice Call Automation Controls (Attendance & Due Fee) - Only if Internet Voice Call module is active */}
+          {canConfigureInternetVoice && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1751,17 +1756,6 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                 <span>{lang === 'bn' ? 'ভয়েস তালিকা রিফ্রেশ' : 'Refresh Voices'}</span>
               </button>
             </div>
-
-            {!canConfigureInternetVoice && (
-              <div className={`p-4 rounded-2xl border flex items-start gap-3 text-xs font-bold font-noto ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-                <span>
-                  {lang === 'bn'
-                    ? 'ইন্টারনেট ভয়েস কল পাঠানোর জন্য সুপার অ্যাডমিন প্যানেল থেকে এই প্রতিষ্ঠানের "প্যারেন্ট পোর্টাল" এবং "লাইভ চ্যাট" মডিউল অ্যাক্টিভ থাকতে হবে।'
-                    : 'Parent Portal and Live Chat permissions must be enabled by Super Admin to broadcast zero-cost internet voice calls.'}
-                </span>
-              </div>
-            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {/* Control 1: Attendance Absence Internet Voice Call */}
@@ -2017,6 +2011,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
               </button>
             </div>
           </motion.div>
+          )}
 
           {/* Smartphone Push & In-App Notification Configuration Card - Only if Parent Portal is active */}
           {Boolean((madrasah?.config_json as any)?.modules?.parent_portal === true) && (

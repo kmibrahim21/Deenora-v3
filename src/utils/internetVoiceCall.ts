@@ -43,15 +43,11 @@ export function hasInternetVoicePermission(
   if (!madrasah) return false;
   const cfg = parseConfigJson(madrasah.config_json);
   const cfgMods = cfg.modules || {};
-  const hasParentPortal =
-    cfgMods.parent_portal === true ||
-    (madrasah as any)?.parent_portal === true ||
-    cfg.parent_portal === true;
-  const hasLiveChat =
-    cfgMods.live_chat === true ||
-    (madrasah as any)?.live_chat === true ||
-    cfg.live_chat === true;
-  return hasParentPortal && hasLiveChat;
+  return (
+    cfgMods.internet_voice_call === true ||
+    (madrasah as any)?.internet_voice_call === true ||
+    cfg.internet_voice_call === true
+  );
 }
 
 export function getInternetVoiceFeatureConfig(

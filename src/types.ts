@@ -56,6 +56,7 @@ export interface Institution {
       donations?: boolean;
       class_routine?: boolean;
       live_chat?: boolean;
+      internet_voice_call?: boolean;
       backup_restore?: boolean;
       biometric_device_sync?: boolean;
       question_bank?: boolean;

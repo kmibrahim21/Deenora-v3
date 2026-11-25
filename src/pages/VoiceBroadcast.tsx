@@ -51,7 +51,7 @@ import PaymentCheckout from '../components/PaymentCheckout';
 import { requestManager } from 'services/RequestManager';
 import { isValidUUID } from 'utils/validation';
 import { globalAudioPlayer } from '../utils/audioPlayer';
-import { normalizeVoiceAudioUrl } from '../utils/internetVoiceCall';
+import { hasInternetVoicePermission, normalizeVoiceAudioUrl } from '../utils/internetVoiceCall';
 
 interface VoiceBroadcastProps {
   lang: Language;
@@ -110,17 +110,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     };
   }, [madrasah?.config_json]);
 
-  const canUseInternetVoiceCall = useMemo(() => {
-    if (isSuperAdmin) return true;
-    let cfg: any = madrasah?.config_json || {};
-    if (typeof cfg === 'string') {
-      try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
-    }
-    const cfgMods = cfg?.modules || {};
-    const hasParentPortal = cfgMods.parent_portal === true || (madrasah as any)?.parent_portal === true || cfg?.parent_portal === true;
-    const hasLiveChat = cfgMods.live_chat === true || (madrasah as any)?.live_chat === true || cfg?.live_chat === true;
-    return hasParentPortal && hasLiveChat;
-  }, [isSuperAdmin, madrasah]);
+  const canUseInternetVoiceCall = useMemo(
+    () => hasInternetVoicePermission(madrasah, isSuperAdmin),
+    [isSuperAdmin, madrasah]
+  );
 
   const availableTabs = useMemo(() => {
     const rawTabs = (['broadcast', 'templates', 'history', 'recharge'] as const);

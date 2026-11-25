@@ -4,9 +4,15 @@ import { supabase, smsApi } from 'supabase';
 import { Language, Class, SMSTemplate, Institution, UserRole, Profile } from 'types';
 import { t } from 'translations';
 import { ShortcodeService } from 'services/ShortcodeService';
-import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall, Download, X } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall, Download, X, Wifi } from 'lucide-react';
 import { isValidUUID } from 'utils/validation';
 import { generateAccountingReportPDF } from 'utils/pdfGenerator';
+import {
+  getInternetVoiceFeatureConfig,
+  hasInternetVoicePermission,
+  parseConfigJson,
+  sendInternetVoiceBroadcast,
+} from '../utils/internetVoiceCall';
 
 import { createPortal } from 'react-dom';
 
@@ -166,6 +172,52 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [voices, setVoices] = useState<any[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.45);
+
+  const isSuperAdmin = role === 'super_admin' || Boolean((madrasah as any)?.is_super_admin);
+  const canUseInternetVoiceCall = React.useMemo(() => {
+    const cfg = parseConfigJson(madrasah?.config_json);
+    return (
+      isSuperAdmin ||
+      hasInternetVoicePermission(madrasah, isSuperAdmin) ||
+      Boolean(cfg?.features?.internet_voice_call)
+    );
+  }, [madrasah, isSuperAdmin]);
+  const internetVoiceConfig = React.useMemo(
+    () => getInternetVoiceFeatureConfig(madrasah),
+    [madrasah]
+  );
+  const [approvedDueVoiceTemplate, setApprovedDueVoiceTemplate] = useState<any | null>(null);
+  const [sendingDueVoice, setSendingDueVoice] = useState(false);
+
+  useEffect(() => {
+    if (
+      !canUseInternetVoiceCall ||
+      !internetVoiceConfig.dueFeeEnabled ||
+      !internetVoiceConfig.dueFeeTemplateId ||
+      !isValidUUID(institutionId)
+    ) {
+      setApprovedDueVoiceTemplate(null);
+      return;
+    }
+    let mounted = true;
+    supabase
+      .from('voice_templates')
+      .select('id, title, admin_status, provider_status')
+      .eq('id', internetVoiceConfig.dueFeeTemplateId)
+      .eq('institution_id', institutionId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!mounted) return;
+        if (data && (data.admin_status || data.provider_status || 'approved') === 'approved') {
+          setApprovedDueVoiceTemplate(data);
+        } else {
+          setApprovedDueVoiceTemplate(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [institutionId, canUseInternetVoiceCall, internetVoiceConfig.dueFeeEnabled, internetVoiceConfig.dueFeeTemplateId]);
 
   const passedClassesLength = classes?.length;
   const allowedClassesJson = JSON.stringify(profile?.permissions?.allowed_classes || []);
@@ -803,6 +855,97 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     }
   };
 
+  const sendDueInternetVoiceCall = async () => {
+    if (sendingDueVoice) return;
+    if (!approvedDueVoiceTemplate) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ভয়েস টেমপ্লেট প্রয়োজন' : 'Voice Template Required',
+        message: lang === 'bn'
+          ? 'অ্যাকাউন্ট -> অটোমেশন ও পারমিশন থেকে সুপার অ্যাডমিন অনুমোদিত একটি ভয়েস টেমপ্লেট নির্বাচন করুন।'
+          : 'Please select a Super Admin approved voice template in Account -> Automation & Permissions.'
+      });
+      return;
+    }
+
+    if (reminders.length === 0) {
+      setStatusModal({
+        show: true,
+        type: 'warning',
+        title: lang === 'bn' ? 'কোনো বকেয়া শিক্ষার্থী নেই' : 'No Due Students',
+        message: lang === 'bn'
+          ? 'বর্তমান তালিকায় কোনো বকেয়া শিক্ষার্থী পাওয়া যায়নি।'
+          : 'No students with due balance found.'
+      });
+      return;
+    }
+
+    const studentIds = Array.from(
+      new Set(reminders.map(r => r.student_id).filter(Boolean))
+    ) as string[];
+
+    const targetPhones = Array.from(
+      new Set(
+        reminders
+          .map(r => {
+            if (!r.guardian_phone) return '';
+            const digits = String(r.guardian_phone).replace(/[^0-9]/g, '');
+            if (digits.length === 11 && digits.startsWith('01')) return digits;
+            if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+            if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+            return digits;
+          })
+          .filter(p => p && p.length === 11 && p.startsWith('01'))
+      )
+    );
+
+    if (studentIds.length === 0 && targetPhones.length === 0) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'সঠিক প্রাপক পাওয়া যায়নি' : 'No Valid Recipients',
+        message: lang === 'bn'
+          ? 'বকেয়া শিক্ষার্থীদের কোনো সঠিক অভিভাবক নম্বর পাওয়া যায়নি।'
+          : 'No valid student IDs or guardian phone numbers found.'
+      });
+      return;
+    }
+
+    setSendingDueVoice(true);
+    try {
+      const resJson = await sendInternetVoiceBroadcast({
+        institutionId,
+        voiceTemplateId: approvedDueVoiceTemplate.id,
+        studentIds,
+        targetPhones,
+        title: 'বকেয়া ফি রিমাইন্ডার ভয়েস কল',
+        body: lang === 'bn'
+          ? `${madrasah?.name || 'প্রতিষ্ঠান'} থেকে বকেয়া ফি পরিশোধের জন্য একটি জরুরি ভয়েস রিমাইন্ডার এসেছে।`
+          : `Fee due reminder voice alert from ${madrasah?.name || 'Institution'}.`
+      });
+
+      setShowVoiceModal(false);
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'ইন্টারনেট ভয়েস কল পাঠানো হয়েছে' : 'Internet Voice Call Sent',
+        message: lang === 'bn'
+          ? `মোট ${resJson.total_targets} জন বকেয়া শিক্ষার্থীর অভিভাবককে ফ্রি ইন্টারনেট ভয়েস কল পাঠানো হয়েছে (${resJson.pushed_devices_count}টি ডিভাইসে পুশ)। খরচ: ০ টাকা।`
+          : `Sent free internet voice reminder to ${resJson.total_targets} recipients (${resJson.pushed_devices_count} devices pushed). Cost: 0 BDT.`
+      });
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Failed',
+        message: err?.message || (lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল পাঠানো যায়নি।' : 'Failed to send free internet voice call.')
+      });
+    } finally {
+      setSendingDueVoice(false);
+    }
+  };
+
   const sendBulkReminder = async (type: 'native' | 'system') => {
     if (reminders.length === 0) return;
     
@@ -1290,31 +1433,57 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button 
-                onClick={() => sendBulkReminder('system')}
-                disabled={sending}
-                className="h-14 bg-[#2563EB] text-white rounded-2xl font-black text-[10px] uppercase shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
-            >
-                {sending ? <Loader2 className="animate-spin" size={16} /> : <MessageSquare size={16} fill="currentColor" />} {t('system_sms', lang)}
-            </button>
-            <button 
-                onClick={() => sendBulkReminder('native')}
-                disabled={sending}
-                className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
-            >
-                <Smartphone size={16} fill="currentColor" /> {t('native_sms', lang)}
-            </button>
-            {(!role || role === 'madrasah_admin' || profile?.permissions?.can_use_voice_call) && (
-              <button 
-                  onClick={fetchVoices}
-                  disabled={sending || isFetchingVoices}
-                  className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 border-emerald-900/50 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
-              >
-                  {isFetchingVoices ? <Loader2 className="animate-spin" size={16} /> : <PhoneCall size={16} fill="currentColor" />} {t('voice_call', lang)}
-              </button>
-            )}
-            </div>
+            {(() => {
+              const hasVoicePermission = !role || role === 'madrasah_admin' || role === 'super_admin' || profile?.permissions?.can_use_voice_call;
+              const showDueInternetVoice = hasVoicePermission && canUseInternetVoiceCall && internetVoiceConfig.dueFeeEnabled;
+              return (
+                <div className={`grid grid-cols-1 ${showDueInternetVoice ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'} gap-3`}>
+                  <button 
+                      onClick={() => sendBulkReminder('system')}
+                      disabled={sending}
+                      className="h-14 bg-[#2563EB] text-white rounded-2xl font-black text-[10px] uppercase shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                      {sending ? <Loader2 className="animate-spin" size={16} /> : <MessageSquare size={16} fill="currentColor" />} {t('system_sms', lang)}
+                  </button>
+                  <button 
+                      onClick={() => sendBulkReminder('native')}
+                      disabled={sending}
+                      className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                  >
+                      <Smartphone size={16} fill="currentColor" /> {t('native_sms', lang)}
+                  </button>
+                  {hasVoicePermission && (
+                    <button 
+                        onClick={fetchVoices}
+                        disabled={sending || isFetchingVoices}
+                        className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 border-emerald-900/50 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
+                    >
+                        {isFetchingVoices ? <Loader2 className="animate-spin" size={16} /> : <PhoneCall size={16} fill="currentColor" />} {t('voice_call', lang)}
+                    </button>
+                  )}
+                  {showDueInternetVoice && (
+                    <button
+                        type="button"
+                        onClick={sendDueInternetVoiceCall}
+                        disabled={sending || sendingDueVoice}
+                        title={approvedDueVoiceTemplate ? approvedDueVoiceTemplate.title : (lang === 'bn' ? 'ভয়েস টেমপ্লেট নির্বাচন করুন' : 'Select approved voice template')}
+                        className={`h-14 rounded-2xl font-black text-[10px] px-3 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 ${
+                          !approvedDueVoiceTemplate || reminders.length === 0
+                            ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-slate-300 shadow-none' : 'bg-slate-200 text-slate-600 shadow-none')
+                            : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-indigo-500/20 hover:from-indigo-700 hover:to-blue-700'
+                        }`}
+                    >
+                        {sendingDueVoice ? <Loader2 className="animate-spin" size={16} /> : <Wifi size={16} />}
+                        <span className="truncate">
+                          {lang === 'bn'
+                            ? `ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)`
+                            : `Free Internet Voice Call (0 BDT)`}
+                        </span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {reminders.map((r, idx) => (
@@ -1409,6 +1578,44 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                   <div className={`h-1.5 w-full rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
                     <div className="h-full bg-blue-500 rounded-full w-full animate-pulse opacity-50" />
                   </div>
+                </div>
+              )}
+
+              {canUseInternetVoiceCall && internetVoiceConfig.dueFeeEnabled && (
+                <div className={`p-4 rounded-2xl border space-y-3 ${madrasah?.theme === 'dark' ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-indigo-50/80 border-indigo-200'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Wifi size={16} className="text-indigo-600 dark:text-indigo-400" />
+                      <span className={`text-xs font-black font-noto ${madrasah?.theme === 'dark' ? 'text-indigo-300' : 'text-indigo-900'}`}>
+                        {lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)' : 'Free Internet Voice Call (0 BDT)'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      0 ৳
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 font-noto">
+                    {approvedDueVoiceTemplate
+                      ? (lang === 'bn'
+                          ? `নির্বাচিত টেমপ্লেট: "${approvedDueVoiceTemplate.title}" (${reminders.length} জন বকেয়া শিক্ষার্থী)`
+                          : `Template: "${approvedDueVoiceTemplate.title}" (${reminders.length} due students)`)
+                      : (lang === 'bn'
+                          ? 'অ্যাকাউন্ট -> অটোমেশন ও পারমিশন থেকে অনুমোদিত ভয়েস টেমপ্লেট সেট করুন।'
+                          : 'Select an approved template in Account -> Automation & Permissions.')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={sendDueInternetVoiceCall}
+                    disabled={sending || sendingDueVoice}
+                    className={`w-full h-12 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 ${
+                      !approvedDueVoiceTemplate || reminders.length === 0
+                        ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-600')
+                        : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md hover:from-indigo-700 hover:to-blue-700'
+                    }`}
+                  >
+                    {sendingDueVoice ? <Loader2 className="animate-spin" size={16} /> : <Wifi size={16} />}
+                    <span>{lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল (০ টাকা)' : 'Free Internet Voice Call (0 BDT)'}</span>
+                  </button>
                 </div>
               )}
             </div>
