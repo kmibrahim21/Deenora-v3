@@ -654,13 +654,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data: existing, error: fetchErr } = await supabase
         .from('voice_templates')
-        .select('id, institution_id')
+        .select('id, institution_id, file_url')
         .eq('id', templateId)
         .single();
       if (fetchErr || !existing) return res.status(404).json({ error: 'Template not found' });
 
       const auth = await verifyCallerAndInstitutionAccess(req, existing.institution_id);
       if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+      if (existing.file_url) {
+        try {
+          const cleanUrl = String(existing.file_url).split('?')[0].trim();
+          if (cleanUrl.includes('supabase.co')) {
+            const match = cleanUrl.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/);
+            if (match && match[1] && match[2]) {
+              await supabase.storage.from(decodeURIComponent(match[1])).remove([decodeURIComponent(match[2])]);
+            } else {
+              const fileName = cleanUrl.split('/').pop();
+              if (fileName) {
+                await supabase.storage.from('voice-templates').remove([`voices/${decodeURIComponent(fileName)}`]);
+              }
+            }
+          }
+        } catch (storageErr) {
+          console.warn('Supabase storage remove warning:', storageErr);
+        }
+      }
 
       const { error: delErr } = await supabase
         .from('voice_templates')
@@ -1131,12 +1150,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const vKey = body.voice_id || body.voice_template_id || body.voice || body.provider_voice_id || body.voice_name || body.title;
         if (vKey) {
           const vKeyStr = String(vKey).trim();
+          const isUuidKey = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vKeyStr);
+          const safeKey = vKeyStr.replace(/[,()]/g, ' ').trim();
           try {
-            const { data: dbVoices } = await supabase
-              .from('voice_templates')
-              .select('id, file_url, title, provider_voice_name, provider_voice_id, status, admin_status, provider_status')
-              .or(`id.eq.${vKeyStr},provider_voice_id.eq.${vKeyStr},title.eq.${vKeyStr},provider_voice_name.eq.${vKeyStr},title.ilike.%${vKeyStr}%,provider_voice_name.ilike.%${vKeyStr}%`)
-              .limit(1);
+            const orFilter = [
+              ...(isUuidKey ? [`id.eq.${vKeyStr}`] : []),
+              `provider_voice_id.eq.${safeKey}`,
+              `title.eq.${safeKey}`,
+              `provider_voice_name.eq.${safeKey}`,
+              `title.ilike.%${safeKey}%`,
+              `provider_voice_name.ilike.%${safeKey}%`
+            ].join(',');
+            const { data: dbVoices } = safeKey
+              ? await supabase
+                  .from('voice_templates')
+                  .select('id, file_url, title, provider_voice_name, provider_voice_id, status, admin_status, provider_status')
+                  .or(orFilter)
+                  .limit(1)
+              : { data: null };
             if (dbVoices && dbVoices[0]) {
               const matched = dbVoices[0];
               if (matched.file_url && matched.file_url.trim().startsWith('http')) {

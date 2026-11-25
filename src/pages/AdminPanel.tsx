@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng, toJpeg } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff, GitFork, ExternalLink } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Pause, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone, Eye, EyeOff, GitFork, ExternalLink, Wifi } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
@@ -192,6 +192,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [pendingVoiceTemplates, setPendingVoiceTemplates] = useState<any[]>([]);
   const [isFetchingPendingVoices, setIsFetchingPendingVoices] = useState(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [confirmDeleteVoiceId, setConfirmDeleteVoiceId] = useState<string | null>(null);
+  const [deletingVoiceId, setDeletingVoiceId] = useState<string | null>(null);
+  const [adminInternetHistory, setAdminInternetHistory] = useState<Array<{
+    call_id: string;
+    institution_id: string;
+    title: string;
+    institution_name: string;
+    created_at: string;
+    total_sent: number;
+    received_count: number;
+    pending_count: number;
+  }>>([]);
+  const [isFetchingAdminInternetHistory, setIsFetchingAdminInternetHistory] = useState(false);
+  const [isCleaningInternetHistory, setIsCleaningInternetHistory] = useState(false);
+  const [confirmCleanupMode, setConfirmCleanupMode] = useState<
+    { type: 'days'; days: number } | { type: 'call'; callId: string; title: string } | null
+  >(null);
   const voiceAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchPendingVoiceTemplates = useCallback(async () => {
@@ -333,6 +350,129 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         title: 'ব্যর্থ',
         message: err.message || 'বাতিল করতে সমস্যা হয়েছে'
       });
+    }
+  };
+
+  const fetchAdminInternetHistory = useCallback(async () => {
+    setIsFetchingAdminInternetHistory(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch('/api/call?action=get_internet_voice_history', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.history)) {
+          setAdminInternetHistory(json.history);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching admin internet voice history:', err);
+    } finally {
+      setIsFetchingAdminInternetHistory(false);
+    }
+  }, []);
+
+  const handleDeleteVoiceTemplate = async (pv: any) => {
+    setDeletingVoiceId(pv.id);
+    try {
+      const fileUrl = pv.file_url || pv.preview_url || pv.previewUrl || pv.url || pv.audio_url || '';
+      if (fileUrl && String(fileUrl).includes('supabase.co')) {
+        const cleanUrl = String(fileUrl).split('?')[0].trim();
+        const match = cleanUrl.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/);
+        if (match && match[1] && match[2]) {
+          await supabase.storage.from(decodeURIComponent(match[1])).remove([decodeURIComponent(match[2])]);
+        } else {
+          const fileName = cleanUrl.split('/').pop();
+          if (fileName) {
+            await supabase.storage.from('voice-templates').remove([`voices/${decodeURIComponent(fileName)}`]);
+          }
+        }
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('সেশন পাওয়া যায়নি। অনুগ্রহ করে আবার লগইন করুন।');
+      }
+
+      const res = await fetch('/api/awaj', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: 'delete_template', id: pv.id }),
+      });
+      const resJson = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resJson.error || 'ভয়েস ডিলিট করতে ব্যর্থ হয়েছে');
+      }
+
+      setConfirmDeleteVoiceId(null);
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'ভয়েস টেমপ্লেট ও অডিও ফাইল সম্পূর্ণভাবে ডিলিট করা হয়েছে।',
+      });
+      fetchPendingVoiceTemplates();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'ডিলিট করতে সমস্যা হয়েছে',
+      });
+    } finally {
+      setDeletingVoiceId(null);
+    }
+  };
+
+  const handleCleanupOldInternetCalls = async () => {
+    if (!confirmCleanupMode) return;
+    setIsCleaningInternetHistory(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('সেশন পাওয়া যায়নি। অনুগ্রহ করে আবার লগইন করুন।');
+      }
+
+      const bodyPayload =
+        confirmCleanupMode.type === 'days'
+          ? { days_old: confirmCleanupMode.days }
+          : { call_id: confirmCleanupMode.callId };
+
+      const res = await fetch('/api/call?action=cleanup_old_internet_calls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(bodyPayload),
+      });
+      const resJson = await res.json().catch(() => ({}));
+      if (!res.ok || !resJson.success) {
+        throw new Error(resJson.error || 'হিস্ট্রি মুছতে ব্যর্থ হয়েছে');
+      }
+
+      setConfirmCleanupMode(null);
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'ক্লিনআপ সম্পন্ন',
+        message: `মোট ${resJson.deleted_count || 0} টি ইন্টারনেট কল রেকর্ড স্থায়ীভাবে মুছে ফেলা হয়েছে।`,
+      });
+      fetchAdminInternetHistory();
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'হিস্ট্রি মুছতে সমস্যা হয়েছে',
+      });
+    } finally {
+      setIsCleaningInternetHistory(false);
     }
   };
 
@@ -1807,6 +1947,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
       if (view === 'approvals') {
         fetchPendingVoiceTemplates();
+        fetchAdminInternetHistory();
         const [pTrans, tHist, gSettings] = await Promise.all([
           fetchPendingTransactions(),
           fetchTransactionHistory(), // Fetch all requests from last 30 days
@@ -4032,7 +4173,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   SMS Recharge
                 </button>
                 <button 
-                  onClick={() => setPaymentTab('voice')}
+                  onClick={() => {
+                    setPaymentTab('voice');
+                    fetchPendingVoiceTemplates();
+                    fetchAdminInternetHistory();
+                  }}
                   className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentTab === 'voice' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : 'text-slate-400'}`}
                 >
                   Voice Recharge
@@ -4128,7 +4273,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                 <p className="text-[10px] text-amber-600 font-noto">⚠️ অডিও লিংক পাওয়া যায়নি</p>
                               )}
 
-                              <div className="flex items-center gap-2 pt-1">
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
                                 <button
                                   type="button"
                                   onClick={() => handleApproveVoiceTemplate(pv.id)}
@@ -4145,6 +4290,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   <XCircle size={13} />
                                   <span>বাতিল</span>
                                 </button>
+                                {confirmDeleteVoiceId === pv.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={deletingVoiceId === pv.id}
+                                      onClick={() => handleDeleteVoiceTemplate(pv)}
+                                      className="py-1.5 px-2.5 bg-red-600 hover:bg-red-700 text-white text-[10px] font-black rounded-lg transition-all font-noto cursor-pointer flex items-center gap-1"
+                                    >
+                                      {deletingVoiceId === pv.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                      <span>নিশ্চিত ডিলিট</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteVoiceId(null)}
+                                      className="py-1.5 px-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-black rounded-lg font-noto cursor-pointer"
+                                    >
+                                      না
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteVoiceId(pv.id)}
+                                    className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+                                    title="ফাইল ও টেমপ্লেট সম্পূর্ণ মুছুন"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -4152,6 +4326,110 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       </div>
                     </div>
                   )}
+
+                  {/* SuperAdmin Internet Voice Call History & Old Storage Cleanup */}
+                  <div className={`p-4 rounded-2xl border space-y-3 ${madrasah?.theme === 'dark' ? 'bg-slate-900/70 border-slate-700' : 'bg-white border-emerald-200/80 shadow-sm'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                          <Wifi size={18} />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black font-noto text-slate-900 dark:text-slate-100">
+                            ইন্টারনেট ভয়েস কল হিস্ট্রি ও স্টোরেজ ক্লিনআপ ({adminInternetHistory.length})
+                          </h4>
+                          <p className="text-[11px] font-bold text-slate-500 font-noto">
+                            ডাটাবেস হালকা রাখতে ৩০ বা ৬০ দিনের পুরনো ইন্টারনেট ভয়েস কল লগ মুছে ফেলুন।
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmCleanupMode({ type: 'days', days: 30 })}
+                          disabled={isCleaningInternetHistory}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black font-noto flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                        >
+                          <Trash2 size={13} />
+                          <span>৩০ দিনের পুরনো ইন্টারনেট কল হিস্ট্রি মুছুন</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmCleanupMode({ type: 'days', days: 60 })}
+                          disabled={isCleaningInternetHistory}
+                          className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black font-noto transition-all cursor-pointer active:scale-95"
+                        >
+                          ৬০ দিন+
+                        </button>
+                        <button
+                          type="button"
+                          onClick={fetchAdminInternetHistory}
+                          disabled={isFetchingAdminInternetHistory}
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[11px] font-black font-noto flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw size={13} className={isFetchingAdminInternetHistory ? 'animate-spin' : ''} />
+                          <span>রিফ্রেশ</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {confirmCleanupMode && (
+                      <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-rose-800 dark:text-rose-200 font-noto">
+                          {confirmCleanupMode.type === 'days'
+                            ? `আপনি কি ${confirmCleanupMode.days} দিনের চেয়ে পুরনো সকল ইন্টারনেট ভয়েস কল রেকর্ড স্থায়ীভাবে মুছতে চান?`
+                            : `আপনি কি "${confirmCleanupMode.title}" কলের সকল হিস্ট্রি রেকর্ড মুছে ফেলতে চান?`}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCleanupOldInternetCalls}
+                            disabled={isCleaningInternetHistory}
+                            className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black font-noto flex items-center gap-1 cursor-pointer"
+                          >
+                            {isCleaningInternetHistory && <Loader2 size={12} className="animate-spin" />}
+                            <span>হ্যাঁ, মুছুন</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmCleanupMode(null)}
+                            className="px-3 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-black font-noto cursor-pointer"
+                          >
+                            বাতিল
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {adminInternetHistory.length > 0 && (
+                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                        {adminInternetHistory.slice(0, 30).map((item) => (
+                          <div key={item.call_id} className="px-3 py-2.5 flex items-center justify-between gap-3 text-xs">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-black text-slate-800 dark:text-slate-100 font-noto truncate">{item.title}</span>
+                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded font-noto shrink-0">
+                                  {item.received_count}/{item.total_sent} রিসিভ
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-400 font-noto truncate">
+                                {item.institution_name} • {item.created_at ? new Date(item.created_at).toLocaleString('bn-BD') : ''}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmCleanupMode({ type: 'call', callId: item.call_id, title: item.title })}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer shrink-0"
+                              title="এই কলের হিস্ট্রি মুছুন"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

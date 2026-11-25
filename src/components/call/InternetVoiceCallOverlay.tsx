@@ -20,8 +20,15 @@ interface InternetVoiceCallOverlayProps {
   title: string;
   body?: string;
   autoPlay?: boolean;
+  onAccept?: () => void;
   onClose: () => void;
 }
+
+const normalizeVoiceAudioUrl = (url: string): string => {
+  const trimmed = String(url || '').trim();
+  if (!trimmed) return '';
+  return trimmed.replace(/^https?:\/\/t2\.tenbytecloud\.com\//i, 'https://s3.eslcloud.io/');
+};
 
 const isSafeAudioUrl = (url: string): boolean => {
   const trimmed = String(url || '').trim();
@@ -40,8 +47,10 @@ export const InternetVoiceCallOverlay: React.FC<InternetVoiceCallOverlayProps> =
   title,
   body,
   autoPlay = false,
+  onAccept,
   onClose,
 }) => {
+  const normalizedAudioUrl = normalizeVoiceAudioUrl(audioUrl);
   const [phase, setPhase] = useState<'ringing' | 'answered'>(autoPlay ? 'answered' : 'ringing');
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -155,8 +164,8 @@ export const InternetVoiceCallOverlay: React.FC<InternetVoiceCallOverlayProps> =
     return () => window.clearInterval(t);
   }, [isOpen, phase]);
 
-  const startPlayback = useCallback(async () => {
-    if (!isSafeAudioUrl(audioUrl)) {
+  const startPlayback = useCallback(() => {
+    if (!isSafeAudioUrl(normalizedAudioUrl)) {
       setAudioError('অডিও লিংকটি সঠিক নয়।');
       return;
     }
@@ -166,15 +175,31 @@ export const InternetVoiceCallOverlay: React.FC<InternetVoiceCallOverlayProps> =
     setIsLoadingAudio(true);
     try {
       el.muted = isMuted;
-      await el.play();
-      setIsPlaying(true);
+      if (el.readyState === 0 || el.error) {
+        el.load();
+      }
+      const playPromise = el.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+            setIsLoadingAudio(false);
+          })
+          .catch(() => {
+            setAudioError('অডিও চালু করতে "প্লে" বাটনে ট্যাপ করুন।');
+            setIsPlaying(false);
+            setIsLoadingAudio(false);
+          });
+      } else {
+        setIsPlaying(true);
+        setIsLoadingAudio(false);
+      }
     } catch {
       setAudioError('অডিও চালু করতে "প্লে" বাটনে ট্যাপ করুন।');
       setIsPlaying(false);
-    } finally {
       setIsLoadingAudio(false);
     }
-  }, [audioUrl, isMuted]);
+  }, [normalizedAudioUrl, isMuted]);
 
   // Auto-play immediately when opened in replay mode from Notification Center
   useEffect(() => {
@@ -198,10 +223,9 @@ export const InternetVoiceCallOverlay: React.FC<InternetVoiceCallOverlayProps> =
     stopRingChime();
     setPhase('answered');
     setElapsedSec(0);
-    // Trigger play inside click user gesture for mobile browser compatibility
-    setTimeout(() => {
-      startPlayback();
-    }, 30);
+    onAccept?.();
+    // Play synchronously inside click user gesture for mobile browser compatibility
+    startPlayback();
   };
 
   const handleTogglePlayPause = () => {
@@ -251,7 +275,7 @@ export const InternetVoiceCallOverlay: React.FC<InternetVoiceCallOverlayProps> =
       {/* Hidden native audio element */}
       <audio
         ref={audioRef}
-        src={isSafeAudioUrl(audioUrl) ? audioUrl : ''}
+        src={isSafeAudioUrl(normalizedAudioUrl) ? normalizedAudioUrl : ''}
         preload="auto"
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;

@@ -1470,7 +1470,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const audioUrl = String(voiceTemplate.file_url || '').trim();
+      const normalizeVoiceAudioUrl = (raw: any): string => {
+        const trimmed = String(raw || '').trim();
+        if (!trimmed) return '';
+        return trimmed.replace(/^https?:\/\/t2\.tenbytecloud\.com\//i, 'https://s3.eslcloud.io/');
+      };
+
+      const audioUrl = normalizeVoiceAudioUrl(voiceTemplate.file_url);
       if (!audioUrl || (!audioUrl.startsWith('https://') && !audioUrl.startsWith('http://') && !audioUrl.startsWith('/'))) {
         return res.status(400).json({ success: false, error: 'Valid voice template audio URL is missing' });
       }
@@ -1782,6 +1788,149 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // 4c. MARK INTERNET VOICE CALL RECEIVED BY GUARDIAN
+  if (req.method === 'POST' && action === 'mark_internet_voice_received') {
+    try {
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return res.status(500).json({ success: false, error: 'Server configuration error' });
+      }
+      const { call_id, guardian_phone, student_id } = req.body || {};
+      const cleanCallId = String(call_id || '').trim();
+      if (!cleanCallId || !/^ivc_[0-9]+_[a-f0-9]+$/i.test(cleanCallId)) {
+        return res.status(400).json({ success: false, error: 'Valid call_id is required' });
+      }
+
+      const isUuid = (s: any) =>
+        typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+      const cleanStudentId = isUuid(student_id) ? String(student_id).trim() : '';
+      const digitsPhone = String(guardian_phone || '').replace(/\D/g, '');
+      const last10Phone = digitsPhone.length >= 10 ? digitsPhone.slice(-10) : '';
+
+      if (!cleanStudentId && !last10Phone) {
+        return res.status(400).json({ success: false, error: 'Valid student_id or guardian_phone is required' });
+      }
+
+      let filterQuery = `type=eq.auto_voice_alert&message=ilike.*${encodeURIComponent(cleanCallId)}*`;
+      if (cleanStudentId && last10Phone) {
+        filterQuery += `&or=(student_id.eq.${encodeURIComponent(cleanStudentId)},guardian_phone.ilike.*${encodeURIComponent(last10Phone)}*)`;
+      } else if (cleanStudentId) {
+        filterQuery += `&student_id=eq.${encodeURIComponent(cleanStudentId)}`;
+      } else {
+        filterQuery += `&guardian_phone=ilike.*${encodeURIComponent(last10Phone)}*`;
+      }
+
+      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/app_notifications?${filterQuery}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation',
+        },
+        body: JSON.stringify({ is_read: true }),
+      });
+
+      if (!patchRes.ok) {
+        const errText = await patchRes.text().catch(() => '');
+        return res.status(500).json({ success: false, error: errText || 'Failed to update notification status' });
+      }
+
+      const patchedRows = await patchRes.json().catch(() => []);
+      return res.status(200).json({
+        success: true,
+        updated_count: Array.isArray(patchedRows) ? patchedRows.length : 0,
+      });
+    } catch (err: any) {
+      console.error('[Call API] mark_internet_voice_received error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+    }
+  }
+
+  // 4d. SUPERADMIN CLEANUP OLD OR SPECIFIC INTERNET VOICE CALL HISTORY
+  if (req.method === 'POST' && action === 'cleanup_old_internet_calls') {
+    try {
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return res.status(500).json({ success: false, error: 'Server configuration error' });
+      }
+
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+      }
+      const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (!bearerToken || bearerToken === 'undefined' || bearerToken === 'null') {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+      }
+
+      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${bearerToken}` },
+      });
+      if (!userRes.ok) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired token' });
+      }
+      const authUser = await userRes.json();
+      const userId = authUser?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: User not found' });
+      }
+
+      const sbHeaders = {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      };
+      const profRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?select=id,role&id=eq.${encodeURIComponent(userId)}&limit=1`,
+        { headers: sbHeaders }
+      );
+      const profRows = profRes.ok ? await profRes.json() : [];
+      const callerProfile = Array.isArray(profRows) ? profRows[0] : null;
+      if (!callerProfile || (callerProfile.role !== 'super_admin' && callerProfile.role !== 'manager')) {
+        return res.status(403).json({ success: false, error: 'Forbidden: SuperAdmin permission required' });
+      }
+
+      const { days_old, call_id } = req.body || {};
+      const cleanCallId = String(call_id || '').trim();
+      let deleteQuery = '';
+
+      if (cleanCallId) {
+        if (!/^ivc_[0-9]+_[a-f0-9]+$/i.test(cleanCallId)) {
+          return res.status(400).json({ success: false, error: 'Invalid call_id format' });
+        }
+        deleteQuery = `type=eq.auto_voice_alert&message=ilike.*${encodeURIComponent(cleanCallId)}*`;
+      } else {
+        const parsedDays = Number(days_old ?? 30);
+        if (!Number.isFinite(parsedDays) || parsedDays < 1 || parsedDays > 3650) {
+          return res.status(400).json({ success: false, error: 'days_old must be between 1 and 3650' });
+        }
+        const cutoffIso = new Date(Date.now() - Math.floor(parsedDays) * 24 * 60 * 60 * 1000).toISOString();
+        deleteQuery = `type=eq.auto_voice_alert&created_at=lt.${encodeURIComponent(cutoffIso)}`;
+      }
+
+      const delRes = await fetch(`${SUPABASE_URL}/rest/v1/app_notifications?${deleteQuery}`, {
+        method: 'DELETE',
+        headers: {
+          ...sbHeaders,
+          Prefer: 'return=representation',
+        },
+      });
+
+      if (!delRes.ok) {
+        const errTxt = await delRes.text().catch(() => '');
+        return res.status(500).json({ success: false, error: errTxt || 'Failed to delete call history' });
+      }
+
+      const deletedRows = await delRes.json().catch(() => []);
+      return res.status(200).json({
+        success: true,
+        deleted_count: Array.isArray(deletedRows) ? deletedRows.length : 0,
+      });
+    } catch (err: any) {
+      console.error('[Call API] cleanup_old_internet_calls error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+    }
+  }
+
   // 5. GET CALL PAYLOAD FOR KILLED-STATE NOTIFICATION TAP
   if (action === 'get_call_payload' || (req.query && req.query.action === 'get_call_payload')) {
     const targetCallId = String(req.body?.call_id || req.query?.call_id || '').trim();
@@ -1873,8 +2022,186 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // 6. GET CALL CONFIG & HEALTH
+  // 6. GET CALL CONFIG, INTERNET VOICE HISTORY & HEALTH
   if (req.method === 'GET') {
+    if (req.query && req.query.action === 'get_internet_voice_history') {
+      try {
+        if (!SUPABASE_URL || !SUPABASE_KEY) {
+          return res.status(500).json({ success: false, error: 'Server configuration error' });
+        }
+
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+          return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+        }
+        const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+        if (!bearerToken || bearerToken === 'undefined' || bearerToken === 'null') {
+          return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+        }
+
+        const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${bearerToken}` },
+        });
+        if (!userRes.ok) {
+          return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired token' });
+        }
+        const authUser = await userRes.json();
+        const userId = authUser?.id;
+        if (!userId) {
+          return res.status(401).json({ success: false, error: 'Unauthorized: User not found' });
+        }
+
+        const sbHeaders = {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        };
+        const sbGet = async (path: string): Promise<any[]> => {
+          try {
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders });
+            if (!r.ok) return [];
+            const j = await r.json();
+            return Array.isArray(j) ? j : [];
+          } catch {
+            return [];
+          }
+        };
+
+        const profiles = await sbGet(`profiles?select=id,institution_id,role&id=eq.${encodeURIComponent(userId)}&limit=1`);
+        const callerProfile = profiles[0];
+        if (!callerProfile) {
+          return res.status(403).json({ success: false, error: 'Forbidden: Profile not found' });
+        }
+
+        const isUuid = (s: any) =>
+          typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+        const isSuperAdmin = callerProfile.role === 'super_admin' || callerProfile.role === 'manager';
+        const requestedInstId = String(req.query.institution_id || '').trim();
+
+        if (requestedInstId && !isUuid(requestedInstId)) {
+          return res.status(400).json({ success: false, error: 'Invalid institution_id' });
+        }
+
+        const effectiveInstId = requestedInstId || (!isSuperAdmin ? callerProfile.institution_id : '');
+        if (!isSuperAdmin) {
+          if (!effectiveInstId) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Institution access required' });
+          }
+          if (callerProfile.institution_id !== effectiveInstId) {
+            const instCheck = await sbGet(`institutions?select=id,config_json&id=eq.${encodeURIComponent(effectiveInstId)}&limit=1`);
+            let cfgObj: any = instCheck[0]?.config_json || {};
+            if (typeof cfgObj === 'string') {
+              try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; }
+            }
+            if (cfgObj?.parent_institution_id !== callerProfile.institution_id) {
+              return res.status(403).json({ success: false, error: 'Forbidden: Access denied for this institution' });
+            }
+          }
+        }
+
+        let queryUrl = `app_notifications?select=id,institution_id,student_id,guardian_phone,title,message,is_read,created_at&type=eq.auto_voice_alert&order=created_at.desc&limit=2000`;
+        if (effectiveInstId) {
+          queryUrl += `&institution_id=eq.${encodeURIComponent(effectiveInstId)}`;
+        }
+
+        const rows = await sbGet(queryUrl);
+        const normalizeVoiceAudioUrl = (raw: any): string => {
+          const trimmed = String(raw || '').trim();
+          if (!trimmed) return '';
+          return trimmed.replace(/^https?:\/\/t2\.tenbytecloud\.com\//i, 'https://s3.eslcloud.io/');
+        };
+        const normLast10 = (p: any) => String(p || '').replace(/\D/g, '').slice(-10);
+
+        interface AggregatedCall {
+          call_id: string;
+          institution_id: string;
+          title: string;
+          institution_name: string;
+          audio_url: string;
+          created_at: string;
+          recipientMap: Map<string, { guardian_phone: string; student_id: string | null; received: boolean }>;
+        }
+
+        const grouped = new Map<string, AggregatedCall>();
+
+        for (const row of rows) {
+          let parsed: any = {};
+          if (row?.message) {
+            try {
+              parsed = typeof row.message === 'string' ? JSON.parse(row.message) : row.message;
+            } catch {
+              parsed = {};
+            }
+          }
+          const callId = String(
+            parsed?.call_id ||
+            `legacy_${row.institution_id || 'x'}_${row.title || 'voice'}_${String(row.created_at || '').slice(0, 16)}`
+          ).trim();
+
+          let bucket = grouped.get(callId);
+          if (!bucket) {
+            bucket = {
+              call_id: callId,
+              institution_id: row.institution_id || '',
+              title: String(row.title || parsed?.title || 'জরুরি ভয়েস বার্তা'),
+              institution_name: String(parsed?.institution_name || 'প্রতিষ্ঠান'),
+              audio_url: normalizeVoiceAudioUrl(parsed?.audio_url || ''),
+              created_at: row.created_at,
+              recipientMap: new Map(),
+            };
+            grouped.set(callId, bucket);
+          }
+
+          if (row.created_at && new Date(row.created_at).getTime() > new Date(bucket.created_at).getTime()) {
+            bucket.created_at = row.created_at;
+          }
+          if (!bucket.audio_url && parsed?.audio_url) {
+            bucket.audio_url = normalizeVoiceAudioUrl(parsed.audio_url);
+          }
+
+          const gPhone = String(row.guardian_phone || '').trim();
+          const sId = row.student_id || null;
+          const rKey = `${sId || ''}_${normLast10(gPhone) || row.id}`;
+          const prevRecipient = bucket.recipientMap.get(rKey);
+          const isReceived = Boolean(row.is_read);
+          if (prevRecipient) {
+            prevRecipient.received = prevRecipient.received || isReceived;
+          } else {
+            bucket.recipientMap.set(rKey, {
+              guardian_phone: gPhone,
+              student_id: sId,
+              received: isReceived,
+            });
+          }
+        }
+
+        const history = Array.from(grouped.values())
+          .map((item) => {
+            const recipients = Array.from(item.recipientMap.values());
+            const received_count = recipients.filter((r) => r.received).length;
+            const total_sent = recipients.length;
+            return {
+              call_id: item.call_id,
+              institution_id: item.institution_id,
+              title: item.title,
+              institution_name: item.institution_name,
+              audio_url: item.audio_url,
+              created_at: item.created_at,
+              total_sent,
+              received_count,
+              pending_count: Math.max(0, total_sent - received_count),
+              recipients,
+            };
+          })
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        return res.status(200).json({ success: true, history });
+      } catch (err: any) {
+        console.error('[Call API] get_internet_voice_history error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+      }
+    }
+
     if (req.query && req.query.action === 'get_call_payload') {
       const targetCallId = String(req.query?.call_id || '').trim();
       if (targetCallId && activeCallPayloads[targetCallId]) {

@@ -5657,6 +5657,22 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       title={activeVoiceAlert.title}
       body={activeVoiceAlert.body}
       autoPlay={activeVoiceAlert.autoPlay}
+      onAccept={() => {
+        if (activeVoiceAlert.id) {
+          handleMarkAsRead(activeVoiceAlert.id);
+        }
+        if (activeVoiceAlert.call_id) {
+          fetch('/api/call?action=mark_internet_voice_received', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              call_id: activeVoiceAlert.call_id,
+              guardian_phone: getParentPhone(),
+              student_id: student?.id || activeStudentId || studentId || null,
+            }),
+          }).catch(() => {});
+        }
+      }}
       onClose={() => {
         if (activeVoiceAlert.id) {
           handleMarkAsRead(activeVoiceAlert.id);

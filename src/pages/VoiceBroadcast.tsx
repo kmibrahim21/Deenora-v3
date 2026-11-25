@@ -313,6 +313,47 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [allStudentsForBroadcast, setAllStudentsForBroadcast] = useState<Array<{ id: string; student_name: string; roll?: any; class_id?: string; guardian_phone?: string; guardian_phone_2?: string }>>([]);
   const [internetCallTitle, setInternetCallTitle] = useState<string>('');
   const [internetCallBody, setInternetCallBody] = useState<string>('');
+  const [internetVoiceHistory, setInternetVoiceHistory] = useState<Array<{
+    call_id: string;
+    institution_id: string;
+    title: string;
+    institution_name: string;
+    audio_url: string;
+    created_at: string;
+    total_sent: number;
+    received_count: number;
+    pending_count: number;
+    recipients: Array<{ guardian_phone: string; student_id: string | null; received: boolean }>;
+  }>>([]);
+  const [isFetchingInternetHistory, setIsFetchingInternetHistory] = useState(false);
+  const [expandedInternetCallId, setExpandedInternetCallId] = useState<string | null>(null);
+
+  const fetchInternetVoiceHistory = async () => {
+    if (!canUseInternetVoiceCall || !madrasah?.id) return;
+    setIsFetchingInternetHistory(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(
+        `/api/call?action=get_internet_voice_history&institution_id=${encodeURIComponent(madrasah.id)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.history)) {
+          setInternetVoiceHistory(json.history);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching internet voice history:', err);
+    } finally {
+      setIsFetchingInternetHistory(false);
+    }
+  };
 
   useEffect(() => {
     if (!canUseInternetVoiceCall && broadcastMode === 'internet_voice') {
@@ -699,6 +740,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         fetchClasses();
         fetchTeachers();
         fetchAllStudentsForBroadcast();
+        if (canUseInternetVoiceCall) {
+          fetchInternetVoiceHistory();
+        }
       } 
       fetchVoices(); 
       fetchSenders(); 
@@ -712,7 +756,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       fetchSystemSettings();
       fetchUserTransactions();
     }
-  }, [activeTab, madrasah?.id, madrasah?.balance, madrasah?.sms_balance, dataVersion]);
+  }, [activeTab, madrasah?.id, madrasah?.balance, madrasah?.sms_balance, dataVersion, canUseInternetVoiceCall]);
 
   const fetchSystemSettings = async () => {
     const { data } = await supabase.from('system_settings').select('bkash_number, nagad_number, voice_rate').single();
@@ -914,9 +958,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
       
       if (fileUrl && fileUrl.includes('supabase.co')) {
-        const fileName = fileUrl.split('/').pop();
-        if (fileName) {
-          await supabase.storage.from('voice-templates').remove([`voices/${fileName}`]);
+        const cleanUrl = String(fileUrl).split('?')[0].trim();
+        const match = cleanUrl.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/);
+        if (match && match[1] && match[2]) {
+          await supabase.storage.from(decodeURIComponent(match[1])).remove([decodeURIComponent(match[2])]);
+        } else {
+          const fileName = cleanUrl.split('/').pop();
+          if (fileName) {
+            await supabase.storage.from('voice-templates').remove([`voices/${decodeURIComponent(fileName)}`]);
+          }
         }
       }
 
@@ -1869,6 +1919,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       });
       setInternetCallTitle('');
       setInternetCallBody('');
+      fetchInternetVoiceHistory();
     } catch (err: any) {
       setStatusModal({
         show: true,
@@ -2246,7 +2297,19 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      let recorderOptions: MediaRecorderOptions | undefined;
+      let recordedMimeType = 'audio/webm';
+      if (uploadMode === 'internet_only' && typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus')) {
+          recorderOptions = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 24000 };
+          recordedMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported?.('audio/webm')) {
+          recorderOptions = { mimeType: 'audio/webm', audioBitsPerSecond: 24000 };
+        } else {
+          recorderOptions = { audioBitsPerSecond: 24000 };
+        }
+      }
+      const mediaRecorder = recorderOptions ? new MediaRecorder(stream, recorderOptions) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -2257,8 +2320,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const recordedFile = new File([audioBlob], `recorded_voice_${Date.now()}.webm`, { type: 'audio/webm' });
+        const blobType = mediaRecorder.mimeType || recordedMimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+        const recordedFile = new File([audioBlob], `recorded_voice_${Date.now()}.webm`, { type: blobType });
         setUploadFile(recordedFile);
         stream.getTracks().forEach(track => track.stop());
       };
@@ -3143,6 +3207,127 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                 </div>
               </div>
             </div>
+
+            {canUseInternetVoiceCall && broadcastMode === 'internet_voice' && (
+              <div className="bg-white/95 backdrop-blur-md rounded-[2.2rem] p-5 sm:p-7 border border-emerald-200/80 shadow-bubble space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <History size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-slate-900 font-noto">
+                        {lang === 'bn' ? 'ইন্টারনেট ভয়েস কল ইতিহাস' : 'Internet Voice Call History'}
+                      </h3>
+                      <p className="text-[11px] font-bold text-slate-500 font-noto">
+                        {lang === 'bn' ? 'কে কে কল রিসিভ করেছে এবং কতজন অপেক্ষমান তা দেখুন' : 'Track guardian receipt status for zero-cost calls'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchInternetVoiceHistory}
+                    disabled={isFetchingInternetHistory}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-black font-noto flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <RefreshCw size={14} className={isFetchingInternetHistory ? 'animate-spin' : ''} />
+                    <span>{lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}</span>
+                  </button>
+                </div>
+
+                {isFetchingInternetHistory && internetVoiceHistory.length === 0 ? (
+                  <div className="py-8 flex items-center justify-center gap-2 text-slate-400 text-xs font-bold font-noto">
+                    <Loader2 size={18} className="animate-spin text-emerald-600" />
+                    <span>{lang === 'bn' ? 'কল ইতিহাস লোড হচ্ছে...' : 'Loading call history...'}</span>
+                  </div>
+                ) : internetVoiceHistory.length === 0 ? (
+                  <div className="py-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70">
+                    <p className="text-xs font-bold text-slate-500 font-noto">
+                      {lang === 'bn' ? 'এখনো কোনো ইন্টারনেট ভয়েস কল পাঠানো হয়নি।' : 'No internet voice calls sent yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {internetVoiceHistory.map((item) => {
+                      const isExpanded = expandedInternetCallId === item.call_id;
+                      return (
+                        <div key={item.call_id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm font-black text-slate-900 font-noto truncate">{item.title}</h4>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black font-noto">
+                                  ০ টাকা
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-bold text-slate-500 font-noto">
+                                {item.created_at ? new Date(item.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US') : ''}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setExpandedInternetCallId(isExpanded ? null : item.call_id)}
+                              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-[11px] font-black text-slate-700 font-noto flex items-center gap-1 cursor-pointer transition-all"
+                            >
+                              <Users size={13} className="text-emerald-600" />
+                              <span>{isExpanded ? (lang === 'bn' ? 'বন্ধ করুন' : 'Hide') : (lang === 'bn' ? 'প্রাপক তালিকা' : 'Recipients')}</span>
+                              <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-white border border-slate-200 px-3 py-2 text-center">
+                              <p className="text-[10px] font-bold text-slate-500 font-noto">{lang === 'bn' ? 'মোট পাঠানো' : 'Total Sent'}</p>
+                              <p className="text-sm font-black text-slate-900">{item.total_sent}</p>
+                            </div>
+                            <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-center">
+                              <p className="text-[10px] font-bold text-emerald-700 font-noto">{lang === 'bn' ? 'রিসিভ করেছে' : 'Received'}</p>
+                              <p className="text-sm font-black text-emerald-800">{item.received_count}</p>
+                            </div>
+                            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-center">
+                              <p className="text-[10px] font-bold text-amber-700 font-noto">{lang === 'bn' ? 'অপেক্ষমান' : 'Pending'}</p>
+                              <p className="text-sm font-black text-amber-800">{item.pending_count}</p>
+                            </div>
+                          </div>
+
+                          {isExpanded && item.recipients && item.recipients.length > 0 && (
+                            <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                              {item.recipients.map((rec, idx) => {
+                                const stMatch = rec.student_id
+                                  ? allStudentsForBroadcast.find((s) => s.id === rec.student_id)
+                                  : undefined;
+                                return (
+                                  <div key={`${rec.student_id || ''}_${rec.guardian_phone || idx}`} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-slate-800 font-noto truncate">
+                                        {stMatch?.student_name || rec.guardian_phone || (lang === 'bn' ? 'অভিভাবক' : 'Guardian')}
+                                      </p>
+                                      {rec.guardian_phone && (
+                                        <p className="text-[10px] font-mono text-slate-500">{rec.guardian_phone}</p>
+                                      )}
+                                    </div>
+                                    {rec.received ? (
+                                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black font-noto shrink-0">
+                                        রিসিভ করেছে ✓
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black font-noto shrink-0">
+                                        অপেক্ষমান
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -1937,8 +1937,42 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, data });
     }
 
+    const removeVoiceStorageFiles = async (rows: Array<{ file_url?: string | null }>) => {
+      const byBucket: Record<string, string[]> = {};
+      for (const r of rows || []) {
+        const cleanUrl = String(r?.file_url || '').split('?')[0].trim();
+        if (!cleanUrl || !cleanUrl.includes('supabase.co')) continue;
+        const match = cleanUrl.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/);
+        if (match && match[1] && match[2]) {
+          const b = decodeURIComponent(match[1]);
+          const p = decodeURIComponent(match[2]);
+          byBucket[b] = byBucket[b] || [];
+          byBucket[b].push(p);
+        } else {
+          const fileName = cleanUrl.split('/').pop();
+          if (fileName) {
+            byBucket['voice-templates'] = byBucket['voice-templates'] || [];
+            byBucket['voice-templates'].push(`voices/${decodeURIComponent(fileName)}`);
+          }
+        }
+      }
+      for (const [bucket, paths] of Object.entries(byBucket)) {
+        if (paths.length > 0) {
+          try {
+            await supabase.storage.from(bucket).remove(Array.from(new Set(paths)));
+          } catch (sErr) {
+            console.warn('Supabase voice storage cleanup warning:', sErr);
+          }
+        }
+      }
+    };
+
     if (action === 'unassign_voice') {
       const { id } = body;
+      const { data: rowsToDel } = await supabase.from('voice_templates').select('id, file_url').eq('id', id);
+      if (rowsToDel && rowsToDel.length > 0) {
+        await removeVoiceStorageFiles(rowsToDel);
+      }
       const { error } = await supabase.from('voice_templates').delete().eq('id', id);
       if (error) throw error;
       return res.status(200).json({ success: true });
@@ -1947,12 +1981,26 @@ export default async function handler(req, res) {
     if (action === 'delete_voice_assignments') {
       const { voice_id } = body;
       if (voice_id) {
-        const vIdStr = voice_id.toString();
-        const { error } = await supabase
-          .from('voice_templates')
-          .delete()
-          .or(`provider_voice_id.eq.${vIdStr},id.eq.${vIdStr}`);
-        if (error) console.warn('Supabase delete voice_templates error:', error);
+        const vIdStr = voice_id.toString().trim();
+        const isUuidId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vIdStr);
+        const safeId = vIdStr.replace(/[,()]/g, '').trim();
+        if (safeId) {
+          const orFilter = isUuidId
+            ? `provider_voice_id.eq.${safeId},id.eq.${safeId}`
+            : `provider_voice_id.eq.${safeId}`;
+          const { data: rowsToDel } = await supabase
+            .from('voice_templates')
+            .select('id, file_url')
+            .or(orFilter);
+          if (rowsToDel && rowsToDel.length > 0) {
+            await removeVoiceStorageFiles(rowsToDel);
+          }
+          const { error } = await supabase
+            .from('voice_templates')
+            .delete()
+            .or(orFilter);
+          if (error) console.warn('Supabase delete voice_templates error:', error);
+        }
       }
       return res.status(200).json({ success: true });
     }
