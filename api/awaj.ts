@@ -1776,6 +1776,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let totalOverallRefundPulses = 0;
         let anyLogsFound = false;
+        let anyCampaignFetchFailed = false;
 
         for (const campId of allCampaignIds) {
           try {
@@ -1785,6 +1786,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             if (!response.ok) {
+              anyCampaignFetchFailed = true;
               console.warn(`Campaign ${campId} logs fetch failed: ${response.statusText}`);
               continue;
             }
@@ -1819,7 +1821,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 campaignRefundPulses += refundPulsesForThisCall;
               } else if (isFailedStatus) {
                 campaignRefundPulses += chargedPulsesPerCall;
-              } else if (!['pending', 'sending', 'processing', 'queued'].includes(status)) {
+              } else if (!['pending', 'sending', 'processing', 'queued', 'calling', 'ringing', 'dialing', 'in_progress', 'in-progress'].includes(status)) {
                 campaignRefundPulses += chargedPulsesPerCall;
               }
             });
@@ -1855,6 +1857,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             totalOverallRefundPulses += campaignRefundPulses;
 
           } catch (campErr: any) {
+            anyCampaignFetchFailed = true;
             if (campErr.message?.includes('Awaj Gateway Timeout')) {
               throw campErr;
             }
@@ -1873,8 +1876,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const calculatedRefund = Number((totalOverallRefundPulses * costPerPulse).toFixed(2));
 
         // IF prevRefund is higher than calculatedRefund, perform auto-correction (deduct excess)
-        // This is safe to run now because background polling is restricted to once per completed campaign
-        if (prevRefund > (calculatedRefund + 0.01)) {
+        // ONLY run when ALL campaign fetches succeeded; a failed campaign fetch makes calculatedRefund artificially low
+        if (anyCampaignFetchFailed && prevRefund > (calculatedRefund + 0.01)) {
+          console.warn(`Skipping CORRECT_VOICE auto-correction for broadcast ${broadcast.id} because at least one campaign fetch failed.`);
+          return res.status(200).json({
+            success: true,
+            partial_fetch: true,
+            refund_amount: prevRefund,
+            actual_cost: Number((estimatedCostOriginal - prevRefund).toFixed(2)),
+            message: 'Skipped refund auto-correction due to incomplete campaign log fetch.'
+          });
+        }
+
+        if (!anyCampaignFetchFailed && prevRefund > (calculatedRefund + 0.01)) {
           const excessRefund = Number((prevRefund - calculatedRefund).toFixed(2));
           if (excessRefund > 0) {
             const { data: inst } = await supabase
@@ -1916,7 +1930,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // IF prevRefund is equal to calculatedRefund (or within 0.01 range), treat as already fully refunded
-        if (Math.abs(prevRefund - calculatedRefund) <= 0.01) {
+        if (!anyCampaignFetchFailed && Math.abs(prevRefund - calculatedRefund) <= 0.01) {
           await supabase.from('voice_broadcasts').update({
             is_refunded: true
           }).eq('id', broadcast.id);
