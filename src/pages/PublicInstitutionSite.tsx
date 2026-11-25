@@ -556,32 +556,44 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
 
   if (loadError || !siteData) {
     return (
-      <div className="min-h-screen w-full bg-[#F8FAFC] flex items-center justify-center p-6 font-noto">
-        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-8 text-center shadow-sm space-y-4">
-          <div
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
-              loadErrorCode === 'SITE_DISABLED'
-                ? 'bg-amber-50 text-amber-600'
-                : 'bg-rose-50 text-rose-600'
-            }`}
-          >
-            <AlertCircle size={28} />
+      <div className="min-h-screen w-full bg-[#F8FAFC] flex flex-col items-center justify-between p-6 font-noto">
+        <div className="flex-1 flex items-center justify-center w-full">
+          <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-8 text-center shadow-sm space-y-4">
+            <div
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
+                loadErrorCode === 'SITE_DISABLED'
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'bg-rose-50 text-rose-600'
+              }`}
+            >
+              <AlertCircle size={28} />
+            </div>
+            <h1 className="text-xl font-black text-slate-900">
+              {loadErrorCode === 'SITE_DISABLED'
+                ? 'পাবলিক ওয়েবসাইট চালু নেই'
+                : 'প্রতিষ্ঠান খুঁজে পাওয়া যায়নি'}
+            </h1>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">{loadError}</p>
+            <button
+              type="button"
+              onClick={fetchSite}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-sm font-bold transition-colors cursor-pointer"
+            >
+              <RefreshCw size={16} />
+              <span>আবার চেষ্টা করুন</span>
+            </button>
           </div>
-          <h1 className="text-xl font-black text-slate-900">
-            {loadErrorCode === 'SITE_DISABLED'
-              ? 'পাবলিক ওয়েবসাইট চালু নেই'
-              : 'প্রতিষ্ঠান খুঁজে পাওয়া যায়নি'}
-          </h1>
-          <p className="text-sm text-slate-500 font-medium leading-relaxed">{loadError}</p>
-          <button
-            type="button"
-            onClick={fetchSite}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#2563EB] hover:bg-[#1E3A8A] text-white text-sm font-bold transition-colors cursor-pointer"
-          >
-            <RefreshCw size={16} />
-            <span>আবার চেষ্টা করুন</span>
-          </button>
         </div>
+        <footer className="w-full pt-6 text-center text-xs text-slate-500">
+          <a
+            href="https://tech.deenora.app/"
+            target="_blank"
+            rel="noopener"
+            className="hover:text-slate-700 transition-colors"
+          >
+            Powered by Deenora (দিনোরা) — শিক্ষাপ্রতিষ্ঠান ম্যানেজমেন্ট সফটওয়্যার
+          </a>
+        </footer>
       </div>
     );
   }
@@ -2072,13 +2084,18 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
 
         {/* Bottom Powered By Bar */}
         <div className="border-t border-slate-800/90">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-xs text-slate-400 text-center sm:text-left">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400 text-center sm:text-left">
             <span>
               © {toBnDigit(new Date().getFullYear())} {institution.name}। সর্বস্বত্ব সংরক্ষিত।
             </span>
-            <span className="font-bold">
-              Powered by <span className="text-white font-black">Deenora</span>
-            </span>
+            <a
+              href="https://tech.deenora.app/"
+              target="_blank"
+              rel="noopener"
+              className="text-slate-400 hover:text-white transition-colors font-medium leading-relaxed"
+            >
+              Powered by Deenora (দিনোরা) — শিক্ষাপ্রতিষ্ঠান ম্যানেজমেন্ট সফটওয়্যার
+            </a>
           </div>
         </div>
       </footer>

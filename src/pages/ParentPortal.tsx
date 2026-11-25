@@ -3511,14 +3511,22 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                </motion.button>
                
                {/* Footer brand block */}
-               <div className="flex flex-col items-center gap-0.5 pt-2">
+               <footer className="flex flex-col items-center gap-1 pt-2 text-center">
                   <div className="flex items-center gap-1.5">
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">Deenora App</span>
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                   </div>
+                  <a
+                    href="https://tech.deenora.app/"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-[10px] font-medium text-slate-400 hover:text-slate-600 transition-colors font-noto"
+                  >
+                    Powered by Deenora (দিনোরা) — শিক্ষাপ্রতিষ্ঠান ম্যানেজমেন্ট সফটওয়্যার
+                  </a>
                   <p className="text-[7px] font-bold text-slate-300 uppercase tracking-widest">Build v26.06.2023</p>
-               </div>
+               </footer>
             </motion.div>
           )}
 

@@ -1026,16 +1026,24 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-2">
+        <footer className="flex flex-col items-center gap-2 text-center">
           <p className="text-slate-500 text-[9px] font-black tracking-[0.4em] uppercase">
             Deenora Management System
           </p>
+          <a
+            href="https://tech.deenora.app/"
+            target="_blank"
+            rel="noopener"
+            className="text-[11px] font-medium text-slate-400 hover:text-slate-200 transition-colors font-noto leading-relaxed"
+          >
+            Powered by Deenora (দিনোরা) — শিক্ষাপ্রতিষ্ঠান ম্যানেজমেন্ট সফটওয়্যার
+          </a>
           <div className="flex items-center gap-4 text-slate-600">
             <Star size={10} fill="currentColor" />
             <Moon size={10} fill="currentColor" />
             <Star size={10} fill="currentColor" />
           </div>
-        </div>
+        </footer>
       </motion.div>
     </div>
   );
