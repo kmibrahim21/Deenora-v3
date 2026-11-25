@@ -82,6 +82,47 @@ import { generateResultPDF } from 'utils/pdfGenerator';
 import { NotificationService, AppNotification } from '../services/NotificationService';
 import { DEPT_LABELS, GRADE_LABELS, SABQI_LABELS, TILAWAT_LABELS } from '../utils/hifzReportPdf';
 import { computeHifzParaProgress } from '../utils/studentExtraFields';
+import { InternetVoiceCallOverlay } from '../components/call/InternetVoiceCallOverlay';
+
+const parseAutoVoiceNotification = (rawMessage: any): {
+  text: string;
+  audio_url?: string;
+  call_mode?: string;
+  institution_name?: string;
+  voice_template_id?: string;
+  call_id?: string;
+} => {
+  if (!rawMessage) return { text: '' };
+  if (typeof rawMessage === 'object') {
+    return {
+      text: String(rawMessage.text || rawMessage.body || ''),
+      audio_url: rawMessage.audio_url ? String(rawMessage.audio_url) : undefined,
+      call_mode: rawMessage.call_mode ? String(rawMessage.call_mode) : undefined,
+      institution_name: rawMessage.institution_name ? String(rawMessage.institution_name) : undefined,
+      voice_template_id: rawMessage.voice_template_id ? String(rawMessage.voice_template_id) : undefined,
+      call_id: rawMessage.call_id ? String(rawMessage.call_id) : undefined,
+    };
+  }
+  const str = String(rawMessage).trim();
+  if (str.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          text: String(parsed.text || parsed.body || ''),
+          audio_url: parsed.audio_url ? String(parsed.audio_url) : undefined,
+          call_mode: parsed.call_mode ? String(parsed.call_mode) : undefined,
+          institution_name: parsed.institution_name ? String(parsed.institution_name) : undefined,
+          voice_template_id: parsed.voice_template_id ? String(parsed.voice_template_id) : undefined,
+          call_id: parsed.call_id ? String(parsed.call_id) : undefined,
+        };
+      }
+    } catch {
+      // fall through to plain text
+    }
+  }
+  return { text: str };
+};
 
 const toBanglaNum = (num: any): string => {
   if (num === null || num === undefined) return '';
@@ -351,8 +392,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
   const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false);
-  const [notifFilter, setNotifFilter] = useState<'all' | 'attendance' | 'fee' | 'hifz' | 'hostel' | 'unread'>('all');
+  const [notifFilter, setNotifFilter] = useState<'all' | 'auto_voice_alert' | 'attendance' | 'fee' | 'hifz' | 'hostel' | 'unread'>('all');
   const [markingAllRead, setMarkingAllRead] = useState<boolean>(false);
+  const [activeVoiceAlert, setActiveVoiceAlert] = useState<{
+    id?: string;
+    call_id?: string;
+    audio_url: string;
+    title: string;
+    body: string;
+    institution_name: string;
+    autoPlay?: boolean;
+  } | null>(null);
 
   useBackHandler(
     'parent-hostel-modal',
@@ -591,11 +641,59 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     }
   }, [student?.guardian_phone]);
 
+  const isVoiceAlertDismissed = useCallback((alertKey?: string): boolean => {
+    if (!alertKey) return false;
+    try {
+      const raw = localStorage.getItem('deenora_dismissed_voice_alerts');
+      if (!raw) return false;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.includes(alertKey);
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const markVoiceAlertDismissed = useCallback((alertKey?: string) => {
+    if (!alertKey) return;
+    try {
+      const raw = localStorage.getItem('deenora_dismissed_voice_alerts');
+      const arr: string[] = raw ? JSON.parse(raw) : [];
+      const next = Array.from(new Set([...(Array.isArray(arr) ? arr : []), alertKey])).slice(-100);
+      localStorage.setItem('deenora_dismissed_voice_alerts', JSON.stringify(next));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  const triggerIncomingVoiceAlert = useCallback((alertData: {
+    id?: string;
+    call_id?: string;
+    audio_url?: string;
+    title?: string;
+    body?: string;
+    institution_name?: string;
+    autoPlay?: boolean;
+  }) => {
+    const audioUrl = String(alertData.audio_url || '').trim();
+    if (!audioUrl) return;
+    const dedupKey = alertData.call_id || alertData.id;
+    if (!alertData.autoPlay && isVoiceAlertDismissed(dedupKey)) return;
+
+    setActiveVoiceAlert({
+      id: alertData.id,
+      call_id: alertData.call_id,
+      audio_url: audioUrl,
+      title: alertData.title || 'জরুরি ভয়েস বার্তা',
+      body: alertData.body || '',
+      institution_name: alertData.institution_name || currentInstitution?.name || madrasah?.name || 'প্রতিষ্ঠান',
+      autoPlay: Boolean(alertData.autoPlay),
+    });
+  }, [isVoiceAlertDismissed, currentInstitution?.name, madrasah?.name]);
+
   const fetchAppNotifications = useCallback(async () => {
     const activePhone = getParentPhone();
     const activeStudentId = student?.id || studentId;
     if (!activePhone && !activeStudentId) return;
-
     try {
       const items = await NotificationService.getInAppNotifications({
         guardianPhone: activePhone,
@@ -605,11 +703,32 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       });
       if (items && Array.isArray(items)) {
         setAppNotifications(items);
+
+        // Check for recent unread auto_voice_alert (< 90s old) on load/resume
+        const nowMs = Date.now();
+        const recentVoice = items.find(n => {
+          if (n.type !== 'auto_voice_alert' || n.is_read) return false;
+          const ageMs = nowMs - new Date(n.created_at).getTime();
+          if (ageMs < 0 || ageMs > 90 * 1000) return false;
+          const parsed = parseAutoVoiceNotification(n.message);
+          return Boolean(parsed.audio_url) && !isVoiceAlertDismissed(parsed.call_id || n.id);
+        });
+        if (recentVoice) {
+          const parsed = parseAutoVoiceNotification(recentVoice.message);
+          triggerIncomingVoiceAlert({
+            id: recentVoice.id,
+            call_id: parsed.call_id,
+            audio_url: parsed.audio_url,
+            title: recentVoice.title,
+            body: parsed.text,
+            institution_name: parsed.institution_name,
+          });
+        }
       }
     } catch (err) {
       console.warn('Error fetching app notifications:', err);
     }
-  }, [student?.id, studentId, getParentPhone, currentInstitution?.id, madrasah?.id, student?.institution_id]);
+  }, [student?.id, studentId, getParentPhone, currentInstitution?.id, madrasah?.id, student?.institution_id, isVoiceAlertDismissed, triggerIncomingVoiceAlert]);
 
   useEffect(() => {
     fetchAppNotifications();
@@ -636,7 +755,21 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
           if (isForStudent || isForPhone) {
             setAppNotifications(prev => [newNotif, ...prev.filter(n => n.id !== newNotif.id)]);
-            playNotificationSound();
+            if (newNotif.type === 'auto_voice_alert') {
+              const parsed = parseAutoVoiceNotification(newNotif.message);
+              if (parsed.audio_url) {
+                triggerIncomingVoiceAlert({
+                  id: newNotif.id,
+                  call_id: parsed.call_id,
+                  audio_url: parsed.audio_url,
+                  title: newNotif.title,
+                  body: parsed.text,
+                  institution_name: parsed.institution_name,
+                });
+              }
+            } else {
+              playNotificationSound();
+            }
             setNotifToast(newNotif.title || 'নতুন নোটিফিকেশন এসেছে 🔔');
             setTimeout(() => setNotifToast(null), 4000);
             if (newNotif.type === 'hifz') {
@@ -650,7 +783,69 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [student?.id, studentId, getParentPhone, fetchAppNotifications]);
+  }, [student?.id, studentId, getParentPhone, fetchAppNotifications, triggerIncomingVoiceAlert]);
+
+  // Handle URL ?action=auto_voice_alert&call_id=..., window.onAutoVoiceAlert, custom event, and SW messages
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlAction = params.get('action');
+      const callIdParam = params.get('call_id');
+      if (urlAction === 'auto_voice_alert' && callIdParam) {
+        fetch(`/api/call?action=get_call_payload&call_id=${encodeURIComponent(callIdParam)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(fetched => {
+            if (!fetched) return;
+            const pObj = fetched?.payload || fetched || {};
+            if (pObj.audio_url) {
+              triggerIncomingVoiceAlert({
+                call_id: pObj.call_id || callIdParam,
+                audio_url: pObj.audio_url,
+                title: pObj.title,
+                body: pObj.body,
+                institution_name: pObj.institution_name,
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // ignore URL parse errors
+    }
+
+    const handleVoiceEventPayload = (data: any) => {
+      if (!data) return;
+      const pObj = data?.payload || data;
+      if (pObj?.type === 'auto_voice_alert' || pObj?.audio_url) {
+        triggerIncomingVoiceAlert({
+          call_id: pObj.call_id,
+          audio_url: pObj.audio_url,
+          title: pObj.title,
+          body: pObj.body,
+          institution_name: pObj.institution_name,
+        });
+      }
+    };
+
+    (window as any).onAutoVoiceAlert = handleVoiceEventPayload;
+    const onCustomVoiceEvent = (e: any) => handleVoiceEventPayload(e?.detail);
+    const onSwMessage = (e: MessageEvent) => handleVoiceEventPayload(e?.data);
+
+    window.addEventListener('deenora:auto-voice-alert', onCustomVoiceEvent);
+    if ('serviceWorker' in navigator && navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', onSwMessage);
+    }
+
+    return () => {
+      if ((window as any).onAutoVoiceAlert === handleVoiceEventPayload) {
+        delete (window as any).onAutoVoiceAlert;
+      }
+      window.removeEventListener('deenora:auto-voice-alert', onCustomVoiceEvent);
+      if ('serviceWorker' in navigator && navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener('message', onSwMessage);
+      }
+    };
+  }, [triggerIncomingVoiceAlert]);
 
   const handleMarkAsRead = async (notifId: string) => {
     setAppNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
@@ -1087,6 +1282,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   }, [results, selectedExamId]);
 
   return (
+    <>
     <AnimatePresence mode="wait">
       {downloadingReport && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
@@ -1379,6 +1575,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
                     {[
                       { id: 'all', label: 'সবগুলো', count: appNotifications.length },
+                      ...(appNotifications.some(n => n.type === 'auto_voice_alert')
+                        ? [{ id: 'auto_voice_alert', label: 'ভয়েস কল', count: appNotifications.filter(n => n.type === 'auto_voice_alert').length }]
+                        : []),
                       ...(showHifzDiary || appNotifications.some(n => n.type === 'hifz')
                         ? [{ id: 'hifz', label: 'হিফজ ও সবক', count: appNotifications.filter(n => n.type === 'hifz').length }]
                         : []),
@@ -1427,6 +1626,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   {(() => {
                     const filtered = appNotifications.filter(n => {
                       if (notifFilter === 'unread') return !n.is_read;
+                      if (notifFilter === 'auto_voice_alert') return n.type === 'auto_voice_alert';
                       if (notifFilter === 'attendance') return n.type === 'attendance';
                       if (notifFilter === 'fee') return n.type === 'fee';
                       if (notifFilter === 'hifz') return n.type === 'hifz';
@@ -1445,7 +1645,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                               {notifFilter === 'unread' ? 'কোনো অপঠিত নোটিফিকেশন নেই' : 'কোনো নোটিফিকেশন পাওয়া যায়নি'}
                             </p>
                             <p className="text-xs text-slate-400 font-noto mt-0.5">
-                              হাজিরা অনুপস্থিতি, ফি আদায়, গেট পাস বা সবকের সকল বার্তা এখানে সংরক্ষিত থাকবে।
+                              ভয়েস কল, হাজিরা অনুপস্থিতি, ফি আদায়, গেট পাস বা সবকের সকল বার্তা এখানে সংরক্ষিত থাকবে।
                             </p>
                           </div>
                         </div>
@@ -1454,17 +1654,31 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
                     return filtered.map(notif => {
                       const isUnread = !notif.is_read;
+                      const isVoiceAlert = notif.type === 'auto_voice_alert';
                       const isAttendance = notif.type === 'attendance';
                       const isFee = notif.type === 'fee';
                       const isHifz = notif.type === 'hifz';
                       const isHostel = notif.type === 'hostel';
+                      const parsedVoice = isVoiceAlert ? parseAutoVoiceNotification(notif.message) : null;
+                      const displayMessage = parsedVoice ? parsedVoice.text : notif.message;
 
                       return (
                         <div
                           key={notif.id}
                           onClick={() => {
                             if (isUnread) handleMarkAsRead(notif.id);
-                            if (isHifz) {
+                            if (isVoiceAlert && parsedVoice?.audio_url) {
+                              setShowNotificationCenter(false);
+                              triggerIncomingVoiceAlert({
+                                id: notif.id,
+                                call_id: parsedVoice.call_id,
+                                audio_url: parsedVoice.audio_url,
+                                title: notif.title,
+                                body: parsedVoice.text,
+                                institution_name: parsedVoice.institution_name,
+                                autoPlay: true,
+                              });
+                            } else if (isHifz) {
                               setShowNotificationCenter(false);
                               setActiveTab('notices');
                               setActiveNoticeTab('hifz');
@@ -1482,7 +1696,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           <div className="flex items-start gap-3">
                             {/* Icon badge */}
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              isHostel
+                              isVoiceAlert
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : isHostel
                                 ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
                                 : isHifz
                                 ? 'bg-teal-100 text-teal-700 border border-teal-200'
@@ -1492,7 +1708,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                                 : 'bg-blue-100 text-blue-700 border border-blue-200'
                             }`}>
-                              {isHostel ? (
+                              {isVoiceAlert ? (
+                                <PhoneCall size={18} />
+                              ) : isHostel ? (
                                 <BedDouble size={18} />
                               ) : isHifz ? (
                                 <BookOpen size={18} />
@@ -1513,7 +1731,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                     {notif.title}
                                   </h4>
                                   <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                                    isHostel
+                                    isVoiceAlert
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : isHostel
                                       ? 'bg-indigo-100 text-indigo-800'
                                       : isHifz
                                       ? 'bg-teal-100 text-teal-800'
@@ -1523,7 +1743,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                       ? 'bg-emerald-100 text-emerald-800' 
                                       : 'bg-blue-100 text-blue-800'
                                   }`}>
-                                    {isHostel ? 'হোস্টেল ও গেট পাস' : isHifz ? 'হিফজ ও সবক' : isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
+                                    {isVoiceAlert ? 'ইন্টারনেট ভয়েস কল' : isHostel ? 'হোস্টেল ও গেট পাস' : isHifz ? 'হিফজ ও সবক' : isAttendance ? 'হাজিরা' : isFee ? 'ফি আদায়' : 'সাধারণ'}
                                   </span>
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-400 font-noto shrink-0">
@@ -1531,15 +1751,43 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 </span>
                               </div>
 
-                              <p className="text-xs text-slate-600 font-noto mt-1.5 leading-relaxed whitespace-pre-wrap">
-                                {notif.message}
-                              </p>
+                              {displayMessage && (
+                                <p className="text-xs text-slate-600 font-noto mt-1.5 leading-relaxed whitespace-pre-wrap">
+                                  {displayMessage}
+                                </p>
+                              )}
+
+                              {isVoiceAlert && parsedVoice?.audio_url && (
+                                <div className="mt-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isUnread) handleMarkAsRead(notif.id);
+                                      setShowNotificationCenter(false);
+                                      triggerIncomingVoiceAlert({
+                                        id: notif.id,
+                                        call_id: parsedVoice.call_id,
+                                        audio_url: parsedVoice.audio_url,
+                                        title: notif.title,
+                                        body: parsedVoice.text,
+                                        institution_name: parsedVoice.institution_name,
+                                        autoPlay: true,
+                                      });
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black font-noto shadow-xs transition-all active:scale-95 cursor-pointer"
+                                  >
+                                    <Volume2 size={13} />
+                                    <span>ভয়েস শুনুন</span>
+                                  </button>
+                                </div>
+                              )}
 
                               {isUnread && (
                                 <div className="mt-2 flex items-center gap-1.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                                   <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider font-noto">
-                                    {isHostel ? 'অপঠিত (ট্যাপ করে হোস্টেল তথ্য দেখুন)' : isHifz ? 'অপঠিত (ট্যাপ করে সবক ডায়েরি দেখুন)' : 'অপঠিত (ক্লিক করে পঠিত করুন)'}
+                                    {isVoiceAlert ? 'অপঠিত (ট্যাপ করে ভয়েস শুনুন)' : isHostel ? 'অপঠিত (ট্যাপ করে হোস্টেল তথ্য দেখুন)' : isHifz ? 'অপঠিত (ট্যাপ করে সবক ডায়েরি দেখুন)' : 'অপঠিত (ক্লিক করে পঠিত করুন)'}
                                   </span>
                                 </div>
                               )}
@@ -5401,6 +5649,24 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     </motion.div>
     )}
   </AnimatePresence>
+  {activeVoiceAlert && (
+    <InternetVoiceCallOverlay
+      isOpen={true}
+      audioUrl={activeVoiceAlert.audio_url}
+      institutionName={activeVoiceAlert.institution_name}
+      title={activeVoiceAlert.title}
+      body={activeVoiceAlert.body}
+      autoPlay={activeVoiceAlert.autoPlay}
+      onClose={() => {
+        if (activeVoiceAlert.id) {
+          handleMarkAsRead(activeVoiceAlert.id);
+        }
+        markVoiceAlertDismissed(activeVoiceAlert.call_id || activeVoiceAlert.id);
+        setActiveVoiceAlert(null);
+      }}
+    />
+  )}
+  </>
   );
 };
 

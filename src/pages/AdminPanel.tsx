@@ -4081,6 +4081,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           const pUrl = pv.file_url || pv.preview_url || pv.previewUrl || pv.url || pv.audio_url || '';
                           const isPPlaying = playingVoiceId === pv.id;
                           const pInstName = pv.institutions?.name || 'অজানা প্রতিষ্ঠান';
+                          const isInternetOnly = pv.provider_status === 'internet_only';
 
                           return (
                             <div key={pv.id} className={`p-4 rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200 shadow-sm'} space-y-2.5`}>
@@ -4089,7 +4090,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   <h4 className="text-xs font-black font-noto truncate text-slate-800 dark:text-slate-100">{pv.title || 'শিরোনামহীন ভয়েস'}</h4>
                                   <p className="text-[10px] font-bold text-slate-400 font-noto truncate">{pInstName}</p>
                                 </div>
-                                <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">পেন্ডিং</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-black font-noto ${
+                                    isInternetOnly
+                                      ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300'
+                                      : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
+                                  }`}>
+                                    {isInternetOnly ? 'ইন্টারনেট ভয়েস (ফ্রি)' : 'জিএসএম ভয়েস'}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-noto">পেন্ডিং</span>
+                                </div>
                               </div>
 
                               {pUrl ? (

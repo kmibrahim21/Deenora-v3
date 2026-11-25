@@ -130,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -1366,6 +1366,419 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('[Call API] send_notification_push error:', err);
       return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // 4b. ZERO-COST INTERNET VOICE CALL BROADCAST
+  if (req.method === 'POST' && action === 'broadcast_internet_voice_call') {
+    try {
+      const {
+        institution_id,
+        voice_template_id,
+        target_phones,
+        student_ids,
+        class_id,
+        title,
+        body,
+      } = req.body || {};
+
+      const isUuid = (s: any) =>
+        typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+      if (!institution_id || !isUuid(institution_id)) {
+        return res.status(400).json({ success: false, error: 'Valid institution_id is required' });
+      }
+      if (!voice_template_id || !isUuid(voice_template_id)) {
+        return res.status(400).json({ success: false, error: 'Valid voice_template_id is required' });
+      }
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return res.status(500).json({ success: false, error: 'Server configuration error' });
+      }
+
+      // 1. Verify caller authentication & tenant authorization
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+      }
+      const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (!bearerToken || bearerToken === 'undefined' || bearerToken === 'null') {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Missing Bearer token' });
+      }
+
+      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${bearerToken}` },
+      });
+      if (!userRes.ok) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired token' });
+      }
+      const authUser = await userRes.json();
+      const userId = authUser?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: User not found' });
+      }
+
+      const sbHeaders = {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      };
+
+      const sbGet = async (path: string): Promise<any[]> => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders });
+          if (!r.ok) return [];
+          const j = await r.json();
+          return Array.isArray(j) ? j : [];
+        } catch {
+          return [];
+        }
+      };
+
+      const profiles = await sbGet(`profiles?select=id,institution_id,role&id=eq.${encodeURIComponent(userId)}&limit=1`);
+      const callerProfile = profiles[0];
+      if (!callerProfile) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Profile not found' });
+      }
+
+      const isSuperAdmin = callerProfile.role === 'super_admin' || callerProfile.role === 'manager';
+      if (!isSuperAdmin && callerProfile.institution_id !== institution_id) {
+        const instCheck = await sbGet(`institutions?select=id,config_json&id=eq.${encodeURIComponent(institution_id)}&limit=1`);
+        let cfgObj: any = instCheck[0]?.config_json || {};
+        if (typeof cfgObj === 'string') {
+          try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; }
+        }
+        if (cfgObj?.parent_institution_id !== callerProfile.institution_id) {
+          return res.status(403).json({ success: false, error: 'Forbidden: Access denied for this institution' });
+        }
+      }
+
+      // 2. Verify voice template exists, belongs to institution (or global), and is SuperAdmin approved
+      const templates = await sbGet(
+        `voice_templates?select=id,institution_id,title,file_url,admin_status&id=eq.${encodeURIComponent(voice_template_id)}&limit=1`
+      );
+      const voiceTemplate = templates[0];
+      if (!voiceTemplate) {
+        return res.status(404).json({ success: false, error: 'Voice template not found' });
+      }
+      if (voiceTemplate.institution_id && voiceTemplate.institution_id !== institution_id) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Voice template belongs to another institution' });
+      }
+      if (voiceTemplate.admin_status !== 'approved') {
+        return res.status(403).json({
+          success: false,
+          error: 'এই ভয়েস টেমপ্লেটটি এখনো সুপার অ্যাডমিন কর্তৃক অনুমোদিত হয়নি। অনুমোদনের পর কল পাঠানো যাবে।',
+        });
+      }
+
+      const audioUrl = String(voiceTemplate.file_url || '').trim();
+      if (!audioUrl || (!audioUrl.startsWith('https://') && !audioUrl.startsWith('http://') && !audioUrl.startsWith('/'))) {
+        return res.status(400).json({ success: false, error: 'Valid voice template audio URL is missing' });
+      }
+
+      // 3. Fetch institution display name and verify Parent Portal + Live Chat permissions
+      const instRows = await sbGet(`institutions?select=id,name,config_json&id=eq.${encodeURIComponent(institution_id)}&limit=1`);
+      const instRow = instRows[0];
+      const institutionName = String(instRow?.name || 'প্রতিষ্ঠান').trim();
+
+      if (!isSuperAdmin) {
+        let instCfg: any = instRow?.config_json || {};
+        if (typeof instCfg === 'string') {
+          try { instCfg = JSON.parse(instCfg); } catch { instCfg = {}; }
+        }
+        const cfgMods = instCfg?.modules || {};
+        const hasParentPortal = cfgMods.parent_portal === true || instCfg.parent_portal === true;
+        const hasLiveChat = cfgMods.live_chat === true || instCfg.live_chat === true;
+        if (!hasParentPortal || !hasLiveChat) {
+          return res.status(403).json({
+            success: false,
+            error: 'ইন্টারনেট ভয়েস কল ব্যবহারের জন্য সুপার অ্যাডমিন প্যানেল থেকে প্যারেন্ট পোর্টাল এবং লাইভ চ্যাট পারমিশন অ্যাক্টিভ থাকতে হবে।',
+          });
+        }
+      }
+
+      // 4. Normalize and collect targets
+      const normLast10 = (p: any) => String(p || '').replace(/\D/g, '').slice(-10);
+      const normalizeBdPhone = (p: any): string => {
+        const digits = String(p || '').replace(/\D/g, '');
+        if (digits.length === 11 && digits.startsWith('01')) return digits;
+        if (digits.length === 13 && digits.startsWith('8801')) return digits.slice(2);
+        if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+        return digits;
+      };
+
+      const targetAllStudents = Boolean(req.body?.target_all_students);
+      const inputPhones: string[] = Array.isArray(target_phones) ? target_phones.map(normalizeBdPhone).filter((p) => p.length >= 10) : [];
+      const inputStudentIds: string[] = Array.isArray(student_ids) ? student_ids.filter(isUuid) : [];
+
+      let resolvedStudents: Array<{ id: string; guardian_phone?: string; guardian_phone_2?: string }> = [];
+      if (inputStudentIds.length > 0) {
+        for (let i = 0; i < inputStudentIds.length; i += 200) {
+          const sChunk = inputStudentIds.slice(i, i + 200);
+          const rows = await sbGet(
+            `students?select=id,guardian_phone,guardian_phone_2&institution_id=eq.${encodeURIComponent(institution_id)}&id=in.(${sChunk.join(',')})&limit=500`
+          );
+          resolvedStudents.push(...rows);
+        }
+      } else if (class_id && isUuid(class_id)) {
+        resolvedStudents = await sbGet(
+          `students?select=id,guardian_phone,guardian_phone_2&institution_id=eq.${encodeURIComponent(institution_id)}&class_id=eq.${encodeURIComponent(class_id)}&is_active=eq.true&limit=2000`
+        );
+      } else if (targetAllStudents) {
+        resolvedStudents = await sbGet(
+          `students?select=id,guardian_phone,guardian_phone_2&institution_id=eq.${encodeURIComponent(institution_id)}&is_active=eq.true&limit=5000`
+        );
+      } else if (inputPhones.length > 0) {
+        const last10s = Array.from(new Set(inputPhones.map(normLast10).filter((p) => p.length >= 10)));
+        for (let i = 0; i < last10s.length; i += 40) {
+          const chunk = last10s.slice(i, i + 40);
+          const orFilter = chunk.map((p) => `guardian_phone.ilike.*${p}*,guardian_phone_2.ilike.*${p}*`).join(',');
+          const rows = await sbGet(
+            `students?select=id,guardian_phone,guardian_phone_2&institution_id=eq.${encodeURIComponent(institution_id)}&or=(${orFilter})&limit=500`
+          );
+          resolvedStudents.push(...rows);
+        }
+      }
+
+      const phoneSet = new Set<string>(inputPhones);
+      const studentIdSet = new Set<string>(inputStudentIds);
+      for (const st of resolvedStudents) {
+        if (st.id) studentIdSet.add(st.id);
+        if (st.guardian_phone) {
+          const n1 = normalizeBdPhone(st.guardian_phone);
+          if (n1.length >= 10) phoneSet.add(n1);
+        }
+        if (st.guardian_phone_2) {
+          const n2 = normalizeBdPhone(st.guardian_phone_2);
+          if (n2.length >= 10) phoneSet.add(n2);
+        }
+      }
+
+      const uniquePhones = Array.from(phoneSet);
+      const uniqueStudentIds = Array.from(studentIdSet);
+      const uniqueLast10 = Array.from(new Set(uniquePhones.map(normLast10).filter((p) => p.length >= 10)));
+
+      if (uniquePhones.length === 0 && uniqueStudentIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'No target guardian phone numbers or students provided' });
+      }
+
+      const callId = `ivc_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const cleanTitle = String(title || voiceTemplate.title || 'প্রতিষ্ঠান থেকে ভয়েস কল').trim();
+      const cleanBody = String(body || `${institutionName} থেকে একটি জরুরি ভয়েস বার্তা এসেছে।`).trim();
+
+      activeCallPayloads[callId] = {
+        updatedAt: Date.now(),
+        payload: {
+          call_id: callId,
+          type: 'auto_voice_alert',
+          call_mode: 'internet_voice_broadcast',
+          audio_url: audioUrl,
+          institution_name: institutionName,
+          title: cleanTitle,
+          body: cleanBody,
+          voice_template_id: voiceTemplate.id,
+        },
+      };
+
+      // 5. Insert app_notifications records (NO metadata column)
+      const messageJson = JSON.stringify({
+        text: cleanBody,
+        audio_url: audioUrl,
+        call_mode: 'internet_voice_broadcast',
+        institution_name: institutionName,
+        voice_template_id: voiceTemplate.id,
+        call_id: callId,
+      });
+
+      const nowIso = new Date().toISOString();
+      const notifRows: Array<Record<string, any>> = [];
+      const seenNotifKeys = new Set<string>();
+
+      for (const st of resolvedStudents) {
+        const gPhone = normalizeBdPhone(st.guardian_phone || st.guardian_phone_2 || '') || null;
+        const key = `${st.id}_${gPhone || ''}`;
+        if (!seenNotifKeys.has(key)) {
+          seenNotifKeys.add(key);
+          notifRows.push({
+            institution_id,
+            student_id: st.id,
+            guardian_phone: gPhone,
+            title: cleanTitle,
+            message: messageJson,
+            type: 'auto_voice_alert',
+            is_read: false,
+            created_at: nowIso,
+          });
+        }
+      }
+
+      const coveredLast10 = new Set(notifRows.map((r) => normLast10(r.guardian_phone)).filter(Boolean));
+      for (const ph of uniquePhones) {
+        const l10 = normLast10(ph);
+        if (l10 && !coveredLast10.has(l10)) {
+          coveredLast10.add(l10);
+          notifRows.push({
+            institution_id,
+            student_id: null,
+            guardian_phone: ph,
+            title: cleanTitle,
+            message: messageJson,
+            type: 'auto_voice_alert',
+            is_read: false,
+            created_at: nowIso,
+          });
+        }
+      }
+
+      let notificationsInserted = 0;
+      for (let i = 0; i < notifRows.length; i += 100) {
+        const batch = notifRows.slice(i, i + 100);
+        try {
+          const insRes = await fetch(`${SUPABASE_URL}/rest/v1/app_notifications`, {
+            method: 'POST',
+            headers: { ...sbHeaders, Prefer: 'return=minimal' },
+            body: JSON.stringify(batch),
+          });
+          if (insRes.ok) {
+            notificationsInserted += batch.length;
+          } else {
+            const errTxt = await insRes.text().catch(() => '');
+            console.warn('[Call API] app_notifications insert warning:', errTxt.slice(0, 200));
+          }
+        } catch (insErr) {
+          console.warn('[Call API] app_notifications batch insert error:', insErr);
+        }
+      }
+
+      // 6. Lookup matching parent FCM tokens across memoryTokens, device_tokens, fcm_tokens, call_tokens
+      const tokenSet = new Set<string>();
+
+      for (const l10 of uniqueLast10) {
+        if (memoryTokens[`phone_${l10}`]?.token) {
+          tokenSet.add(memoryTokens[`phone_${l10}`].token);
+        }
+      }
+      for (const sid of uniqueStudentIds) {
+        if (memoryTokens[`student_${sid}`]?.token) {
+          tokenSet.add(memoryTokens[`student_${sid}`].token);
+        }
+      }
+
+      for (let i = 0; i < uniqueLast10.length; i += 30) {
+        const chunk = uniqueLast10.slice(i, i + 30);
+        const orFilter = chunk.map((p) => `phone.ilike.*${p}*`).join(',');
+        const devRows = await sbGet(`device_tokens?select=fcm_token&or=(${orFilter})&order=updated_at.desc&limit=500`);
+        for (const row of devRows) {
+          if (row?.fcm_token) tokenSet.add(row.fcm_token);
+        }
+
+        const fcmRows = await sbGet(`fcm_tokens?select=token,fcm_token&or=(${orFilter})&limit=300`);
+        for (const row of fcmRows) {
+          const tok = row?.fcm_token || row?.token;
+          if (tok) tokenSet.add(tok);
+        }
+        const callTokRows = await sbGet(`call_tokens?select=token,fcm_token&or=(${orFilter})&limit=300`);
+        for (const row of callTokRows) {
+          const tok = row?.fcm_token || row?.token;
+          if (tok) tokenSet.add(tok);
+        }
+      }
+
+      if (uniqueStudentIds.length > 0) {
+        for (let i = 0; i < uniqueStudentIds.length; i += 50) {
+          const sChunk = uniqueStudentIds.slice(i, i + 50);
+          const sDevRows = await sbGet(`device_tokens?select=fcm_token&student_id=in.(${sChunk.join(',')})&limit=300`);
+          for (const row of sDevRows) {
+            if (row?.fcm_token) tokenSet.add(row.fcm_token);
+          }
+        }
+      }
+
+      const finalTokens = Array.from(tokenSet).filter(Boolean);
+      let pushedDevicesCount = 0;
+
+      // 7. Send high-priority FCM v1 pushes (NO balance or voice_rate deduction)
+      if (finalTokens.length > 0) {
+        const effectiveSa = await resolveServiceAccount(institution_id);
+        const fcmAccessToken = effectiveSa ? await getFirebaseV1AccessToken(effectiveSa) : null;
+
+        if (effectiveSa && fcmAccessToken) {
+          const clickAction = `/parent-portal?action=auto_voice_alert&call_id=${encodeURIComponent(callId)}`;
+          const fcmData: Record<string, string> = {
+            type: 'auto_voice_alert',
+            call_mode: 'internet_voice_broadcast',
+            call_id: callId,
+            audio_url: audioUrl,
+            institution_name: institutionName,
+            title: cleanTitle,
+            body: cleanBody,
+            voice_template_id: String(voiceTemplate.id),
+            click_action: clickAction,
+          };
+
+          const deadTokens: string[] = [];
+          await Promise.all(
+            finalTokens.map(async (tok) => {
+              try {
+                const r = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveSa.project_id}/messages:send`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${fcmAccessToken}`,
+                  },
+                  body: JSON.stringify({
+                    message: {
+                      token: tok,
+                      android: {
+                        priority: 'HIGH',
+                        ttl: '120s',
+                        notification: {
+                          title: cleanTitle,
+                          body: cleanBody,
+                          sound: 'default',
+                          channel_id: 'deenora_general_alerts',
+                          notification_priority: 'PRIORITY_HIGH',
+                          default_sound: true,
+                          default_vibrate_timings: true,
+                        },
+                      },
+                      notification: {
+                        title: cleanTitle,
+                        body: cleanBody,
+                      },
+                      data: fcmData,
+                    },
+                  }),
+                });
+                if (r.ok) {
+                  pushedDevicesCount++;
+                } else if (r.status === 404 || r.status === 410) {
+                  deadTokens.push(tok);
+                }
+              } catch {
+                // continue other devices
+              }
+            })
+          );
+
+          if (deadTokens.length > 0) {
+            fetch(`${SUPABASE_URL}/rest/v1/device_tokens?fcm_token=in.(${deadTokens.map((t) => encodeURIComponent(t)).join(',')})`, {
+              method: 'DELETE',
+              headers: sbHeaders,
+            }).catch(() => {});
+          }
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        call_id: callId,
+        pushed_devices_count: pushedDevicesCount,
+        total_targets: Math.max(uniquePhones.length, uniqueStudentIds.length),
+        notifications_inserted: notificationsInserted,
+      });
+    } catch (err: any) {
+      console.error('[Call API] broadcast_internet_voice_call error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
     }
   }
 

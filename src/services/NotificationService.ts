@@ -20,7 +20,7 @@ export interface AppNotification {
   guardian_phone?: string | null;
   title: string;
   message: string;
-  type: 'attendance' | 'fee' | 'hifz' | 'hostel' | 'general';
+  type: 'attendance' | 'fee' | 'hifz' | 'hostel' | 'general' | 'auto_voice_alert';
   is_read: boolean;
   created_at: string;
 }

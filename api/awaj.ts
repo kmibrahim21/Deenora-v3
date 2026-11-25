@@ -711,14 +711,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         filename = body.filename || body.audio_filename || `voice.${contentType.split('/')[1] || 'mp3'}`;
       }
-      // 3. From downloadable file_url
+      // 3. From downloadable file_url (SSRF-safe validation)
       else if (body.file_url) {
-        const fileRes = await fetchWithTimeout(body.file_url);
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(String(body.file_url));
+        } catch {
+          return res.status(400).json({ message: 'Invalid file_url' });
+        }
+        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+          return res.status(400).json({ message: 'Unsupported URL protocol' });
+        }
+        const host = parsedUrl.hostname.toLowerCase();
+        if (
+          host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host === '::1' ||
+          host === '169.254.169.254' ||
+          host.startsWith('10.') ||
+          host.startsWith('192.168.') ||
+          /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+        ) {
+          return res.status(403).json({ message: 'Forbidden file_url host' });
+        }
+        const fileRes = await fetchWithTimeout(parsedUrl.toString());
         if (!fileRes.ok) throw new Error(`Failed to download file from url: ${fileRes.statusText}`);
         const arrayBuf = await fileRes.arrayBuffer();
         fileBuffer = Buffer.from(new Uint8Array(arrayBuf));
         contentType = fileRes.headers.get('content-type') || 'audio/mpeg';
-        const ext = body.file_url.split('.').pop()?.split('?')[0] || 'mp3';
+        const ext = parsedUrl.pathname.split('.').pop() || 'mp3';
         filename = `voice.${ext}`;
       }
       // 4. From raw multipart body parser (for Vercel Serverless environment without multer)
@@ -806,7 +827,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Always pass a clean ASCII filename to avoid Unicode/Header parsing issues in PHP/Laravel backend
-      const cleanFilename = `voice_${Date.now()}.${normalizedExt}`;
+      const cleanFilename = `voice_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.${normalizedExt}`;
 
       // Canonical MIME type map required by Awaj Digital / Laravel file validators
       const canonicalMimeMap: Record<string, string> = {
@@ -819,6 +840,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         flac: 'audio/flac'
       };
       const finalContentType = canonicalMimeMap[normalizedExt] || 'audio/mpeg';
+
+      const targetInstId = (body.institution_id || req.query.institution_id || null) as string | null;
+      const uploadMode = String(body.upload_mode || req.query.upload_mode || 'gsm').toLowerCase();
+      const inputDuration = body.duration ? Number(body.duration) : null;
+
+      // Verify caller authentication & role from JWT (never trust client-supplied role booleans)
+      let isVerifiedSuperAdmin = false;
+      let resolvedInstId = targetInstId;
+      if (req.headers.authorization || uploadMode === 'internet_only' || targetInstId) {
+        const auth = await verifyCallerAndInstitutionAccess(req, targetInstId);
+        if (!auth.ok) {
+          return res.status(auth.status).json({ message: auth.error, error: auth.error });
+        }
+        isVerifiedSuperAdmin = auth.profile.role === 'super_admin';
+        if (auth.resolvedInstitutionId) {
+          resolvedInstId = auth.resolvedInstitutionId;
+        }
+      }
+
+      // INTERNET-ONLY VOICE UPLOAD (Zero-Cost Internet Voice Call Broadcast -> Supabase Storage, skip Awaj)
+      if (uploadMode === 'internet_only') {
+        if (!resolvedInstId) {
+          return res.status(400).json({ message: 'Valid institution_id is required for internet voice upload' });
+        }
+        const storagePath = `voices/${cleanFilename}`;
+        let uploadResult = await supabase.storage
+          .from('voice-templates')
+          .upload(storagePath, fileBuffer, { contentType: finalContentType, upsert: true });
+
+        if (uploadResult.error && String(uploadResult.error.message || '').toLowerCase().includes('not found')) {
+          await supabase.storage.createBucket('voice-templates', { public: true }).catch(() => {});
+          uploadResult = await supabase.storage
+            .from('voice-templates')
+            .upload(storagePath, fileBuffer, { contentType: finalContentType, upsert: true });
+        }
+
+        if (uploadResult.error) {
+          throw new Error(uploadResult.error.message || 'Failed to upload voice audio to storage');
+        }
+
+        const { data: pubData } = supabase.storage.from('voice-templates').getPublicUrl(storagePath);
+        const publicUrl = pubData?.publicUrl || '';
+        const initStatus = isVerifiedSuperAdmin ? 'approved' : 'pending';
+
+        const { data: dbItem, error: dbErr } = await supabase
+          .from('voice_templates')
+          .insert({
+            institution_id: resolvedInstId,
+            title: voiceName,
+            file_url: publicUrl,
+            admin_status: initStatus,
+            provider_status: 'internet_only',
+            provider_voice_name: voiceName,
+            provider_voice_id: null,
+            duration: inputDuration
+          })
+          .select()
+          .single();
+
+        if (dbErr) {
+          throw new Error(dbErr.message || 'Failed to save internet voice template');
+        }
+
+        return res.status(201).json({
+          success: true,
+          file_url: publicUrl,
+          preview_url: publicUrl,
+          previewUrl: publicUrl,
+          voice_template: dbItem,
+          message: 'Internet voice uploaded successfully'
+        });
+      }
 
       // Create multipart FormData for Awaj Digital
       const formData = new FormData();
@@ -886,15 +979,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const fileUrl = rawFileUrl || '';
 
       let savedTemplate: any = null;
-      const targetInstId = body.institution_id || req.query.institution_id;
-      if (targetInstId) {
+      if (resolvedInstId) {
         try {
-          const isSuper = body.is_super_admin === true || body.is_super_admin === 'true';
-          const isManager = body.is_manager === true || body.is_manager === 'true';
-          const initStatus = (isSuper || isManager) ? 'approved' : 'pending';
-          const inputDuration = body.duration ? Number(body.duration) : null;
+          const initStatus = isVerifiedSuperAdmin ? 'approved' : 'pending';
           const { data: dbItem, error: dbErr } = await supabase.from('voice_templates').insert({
-            institution_id: targetInstId,
+            institution_id: resolvedInstId,
             title: voiceName,
             file_url: fileUrl,
             admin_status: initStatus,
@@ -939,7 +1028,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (error) throw error;
 
       const rawTemplates = data || [];
-      const missingFileUrl = rawTemplates.some(v => !v.file_url || !v.file_url.startsWith('http'));
+      const missingFileUrl = rawTemplates.some(v => v.provider_status !== 'internet_only' && (!v.file_url || !v.file_url.startsWith('http')));
 
       if (missingFileUrl) {
         try {
@@ -948,7 +1037,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const listData = await awajListRes.json();
             const voiceList = Array.isArray(listData) ? listData : (listData.voices || listData.data || []);
             for (const v of rawTemplates) {
-              if (!v.file_url || !v.file_url.startsWith('http')) {
+              if (v.provider_status !== 'internet_only' && (!v.file_url || !v.file_url.startsWith('http'))) {
                 const match = voiceList.find((av: any) => 
                   (v.provider_voice_id && String(av.id) === String(v.provider_voice_id)) ||
                   (v.provider_voice_name && av.name && av.name.toLowerCase() === v.provider_voice_name.toLowerCase()) ||

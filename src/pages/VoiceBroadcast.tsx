@@ -34,7 +34,11 @@ import {
   Plus,
   Square,
   Edit2,
-  Sparkles
+  Sparkles,
+  Wifi,
+  PhoneCall,
+  Search,
+  Volume2
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
@@ -70,7 +74,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const isInstPreSelected = preSelectedInstitutionIds.length > 0;
   const isSuperAdmin = role === 'super_admin';
   const isManager = role === 'manager' || profile?.role === 'manager';
-  const canApproveVoice = isSuperAdmin || isManager;
+  const canApproveVoice = isSuperAdmin;
 
   if (!canUseVoice) {
     return (
@@ -94,10 +98,28 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [activeTab, setActiveTab] = useState<'templates' | 'broadcast' | 'recharge' | 'history'>('broadcast');
   const [loading, setLoading] = useState(false);
   
-  const modules = useMemo(() => ({
-    voice_broadcast: true,
-    ...(madrasah?.config_json?.modules || {})
-  }), [madrasah?.config_json?.modules]);
+  const modules = useMemo(() => {
+    let cfg: any = madrasah?.config_json || {};
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+    }
+    return {
+      voice_broadcast: true,
+      ...(cfg?.modules || {})
+    };
+  }, [madrasah?.config_json]);
+
+  const canUseInternetVoiceCall = useMemo(() => {
+    if (isSuperAdmin) return true;
+    let cfg: any = madrasah?.config_json || {};
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+    }
+    const cfgMods = cfg?.modules || {};
+    const hasParentPortal = cfgMods.parent_portal === true || (madrasah as any)?.parent_portal === true || cfg?.parent_portal === true;
+    const hasLiveChat = cfgMods.live_chat === true || (madrasah as any)?.live_chat === true || cfg?.live_chat === true;
+    return hasParentPortal && hasLiveChat;
+  }, [isSuperAdmin, madrasah]);
 
   const availableTabs = useMemo(() => {
     const rawTabs = (['broadcast', 'templates', 'history', 'recharge'] as const);
@@ -132,8 +154,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   // Upload & Preview & Recording state
   const [uploadName, setUploadName] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<'internet_only' | 'gsm'>(canUseInternetVoiceCall ? 'internet_only' : 'gsm');
   const [isUploading, setIsUploading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+
+  useEffect(() => {
+    if (!canUseInternetVoiceCall && uploadMode === 'internet_only') {
+      setUploadMode('gsm');
+    }
+  }, [canUseInternetVoiceCall, uploadMode]);
 
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -262,9 +291,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }, [voices, voiceStatusFilter]);
 
   const selectableVoices = useMemo(() => {
-    if (canApproveVoice) return voices;
     return voices.filter(v => (v.admin_status || v.provider_status || 'approved') === 'approved');
-  }, [voices, canApproveVoice]);
+  }, [voices]);
 
   const pendingVoicesCount = useMemo(() => {
     return voices.filter(v => (v.admin_status || v.provider_status) === 'pending').length;
@@ -276,12 +304,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [isFetchingTransactions, setIsFetchingTransactions] = useState(false);
 
   // Broadcast state
+  const [broadcastMode, setBroadcastMode] = useState<'internet_voice' | 'gsm_voice'>(canUseInternetVoiceCall ? 'internet_voice' : 'gsm_voice');
   const [classes, setClasses] = useState<Class[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
   const [targetType, setTargetType] = useState<'all' | 'class' | 'teachers' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
   const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
-  
+  const [allStudentsForBroadcast, setAllStudentsForBroadcast] = useState<Array<{ id: string; student_name: string; roll?: any; class_id?: string; guardian_phone?: string; guardian_phone_2?: string }>>([]);
+  const [internetCallTitle, setInternetCallTitle] = useState<string>('');
+  const [internetCallBody, setInternetCallBody] = useState<string>('');
+
+  useEffect(() => {
+    if (!canUseInternetVoiceCall && broadcastMode === 'internet_voice') {
+      setBroadcastMode('gsm_voice');
+    }
+  }, [canUseInternetVoiceCall, broadcastMode]);
+
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [senders, setSenders] = useState<any[]>([]);
@@ -660,6 +698,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (madrasah && isValidUUID(madrasah.id)) {
         fetchClasses();
         fetchTeachers();
+        fetchAllStudentsForBroadcast();
       } 
       fetchVoices(); 
       fetchSenders(); 
@@ -766,13 +805,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
       // 1. Fetch via backend service-role endpoint (immune to client-side RLS filtering)
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         const params = new URLSearchParams({
           action: 'templates',
           institution_id: madrasah?.id || '',
           is_super_admin: isSuperAdmin ? 'true' : 'false',
           is_manager: isManager ? 'true' : 'false'
         });
-        const res = await fetch(`/api/awaj?${params.toString()}`);
+        const res = await fetch(`/api/awaj?${params.toString()}`, {
+          headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : undefined
+        });
         if (res.ok) {
           const resJson = await res.json();
           if (resJson.templates && Array.isArray(resJson.templates)) {
@@ -1042,6 +1084,30 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
     } catch (e) {
       console.error('Error fetching teachers in VoiceBroadcast:', e);
+    }
+  };
+
+  const fetchAllStudentsForBroadcast = async () => {
+    if (!madrasah?.id || !isValidUUID(madrasah.id)) return;
+    try {
+      let query = supabase
+        .from('students')
+        .select('id, student_name, roll, class_id, guardian_phone, guardian_phone_2')
+        .eq('institution_id', madrasah.id)
+        .order('roll', { ascending: true })
+        .limit(2000);
+      if (isAdvanceOrHistorical && targetYearId) {
+        query = query.eq('academic_year_id', targetYearId);
+      } else if (targetYearId) {
+        query = query.or(`academic_year_id.eq.${targetYearId},academic_year_id.is.null`);
+      }
+      if ((window as any)._hasIsActive !== false) {
+        query = query.eq('is_active', true);
+      }
+      const { data } = await query;
+      if (data) setAllStudentsForBroadcast(data);
+    } catch (e) {
+      console.warn('Error fetching students for voice broadcast selector:', e);
     }
   };
 
@@ -1686,10 +1752,141 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     return [];
   };
 
+  const dropdownVoices = useMemo(() => {
+    return voices.filter(v => (v.admin_status || v.provider_status) !== 'rejected');
+  }, [voices]);
+
   const isTargetingInstitutions = isSuperAdmin && (targetType === 'all_institutions' || targetType === 'specific_institution');
   const isTargetingAllStudents = !isSuperAdmin && targetType === 'all';
 
+  const handleInternetVoiceBroadcast = async () => {
+    if (!canUseInternetVoiceCall) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'পারমিশন নেই' : 'Permission Required',
+        message: lang === 'bn'
+          ? 'ইন্টারনেট ভয়েস কল ব্যবহারের জন্য সুপার অ্যাডমিন প্যানেল থেকে প্যারেন্ট পোর্টাল এবং লাইভ চ্যাট পারমিশন অ্যাক্টিভ থাকতে হবে।'
+          : 'Parent Portal and Live Chat permissions must be enabled from Super Admin panel.'
+      });
+      return;
+    }
+
+    if (!madrasah?.id || !selectedVoiceId) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'তথ্য অসম্পূর্ণ' : 'Incomplete Info',
+        message: lang === 'bn' ? 'অনুগ্রহ করে অনুমোদিত ভয়েস বার্তা এবং প্রাপক নির্বাচন করুন।' : 'Please select an approved voice template and target.'
+      });
+      return;
+    }
+
+    const chosenVoice = voices.find(v => v.id === selectedVoiceId);
+    if (!chosenVoice || chosenVoice.admin_status !== 'approved') {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'অ্যাপ্রুভাল পেন্ডিং' : 'Approval Required',
+        message: lang === 'bn'
+          ? 'অ্যাপ্রুভাল পেন্ডিং — সুপার অ্যাডমিন অ্যাপ্রুভাল প্রয়োজন। শুধুমাত্র অনুমোদিত ভয়েস দিয়ে কল পাঠানো যাবে।'
+          : 'This voice requires Super Admin approval before broadcasting.'
+      });
+      return;
+    }
+
+    if (targetType === 'class' && !selectedClassId && !isPreSelected) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ক্লাস নির্বাচন করুন' : 'Select Class',
+        message: lang === 'bn' ? 'অনুগ্রহ করে একটি শ্রেণি নির্বাচন করুন।' : 'Please select a class.'
+      });
+      return;
+    }
+
+    if (!isOnline) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'Offline',
+        message: lang === 'bn' ? 'ইন্টারনেট ভয়েস কল পাঠাতে ইন্টারনেট সংযোগ প্রয়োজন।' : 'Internet connection is required.'
+      });
+      return;
+    }
+
+    setIsBroadcasting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error(lang === 'bn' ? 'সেশন পাওয়া যায়নি। অনুগ্রহ করে পুনরায় লগইন করুন।' : 'Session expired. Please login again.');
+      }
+
+      const payload: Record<string, any> = {
+        institution_id: madrasah.id,
+        voice_template_id: chosenVoice.id,
+        title: internetCallTitle.trim() || chosenVoice.title || (lang === 'bn' ? 'প্রতিষ্ঠান থেকে জরুরি ভয়েস কল' : 'Institution Voice Alert'),
+        body: internetCallBody.trim() || (lang === 'bn'
+          ? `${madrasah.name} থেকে "${chosenVoice.title}" ভয়েস বার্তা এসেছে। রিসিভ করে শুনুন।`
+          : `Voice message "${chosenVoice.title}" from ${madrasah.name}.`)
+      };
+
+      if (isPreSelected) {
+        payload.student_ids = preSelectedStudentIds;
+      } else if (targetType === 'class') {
+        payload.class_id = selectedClassId;
+      } else if (targetType === 'all' || isTargetingInstitutions) {
+        payload.target_all_students = true;
+      } else if (targetType === 'teachers') {
+        const teacherPhones = teachers.map(t => t.phone).filter(Boolean);
+        if (teacherPhones.length === 0) {
+          throw new Error(lang === 'bn' ? 'শিক্ষকদের কোনো ফোন নম্বর পাওয়া যায়নি।' : 'No teacher phone numbers found.');
+        }
+        payload.target_phones = teacherPhones;
+      }
+
+      const res = await fetch('/api/call?action=broadcast_internet_voice_call', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resJson = await res.json().catch(() => ({}));
+      if (!res.ok || !resJson.success) {
+        throw new Error(resJson.error || (lang === 'bn' ? 'ইন্টারনেট ভয়েস কল পাঠানো যায়নি।' : 'Failed to send internet voice call.'));
+      }
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'ইন্টারনেট ভয়েস কল সফল হয়েছে!' : 'Internet Voice Call Sent!',
+        message: lang === 'bn'
+          ? `মোট ${resJson.total_targets || 0} জন অভিভাবকের অ্যাকাউন্টে ভয়েস বার্তা পাঠানো হয়েছে এবং ${resJson.pushed_devices_count || 0} টি ডিভাইসে রিয়েল-টাইম কল পুশ হয়েছে। (খরচ: ০ টাকা / ফ্রি)`
+          : `Sent to ${resJson.total_targets || 0} targets (${resJson.pushed_devices_count || 0} devices pushed via Internet, 0 BDT cost).`
+      });
+      setInternetCallTitle('');
+      setInternetCallBody('');
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'কল পাঠানো ব্যর্থ' : 'Broadcast Failed',
+        message: err?.message || 'Error sending internet voice call.'
+      });
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
+
   const handleBroadcast = async () => {
+    if (broadcastMode === 'internet_voice') {
+      await handleInternetVoiceBroadcast();
+      return;
+    }
+
     if (IS_VOICE_BROADCAST_DISABLED) {
       setStatusModal({
         show: true,
@@ -2126,13 +2323,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         reader.readAsDataURL(uploadFile);
       });
 
+      const { data: { session } } = await supabase.auth.getSession();
       const cleanTitle = uploadName.trim();
       const encodedName = encodeURIComponent(cleanTitle);
       const response = await fetch(`/api/voices/upload?name=${encodedName}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Voice-Name': encodedName
+          'X-Voice-Name': encodedName,
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
         },
         body: JSON.stringify({
           name: cleanTitle,
@@ -2143,6 +2342,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           institution_id: madrasah.id,
           is_super_admin: isSuperAdmin,
           is_manager: isManager,
+          upload_mode: uploadMode,
           duration: effectiveDuration
         })
       });
@@ -2156,7 +2356,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
       const providerVoiceName = resData.name || resData.title || cleanTitle;
-      const initialStatus = canApproveVoice ? 'approved' : 'pending';
+      const initialStatus = isSuperAdmin ? 'approved' : 'pending';
+      const initialProviderStatus = uploadMode === 'internet_only' ? 'internet_only' : initialStatus;
 
       let newVoiceRecord = resData.voice_template;
       if (newVoiceRecord) {
@@ -2171,7 +2372,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           title: cleanTitle,
           file_url: audioUrl,
           admin_status: initialStatus,
-          provider_status: initialStatus,
+          provider_status: initialProviderStatus,
           provider_voice_name: providerVoiceName,
           provider_voice_id: providerVoiceId ? String(providerVoiceId) : null,
           duration: effectiveDuration
@@ -2500,40 +2701,108 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       <div className="space-y-6">
         {activeTab === 'broadcast' && (
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
-            {IS_VOICE_BROADCAST_DISABLED && (
+            {/* Broadcast Mode Switcher: Zero-Cost Internet Voice Call (only when Parent Portal & Live Chat active) vs Paid GSM Call */}
+            {canUseInternetVoiceCall && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBroadcastMode('internet_voice')}
+                  className={`p-4 rounded-[1.8rem] border-2 text-left transition-all flex items-center gap-3.5 cursor-pointer ${
+                    broadcastMode === 'internet_voice'
+                      ? 'bg-emerald-50/90 border-emerald-500 shadow-md shadow-emerald-500/10'
+                      : 'bg-white border-slate-100 hover:border-slate-200'
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    broadcastMode === 'internet_voice' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    <Wifi size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-sm font-black font-noto ${broadcastMode === 'internet_voice' ? 'text-emerald-900' : 'text-slate-700'}`}>
+                        {lang === 'bn' ? 'ইন্টারনেট ভয়েস কল' : 'Internet Voice Call'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white font-noto">
+                        {lang === 'bn' ? '০ টাকা / ফ্রি' : 'FREE'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-500 font-noto mt-0.5 truncate">
+                      {lang === 'bn' ? 'অভিভাবক পোর্টালে সরাসরি রিং ও অডিও প্লেব্যাক' : 'Direct app alert & audio playback'}
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBroadcastMode('gsm_voice')}
+                  className={`p-4 rounded-[1.8rem] border-2 text-left transition-all flex items-center gap-3.5 cursor-pointer ${
+                    broadcastMode === 'gsm_voice'
+                      ? 'bg-blue-50/90 border-blue-500 shadow-md shadow-blue-500/10'
+                      : 'bg-white border-slate-100 hover:border-slate-200'
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    broadcastMode === 'gsm_voice' ? 'bg-[#2563EB] text-white shadow-sm' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    <PhoneCall size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-sm font-black font-noto ${broadcastMode === 'gsm_voice' ? 'text-[#1E3A8A]' : 'text-slate-700'}`}>
+                        {lang === 'bn' ? 'ডিরেক্ট মোবাইল কল' : 'Direct Mobile Call'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 font-noto">
+                        {lang === 'bn' ? 'পেইড (জিএসএম)' : 'Paid GSM'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-500 font-noto mt-0.5 truncate">
+                      {lang === 'bn' ? '০৯৬ কলার আইডি থেকে সরাসরি মোবাইল সিম কল' : 'Direct mobile GSM call via 096 sender'}
+                    </p>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {broadcastMode === 'gsm_voice' && IS_VOICE_BROADCAST_DISABLED && (
               <div className="bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-200 dark:border-amber-700/50 rounded-2xl p-4 flex items-center gap-3 text-amber-800 dark:text-amber-200 shadow-xs">
                 <AlertCircle className="shrink-0 text-amber-600 dark:text-amber-400" size={22} />
                 <div className="text-xs sm:text-sm font-bold font-noto">
                   {lang === 'bn' 
-                    ? 'ভয়েস কল ব্রডকাস্ট বাটন টি অফ করে রাখা হয়েছে। পরবর্তীতে নির্দেশ দিলে আবার চালু করা হবে।' 
-                    : 'Voice call broadcast button is currently turned off.'}
+                    ? (canUseInternetVoiceCall
+                        ? 'ডিরেক্ট জিএসএম ভয়েস কল ব্রডকাস্ট বাটন টি বর্তমানে অফ রাখা হয়েছে। তবে আপনি "ইন্টারনেট ভয়েস কল (০ টাকা / ফ্রি)" ব্যবহার করতে পারবেন।'
+                        : 'ভয়েস কল ব্রডকাস্ট বাটন টি অফ করে রাখা হয়েছে। পরবর্তীতে নির্দেশ দিলে আবার চালু করা হবে।')
+                    : 'Direct GSM voice call broadcast is currently off.'}
                 </div>
               </div>
             )}
+
             <div className="bg-white p-6 rounded-[2.5rem] shadow-bubble border border-slate-100">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
                 <div className="space-y-7">
                   <div className="space-y-4">
                     <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">
-                      {isSuperAdmin ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
+                      {isSuperAdmin && broadcastMode === 'gsm_voice' ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
                     </h4>
                     
                     {!isPreSelected && !isInstPreSelected ? (
                       <div className="relative">
-                        {!isSuperAdmin ? (
+                        {(!isSuperAdmin || broadcastMode === 'internet_voice') ? (
                           <>
-                            <div className="flex bg-slate-100 p-1 rounded-[1.5rem] mb-4">
+                            <div className="flex bg-slate-100 p-1 rounded-[1.5rem] mb-4 gap-1">
                               <button
+                                type="button"
                                 onClick={() => setTargetType('class')}
-                                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-[1.2rem] transition-all ${targetType === 'class' || targetType === 'all' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
+                                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-wider rounded-[1.2rem] transition-all cursor-pointer font-noto ${targetType === 'class' || targetType === 'all' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
                               >
-                                {lang === 'bn' ? 'শিক্ষার্থী' : 'Students'}
+                                {lang === 'bn' ? 'ক্লাস নির্বাচন' : 'Select Class'}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => { setTargetType('teachers'); setSelectedClassId(''); }}
-                                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-[1.2rem] transition-all ${targetType === 'teachers' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
+                                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-wider rounded-[1.2rem] transition-all cursor-pointer font-noto ${targetType === 'teachers' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
                               >
-                                {lang === 'bn' ? 'শিক্ষক' : 'Teachers'}
+                                {lang === 'bn' ? 'শিক্ষক নির্বাচন' : 'Select Teachers'}
                               </button>
                             </div>
 
@@ -2692,24 +2961,62 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                         <ChevronDown className={`text-slate-300 transition-all ${showVoiceDropdown ? 'rotate-180' : ''}`} size={20} />
                       </button>
                       {showVoiceDropdown && (
-                        <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                          {selectableVoices.length > 0 ? (
-                            selectableVoices.map(v => (
-                              <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                                <span className="font-black font-noto">{v.title}</span>
-                                {voiceDurations[v.id] ? (
-                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                     {voiceDurations[v.id]}s ({getPulsesForVoice(v.id)} {getPulsesForVoice(v.id) === 1 ? 'Pulse' : 'Pulses'})
-                                   </span>
-                                ) : null}
-                              </button>
-                            ))
+                        <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-64 overflow-y-auto">
+                          {dropdownVoices.length > 0 ? (
+                            dropdownVoices.map(v => {
+                              const isApproved = v.admin_status === 'approved';
+                              const isInternetTpl = v.provider_status === 'internet_only';
+                              return (
+                                <button
+                                  key={v.id}
+                                  type="button"
+                                  disabled={!isApproved}
+                                  onClick={() => {
+                                    if (!isApproved) return;
+                                    setSelectedVoiceId(v.id);
+                                    setShowVoiceDropdown(false);
+                                  }}
+                                  className={`w-full text-left px-4 py-3 rounded-xl mb-1 flex items-center justify-between gap-2 transition-all ${
+                                    !isApproved
+                                      ? 'bg-slate-50 text-slate-400 cursor-not-allowed opacity-75'
+                                      : selectedVoiceId === v.id
+                                      ? 'bg-[#2563EB] text-white cursor-pointer'
+                                      : 'hover:bg-slate-50 text-[#1E3A8A] cursor-pointer'
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-black font-noto truncate">{v.title}</span>
+                                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded font-noto ${
+                                        selectedVoiceId === v.id
+                                          ? 'bg-white/20 text-white'
+                                          : isInternetTpl
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : 'bg-blue-100 text-blue-700'
+                                      }`}>
+                                        {isInternetTpl ? 'ইন্টারনেট (ফ্রি)' : 'জিএসএম'}
+                                      </span>
+                                    </div>
+                                    {!isApproved && (
+                                      <p className="text-[10px] font-bold text-amber-600 font-noto mt-0.5 flex items-center gap-1">
+                                        <Lock size={10} /> অ্যাপ্রুভাল পেন্ডিং — সুপার অ্যাডমিন অ্যাপ্রুভাল প্রয়োজন
+                                      </p>
+                                    )}
+                                  </div>
+                                  {(v.duration || voiceDurations[v.id]) ? (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                      {v.duration || voiceDurations[v.id]}s
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })
                           ) : (
                             <div className="p-4 text-center">
                               <p className="text-xs font-bold text-slate-400 font-noto">
                                 {pendingVoicesCount > 0 
-                                  ? (lang === 'bn' ? 'আপনার আপলোডকৃত ভয়েসটি এডমিন / ম্যানেজারের অনুমোদনের অপেক্ষায় আছে।' : 'Your voice is pending Admin / Manager approval.')
-                                  : (lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস পাওয়া যায়নি।' : 'No approved voices found.')}
+                                  ? (lang === 'bn' ? 'আপনার আপলোডকৃত ভয়েসটি সুপার অ্যাডমিনের অনুমোদনের অপেক্ষায় আছে।' : 'Your voice is pending Super Admin approval.')
+                                  : (lang === 'bn' ? 'কোনো ভয়েস পাওয়া যায়নি।' : 'No voices found.')}
                               </p>
                             </div>
                           )}
@@ -2719,54 +3026,120 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                     {pendingVoicesCount > 0 && !canApproveVoice && (
                       <p className="text-[10px] font-bold text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-center gap-1.5 font-noto">
                         <Info size={12} className="shrink-0 text-amber-600" />
-                        <span>{lang === 'bn' ? `${pendingVoicesCount} টি ভয়েস বার্তা পেন্ডিং অবস্থায় রয়েছে। এডমিন / ম্যানেজার অনুমোদন দিলে এখানে ব্যবহারের জন্য আসবে।` : `${pendingVoicesCount} voice(s) pending Admin / Manager approval.`}</span>
+                        <span>{lang === 'bn' ? `${pendingVoicesCount} টি ভয়েস বার্তা সুপার অ্যাডমিনের অনুমোদনের অপেক্ষায় রয়েছে। অনুমোদন না হওয়া পর্যন্ত সেগুলো দিয়ে কল পাঠানো যাবে না।` : `${pendingVoicesCount} voice(s) pending Super Admin approval.`}</span>
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-7 flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">{t('select_sender_id', lang)}</h4>
-                    <div className="relative">
-                      <button onClick={() => setShowSenderDropdown(!showSenderDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
-                        <span className="text-base font-black font-noto text-[#1E3A8A]">
-                          {selectedSenderId ? (senders.find(s => (s.id || s.callingNumber || s.caller_id) === selectedSenderId)?.callingNumber || selectedSenderId) : t('select_sender_id', lang)}
-                        </span>
-                        <ChevronDown className={`text-slate-300 transition-all ${showSenderDropdown ? 'rotate-180' : ''}`} size={20} />
-                      </button>
-                      {showSenderDropdown && (
-                        <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                          {senders.map(s => (
-                            <button key={s.id || s.callingNumber || s.caller_id} onClick={() => { setSelectedSenderId(s.id || s.callingNumber || s.caller_id); setShowSenderDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${(s.id || s.callingNumber || s.caller_id) === selectedSenderId ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                              <span className="font-black font-noto">{s.callingNumber || s.caller_id || s.id || s.name}</span>
-                            </button>
-                          ))}
+                <div className="space-y-6 flex flex-col justify-between">
+                  {broadcastMode === 'internet_voice' ? (
+                    <div className="space-y-4">
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-[1.5rem] p-4 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-emerald-900 font-noto flex items-center gap-1.5">
+                            <Wifi size={15} className="text-emerald-600" />
+                            <span>{lang === 'bn' ? 'জিরো-কস্ট ইন্টারনেট ভয়েস কল' : 'Zero-Cost Internet Voice Call'}</span>
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black font-noto">
+                            খরচ: ০ টাকা
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
+                        <p className="text-[11px] font-bold text-emerald-700 font-noto leading-relaxed">
+                          অভিভাবকের প্যারেন্ট পোর্টাল অ্যাপে সরাসরি রিং বেজে ভয়েস কল হিসেবে অডিও শোনানো হবে এবং ইনবক্সেও সংরক্ষিত থাকবে। ওয়ালেট ব্যালেন্স থেকে কোনো টাকা কাটা হবে না।
+                        </p>
+                      </div>
 
-                  <button 
-                    onClick={handleBroadcast}
-                    disabled={IS_VOICE_BROADCAST_DISABLED || !selectedVoiceId || (targetType === 'class' && !selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
-                    className={`w-full h-[64px] font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg transition-all mt-auto ${
-                      IS_VOICE_BROADCAST_DISABLED
-                        ? 'bg-slate-400 text-white cursor-not-allowed opacity-70'
-                        : 'bg-[#2563EB] text-white active:scale-95 disabled:opacity-40'
-                    }`}
-                  >
-                    {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : (
-                      <>
-                        <Send size={20} /> 
-                        {IS_VOICE_BROADCAST_DISABLED
-                          ? (lang === 'bn' ? 'ব্রডকাস্ট অফ আছে (OFF)' : 'Voice Broadcast Disabled')
-                          : (targetType === 'all_institutions' ? 'Broadcasting to All Institutions' : 
-                             targetType === 'specific_institution' ? `Calling ${selectedInstitutionIds.length} Institutions` :
-                             t('start_broadcast', lang))}
-                      </>
-                    )}
-                  </button>
+                      <div>
+                        <label className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1 mb-1.5 block font-noto">
+                          {lang === 'bn' ? 'কলের শিরোনাম (ঐচ্ছিক)' : 'Call Title (Optional)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={internetCallTitle}
+                          onChange={(e) => setInternetCallTitle(e.target.value)}
+                          placeholder={lang === 'bn' ? 'যেমন: জরুরি বিজ্ঞপ্তি / ছুটির নোটিশ' : 'e.g. Urgent Notice'}
+                          className="w-full h-12 px-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500 font-noto"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1 mb-1.5 block font-noto">
+                          {lang === 'bn' ? 'সংক্ষিপ্ত বার্তা / ট্রান্সক্রিপ্ট (ঐচ্ছিক)' : 'Transcript / Message (Optional)'}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={internetCallBody}
+                          onChange={(e) => setInternetCallBody(e.target.value)}
+                          placeholder={lang === 'bn' ? 'কল রিসিভ করলে বা নোটিফিকেশনে অভিভাবক এই লেখা দেখতে পাবেন...' : 'Short summary text displayed during call...'}
+                          className="w-full p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500 font-noto resize-none"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">{t('select_sender_id', lang)}</h4>
+                      <div className="relative">
+                        <button onClick={() => setShowSenderDropdown(!showSenderDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
+                          <span className="text-base font-black font-noto text-[#1E3A8A]">
+                            {selectedSenderId ? (senders.find(s => (s.id || s.callingNumber || s.caller_id) === selectedSenderId)?.callingNumber || selectedSenderId) : t('select_sender_id', lang)}
+                          </span>
+                          <ChevronDown className={`text-slate-300 transition-all ${showSenderDropdown ? 'rotate-180' : ''}`} size={20} />
+                        </button>
+                        {showSenderDropdown && (
+                          <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                            {senders.map(s => (
+                              <button key={s.id || s.callingNumber || s.caller_id} onClick={() => { setSelectedSenderId(s.id || s.callingNumber || s.caller_id); setShowSenderDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${(s.id || s.callingNumber || s.caller_id) === selectedSenderId ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                <span className="font-black font-noto">{s.callingNumber || s.caller_id || s.id || s.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {broadcastMode === 'internet_voice' ? (
+                    <button
+                      type="button"
+                      onClick={handleBroadcast}
+                      disabled={
+                        !selectedVoiceId ||
+                        (targetType === 'class' && !selectedClassId && !isPreSelected) ||
+                        (targetType === 'teachers' && teachers.length === 0) ||
+                        isBroadcasting
+                      }
+                      className="w-full h-[64px] font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-base sm:text-lg transition-all mt-auto bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 disabled:opacity-40 cursor-pointer font-noto"
+                    >
+                      {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : (
+                        <>
+                          <PhoneCall size={20} />
+                          <span>{lang === 'bn' ? 'ফ্রি ইন্টারনেট ভয়েস কল পাঠান (০ টাকা)' : 'Send Free Internet Voice Call'}</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleBroadcast}
+                      disabled={IS_VOICE_BROADCAST_DISABLED || !selectedVoiceId || (targetType === 'class' && !selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
+                      className={`w-full h-[64px] font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg transition-all mt-auto ${
+                        IS_VOICE_BROADCAST_DISABLED
+                          ? 'bg-slate-400 text-white cursor-not-allowed opacity-70'
+                          : 'bg-[#2563EB] text-white active:scale-95 disabled:opacity-40'
+                      }`}
+                    >
+                      {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : (
+                        <>
+                          <Send size={20} /> 
+                          {IS_VOICE_BROADCAST_DISABLED
+                            ? (lang === 'bn' ? 'ব্রডকাস্ট অফ আছে (OFF)' : 'Voice Broadcast Disabled')
+                            : (targetType === 'all_institutions' ? 'Broadcasting to All Institutions' : 
+                               targetType === 'specific_institution' ? `Calling ${selectedInstitutionIds.length} Institutions` :
+                               t('start_broadcast', lang))}
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -3847,6 +4220,40 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             </div>
 
             <div className="space-y-4">
+              {canUseInternetVoiceCall && (
+                <div>
+                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 mb-1.5 block font-noto">
+                    {lang === 'bn' ? 'ভয়েস ধরন নির্বাচন করুন *' : 'Voice Type *'}
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUploadMode('internet_only')}
+                      className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                        uploadMode === 'internet_only'
+                          ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
+                          : 'bg-slate-50 border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <p className="text-xs font-black font-noto">ইন্টারনেট ভয়েস</p>
+                      <p className="text-[10px] font-bold text-emerald-600 font-noto">০ টাকা / সম্পূর্ণ ফ্রি</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUploadMode('gsm')}
+                      className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                        uploadMode === 'gsm'
+                          ? 'bg-blue-50 border-blue-500 text-[#1E3A8A]'
+                          : 'bg-slate-50 border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <p className="text-xs font-black font-noto">জিএসএম ডিরেক্ট কল</p>
+                      <p className="text-[10px] font-bold text-blue-600 font-noto">পেইড মোবাইল কল</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 mb-1.5 block font-noto">
                   {lang === 'bn' ? 'ভয়েস এর শিরোনাম / বিষয় *' : 'Voice Title / Subject *'}
@@ -3862,15 +4269,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
               <div className="space-y-3">
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 block font-noto">
-                  {canApproveVoice 
+                  {(canApproveVoice || uploadMode === 'internet_only')
                     ? (lang === 'bn' ? 'অডিও ইনপুট বা সরাসরি রেকর্ড করুন *' : 'Audio Input or Live Record *')
                     : (lang === 'bn' ? 'অডিও ফাইল নির্বাচন করুন (MP3, WAV, M4A, OGG) *' : 'Select Audio File (MP3, WAV, M4A, OGG) *')}
                 </label>
 
                 {/* Sleek Recording & Upload Zone Card */}
                 <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 p-5 rounded-[2rem] border-2 border-dashed border-blue-200/80 text-center space-y-4 shadow-xs">
-                  {/* Live Recording: Only visible to Super Admin / Manager; completely hidden in User Panel */}
-                  {canApproveVoice && (
+                  {/* Live Recording: Available for Super Admin and for Internet-Only Free Voice messages */}
+                  {(canApproveVoice || uploadMode === 'internet_only') && (
                     <div className="flex items-center justify-center gap-3">
                       {!isRecording ? (
                         <button 
@@ -3896,7 +4303,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
                   {!uploadFile && (
                     <>
-                      {canApproveVoice && (
+                      {(canApproveVoice || uploadMode === 'internet_only') && (
                         <div className="relative flex items-center justify-center my-2">
                           <div className="border-t border-slate-200 w-full" />
                           <span className="bg-slate-50 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest absolute font-noto">
@@ -3905,7 +4312,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                         </div>
                       )}
 
-                      {!canApproveVoice ? (
+                      {!(canApproveVoice || uploadMode === 'internet_only') ? (
                         <label className="cursor-pointer flex flex-col items-center justify-center gap-2.5 px-5 py-6 rounded-2xl bg-white border-2 border-blue-100 hover:border-blue-400 text-slate-700 font-bold text-xs shadow-sm transition-all w-full font-noto group hover:shadow-md">
                           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                             <Upload size={22} />

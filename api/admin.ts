@@ -1625,11 +1625,20 @@ export default async function handler(req, res) {
       const targetId = body.id || body.voice_id;
       if (!targetId) return res.status(400).json({ error: 'Voice ID is required' });
 
+      const { data: existingVoice } = await supabase
+        .from('voice_templates')
+        .select('id, provider_status')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      const nextProviderStatus =
+        existingVoice?.provider_status === 'internet_only' ? 'internet_only' : 'approved';
+
       const { data, error } = await supabase
         .from('voice_templates')
         .update({
           admin_status: 'approved',
-          provider_status: 'approved',
+          provider_status: nextProviderStatus,
           status: 'approved'
         })
         .eq('id', targetId)
@@ -1644,11 +1653,20 @@ export default async function handler(req, res) {
       const targetId = body.id || body.voice_id;
       if (!targetId) return res.status(400).json({ error: 'Voice ID is required' });
 
+      const { data: existingVoice } = await supabase
+        .from('voice_templates')
+        .select('id, provider_status')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      const nextProviderStatus =
+        existingVoice?.provider_status === 'internet_only' ? 'internet_only' : 'rejected';
+
       const { data, error } = await supabase
         .from('voice_templates')
         .update({
           admin_status: 'rejected',
-          provider_status: 'rejected',
+          provider_status: nextProviderStatus,
           status: 'rejected'
         })
         .eq('id', targetId)
@@ -1691,9 +1709,18 @@ export default async function handler(req, res) {
 
       if (voicesRes.error) throw voicesRes.error;
       const rawVoices = voicesRes.data || [];
+      const instMap = new Map<string, any>();
+      for (const inst of instsRes.data || []) {
+        if (inst?.id) instMap.set(inst.id, { id: inst.id, name: inst.name, phone: inst.phone });
+      }
+      for (const v of rawVoices) {
+        if (v.institution_id && !v.institutions) {
+          v.institutions = instMap.get(v.institution_id) || null;
+        }
+      }
 
-      // Check if any voice is missing a playable file_url
-      const missingVoices = rawVoices.filter((v: any) => !v.file_url || !v.file_url.startsWith('http'));
+      // Check if any non-internet voice is missing a playable file_url
+      const missingVoices = rawVoices.filter((v: any) => v.provider_status !== 'internet_only' && (!v.file_url || !v.file_url.startsWith('http')));
       if (missingVoices.length > 0 && process.env.AWAJ_API_TOKEN) {
         try {
           const awajRes = await fetch('https://api.awajdigital.com/api/voices', {
@@ -1706,7 +1733,7 @@ export default async function handler(req, res) {
             const awajData = await awajRes.json();
             const voiceList = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
             for (const v of rawVoices) {
-              if (!v.file_url || !v.file_url.startsWith('http')) {
+              if (v.provider_status !== 'internet_only' && (!v.file_url || !v.file_url.startsWith('http'))) {
                 const match = voiceList.find((av: any) => 
                   (v.provider_voice_id && String(av.id) === String(v.provider_voice_id)) ||
                   (v.provider_voice_name && av.name && av.name.toLowerCase() === v.provider_voice_name.toLowerCase()) ||
