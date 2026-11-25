@@ -1735,19 +1735,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                       android: {
                         priority: 'HIGH',
                         ttl: '120s',
-                        notification: {
-                          title: cleanTitle,
-                          body: cleanBody,
-                          sound: 'default',
-                          channel_id: 'deenora_general_alerts',
-                          notification_priority: 'PRIORITY_HIGH',
-                          default_sound: true,
-                          default_vibrate_timings: true,
-                        },
-                      },
-                      notification: {
-                        title: cleanTitle,
-                        body: cleanBody,
                       },
                       data: fcmData,
                     },
