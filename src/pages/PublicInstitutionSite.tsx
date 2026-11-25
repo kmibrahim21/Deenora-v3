@@ -886,15 +886,15 @@ const PublicInstitutionSite: React.FC<PublicInstitutionSiteProps> = ({ code }) =
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A]/85 via-[#0F172A]/20 to-transparent" />
-                    <div className="absolute bottom-3.5 left-4 right-4 flex items-end justify-between gap-2 text-white">
+                    <div className="absolute bottom-3.5 left-4 right-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 text-white">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-emerald-300">অফিসিয়াল ক্যাম্পাস</p>
-                        <p className="text-sm font-black truncate">{institution.name}</p>
+                        <p className="text-sm font-black leading-snug line-clamp-2 sm:truncate">{institution.name}</p>
                       </div>
                       {institution.phone && (
                         <a
                           href={`tel:${institution.phone}`}
-                          className="h-8 px-3 rounded-xl bg-white/95 hover:bg-white text-[#1E3A8A] text-xs font-black inline-flex items-center gap-1.5 shrink-0 shadow-sm"
+                          className="self-start sm:self-auto h-8 px-3 rounded-xl bg-white/95 hover:bg-white text-[#1E3A8A] text-xs font-black inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-sm"
                         >
                           <Phone size={12} className="text-[#059669]" />
                           <span className="tabular-nums">কল করুন</span>

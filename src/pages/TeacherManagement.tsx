@@ -1149,7 +1149,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 </p>
               </div>
             ) : filteredTeachers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
             {filteredTeachers.map((teacher) => (
               <motion.div
                 key={teacher.id}
@@ -1296,7 +1296,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'উপস্থিতি' : 'Attendance'}</h4>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
                       {sortedTeachers.map(teacher => {
                         // Filter by leave date (do not filter active teachers by join date for daily attendance taking)
                         if (teacher.leave_date && attendanceDate > teacher.leave_date) {
@@ -1308,8 +1308,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
                         return (
                           <div key={teacher.id} className={`p-3.5 sm:p-4 rounded-2xl border shadow-bubble group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3">
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+                                <div className="flex items-center gap-3 min-w-[140px] sm:min-w-[200px] flex-1">
                                   <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
                                     <User size={18} />
                                   </div>
@@ -1446,7 +1446,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     <p className="text-[13px] font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
                     {activeReportTeachers.map(teacher => {
                       let presentCount = 0;
                       let absentCount = 0;

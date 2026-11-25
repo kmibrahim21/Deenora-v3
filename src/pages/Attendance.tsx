@@ -2368,16 +2368,16 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </div>
                       {/* Removed Mark All buttons per user request */}
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-3.5">
+                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
                    {students.map(s => (
-                     <div key={s.id} className={`p-3.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-3 group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
-                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 pr-2">
-                          <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                     <div key={s.id} className={`p-3.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex flex-wrap items-center justify-between gap-3 group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
+                        <div className="flex items-center gap-3 min-w-[140px] sm:min-w-[200px] flex-1">
+                          <div className={`w-10 h-10 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
                             <span className="text-[7px] sm:text-[8px] font-black opacity-40 leading-none">ROLL</span>
-                            <span className="text-sm sm:text-base font-black leading-none mt-0.5 sm:mt-1">{s.roll || '-'}</span>
+                            <span className="text-sm sm:text-base font-black leading-none mt-0.5">{s.roll || '-'}</span>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <h5 className={`font-black font-noto text-xs sm:text-sm md:text-base leading-snug break-words ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`} title={s.student_name}>{s.student_name}</h5>
+                            <h5 className={`font-black font-noto text-sm sm:text-[15px] leading-snug break-words ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`} title={s.student_name}>{s.student_name}</h5>
                             {s.registration_number && (
                               <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">
                                 {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {s.registration_number}
@@ -2385,14 +2385,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1.5 sm:gap-2 shrink-0 items-center">
-                           <button onClick={() => setStatus(s.id, 'present')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.institution_type)}><CheckCircle size={18} className="sm:w-5 sm:h-5" /></button>
-                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.institution_type)}><XCircle size={18} className="sm:w-5 sm:h-5" /></button>
+                        <div className="flex gap-1.5 shrink-0 items-center ml-auto">
+                           <button onClick={() => setStatus(s.id, 'present')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.institution_type)}><CheckCircle size={18} /></button>
+                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.institution_type)}><XCircle size={18} /></button>
                            <div className="flex flex-col items-center">
-                             <button onClick={() => setStatus(s.id, 'late')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.institution_type)}>
+                             <button onClick={() => setStatus(s.id, 'late')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.institution_type)}>
                                 {attendance[s.id] === 'late' ? (
-                                 <span className="text-[13px] sm:text-base font-black">{computeLateMins(arrivalTime[s.id])}</span>
-                                ) : <Clock size={18} className="sm:w-5 sm:h-5" />}
+                                 <span className="text-[13px] sm:text-sm font-black">{computeLateMins(arrivalTime[s.id])}</span>
+                                ) : <Clock size={18} />}
                              </button>
                              {attendance[s.id] === 'late' && (
                                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-wider text-amber-500 mt-1 whitespace-nowrap animate-in fade-in slide-in-from-top-1">
@@ -2400,7 +2400,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                </span>
                              )}
                            </div>
-                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.institution_type)}><CalendarOff size={18} className="sm:w-5 sm:h-5" /></button>
+                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.institution_type)}><CalendarOff size={18} /></button>
                         </div>
                      </div>
                    ))}
@@ -2675,7 +2675,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
                     {/* Student Cards for Daily Report */}
                     {filteredDailyStudents.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                         {filteredDailyStudents.map(student => {
                           const isPresent = student.final_status === 'present';
                           const isLate = student.final_status === 'late';
@@ -2712,7 +2712,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                 </div>
 
                                 <div className="min-w-0 flex-1">
-                                  <h5 className={`font-black font-noto text-sm leading-snug truncate ${isDark ? 'text-slate-100' : 'text-slate-800'}`} title={student.student_name}>
+                                  <h5 className={`font-black font-noto text-sm leading-snug break-words ${isDark ? 'text-slate-100' : 'text-slate-800'}`} title={student.student_name}>
                                     {student.student_name}
                                   </h5>
                                   <div className="mt-1 flex items-center gap-1.5 flex-wrap text-xs text-slate-400 font-bold">
@@ -3109,7 +3109,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                           {filteredReportData.map((item) => {
                             const rankLabel = getRankBadgeLabel(item.rank, lang);
                             const isTop3 = item.rank <= 3;

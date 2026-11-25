@@ -343,13 +343,47 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
   // Responsive Zoom & Viewport tracking (compact by default on mobile to avoid CSS zoom distortion)
   const [paperZoom, setPaperZoom] = useState<'fit' | 'compact' | '100'>('compact');
-  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 800);
+  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1280);
+  const [showLeftPanel, setShowLeftPanel] = useState<boolean>(() => (typeof window === 'undefined' ? true : window.innerWidth >= 1024));
+  const [showRightPanel, setShowRightPanel] = useState<boolean>(() => (typeof window === 'undefined' ? false : window.innerWidth >= 1536));
+  const canvasRef = useRef<HTMLElement | null>(null);
+  const paperRef = useRef<HTMLDivElement | null>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number>(0);
+  const [paperNaturalHeight, setPaperNaturalHeight] = useState<number>(0);
 
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const observers: ResizeObserver[] = [];
+    if (canvasRef.current) {
+      const ro = new ResizeObserver((entries) => {
+        const w = entries[0]?.contentRect?.width;
+        if (w) setCanvasWidth(w);
+      });
+      ro.observe(canvasRef.current);
+      observers.push(ro);
+    }
+    if (paperRef.current) {
+      const ro2 = new ResizeObserver((entries) => {
+        const h = entries[0]?.borderBoxSize?.[0]?.blockSize || entries[0]?.contentRect?.height;
+        if (h) setPaperNaturalHeight(h);
+      });
+      ro2.observe(paperRef.current);
+      observers.push(ro2);
+    }
+    return () => observers.forEach((o) => o.disconnect());
+  }, [mobilePane, showLeftPanel, showRightPanel, paperSize]);
+
+  const paperNaturalPx = paperSize === 'Legal' ? 816 : 794;
+  const desktopPaperScale =
+    viewportWidth >= 768 && canvasWidth > 0
+      ? Math.min(1, Math.max(0.45, (canvasWidth - 32) / paperNaturalPx))
+      : 1;
 
   // Localized lists
   const supportedBoardsList = useMemo(() => getSupportedBoards(lang), [lang]);
@@ -995,7 +1029,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] w-full bg-[#f1f5f9] dark:bg-[#090d16] font-noto overflow-hidden select-none">
+    <div className="flex flex-col h-full w-full bg-[#f1f5f9] dark:bg-[#090d16] font-noto overflow-hidden select-none">
 
       {/* ================= MOBILE SLEEK TOUCH HEADER (< 768px) ================= */}
       <div className="md:hidden no-print bg-[#2b579a] text-white px-2.5 py-2 flex items-center justify-between gap-2 border-b border-blue-900 shadow-sm shrink-0 z-30">
@@ -1117,14 +1151,14 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         </div>
 
         {/* ================= ROW 1: শীর্ষ মেনু ও প্রধান অ্যাকশন বাটন ================= */}
-        <div className="h-9 px-3 bg-[#2b579a] flex items-center justify-between border-t border-blue-400/20">
+        <div className="min-h-[38px] px-2.5 bg-[#2b579a] flex items-center justify-between gap-2 border-t border-blue-400/20 overflow-x-auto no-scrollbar">
           
           {/* Menu Tabs: [ফাইল] [হোম] [ইনসার্ট] [পেজ লেআউট] [ভিউ] */}
-          <div className="flex items-end gap-1 h-full pt-1">
+          <div className="flex items-end gap-0.5 h-full pt-1 shrink-0">
             <button
               type="button"
               onClick={() => setActiveMenuTab('file')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-t-md transition ${
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-t-md transition whitespace-nowrap shrink-0 ${
                 activeMenuTab === 'file'
                   ? 'bg-[#f3f2f1] dark:bg-slate-800 text-[#2b579a] dark:text-blue-400 shadow-xs'
                   : 'text-white hover:bg-white/15'
@@ -1136,7 +1170,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             <button
               type="button"
               onClick={() => setActiveMenuTab('home')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-t-md transition ${
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-t-md transition whitespace-nowrap shrink-0 ${
                 activeMenuTab === 'home'
                   ? 'bg-[#f3f2f1] dark:bg-slate-800 text-[#2b579a] dark:text-blue-400 shadow-xs'
                   : 'text-white hover:bg-white/15'
@@ -1150,8 +1184,9 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               onClick={() => {
                 setActiveMenuTab('insert');
                 setMobilePane('library');
+                setShowLeftPanel(true);
               }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-t-md transition ${
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-t-md transition whitespace-nowrap shrink-0 ${
                 activeMenuTab === 'insert'
                   ? 'bg-[#f3f2f1] dark:bg-slate-800 text-[#2b579a] dark:text-blue-400 shadow-xs'
                   : 'text-white hover:bg-white/15'
@@ -1162,8 +1197,11 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveMenuTab('layout')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-t-md transition ${
+              onClick={() => {
+                setActiveMenuTab('layout');
+                setShowRightPanel(true);
+              }}
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-t-md transition whitespace-nowrap shrink-0 ${
                 activeMenuTab === 'layout'
                   ? 'bg-[#f3f2f1] dark:bg-slate-800 text-[#2b579a] dark:text-blue-400 shadow-xs'
                   : 'text-white hover:bg-white/15'
@@ -1175,7 +1213,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             <button
               type="button"
               onClick={() => setActiveMenuTab('view')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-t-md transition ${
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-t-md transition whitespace-nowrap shrink-0 ${
                 activeMenuTab === 'view'
                   ? 'bg-[#f3f2f1] dark:bg-slate-800 text-[#2b579a] dark:text-blue-400 shadow-xs'
                   : 'text-white hover:bg-white/15'
@@ -1185,48 +1223,79 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             </button>
           </div>
 
-          {/* Right Side: Primary Action Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Right Side: Panel Toggles & Primary Action Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Desktop Panel Toggles */}
+            <button
+              type="button"
+              onClick={() => setShowLeftPanel((v) => !v)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold border transition active:scale-95 whitespace-nowrap shrink-0 ${
+                showLeftPanel
+                  ? 'bg-white text-[#2b579a] border-white'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+              }`}
+              title={isBn ? 'প্রশ্ন সম্ভার প্যানেল দেখুন/লুকান' : 'Toggle Question Bank Panel'}
+            >
+              <BookOpen size={13} className="shrink-0" />
+              <span className="hidden lg:inline">{isBn ? 'প্রশ্ন সম্ভার' : 'Bank'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowRightPanel((v) => !v)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold border transition active:scale-95 whitespace-nowrap shrink-0 ${
+                showRightPanel
+                  ? 'bg-white text-[#2b579a] border-white'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+              }`}
+              title={isBn ? 'ফরম্যাটিং ও সেটিংস প্যানেল দেখুন/লুকান' : 'Toggle Settings Panel'}
+            >
+              <Sliders size={13} className="shrink-0" />
+              <span className="hidden lg:inline">{isBn ? 'সেটিংস' : 'Settings'}</span>
+            </button>
+
+            <div className="h-4 w-[1px] bg-white/25 mx-0.5 shrink-0" />
+
             {/* 1. 💾 ড্রাফট সংরক্ষণ / Save Draft */}
             <button
               type="button"
               onClick={saveCurrentDraft}
               disabled={isSaving}
-              className="flex items-center gap-1 px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-xs font-bold border border-white/20 transition active:scale-95"
+              className="flex items-center gap-1 px-2 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-xs font-bold border border-white/20 transition active:scale-95 whitespace-nowrap shrink-0"
               title={isBn ? 'ড্রাফট ক্লাউডে সংরক্ষণ করুন' : 'Save draft to cloud'}
             >
               <Save size={13} className="shrink-0" />
-              <span className="hidden sm:inline">{isBn ? 'ড্রাফট সংরক্ষণ' : 'Save Draft'}</span>
+              <span className="hidden xl:inline">{isBn ? 'ড্রাফট সংরক্ষণ' : 'Save Draft'}</span>
             </button>
 
             {/* 2. 📥 ওয়ার্ড ডাউনলোড (.doc) / Download Word (.doc) */}
             <button
               type="button"
               onClick={exportToWordDoc}
-              className="flex items-center gap-1 px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-xs font-bold border border-white/20 transition active:scale-95"
+              className="flex items-center gap-1 px-2 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-xs font-bold border border-white/20 transition active:scale-95 whitespace-nowrap shrink-0"
               title={isBn ? 'Microsoft Word (.doc) ফাইল ডাউনলোড' : 'Download Microsoft Word (.doc) file'}
             >
               <FileDown size={13} className="shrink-0" />
-              <span className="hidden md:inline">{isBn ? 'ওয়ার্ড ডাউনলোড (.doc)' : 'Download Word (.doc)'}</span>
-              <span className="md:hidden">Word</span>
+              <span className="hidden xl:inline">{isBn ? 'ওয়ার্ড (.doc)' : 'Word (.doc)'}</span>
+              <span className="xl:hidden">Word</span>
             </button>
 
             {/* 3. 🖨️ প্রিন্ট করুন / Print */}
             <button
               type="button"
               onClick={printPaper}
-              className="flex items-center gap-1 px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-xs font-bold border border-white/20 transition active:scale-95"
+              className="flex items-center gap-1 px-2 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-xs font-bold border border-white/20 transition active:scale-95 whitespace-nowrap shrink-0"
               title={isBn ? 'প্রিন্ট অথবা PDF হিসেবে সংরক্ষণ' : 'Print or save as PDF'}
             >
               <Printer size={13} className="shrink-0" />
-              <span className="hidden sm:inline">{isBn ? 'প্রিন্ট করুন' : 'Print'}</span>
+              <span className="hidden lg:inline">{isBn ? 'প্রিন্ট' : 'Print'}</span>
             </button>
 
             {/* 4. 🪄 ১-ক্লিক প্রশ্ন তৈরি / 1-Click Auto Paper (Distinct Emerald Button) */}
             <button
               type="button"
               onClick={() => setShowAutoModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-[#107c41] hover:bg-[#0e6b37] text-white rounded text-xs font-black shadow-md transition active:scale-95 border border-emerald-400/40"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#107c41] hover:bg-[#0e6b37] text-white rounded text-xs font-black shadow-md transition active:scale-95 border border-emerald-400/40 whitespace-nowrap shrink-0"
               title={isBn ? '১-ক্লিকে ৫০ বা ১০০ নম্বরের অটো প্রশ্নপত্র তৈরি' : '1-Click auto generate full 50 or 100 mark paper'}
             >
               <Sparkles size={13} className="shrink-0 text-amber-300" />
@@ -1236,7 +1305,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
         </div>
 
         {/* ================= ROW 2: টুলবার ও ফরম্যাটিং রিবন (5 Distinct Word Groups with Bottom Labels) ================= */}
-        <div className="h-[84px] px-3 py-1 bg-[#f3f2f1] dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700 flex items-stretch gap-1 overflow-x-auto scrollbar-none text-xs select-none">
+        <div className="h-[80px] px-2.5 py-1 bg-[#f3f2f1] dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700 flex items-stretch gap-0.5 overflow-x-auto no-scrollbar text-xs select-none">
           
           {/* গ্রুপ ১: ক্লিপবোর্ড (Clipboard Group) */}
           <div className="flex flex-col justify-between px-2 py-0.5 border-r border-slate-300 dark:border-slate-700 shrink-0">
@@ -1280,13 +1349,13 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
           </div>
 
           {/* গ্রুপ ২: ফন্ট (Font Group) */}
-          <div className="flex flex-col justify-between px-2.5 py-0.5 border-r border-slate-300 dark:border-slate-700 shrink-0">
+          <div className="flex flex-col justify-between px-2 py-0.5 border-r border-slate-300 dark:border-slate-700 shrink-0">
             {/* Line 1: Bangla Font, Arabic Font, Size dropdown, A^, Av */}
             <div className="flex items-center gap-1">
               <select
                 value={banglaFont}
                 onChange={e => setBanglaFont(e.target.value)}
-                className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200 h-6"
+                className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200 h-6 max-w-[140px]"
                 title={isBn ? 'বাংলা ফন্ট নির্বাচন' : 'Bangla Font'}
               >
                 <option value="SolaimanLipi">{isBn ? 'বাংলা: সোলায়মান লিপি' : 'Bangla: SolaimanLipi'}</option>
@@ -1298,7 +1367,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
               <select
                 value={arabicFont}
                 onChange={e => setArabicFont(e.target.value)}
-                className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200 h-6"
+                className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200 h-6 max-w-[130px]"
                 title={isBn ? 'আরবি ক্যালিগ্রাফি ফন্ট নির্বাচন' : 'Arabic Calligraphy Font'}
               >
                 <option value="Amiri">{isBn ? 'আরবি: আমিরি (Amiri)' : 'Arabic: Amiri'}</option>
@@ -1629,8 +1698,11 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setMobilePane('library')}
-                className="flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-[#2b579a] dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded text-xs font-black hover:bg-blue-100 transition h-6"
+                onClick={() => {
+                  setMobilePane('library');
+                  setShowLeftPanel(true);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-[#2b579a] dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded text-xs font-black hover:bg-blue-100 transition h-6 whitespace-nowrap"
                 title={isBn ? '৩৮৫টি বইয়ের প্রশ্ন সম্ভার ওপেন করুন' : 'Open Question Bank Library'}
               >
                 <BookOpen size={13} className="text-[#2b579a] dark:text-blue-400" />
@@ -1672,23 +1744,37 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
       {/* ================= 3-PANE WORKSPACE ================= */}
       <div className="flex-1 flex overflow-hidden relative pb-14 md:pb-0">
 
-        {/* ================= LEFT PANE: 385 BOOKS QUESTION BANK (w-[380px]) ================= */}
+        {/* ================= LEFT PANE: 385 BOOKS QUESTION BANK ================= */}
         <aside
-          className={`w-full md:w-[380px] bg-white dark:bg-[#111827] border-r border-slate-300 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
-            mobilePane === 'library' ? 'flex' : 'hidden md:flex'
+          className={`w-full md:w-[275px] xl:w-[300px] 2xl:w-[330px] bg-white dark:bg-[#111827] border-r border-slate-300 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
+            mobilePane === 'library'
+              ? 'flex'
+              : showLeftPanel
+                ? 'hidden md:flex'
+                : 'hidden'
           }`}
         >
           {/* Header */}
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-base">📚</span>
-              <h3 className="text-xs font-black text-slate-800 dark:text-slate-100">
+          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base shrink-0">📚</span>
+              <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">
                 {isBn ? '৩৮৫টি বইয়ের প্রশ্ন সম্ভার' : '385 Books Question Bank'}
               </h3>
             </div>
-            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
-              {locNum(filteredQuestions.length)} {isBn ? 'টি প্রশ্ন' : 'Questions'}
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 whitespace-nowrap">
+                {locNum(filteredQuestions.length)} {isBn ? 'টি প্রশ্ন' : 'Questions'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowLeftPanel(false)}
+                title={isBn ? 'প্যানেল বন্ধ করুন' : 'Hide panel'}
+                className="hidden md:flex w-6 h-6 items-center justify-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
 
           {/* Cascading Filter Dropdowns */}
@@ -1999,7 +2085,8 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
 
         {/* ================= CENTER CANVAS: WORD A4 / LEGAL DOCUMENT CANVAS ================= */}
         <main
-          className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-8 flex flex-col items-center bg-slate-200 dark:bg-slate-900 custom-scrollbar ${
+          ref={canvasRef}
+          className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-5 flex flex-col items-center bg-slate-200 dark:bg-slate-900 custom-scrollbar ${
             mobilePane === 'paper' ? 'flex' : 'hidden md:flex'
           }`}
           onDragOver={e => e.preventDefault()}
@@ -2045,15 +2132,34 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
             </div>
           </div>
 
-          {/* Responsive Paper Viewport Container (Zero CSS Zoom Distortion on < 768px) */}
+          {/* Responsive Paper Viewport Container (Auto-Fits A4/Legal cleanly on Desktop, Zero Distortion on Mobile) */}
           <div className="paper-viewport-wrapper w-full flex justify-center">
-            <div className="paper-scale-container w-full md:w-auto origin-top transition-all duration-200">
+            <div
+              className="paper-scale-container shrink-0 transition-all duration-150"
+              style={
+                viewportWidth >= 768
+                  ? {
+                      width: `${Math.round(paperNaturalPx * desktopPaperScale)}px`,
+                      height:
+                        desktopPaperScale < 1 && paperNaturalHeight > 0
+                          ? `${Math.ceil(paperNaturalHeight * desktopPaperScale)}px`
+                          : undefined,
+                    }
+                  : { width: '100%' }
+              }
+            >
               {/* White A4 / Legal Canvas Sheet (#paperSheet) */}
               <div
+                ref={paperRef}
                 id="paperSheet"
                 style={{
-                  width: viewportWidth < 768 ? '100%' : (paperSize === 'Legal' ? '216mm' : '210mm'),
+                  width: viewportWidth < 768 ? '100%' : `${paperNaturalPx}px`,
                   minHeight: viewportWidth < 768 ? 'auto' : (paperSize === 'Legal' ? '356mm' : '297mm'),
+                  transform:
+                    viewportWidth >= 768 && desktopPaperScale < 1
+                      ? `scale(${desktopPaperScale})`
+                      : undefined,
+                  transformOrigin: 'top left',
                   padding: viewportWidth < 768
                     ? '14px 14px'
                     : paperMargin === 'narrow'
@@ -2070,7 +2176,7 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
                   textDecoration: isUnderline ? 'underline' : 'none',
                   ['--paper-q-gap' as any]: `${questionGap}px`
                 }}
-                className={`w-full bg-white text-black shadow-2xl relative transition-all ${
+                className={`bg-white text-black shadow-2xl relative transition-all ${
                   borderStyle === 'double'
                     ? 'border-4 border-double border-black'
                     : borderStyle === 'single'
@@ -2537,20 +2643,32 @@ export const QuestionBuilderStudio: React.FC<QuestionBuilderStudioProps> = ({
           </div>
         </main>
 
-        {/* ================= RIGHT PANE: SETTINGS & TOOLS (Desktop: w-[300px]) ================= */}
+        {/* ================= RIGHT PANE: SETTINGS & TOOLS ================= */}
         <aside
-          className={`w-full md:w-[300px] bg-white dark:bg-[#111827] border-l border-slate-300 dark:border-slate-800 flex flex-col shrink-0 z-20 ${
-            mobilePane === 'settings' || mobilePane === 'actions' ? 'flex' : 'hidden md:flex'
+          className={`w-full md:w-[275px] 2xl:w-[295px] bg-white dark:bg-[#111827] border-l border-slate-300 dark:border-slate-800 flex flex-col shrink-0 z-30 md:absolute md:right-0 md:top-0 md:bottom-0 md:shadow-2xl 2xl:static 2xl:shadow-none ${
+            mobilePane === 'settings' || mobilePane === 'actions'
+              ? 'flex'
+              : showRightPanel
+                ? 'hidden md:flex'
+                : 'hidden'
           }`}
         >
           {/* Header */}
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Sliders size={16} className="text-[#2b579a]" />
-              <h3 className="text-xs font-black text-slate-800 dark:text-slate-100">
+          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Sliders size={16} className="text-[#2b579a] shrink-0" />
+              <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">
                 {mobilePane === 'actions' ? (isBn ? 'ডাউনলোড ও অ্যাকশন' : 'Download & Actions') : (isBn ? 'ডকুমেন্ট ফরম্যাটিং ও সেটিংস' : 'Document Formatting & Settings')}
               </h3>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowRightPanel(false)}
+              title={isBn ? 'প্যানেল বন্ধ করুন' : 'Hide panel'}
+              className="hidden md:flex w-6 h-6 items-center justify-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition shrink-0"
+            >
+              <X size={14} />
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3.5 space-y-4 custom-scrollbar text-xs">

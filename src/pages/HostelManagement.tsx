@@ -2802,7 +2802,7 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
         </div>
 
         {/* 5 Summary KPI Cards */}
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+        <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
           <div className={`rounded-2xl border p-3.5 ${isDark ? 'bg-slate-800/70 border-slate-700/80' : 'bg-blue-50/60 border-blue-100'}`}>
             <div className="flex items-center justify-between gap-2">
               <span className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -2857,17 +2857,17 @@ const HostelManagement: React.FC<HostelManagementProps> = ({
           </div>
 
           <div
-            className={`col-span-2 sm:col-span-1 rounded-2xl border p-3.5 flex items-center justify-between sm:block ${
+            className={`col-span-2 lg:col-span-1 rounded-2xl border p-3.5 flex items-center justify-between lg:block ${
               isDark ? 'bg-slate-800/70 border-slate-700/80' : 'bg-teal-50/60 border-teal-100'
             }`}
           >
-            <div className="flex items-center sm:justify-between gap-2">
-              <Sun size={16} className="text-teal-600 dark:text-teal-400 shrink-0 sm:order-2" />
-              <span className={`text-xs sm:text-[11px] font-bold sm:order-1 ${isDark ? 'text-slate-300 sm:text-slate-400' : 'text-slate-700 sm:text-slate-600'}`}>
+            <div className="flex items-center lg:justify-between gap-2">
+              <Sun size={16} className="text-teal-600 dark:text-teal-400 shrink-0 lg:order-2" />
+              <span className={`text-xs lg:text-[11px] font-bold lg:order-1 ${isDark ? 'text-slate-300 lg:text-slate-400' : 'text-slate-700 lg:text-slate-600'}`}>
                 {isBn ? 'ডে-কেয়ার শিক্ষার্থী' : 'Day-Care Students'}
               </span>
             </div>
-            <div className="sm:mt-1.5 flex items-baseline gap-1.5">
+            <div className="lg:mt-1.5 flex items-baseline gap-1.5">
               <span className="text-2xl font-black tabular-nums text-teal-700 dark:text-teal-300">
                 {formatNum(kpis.dayCareCount, isBn)}
               </span>

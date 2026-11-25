@@ -1118,7 +1118,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                    <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
-                      className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none appearance-none transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`}
+                      className={`w-full h-11 pl-4 pr-9 border rounded-xl text-[11px] font-black outline-none appearance-none bg-none transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`}
                   >
                       <option value="all">{lang === 'bn' ? 'সব স্ট্যাটাস' : 'All Status'}</option>
                       <option value="paid">{lang === 'bn' ? 'পরিশোধিত (Paid)' : 'Paid'}</option>
@@ -1172,7 +1172,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             </div>
          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {loading ? (
               <div className={`flex flex-col items-center justify-center py-16 col-span-full ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                 <Loader2 className="animate-spin mb-4" size={32} />
@@ -1207,29 +1207,29 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         const canCollectHostelOnly = isNoFeeSet && Boolean(hostelInfo && hostelInfo.suggested_hostel_fee > 0);
 
                         return (
-                        <div key={item.student_id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                     <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : hasBalance ? (isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-500') : (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
+                        <div key={item.student_id} className={`p-3.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-2.5 group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                     <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-[0.95rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : hasBalance ? (isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-500') : (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
                            {item.roll || '-'}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                            <h5 
-                             className={`font-black font-noto line-clamp-2 whitespace-normal leading-tight mb-0.5 cursor-pointer hover:underline decoration-2 underline-offset-2 text-[13px] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
+                             className={`font-black font-noto whitespace-normal break-words leading-snug mb-0.5 cursor-pointer hover:underline decoration-2 underline-offset-2 text-[13px] sm:text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
                              onClick={() => onStudentClick ? onStudentClick(item) : handleShowHistory(item)}
                            >
                              {item.student_name}
                            </h5>
-                           <div className="flex items-center gap-2">
-                              <p className="text-[9px] text-red-500 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
-                              {isNoFeeSet && !canCollectHostelOnly && <span className={`text-[7px] px-1.5 py-0.5 rounded-md font-black uppercase ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>No Fee Set</span>}
+                           <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[10px] text-red-500 font-bold uppercase whitespace-nowrap">বকেয়া: ৳{Math.max(0, balance)}</p>
+                              {isNoFeeSet && !canCollectHostelOnly && <span className={`text-[7px] px-1.5 py-0.5 rounded-md font-black uppercase whitespace-nowrap ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>No Fee Set</span>}
                            </div>
                         </div>
                      </div>
-                     <div className="flex items-center gap-1.5">
+                     <div className="flex items-center gap-1.5 shrink-0">
                        {item.guardian_phone && (
                           <a
                             href={`tel:${item.guardian_phone}`}
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-orange-400 border-orange-500/20 hover:bg-orange-500/10' : 'bg-white text-orange-500 border-orange-200 hover:bg-orange-50'} active:scale-95`}
+                            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shadow-sm shrink-0 transition-all ${isDark ? 'bg-slate-900 text-orange-400 border-orange-500/20 hover:bg-orange-500/10' : 'bg-white text-orange-500 border-orange-200 hover:bg-orange-50'} active:scale-95`}
                             title="কল করুন"
                           >
                              <Phone size={14} />
@@ -1238,10 +1238,10 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        {(madrasah?.config_json as any)?.features?.receipt_print_mode ? (
                         <button 
                            onClick={() => handleDownloadReceipt(item, lang, 'print')}
-                           className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-blue-900/20 text-blue-400 border-blue-700/50 hover:bg-blue-800/40 hover:text-blue-300' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 hover:text-[#1d4ed8]'} active:scale-95`}
+                           className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shadow-sm shrink-0 transition-all ${isDark ? 'bg-blue-900/20 text-blue-400 border-blue-700/50 hover:bg-blue-800/40 hover:text-blue-300' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 hover:text-[#1d4ed8]'} active:scale-95`}
                            title="Print Receipt"
                         >
-                           <Printer size={16} />
+                           <Printer size={15} />
                         </button>
                       ) : (
                         <button 
@@ -1249,16 +1249,16 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l, 'download'));
                                setShowDownloadLangModal(true);
                            }}
-                           className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-white text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-[#2563EB] hover:border-blue-100'} active:scale-95`}
+                           className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border shadow-sm shrink-0 transition-all ${isDark ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-white text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-[#2563EB] hover:border-blue-100'} active:scale-95`}
                            title="Download Receipt"
                         >
-                           <Download size={16} />
+                           <Download size={15} />
                         </button>
                       )}
                        <button 
                           onClick={() => { setSelectedStudent(item); initializeFeeCollection(item); setShowFeeCollection(true); }} 
                           disabled={isFullyPaid || (isNoFeeSet && !canCollectHostelOnly)} 
-                          className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all shadow-sm ${
+                          className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase whitespace-nowrap shrink-0 transition-all shadow-sm ${
                             isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : 
                             isPartial ? (isDark ? 'bg-[#2563EB]/20 text-[#2563EB] border border-[#2563EB]/30' : 'bg-blue-50 text-blue-600 border border-blue-100') :
                             (isNoFeeSet && !canCollectHostelOnly) ? (isDark ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 

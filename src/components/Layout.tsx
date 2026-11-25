@@ -461,7 +461,7 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         )}
 
-        <main className={`flex-1 overflow-y-auto w-full custom-scrollbar ${(role === 'parent' || currentView === 'chat') ? 'p-0' : 'px-5 md:px-6 lg:px-8 pt-4 pb-[calc(11rem+env(safe-area-inset-bottom,0px))] md:pb-8'}`}>
+        <main className={`flex-1 overflow-y-auto w-full custom-scrollbar ${(role === 'parent' || currentView === 'chat' || currentView === 'question-builder') ? 'p-0' : 'px-5 md:px-6 lg:px-8 pt-4 pb-[calc(11rem+env(safe-area-inset-bottom,0px))] md:pb-8'}`}>
           {children}
         </main>
 

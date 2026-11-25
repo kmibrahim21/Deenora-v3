@@ -1096,7 +1096,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                    <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
-                      className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none appearance-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`}
+                      className={`w-full h-11 pl-4 pr-9 border rounded-xl text-[11px] font-black outline-none appearance-none bg-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`}
                   >
                       <option value="all">{lang === 'bn' ? 'সব স্ট্যাটাস' : 'All Status'}</option>
                       <option value="paid">{lang === 'bn' ? 'পরিশোধিত (Paid)' : 'Paid'}</option>
@@ -1136,7 +1136,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             </div>
          )}
 
-         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400 col-span-full">
                 <Loader2 className="animate-spin mb-4" size={32} />
@@ -1171,41 +1171,41 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         const canCollectHostelOnly = isNoFeeSet && Boolean(hostelInfo && hostelInfo.suggested_hostel_fee > 0);
                         
                         return (
-                        <div key={item.student_id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                     <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : hasBalance ? (madrasah.theme === 'dark' ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-500') : (madrasah.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
+                        <div key={item.student_id} className={`p-3.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-2.5 group active:scale-[0.98] transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                     <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-[0.95rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : hasBalance ? (madrasah.theme === 'dark' ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-500') : (madrasah.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
                            {item.roll || '-'}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                            <h5 
-                             className={`font-black font-noto line-clamp-2 whitespace-normal leading-tight mb-1 cursor-pointer hover:underline decoration-2 underline-offset-2 ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
+                             className={`font-black font-noto text-[13px] sm:text-sm whitespace-normal break-words leading-snug mb-0.5 cursor-pointer hover:underline decoration-2 underline-offset-2 ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
                              onClick={() => onStudentClick ? onStudentClick(item) : handleShowHistory(item)}
                            >
                              {item.student_name}
                            </h5>
-                           <div className="flex items-center gap-2">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">জমা: ৳{paid}</p>
-                              <p className="text-[10px] text-red-500 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
+                           <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[10px] text-slate-400 font-bold uppercase whitespace-nowrap">জমা: ৳{paid}</p>
+                              <p className="text-[10px] text-red-500 font-bold uppercase whitespace-nowrap">বকেয়া: ৳{Math.max(0, balance)}</p>
                            </div>
                         </div>
                      </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-1.5 shrink-0">
                        {item.guardian_phone && (
                           <a
                             href={`tel:${item.guardian_phone}`}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 text-orange-400 border-orange-500/20 hover:bg-orange-500/10' : 'bg-white text-orange-500 border-orange-200 hover:bg-orange-50'} active:scale-95`}
+                            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border shadow-sm shrink-0 transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 text-orange-400 border-orange-500/20 hover:bg-orange-500/10' : 'bg-white text-orange-500 border-orange-200 hover:bg-orange-50'} active:scale-95`}
                             title="কল করুন"
                           >
-                             <Phone size={16} />
+                             <Phone size={15} />
                           </a>
                        )}
                        {(madrasah?.config_json as any)?.features?.receipt_print_mode ? (
                           <button 
                              onClick={() => handleDownloadReceipt(item, lang, 'print')}
-                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 border ${madrasah.theme === 'dark' ? 'bg-blue-900/20 text-blue-400 border-blue-700/50 hover:bg-blue-800/40 hover:text-blue-300' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 hover:text-[#1d4ed8]'}`}
+                             className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 transition-all active:scale-90 border ${madrasah.theme === 'dark' ? 'bg-blue-900/20 text-blue-400 border-blue-700/50 hover:bg-blue-800/40 hover:text-blue-300' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 hover:text-[#1d4ed8]'}`}
                              title="রশিদ প্রিন্ট করুন"
                           >
-                             <Printer size={18} />
+                             <Printer size={16} />
                           </button>
                         ) : (
                           <button 
@@ -1213,16 +1213,16 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                  setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l, 'download'));
                                  setShowDownloadLangModal(true);
                              }}
-                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 border ${madrasah.theme === 'dark' ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-[#2563EB] border-slate-100'}`}
+                             className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 transition-all active:scale-90 border ${madrasah.theme === 'dark' ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-[#2563EB] border-slate-100'}`}
                              title="রশিদ ডাউনলোড করুন"
                           >
-                             <Download size={18} />
+                             <Download size={16} />
                           </button>
                         )}
                        <button 
                           onClick={() => { setSelectedStudent(item); initializeFeeCollection(item); setShowFeeCollection(true); }} 
                           disabled={isFullyPaid || (isNoFeeSet && !canCollectHostelOnly) || isPartial}
-                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${
+                          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] font-black uppercase whitespace-nowrap shrink-0 transition-all shadow-sm ${
                             isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : 
                             isPartial ? (madrasah.theme === 'dark' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-600 border border-rose-200') :
                             (isNoFeeSet && !canCollectHostelOnly) ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 

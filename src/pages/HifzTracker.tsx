@@ -2073,9 +2073,9 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               })}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-3">
               {/* Class Selector */}
-              <div className="sm:col-span-5">
+              <div className="min-w-0 md:col-span-1 xl:col-span-4">
                 <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                   {isBn ? 'জামাত / শ্রেণি' : 'Class / Jammat'}
                 </label>
@@ -2110,16 +2110,16 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               </div>
 
               {/* Date Selector with 1-tap prev/next */}
-              <div className="sm:col-span-4">
+              <div className="min-w-0 md:col-span-1 xl:col-span-5">
                 <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                   {isBn ? 'তারিখ' : 'Date'}
                 </label>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <button
                     type="button"
                     onClick={() => setSelectedDate((d) => shiftIsoDate(d, -1))}
                     aria-label={isBn ? 'আগের দিন' : 'Previous day'}
-                    className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
+                    className={`w-10 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
                       isDark
                         ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -2134,18 +2134,17 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                     isDark={isDark}
                     minDate={activeYear?.start_date}
                     maxDate={activeYear?.end_date}
-                    className="flex-1 min-w-0"
                     renderTrigger={(openPicker) => (
                       <button
                         type="button"
                         onClick={openPicker}
-                        className={`w-full h-11 px-3 rounded-2xl border font-black text-xs sm:text-sm flex items-center justify-between gap-2 transition-all active:scale-[0.99] cursor-pointer ${
+                        className={`flex-1 min-w-0 h-11 px-3 rounded-2xl border font-black text-xs sm:text-sm flex items-center justify-between gap-1.5 transition-all active:scale-[0.99] cursor-pointer ${
                           isDark
                             ? 'bg-slate-800 border-slate-700 text-white hover:border-slate-600'
                             : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-[#2563EB] shadow-xs'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <Calendar size={15} className="text-[#2563EB] shrink-0" />
                           <span className="truncate tabular-nums">
                             {formatFriendlyDateLabel(selectedDate, isBn)}
@@ -2159,7 +2158,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                     type="button"
                     onClick={() => setSelectedDate((d) => shiftIsoDate(d, 1))}
                     aria-label={isBn ? 'পরের দিন' : 'Next day'}
-                    className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
+                    className={`w-10 h-11 rounded-2xl border flex items-center justify-center shrink-0 active:scale-95 transition-transform cursor-pointer ${
                       isDark
                         ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -2171,7 +2170,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               </div>
 
               {/* Search */}
-              <div className="sm:col-span-3">
+              <div className="min-w-0 md:col-span-2 xl:col-span-3">
                 <label className="text-[11px] font-bold text-slate-400 block mb-1 px-1">
                   {isBn ? 'দ্রুত খুঁজুন' : 'Quick Search'}
                 </label>
@@ -2340,7 +2339,7 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
               {filteredStudents.map((student) => {
                 const record = dailyRecordsMap[student.id];
                 const isDone = Boolean(record);
@@ -2374,10 +2373,10 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           : 'bg-white border-slate-200/80 shadow-sm'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
-                          className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm tabular-nums shrink-0 ${
+                          className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm tabular-nums shrink-0 ${
                             isDone
                               ? isDark
                                 ? 'bg-emerald-500/15 text-emerald-400'
@@ -2390,9 +2389,10 @@ const HifzTracker: React.FC<HifzTrackerProps> = ({
                           {student.roll != null ? fmtNum(student.roll) : <User size={18} />}
                         </div>
 
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h3
-                            className={`text-sm sm:text-base font-black truncate ${
+                            title={student.student_name}
+                            className={`text-sm sm:text-[15px] font-black leading-snug break-words line-clamp-2 ${
                               isDark ? 'text-white' : 'text-slate-900'
                             }`}
                           >

@@ -848,7 +848,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       </div>
 
       {/* Student List Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
         {students.map(student => {
           const studentYear = academicYears.find(y => y.id === student.academic_year_id);
           const isAdvanceSession = Boolean(
@@ -858,12 +858,19 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           const badgeText = yearName 
             ? `${yearName} • ${lang === 'bn' ? 'অগ্রিম সেশন' : 'Advance'}`
             : (lang === 'bn' ? 'অগ্রিম সেশন' : 'Advance Session');
+          const guardianText =
+            student.guardian_name && student.guardian_name.trim() && student.guardian_name.trim() !== '-'
+              ? student.guardian_name.trim()
+              : '';
+          const sectionText = student.section?.trim() || '';
+          const regText = student.registration_number?.trim() || '';
+          const hasSubtitle = Boolean(guardianText || sectionText || regText);
 
           return (
             <div 
               key={student.id} 
               onClick={() => isSelectionMode ? (setSelectedIds(prev => { const n = new Set(prev); if(n.has(student.id)) n.delete(student.id); else n.add(student.id); return n; })) : onStudentClick(student)}
-              className={`group p-4 ${isAdvanceSession ? 'pt-7' : ''} rounded-[2rem] border-2 transition-all flex flex-col justify-between shadow-sm hover:shadow-xl active:scale-[0.98] cursor-pointer relative overflow-hidden ${
+              className={`group p-3.5 sm:p-4 ${isAdvanceSession ? 'pt-7' : ''} rounded-[1.8rem] sm:rounded-[2rem] border-2 transition-all flex flex-col justify-between shadow-sm hover:shadow-xl active:scale-[0.98] cursor-pointer relative overflow-hidden ${
                 isSelectionMode && selectedIds.has(student.id) 
                   ? (isDark ? 'bg-blue-600/20 border-[#2563EB] shadow-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB] shadow-[#2563EB]/10') 
                   : (isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/40 hover:bg-slate-700/50' : 'bg-white border-slate-100 hover:border-[#2563EB]/20')
@@ -875,18 +882,18 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                   {badgeText}
                 </div>
               )}
-              <div className="w-full flex items-center justify-between">
-                <div className={`flex items-center gap-4 flex-1 min-w-0 relative ${student.is_active === false ? 'opacity-70' : ''}`}>
+              <div className="w-full flex items-center justify-between gap-2.5">
+                <div className={`flex items-center gap-3 flex-1 min-w-0 relative ${student.is_active === false ? 'opacity-70' : ''}`}>
                   <div className="relative shrink-0">
-                    <div className={`w-14 h-14 rounded-[1rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${
+                    <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-[0.95rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${
                       isSelectionMode && selectedIds.has(student.id) 
                         ? 'bg-[#2563EB] text-white border-[#2563EB]' 
                         : (isDark ? 'bg-slate-800 text-blue-400 border-slate-700 group-hover:bg-slate-700 group-hover:border-[#2563EB]/40' : 'bg-slate-50 text-[#2563EB] border-slate-100 group-hover:bg-blue-50 group-hover:border-[#2563EB]/20')
                     }`}>
-                      <span className={`text-[8px] font-black leading-none uppercase tracking-widest ${isSelectionMode && selectedIds.has(student.id) ? 'opacity-70' : 'opacity-40'}`}>
+                      <span className={`text-[7.5px] font-black leading-none uppercase tracking-wider ${isSelectionMode && selectedIds.has(student.id) ? 'opacity-70' : 'opacity-40'}`}>
                         {t('roll', lang)}
                       </span>
-                      <span className="text-lg font-black leading-none mt-1">{student.roll || '-'}</span>
+                      <span className="text-sm sm:text-base font-black leading-none mt-0.5">{student.roll || '-'}</span>
                     </div>
                     {isSelectionMode && (
                       <div className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border-2 transition-all duration-300 ${selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-white scale-110' : (isDark ? 'bg-slate-800 text-slate-600 border-slate-700' : 'bg-white text-slate-200 border-slate-100')}`}>
@@ -895,60 +902,66 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className={`font-black text-base font-noto line-clamp-2 whitespace-normal leading-tight group-hover:text-[#2563EB] transition-colors ${
+                    <div className="flex items-start gap-1.5">
+                      <h3 className={`font-black text-sm sm:text-base font-noto whitespace-normal break-words leading-snug group-hover:text-[#2563EB] transition-colors ${
                         isDark ? 'text-slate-100' : 'text-[#1E3A8A]'
                       }`}>
                         {student.student_name}
                       </h3>
                       {student.is_active === false && (
-                        <UserX size={16} className="text-red-500 shrink-0" strokeWidth={2.5} />
+                        <UserX size={15} className="text-red-500 shrink-0 mt-0.5" strokeWidth={2.5} />
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
-                      {student.section && (
-                        <>
-                          <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{student.section}</p>
-                        </>
-                      )}
-                      {student.registration_number && (
-                        <>
-                          <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                          <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-800/30">
-                            {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {student.registration_number}
+                    {hasSubtitle && (
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        {guardianText && (
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider group-hover:text-[#2563EB]/60 transition-colors break-words">
+                            {guardianText}
                           </p>
-                        </>
-                      )}
-                    </div>
+                        )}
+                        {sectionText && (
+                          <>
+                            {guardianText && <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />}
+                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider">{sectionText}</p>
+                          </>
+                        )}
+                        {regText && (
+                          <>
+                            {(guardianText || sectionText) && <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />}
+                            <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-800/30 whitespace-nowrap">
+                              {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {regText}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {!isSelectionMode && (
-                  <div className="flex items-center gap-1.5 shrink-0 ml-2 md:ml-3">
+                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                     <button 
                       onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${student.guardian_phone}`; }} 
                       title="সাধারণ ফোন কল"
-                      className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${
                         isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'
                       }`}
                     >
-                      <Phone size={16} fill="currentColor" />
+                      <Phone size={14} fill="currentColor" />
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); openWhatsAppChooser(student.guardian_phone); }} 
                       title="হোয়াটসঅ্যাপ চ্যাট / কল"
-                      className="w-9 h-9 md:w-10 md:h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
+                      className="w-8 h-8 sm:w-9 sm:h-9 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
                     >
-                      <PhoneCall size={16} fill="currentColor" />
+                      <PhoneCall size={14} fill="currentColor" />
                     </button>
                     {isLiveChatEnabled && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleVoiceCall(student); }} 
                         title={lang === 'bn' ? 'অ্যাপ ভয়েস কল (গার্ডিয়ান অ্যাপে সরাসরি কথা বলুন)' : 'Direct In-App Voice Call to Guardian'}
-                        className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-200 active:scale-90 transition-all hover:scale-105 hover:shadow-indigo-400 group"
+                        className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-200 active:scale-90 transition-all hover:scale-105 hover:shadow-indigo-400 group"
                       >
-                        <Mic size={16} className="group-hover:scale-110 transition-transform" />
+                        <Mic size={14} className="group-hover:scale-110 transition-transform" />
                       </button>
                     )}
                   </div>
