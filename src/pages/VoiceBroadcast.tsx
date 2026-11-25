@@ -1497,18 +1497,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     const elapsedSeconds = Math.max(0, Math.floor((Date.now() - latestTimestampMs) / 1000));
     const remainingWaitSeconds = Math.max(0, 120 - elapsedSeconds);
 
-    if (historyDetails?._hasPartialFetchFailure) {
-      setStatusModal({
-        show: true,
-        type: 'error',
-        title: lang === 'bn' ? 'রিপোর্ট অসম্পূর্ণ রয়েছে' : 'Incomplete Delivery Report',
-        message: lang === 'bn'
-          ? 'সব রিট্রাই ক্যাম্পেইনের রিপোর্ট লোড হয়নি। ডুপ্লিকেট কল এড়াতে আগে রিপোর্ট রিফ্রেশ করুন।'
-          : 'Some retry campaign reports failed to load. Please refresh the report before retrying.'
-      });
-      return;
-    }
-
     if (isBroadcastRunning) {
       setStatusModal({
         show: true,
@@ -1751,24 +1739,44 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
 
     try {
-      // Gather all campaign IDs related to this broadcast in chronological order
-      const campaignIds = [broadcast.provider_campaign_id, ...(broadcast.retries || [])].filter(Boolean);
-      
-      const fetchResults = await Promise.all(
-        campaignIds.map(async (cid) => {
+      // Gather all unique campaign IDs related to this broadcast in chronological order
+      const campaignIds = Array.from(
+        new Set([broadcast.provider_campaign_id, ...(broadcast.retries || [])].filter(Boolean))
+      ) as string[];
+
+      const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      const fetchCampaignWithRetry = async (cid: string, maxRetries = 2) => {
+        let lastStatus = 0;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
           try {
             const resp = await fetch(`/api/awaj/broadcast/${cid}`);
-            if (!resp.ok) {
-              return { ok: false, cid, status: resp.status };
+            lastStatus = resp.status;
+            if (resp.ok) {
+              const data = await resp.json();
+              data._campaignId = cid;
+              return { ok: true, cid, data };
             }
-            const data = await resp.json();
-            data._campaignId = cid;
-            return { ok: true, cid, data };
           } catch (e) {
-            return { ok: false, cid, status: 0 };
+            lastStatus = 0;
           }
-        })
-      );
+          if (attempt < maxRetries) {
+            await sleep(400);
+          }
+        }
+        return { ok: false, cid, status: lastStatus };
+      };
+
+      const fetchResults: Array<{ ok: boolean; cid: string; data?: any; status?: number }> = [];
+      const BATCH_SIZE = 2;
+      for (let i = 0; i < campaignIds.length; i += BATCH_SIZE) {
+        const batch = campaignIds.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map((cid) => fetchCampaignWithRetry(cid)));
+        fetchResults.push(...batchResults);
+        if (i + BATCH_SIZE < campaignIds.length) {
+          await sleep(150);
+        }
+      }
       
       const failedCampaignIds = fetchResults.filter(r => !r.ok).map(r => r.cid);
       const validResults = fetchResults.filter(r => r.ok && r.data).map(r => r.data);
@@ -1799,9 +1807,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           isComplete: latestResult.isComplete,
           statusDistribution: latestResult.statusDistribution,
           _latestCampaignId: latestResult._campaignId,
-          _latestTimestamp: latestTimestampMs,
-          _failedCampaignIds: failedCampaignIds,
-          _hasPartialFetchFailure: failedCampaignIds.length > 0
+          _latestTimestamp: latestTimestampMs
         };
         let allCalls: any[] = [];
         
@@ -1810,7 +1816,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           allCalls = [...allCalls, ...extracted];
         });
         
-        // Deduplicate calls by phone in chronological order so latest retry overwrites earlier attempts
+        // Deduplicate calls by phone in chronological order while preserving answered/success entries
         const cleanPhoneForDeduplication = (phoneStr: string) => {
           if (!phoneStr) return '';
           let digits = phoneStr.replace(/[^0-9]/g, '');
@@ -1826,12 +1832,30 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           return digits;
         };
 
+        const answeredSuccessStatuses = [
+          'answered', 'completed', 'delivered', 'accepted', 'success',
+          'picked', 'pickedup', 'picked_up', 'connected', 'complete',
+          'finished', 'finished_success', 'picked up'
+        ];
+        const isCallAnswered = (call: any) => {
+          if (!call) return false;
+          const status = String(call.status || call.state || call.call_status || '').toLowerCase().trim();
+          const rawDuration = call.duration ?? call.billsec ?? call.duration_sec ?? call.talking_time ?? call.seconds ?? 0;
+          const duration = Number(rawDuration) || 0;
+          return duration > 0 || answeredSuccessStatuses.includes(status);
+        };
+
         const deduplicatedCallsMap = new Map();
         allCalls.forEach(call => {
            let p = extractPhoneFromLog(call);
            if (p) {
              const norm = cleanPhoneForDeduplication(p);
-             deduplicatedCallsMap.set(norm || p, call);
+             const key = norm || p;
+             const existing = deduplicatedCallsMap.get(key);
+             if (existing && isCallAnswered(existing) && !isCallAnswered(call)) {
+               return;
+             }
+             deduplicatedCallsMap.set(key, call);
            }
         });
         
@@ -3977,7 +4001,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                 return pendingCallStatuses.includes(status);
                               });
 
-                              const hasPartialFetchFailure = Boolean(historyDetails?._hasPartialFetchFailure);
                               const isStillProcessing = isBroadcastRunning || isProviderRunning || !isAwajComplete || hasPendingLogs;
 
                               const latestTimestampCandidates = [
@@ -3991,7 +4014,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                               const COOLDOWN_SECONDS = 120; // 2 minutes wait for final telecom reports
                               const remainingWaitSeconds = Math.max(0, COOLDOWN_SECONDS - elapsedSeconds);
                               const isCooldownActive = remainingWaitSeconds > 0;
-                              const canRetry = !isStillProcessing && !isCooldownActive && !hasPartialFetchFailure;
+                              const canRetry = !isStillProcessing && !isCooldownActive;
                               
                               return (
                                 <>
@@ -4015,36 +4038,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                       </div>
                                     </div>
                                   </div>
-
-                                  {hasPartialFetchFailure && (
-                                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-rose-900">
-                                      <div className="flex items-start gap-2.5 text-xs">
-                                        <AlertTriangle size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
-                                        <div>
-                                          <p className="font-black text-rose-950">
-                                            {lang === 'bn' ? 'আংশিক রিপোর্ট লোড হয়েছে' : 'Partial Campaign Report Loaded'}
-                                          </p>
-                                          <p className="text-[11px] text-rose-800 mt-0.5 leading-relaxed">
-                                            {lang === 'bn'
-                                              ? `${historyDetails?._failedCampaignIds?.length || 1}টি ক্যাম্পেইন/রিট্রাই রিপোর্ট সার্ভার থেকে লোড করা যায়নি। সঠিক সংখ্যা দেখতে পুনরায় লোড করুন।`
-                                              : `${historyDetails?._failedCampaignIds?.length || 1} campaign/retry report(s) failed to fetch. Retry loading to avoid stale counts.`}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleExpandHistory(h, true);
-                                        }}
-                                        disabled={loadingDetails}
-                                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-black flex items-center gap-1.5 shrink-0 transition-all active:scale-95"
-                                      >
-                                        <RefreshCw size={12} className={loadingDetails ? 'animate-spin' : ''} />
-                                        {lang === 'bn' ? 'পুনরায় লোড' : 'Retry Fetch'}
-                                      </button>
-                                    </div>
-                                  )}
 
                                   {/* Telecom CDR Finalization & Processing Status Notifications */}
                                   {isStillProcessing ? (
@@ -4080,7 +4073,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                         </p>
                                       </div>
                                     </div>
-                                  ) : (!hasPartialFetchFailure && failedLogs.length > 0) ? (
+                                  ) : failedLogs.length > 0 ? (
                                     <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3 flex items-center gap-2.5 text-emerald-900 text-xs">
                                       <ShieldCheck size={18} className="text-emerald-600 flex-shrink-0" />
                                       <p className="text-[11px] text-emerald-800">
@@ -4119,16 +4112,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                         <button
                                           disabled
                                           className="px-4 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 cursor-not-allowed shadow-none"
-                                          title={hasPartialFetchFailure
-                                            ? (lang === 'bn' ? 'অসম্পূর্ণ রিপোর্টের কারণে রিট্রাই লক' : 'Retry locked due to incomplete report')
-                                            : isStillProcessing 
+                                          title={isStillProcessing 
                                             ? (lang === 'bn' ? 'কল শেষ না হওয়া পর্যন্ত রিট্রাই লক' : 'Retry locked while processing') 
                                             : (lang === 'bn' ? `চূড়ান্ত রিপোর্টের অপেক্ষা: ${remainingWaitSeconds} সেকেন্ড` : `Waiting for report: ${remainingWaitSeconds}s`)}
                                         >
                                           <Lock size={13} className="text-slate-400" />
-                                          {hasPartialFetchFailure ? (
-                                            <span>{lang === 'bn' ? 'রিট্রাই লক (রিপোর্ট রিফ্রেশ করুন)' : 'Retry Locked (Refresh Report)'}</span>
-                                          ) : isStillProcessing ? (
+                                          {isStillProcessing ? (
                                             <span>{lang === 'bn' ? 'রিট্রাই লক (প্রসেসিং হচ্ছে)' : 'Retry Locked (Processing)'}</span>
                                           ) : (
                                             <span>{lang === 'bn' ? `রিট্রাই লক (${remainingWaitSeconds}s অপেক্ষা)` : `Retry Locked (${remainingWaitSeconds}s)`}</span>
