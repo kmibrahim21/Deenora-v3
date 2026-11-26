@@ -51,7 +51,7 @@ import PaymentCheckout from '../components/PaymentCheckout';
 import { requestManager } from 'services/RequestManager';
 import { isValidUUID } from 'utils/validation';
 import { globalAudioPlayer } from '../utils/audioPlayer';
-import { hasInternetVoicePermission, normalizeVoiceAudioUrl } from '../utils/internetVoiceCall';
+import { getFreshAccessToken, hasInternetVoicePermission, normalizeVoiceAudioUrl } from '../utils/internetVoiceCall';
 
 interface VoiceBroadcastProps {
   lang: Language;
@@ -2028,10 +2028,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
     setIsBroadcasting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error(lang === 'bn' ? 'সেশন পাওয়া যায়নি। অনুগ্রহ করে পুনরায় লগইন করুন।' : 'Session expired. Please login again.');
-      }
+      let accessToken = await getFreshAccessToken();
 
       const payload: Record<string, any> = {
         institution_id: madrasah.id,
@@ -2056,14 +2053,31 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         payload.target_phones = teacherPhones;
       }
 
-      const res = await fetch('/api/call?action=broadcast_internet_voice_call', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(payload)
-      });
+      const payloadJson = JSON.stringify(payload);
+      const sendBroadcastRequest = (token: string) =>
+        fetch('/api/call?action=broadcast_internet_voice_call', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: payloadJson
+        });
+
+      let res = await sendBroadcastRequest(accessToken);
+
+      if (res.status === 401) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshed?.session?.access_token) {
+          throw new Error('আপনার লগইন সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে লগআউট করে পুনরায় লগইন করুন।');
+        }
+        accessToken = refreshed.session.access_token;
+        res = await sendBroadcastRequest(accessToken);
+      }
+
+      if (res.status === 401) {
+        throw new Error('আপনার লগইন সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে লগআউট করে পুনরায় লগইন করুন।');
+      }
 
       const resJson = await res.json().catch(() => ({}));
       if (!res.ok || !resJson.success) {

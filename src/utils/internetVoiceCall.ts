@@ -82,34 +82,70 @@ export interface SendInternetVoiceBroadcastResult {
   pushed_devices_count: number;
 }
 
+const SESSION_EXPIRED_ERROR =
+  'আপনার লগইন সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে লগআউট করে পুনরায় লগইন করুন।';
+
+export async function getFreshAccessToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const isExpiringSoon =
+      typeof session?.expires_at === 'number' &&
+      session.expires_at * 1000 < Date.now() + 60_000;
+
+    if (session?.access_token && !isExpiringSoon) {
+      return session.access_token;
+    }
+  }
+
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError || !refreshed?.session?.access_token) {
+    throw new Error(SESSION_EXPIRED_ERROR);
+  }
+  return refreshed.session.access_token;
+}
+
 export async function sendInternetVoiceBroadcast(
   params: SendInternetVoiceBroadcastParams
 ): Promise<SendInternetVoiceBroadcastResult> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const payloadBody = JSON.stringify({
+    institution_id: params.institutionId,
+    voice_template_id: params.voiceTemplateId,
+    student_ids: params.studentIds,
+    target_phones: params.targetPhones,
+    class_id: params.classId,
+    target_all_students: params.targetAllStudents,
+    title: params.title,
+    body: params.body,
+  });
 
-  if (!session?.access_token) {
-    throw new Error('সেশন পাওয়া যায়নি। অনুগ্রহ করে পুনরায় লগইন করুন।');
+  const doBroadcastFetch = (token: string) =>
+    fetch('/api/call?action=broadcast_internet_voice_call', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: payloadBody,
+    });
+
+  let accessToken = await getFreshAccessToken();
+  let res = await doBroadcastFetch(accessToken);
+
+  if (res.status === 401) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed?.session?.access_token) {
+      throw new Error(SESSION_EXPIRED_ERROR);
+    }
+    accessToken = refreshed.session.access_token;
+    res = await doBroadcastFetch(accessToken);
   }
 
-  const res = await fetch('/api/call?action=broadcast_internet_voice_call', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({
-      institution_id: params.institutionId,
-      voice_template_id: params.voiceTemplateId,
-      student_ids: params.studentIds,
-      target_phones: params.targetPhones,
-      class_id: params.classId,
-      target_all_students: params.targetAllStudents,
-      title: params.title,
-      body: params.body,
-    }),
-  });
+  if (res.status === 401) {
+    throw new Error(SESSION_EXPIRED_ERROR);
+  }
 
   const resJson = await res.json().catch(() => ({}));
   if (!res.ok || !resJson.success) {
@@ -144,35 +180,46 @@ export async function uploadInternetVoiceTemplate(params: {
     reader.readAsDataURL(params.file);
   });
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const encodedName = encodeURIComponent(cleanTitle);
+  const uploadPayloadBody = JSON.stringify({
+    name: cleanTitle,
+    voice_name: cleanTitle,
+    title: cleanTitle,
+    audio_base64: base64Audio,
+    filename: params.file.name,
+    institution_id: params.institutionId,
+    is_super_admin: Boolean(params.isSuperAdmin),
+    is_manager: Boolean(params.isManager),
+    upload_mode: 'internet_only',
+    duration: params.duration || 0,
+  });
 
-  if (!session?.access_token) {
-    throw new Error('সেশন পাওয়া যায়নি। অনুগ্রহ করে পুনরায় লগইন করুন।');
+  const doUploadFetch = (token: string) =>
+    fetch(`/api/voices/upload?name=${encodedName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Voice-Name': encodedName,
+        Authorization: `Bearer ${token}`,
+      },
+      body: uploadPayloadBody,
+    });
+
+  let accessToken = await getFreshAccessToken();
+  let res = await doUploadFetch(accessToken);
+
+  if (res.status === 401) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed?.session?.access_token) {
+      throw new Error(SESSION_EXPIRED_ERROR);
+    }
+    accessToken = refreshed.session.access_token;
+    res = await doUploadFetch(accessToken);
   }
 
-  const encodedName = encodeURIComponent(cleanTitle);
-  const res = await fetch(`/api/voices/upload?name=${encodedName}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Voice-Name': encodedName,
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({
-      name: cleanTitle,
-      voice_name: cleanTitle,
-      title: cleanTitle,
-      audio_base64: base64Audio,
-      filename: params.file.name,
-      institution_id: params.institutionId,
-      is_super_admin: Boolean(params.isSuperAdmin),
-      is_manager: Boolean(params.isManager),
-      upload_mode: 'internet_only',
-      duration: params.duration || 0,
-    }),
-  });
+  if (res.status === 401) {
+    throw new Error(SESSION_EXPIRED_ERROR);
+  }
 
   const resData = await res.json().catch(() => ({}));
   if (!res.ok) {
