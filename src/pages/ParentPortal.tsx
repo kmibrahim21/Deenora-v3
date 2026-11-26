@@ -679,6 +679,19 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     const dedupKey = alertData.call_id || alertData.id;
     if (!alertData.autoPlay && isVoiceAlertDismissed(dedupKey)) return;
 
+    if (
+      typeof window !== 'undefined' &&
+      typeof (window as any).AndroidCallBridge?.triggerNativeAutoVoiceAlert === 'function' &&
+      !alertData.autoPlay
+    ) {
+      (window as any).AndroidCallBridge.triggerNativeAutoVoiceAlert(
+        alertData.call_id || alertData.id || '',
+        alertData.institution_name || alertData.title || currentInstitution?.name || madrasah?.name || 'প্রতিষ্ঠান',
+        audioUrl
+      );
+      return;
+    }
+
     setActiveVoiceAlert({
       id: alertData.id,
       call_id: alertData.call_id,
