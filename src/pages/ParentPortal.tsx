@@ -717,12 +717,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       if (items && Array.isArray(items)) {
         setAppNotifications(items);
 
-        // Check for recent unread auto_voice_alert (< 90s old) on load/resume
+        // Check for recent unread auto_voice_alert (< 45s old) on load/resume
         const nowMs = Date.now();
         const recentVoice = items.find(n => {
           if (n.type !== 'auto_voice_alert' || n.is_read) return false;
           const ageMs = nowMs - new Date(n.created_at).getTime();
-          if (ageMs < 0 || ageMs > 90 * 1000) return false;
+          if (ageMs < 0 || ageMs > 45 * 1000) return false;
           const parsed = parseAutoVoiceNotification(n.message);
           return Boolean(parsed.audio_url) && !isVoiceAlertDismissed(parsed.call_id || n.id);
         });

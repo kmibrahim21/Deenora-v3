@@ -155,6 +155,23 @@ export const InternetVoiceCallOverlay: React.FC<InternetVoiceCallOverlayProps> =
     };
   }, [isOpen, phase, isMuted, stopRingChime]);
 
+  const handleCloseRef = useRef(handleClose);
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  }, [handleClose]);
+
+  // Auto-timeout ringing call after 45 seconds if unanswered
+  useEffect(() => {
+    if (!isOpen || phase !== 'ringing') return;
+    const timeoutId = window.setTimeout(() => {
+      stopRingChime();
+      handleCloseRef.current();
+    }, 45000);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isOpen, phase, stopRingChime]);
+
   // Call elapsed timer during answered phase
   useEffect(() => {
     if (!isOpen || phase !== 'answered') return;
