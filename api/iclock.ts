@@ -12,17 +12,87 @@ interface DeviceCacheEntry {
   institution_id: string;
   institution_name: string;
   config_json?: any;
+  last_seen_at?: string | null;
+  ip?: string | null;
 }
 
 let cachedDeviceList: DeviceCacheEntry[] | null = null;
 let lastDeviceFetchTime = 0;
+let lastUnknownSnRefreshTime = 0;
 const DEVICE_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const DEVICE_HEARTBEAT_DB_THROTTLE_MS = 60 * 1000; // Persist last_seen_at to DB at most once every 60s per SN
+const DEVICE_ONLINE_WINDOW_MS = 3 * 60 * 1000; // Online if seen within the last 3 minutes
 
 // In-Memory ADMS Command Queue for ZKTeco Cloud Sync: SN (Uppercase) -> string[]
 const pendingAdmsCommands = new Map<string, string[]>();
-// In-Memory Device Heartbeat Tracker: SN (Uppercase) -> ISO Timestamp
-const deviceHeartbeats = new Map<string, string>();
+// In-Memory Device Last-Seen & IP Trackers: SN (Uppercase) -> ISO Timestamp / IP
+const deviceLastSeenMap = new Map<string, string>();
+const deviceLastIpMap = new Map<string, string>();
+const deviceDbPersistThrottle = new Map<string, number>();
 let globalCmdCounter = 1;
+
+function sanitizeSnForPlainText(sn: string): string {
+  return (sn || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 64);
+}
+
+function extractClientIp(req: any): string {
+  const xff = req?.headers?.['x-forwarded-for'];
+  const rawIp = Array.isArray(xff)
+    ? xff[0]
+    : (typeof xff === 'string' && xff.trim()
+        ? xff.split(',')[0].trim()
+        : (req?.headers?.['x-real-ip'] || req?.socket?.remoteAddress || req?.connection?.remoteAddress || ''));
+  return String(rawIp || '').replace(/^::ffff:/i, '').replace(/[\r\n]/g, '').trim().slice(0, 64);
+}
+
+function resolveDeviceOnlineStatus(
+  sn: string,
+  dbLastSeen?: string | null,
+  dbIp?: string | null
+): { last_seen_at: string | null; is_online: boolean; ip: string | null } {
+  const normSn = (sn || '').trim().toUpperCase();
+  const memSeen = normSn ? deviceLastSeenMap.get(normSn) : undefined;
+  const memIp = normSn ? deviceLastIpMap.get(normSn) : undefined;
+
+  let latestSeen: string | null = null;
+  const memMs = memSeen ? Date.parse(memSeen) : NaN;
+  const dbMs = dbLastSeen ? Date.parse(dbLastSeen) : NaN;
+  if (!Number.isNaN(memMs) && !Number.isNaN(dbMs)) {
+    latestSeen = memMs >= dbMs ? memSeen! : dbLastSeen!;
+  } else if (!Number.isNaN(memMs)) {
+    latestSeen = memSeen!;
+  } else if (!Number.isNaN(dbMs)) {
+    latestSeen = dbLastSeen!;
+  }
+
+  const latestMs = latestSeen ? Date.parse(latestSeen) : NaN;
+  const isOnline = !Number.isNaN(latestMs) && (Date.now() - latestMs) <= DEVICE_ONLINE_WINDOW_MS;
+  return {
+    last_seen_at: latestSeen,
+    is_online: isOnline,
+    ip: memIp || dbIp || null
+  };
+}
+
+function findDeviceMetadataInConfig(configJson: any, targetSn: string): { last_seen_at: string | null; ip: string | null } {
+  const normSn = (targetSn || '').trim().toUpperCase();
+  if (!normSn || !configJson || typeof configJson !== 'object') {
+    return { last_seen_at: null, ip: null };
+  }
+  const rawDevices = configJson.biometric_devices;
+  const devicesList = Array.isArray(rawDevices) ? rawDevices : (rawDevices ? [rawDevices] : []);
+  for (const entry of devicesList) {
+    if (!entry || typeof entry !== 'object') continue;
+    const entrySn = (entry.sn || entry.id || entry.device_sn || '').toString().trim().toUpperCase();
+    if (entrySn === normSn) {
+      return {
+        last_seen_at: typeof entry.last_seen_at === 'string' ? entry.last_seen_at : null,
+        ip: typeof entry.ip === 'string' ? entry.ip : null
+      };
+    }
+  }
+  return { last_seen_at: null, ip: null };
+}
 
 // Bengali to English Transliteration for ZKTeco Machine LCD (ASCII only, max 23 chars)
 const BN_TO_EN_NAME_MAP: Record<string, string> = {
@@ -117,7 +187,9 @@ async function getRegisteredDevices(forceRefresh: boolean = false): Promise<Devi
             brand: dev?.brand || 'zkteco',
             institution_id: inst.id,
             institution_name: inst.name,
-            config_json: inst.config_json
+            config_json: inst.config_json,
+            last_seen_at: typeof dev === 'object' && dev?.last_seen_at ? String(dev.last_seen_at) : null,
+            ip: typeof dev === 'object' && dev?.ip ? String(dev.ip) : null
           });
         }
       }
@@ -129,6 +201,120 @@ async function getRegisteredDevices(forceRefresh: boolean = false): Promise<Devi
   } catch (err) {
     console.warn('[ZKteco ADMS] Exception in getRegisteredDevices:', err);
     return cachedDeviceList || [];
+  }
+}
+
+async function recordDeviceHeartbeat(sn: string, clientIp: string): Promise<void> {
+  const normSn = (sn || '').trim().toUpperCase();
+  if (!normSn) return;
+
+  try {
+    let devices = await getRegisteredDevices();
+    let dev = devices.find(d => d.sn === normSn);
+    if (!dev && (Date.now() - lastUnknownSnRefreshTime) >= 15_000) {
+      lastUnknownSnRefreshTime = Date.now();
+      devices = await getRegisteredDevices(true);
+      dev = devices.find(d => d.sn === normSn);
+    }
+
+    // Only track heartbeats for valid registered devices
+    if (!dev) return;
+
+    const nowIso = new Date().toISOString();
+    deviceLastSeenMap.set(normSn, nowIso);
+    if (clientIp) {
+      deviceLastIpMap.set(normSn, clientIp);
+    }
+    dev.last_seen_at = nowIso;
+    if (clientIp) {
+      dev.ip = clientIp;
+    }
+
+    const nowMs = Date.now();
+    const lastPersisted = deviceDbPersistThrottle.get(normSn) || 0;
+    if (nowMs - lastPersisted < DEVICE_HEARTBEAT_DB_THROTTLE_MS) {
+      return;
+    }
+    deviceDbPersistThrottle.set(normSn, nowMs);
+
+    // Fetch fresh config_json strictly scoped to the device's institution_id so concurrent config updates are preserved
+    const { data: inst } = await supabase
+      .from('institutions')
+      .select('config_json')
+      .eq('id', dev.institution_id)
+      .maybeSingle();
+
+    if (!inst) return;
+
+    const cfg = (inst.config_json && typeof inst.config_json === 'object') ? { ...(inst.config_json as any) } : {};
+    const rawDevices = cfg.biometric_devices;
+
+    if (Array.isArray(rawDevices)) {
+      let updated = false;
+      const nextDevices = rawDevices.map((entry: any) => {
+        const entrySn = (typeof entry === 'string' ? entry : (entry?.sn || entry?.id || entry?.device_sn || '')).toString().trim().toUpperCase();
+        if (entrySn === normSn) {
+          updated = true;
+          if (typeof entry === 'string') {
+            return {
+              sn: entry.trim(),
+              last_seen_at: nowIso,
+              ...(clientIp ? { ip: clientIp } : {})
+            };
+          }
+          return {
+            ...entry,
+            last_seen_at: nowIso,
+            ...(clientIp ? { ip: clientIp } : {})
+          };
+        }
+        return entry;
+      });
+      if (updated) {
+        await supabase
+          .from('institutions')
+          .update({
+            config_json: {
+              ...cfg,
+              biometric_devices: nextDevices
+            }
+          })
+          .eq('id', dev.institution_id);
+      }
+    } else if (rawDevices && typeof rawDevices === 'object') {
+      const entrySn = (rawDevices.sn || rawDevices.id || rawDevices.device_sn || '').toString().trim().toUpperCase();
+      if (entrySn === normSn) {
+        await supabase
+          .from('institutions')
+          .update({
+            config_json: {
+              ...cfg,
+              biometric_devices: {
+                ...rawDevices,
+                last_seen_at: nowIso,
+                ...(clientIp ? { ip: clientIp } : {})
+              }
+            }
+          })
+          .eq('id', dev.institution_id);
+      }
+    } else if (typeof rawDevices === 'string' && rawDevices.trim().toUpperCase() === normSn) {
+      await supabase
+        .from('institutions')
+        .update({
+          config_json: {
+            ...cfg,
+            biometric_devices: [{
+              sn: rawDevices.trim(),
+              last_seen_at: nowIso,
+              ...(clientIp ? { ip: clientIp } : {})
+            }]
+          }
+        })
+        .eq('id', dev.institution_id);
+    }
+  } catch (hbErr) {
+    console.warn('[ZKteco ADMS] Failed to record device heartbeat:', hbErr);
   }
 }
 
@@ -589,7 +775,7 @@ export default async function handler(req: any, res: any) {
       ).toString().trim().toUpperCase();
 
       if (vnotifySn) {
-        deviceHeartbeats.set(vnotifySn, new Date().toISOString());
+        await recordDeviceHeartbeat(vnotifySn, extractClientIp(req));
       }
 
       res.setHeader('response_code', 'OK');
@@ -728,7 +914,7 @@ export default async function handler(req: any, res: any) {
       ).trim().toUpperCase();
 
       if (hikSn) {
-        deviceHeartbeats.set(hikSn, new Date().toISOString());
+        await recordDeviceHeartbeat(hikSn, extractClientIp(req));
       }
 
       const pin = String(
@@ -769,10 +955,7 @@ export default async function handler(req: any, res: any) {
       req.headers['x-device-sn'] || ''
     ).toString().trim();
     const SN = rawSN.toUpperCase();
-
-    if (SN) {
-      deviceHeartbeats.set(SN, new Date().toISOString());
-    }
+    const clientIp = extractClientIp(req);
 
     const action = (
       query.action ||
@@ -864,13 +1047,33 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 1. ZKTeco Machine Command Polling: GET /iclock/getrequest
+    // 1. ZKTeco SenseFace 2A / ADMS Registry & Ping Endpoints: /iclock/registry & /iclock/ping
+    if (urlPath.includes('/registry')) {
+      if (SN) {
+        await recordDeviceHeartbeat(SN, clientIp);
+      }
+      const safeSn = sanitizeSnForPlainText(SN) || 'DEVICE';
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.status(200).send(`RegistryCode=Deenora_${safeSn}`);
+    }
+
+    if (urlPath.includes('/ping')) {
+      if (SN) {
+        await recordDeviceHeartbeat(SN, clientIp);
+      }
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.status(200).send('OK');
+    }
+
+    // 2. ZKTeco Machine Command Polling: GET /iclock/getrequest
     if (method === 'GET' && urlPath.includes('/getrequest')) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
 
       if (!SN) {
         return res.status(200).send('OK');
       }
+
+      await recordDeviceHeartbeat(SN, clientIp);
 
       let commands = pendingAdmsCommands.get(SN);
 
@@ -905,28 +1108,49 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send('OK');
     }
 
-    // 2. Machine Execution Callback: POST /iclock/devicecmd
+    // 3. Machine Execution Callback: POST /iclock/devicecmd
     if (urlPath.includes('/devicecmd')) {
-      res.setHeader('Content-Type', 'text/plain');
+      if (SN) {
+        await recordDeviceHeartbeat(SN, clientIp);
+      }
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.status(200).send('OK');
     }
 
-    // 3. Fast-path for ZKTeco ADMS machine heartbeats / handshakes:
-    // Biometric devices send frequent GET /iclock/cdata or /push pulses.
-    const isDeviceHeartbeat = method === 'GET' && (
-      urlPath.includes('/cdata') || 
+    // 4. Full ZKTeco ADMS Push SDK Handshake: GET /iclock/cdata & GET /iclock/push
+    const isDeviceHandshake = method === 'GET' && (
+      urlPath.includes('/cdata') ||
       urlPath.includes('/push')
     );
 
-    if (isDeviceHeartbeat) {
-      res.setHeader('Content-Type', 'text/plain');
+    if (isDeviceHandshake) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      const safeSn = sanitizeSnForPlainText(SN);
+      if (SN && safeSn) {
+        await recordDeviceHeartbeat(SN, clientIp);
+        const admsOptions = [
+          `GET OPTION FROM: ${safeSn}`,
+          'ATTLOGStamp=None',
+          'OPERLOGStamp=9999',
+          'ATTPHOTOStamp=None',
+          'ErrorDelay=30',
+          'Delay=10',
+          'TransTimes=00:00;14:05',
+          'TransInterval=1',
+          'TransFlag=TransData AttLog\tOpLog\tEnrollUser\tChgUser\tEnrollFP\tChgFP\tUserPic',
+          'TimeZone=6',
+          'Realtime=1',
+          'Encrypt=0'
+        ].join('\n');
+        return res.status(200).send(admsOptions);
+      }
       return res.status(200).send('OK');
     }
 
-    // 4. Browser / Admin Connection Ping Diagnostic (GET requests not from machine firmware)
+    // 5. Browser / Admin Connection Ping Diagnostic (GET /api/iclock?action=status&sn=... or generic GET)
     if (method === 'GET') {
       try {
-        let registeredDevices = await getRegisteredDevices();
+        let registeredDevices = await getRegisteredDevices(action === 'status');
         const reqInstId = (
           query.institution_id || query.institutionId || query.inst ||
           req.headers['x-institution-id'] || req.headers['institution-id']
@@ -966,6 +1190,25 @@ export default async function handler(req: any, res: any) {
         }
 
         if (instId) {
+          const targetSnForStatus = matchedDevice?.sn || SN || `PC_AGENT_${instId}`;
+          let dbLastSeen: string | null = matchedDevice?.last_seen_at || null;
+          let dbIp: string | null = matchedDevice?.ip || null;
+
+          // Fetch fresh config_json so serverless instances always read the latest DB-persisted last_seen_at
+          if (matchedDevice) {
+            const { data: freshInst } = await supabase
+              .from('institutions')
+              .select('config_json')
+              .eq('id', instId)
+              .maybeSingle();
+            if (freshInst?.config_json) {
+              const freshMeta = findDeviceMetadataInConfig(freshInst.config_json, matchedDevice.sn);
+              if (freshMeta.last_seen_at) dbLastSeen = freshMeta.last_seen_at;
+              if (freshMeta.ip) dbIp = freshMeta.ip;
+            }
+          }
+
+          const liveStatus = resolveDeviceOnlineStatus(targetSnForStatus, dbLastSeen, dbIp);
           const { students, teachers } = await getInstitutionDirectory(instId);
 
           const { data: recentLogs } = await supabase
@@ -986,9 +1229,12 @@ export default async function handler(req: any, res: any) {
           return res.status(200).json({
             success: true,
             status: 'REGISTERED_AND_ACTIVE',
-            device_sn: SN || `PC_AGENT_${instId}`,
+            device_sn: targetSnForStatus,
             institution: instName,
             institution_id: instId,
+            last_seen_at: liveStatus.last_seen_at,
+            is_online: liveStatus.is_online,
+            device_ip: liveStatus.ip,
             biometric_students_count: bioStudents.length,
             biometric_teachers_count: bioTeachers.length,
             pending_commands_in_queue: pendingCommandsCount,
@@ -1003,25 +1249,45 @@ export default async function handler(req: any, res: any) {
           return res.status(200).json({
             success: false,
             device_sn: SN,
+            last_seen_at: null,
+            is_online: false,
             error: `মেশিনের সিরিয়াল নম্বর "${SN}" কোনো মাদরাসার সাথে রেজিস্টার করা নেই। অনুগ্রহ করে সেটিংস থেকে সিরিয়াল নম্বরটি যুক্ত করুন।`
           });
         }
+
+        const sanitizedDevices = registeredDevices.map(d => {
+          const st = resolveDeviceOnlineStatus(d.sn, d.last_seen_at, d.ip);
+          return {
+            sn: d.sn,
+            name: d.name,
+            brand: d.brand,
+            institution_id: d.institution_id,
+            institution_name: d.institution_name,
+            last_seen_at: st.last_seen_at,
+            is_online: st.is_online,
+            ip: st.ip
+          };
+        });
 
         return res.status(200).json({
           success: true,
           message: 'Deenora ZKTeco ADMS / Biometric Machine API Active and Resilient',
           server_time: new Date().toISOString(),
-          registered_devices_count: registeredDevices.length,
-          registered_devices: registeredDevices
+          registered_devices_count: sanitizedDevices.length,
+          registered_devices: sanitizedDevices
         });
       } catch (diagErr: any) {
         return res.status(500).json({ success: false, error: diagErr.message });
       }
     }
 
-    // 2. ADMS Attendance Push Data (POST requests)
+    // 6. ADMS Attendance Push Data (POST requests)
     if (method === 'POST') {
       res.setHeader('Content-Type', 'text/plain');
+
+      if (SN && (urlPath.includes('/cdata') || urlPath.includes('/push'))) {
+        await recordDeviceHeartbeat(SN, clientIp);
+      }
 
       let rawData = req.body;
       if (Buffer.isBuffer(rawData)) {

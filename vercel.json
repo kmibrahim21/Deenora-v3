@@ -16,6 +16,14 @@
   ],
   "rewrites": [
     {
+      "source": "/iclock/registry",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/iclock/ping",
+      "destination": "/api/iclock.ts"
+    },
+    {
       "source": "/iclock/:path*",
       "destination": "/api/iclock.ts"
     },
