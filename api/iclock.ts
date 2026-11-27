@@ -5,6 +5,16 @@ const supabase = getSupabaseAdmin();
 
 // In-Memory Device & Institution Cache (60 seconds TTL)
 // Drastically cuts database queries during high-frequency biometric machine pings
+interface RawPunchDiagnostic {
+  timestamp: string;
+  sn: string;
+  table: string;
+  raw_preview: string;
+  parsed_pin: string | null;
+  parsed_time: string | null;
+  matched_name: string | null;
+}
+
 interface DeviceCacheEntry {
   sn: string;
   name?: string;
@@ -14,6 +24,7 @@ interface DeviceCacheEntry {
   config_json?: any;
   last_seen_at?: string | null;
   ip?: string | null;
+  recent_raw_punches?: RawPunchDiagnostic[];
 }
 
 let cachedDeviceList: DeviceCacheEntry[] | null = null;
@@ -22,17 +33,56 @@ let lastUnknownSnRefreshTime = 0;
 const DEVICE_CACHE_TTL_MS = 60 * 1000; // 60 seconds
 const DEVICE_HEARTBEAT_DB_THROTTLE_MS = 60 * 1000; // Persist last_seen_at to DB at most once every 60s per SN
 const DEVICE_ONLINE_WINDOW_MS = 3 * 60 * 1000; // Online if seen within the last 3 minutes
+const MAX_RAW_PUNCH_DIAGNOSTICS = 10;
+const MAX_RAW_BODY_BYTES = 2 * 1024 * 1024; // 2MB cap for raw stream reads
 
 // In-Memory ADMS Command Queue for ZKTeco Cloud Sync: SN (Uppercase) -> string[]
 const pendingAdmsCommands = new Map<string, string[]>();
-// In-Memory Device Last-Seen & IP Trackers: SN (Uppercase) -> ISO Timestamp / IP
+// In-Memory Device Last-Seen, IP & Recent Raw Punch Trackers: SN (Uppercase) -> Data
 const deviceLastSeenMap = new Map<string, string>();
 const deviceLastIpMap = new Map<string, string>();
+const deviceRecentRawPunches = new Map<string, RawPunchDiagnostic[]>();
 const deviceDbPersistThrottle = new Map<string, number>();
 let globalCmdCounter = 1;
 
 function sanitizeSnForPlainText(sn: string): string {
   return (sn || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 64);
+}
+
+function makeRawPreview(raw: string, maxLen: number = 240): string {
+  return String(raw || '')
+    .replace(/\r/g, '')
+    .replace(/\n/g, ' | ')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim()
+    .slice(0, maxLen);
+}
+
+function mergeRecentRawPunches(
+  memList?: RawPunchDiagnostic[] | null,
+  dbList?: RawPunchDiagnostic[] | null
+): RawPunchDiagnostic[] {
+  const combined = [
+    ...(Array.isArray(memList) ? memList : []),
+    ...(Array.isArray(dbList) ? dbList : [])
+  ].filter(item => item && typeof item === 'object' && typeof item.timestamp === 'string');
+
+  const seen = new Set<string>();
+  const deduped: RawPunchDiagnostic[] = [];
+  for (const item of combined) {
+    const key = `${item.timestamp}|${item.sn}|${item.parsed_pin ?? ''}|${item.parsed_time ?? ''}|${item.raw_preview}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  deduped.sort((a, b) => {
+    const ta = Date.parse(a.timestamp);
+    const tb = Date.parse(b.timestamp);
+    return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+  });
+
+  return deduped.slice(0, MAX_RAW_PUNCH_DIAGNOSTICS);
 }
 
 function extractClientIp(req: any): string {
@@ -74,10 +124,13 @@ function resolveDeviceOnlineStatus(
   };
 }
 
-function findDeviceMetadataInConfig(configJson: any, targetSn: string): { last_seen_at: string | null; ip: string | null } {
+function findDeviceMetadataInConfig(
+  configJson: any,
+  targetSn: string
+): { last_seen_at: string | null; ip: string | null; recent_raw_punches: RawPunchDiagnostic[] } {
   const normSn = (targetSn || '').trim().toUpperCase();
   if (!normSn || !configJson || typeof configJson !== 'object') {
-    return { last_seen_at: null, ip: null };
+    return { last_seen_at: null, ip: null, recent_raw_punches: [] };
   }
   const rawDevices = configJson.biometric_devices;
   const devicesList = Array.isArray(rawDevices) ? rawDevices : (rawDevices ? [rawDevices] : []);
@@ -87,11 +140,12 @@ function findDeviceMetadataInConfig(configJson: any, targetSn: string): { last_s
     if (entrySn === normSn) {
       return {
         last_seen_at: typeof entry.last_seen_at === 'string' ? entry.last_seen_at : null,
-        ip: typeof entry.ip === 'string' ? entry.ip : null
+        ip: typeof entry.ip === 'string' ? entry.ip : null,
+        recent_raw_punches: Array.isArray(entry.recent_raw_punches) ? entry.recent_raw_punches.slice(0, MAX_RAW_PUNCH_DIAGNOSTICS) : []
       };
     }
   }
-  return { last_seen_at: null, ip: null };
+  return { last_seen_at: null, ip: null, recent_raw_punches: [] };
 }
 
 // Bengali to English Transliteration for ZKTeco Machine LCD (ASCII only, max 23 chars)
@@ -189,7 +243,10 @@ async function getRegisteredDevices(forceRefresh: boolean = false): Promise<Devi
             institution_name: inst.name,
             config_json: inst.config_json,
             last_seen_at: typeof dev === 'object' && dev?.last_seen_at ? String(dev.last_seen_at) : null,
-            ip: typeof dev === 'object' && dev?.ip ? String(dev.ip) : null
+            ip: typeof dev === 'object' && dev?.ip ? String(dev.ip) : null,
+            recent_raw_punches: typeof dev === 'object' && Array.isArray(dev?.recent_raw_punches)
+              ? dev.recent_raw_punches.slice(0, MAX_RAW_PUNCH_DIAGNOSTICS)
+              : []
           });
         }
       }
@@ -316,6 +373,241 @@ async function recordDeviceHeartbeat(sn: string, clientIp: string): Promise<void
   } catch (hbErr) {
     console.warn('[ZKteco ADMS] Failed to record device heartbeat:', hbErr);
   }
+}
+
+async function recordRecentRawPunches(
+  institutionId: string | null,
+  sn: string,
+  newEntries: RawPunchDiagnostic[]
+): Promise<void> {
+  if (!newEntries || newEntries.length === 0) return;
+  const normSn = (sn || '').trim().toUpperCase();
+  if (!normSn) return;
+
+  // 1. Update in-memory diagnostics ring buffer (latest 10, newest first, bounded map size)
+  if (!deviceRecentRawPunches.has(normSn) && deviceRecentRawPunches.size >= 500) {
+    const oldestKey = deviceRecentRawPunches.keys().next().value;
+    if (oldestKey) deviceRecentRawPunches.delete(oldestKey);
+  }
+  const existingMem = deviceRecentRawPunches.get(normSn) || [];
+  const mergedMem = mergeRecentRawPunches(newEntries, existingMem);
+  deviceRecentRawPunches.set(normSn, mergedMem);
+
+  if (!institutionId) return;
+
+  // 2. Persist latest 10 items inside the matching device entry in institutions.config_json.biometric_devices
+  try {
+    const { data: inst } = await supabase
+      .from('institutions')
+      .select('config_json')
+      .eq('id', institutionId)
+      .maybeSingle();
+
+    if (!inst) return;
+
+    const cfg = (inst.config_json && typeof inst.config_json === 'object') ? { ...(inst.config_json as any) } : {};
+    const rawDevices = cfg.biometric_devices;
+
+    const buildUpdatedDevice = (entry: any) => {
+      const base = typeof entry === 'string' ? { sn: entry.trim() } : { ...entry };
+      const existingDb = Array.isArray(base.recent_raw_punches) ? base.recent_raw_punches : [];
+      const nextPunches = mergeRecentRawPunches(mergedMem, existingDb);
+      deviceRecentRawPunches.set(normSn, nextPunches);
+      return {
+        ...base,
+        recent_raw_punches: nextPunches
+      };
+    };
+
+    if (Array.isArray(rawDevices)) {
+      let updated = false;
+      const nextDevices = rawDevices.map((entry: any) => {
+        const entrySn = (typeof entry === 'string' ? entry : (entry?.sn || entry?.id || entry?.device_sn || '')).toString().trim().toUpperCase();
+        if (entrySn === normSn) {
+          updated = true;
+          return buildUpdatedDevice(entry);
+        }
+        return entry;
+      });
+      if (updated) {
+        await supabase
+          .from('institutions')
+          .update({
+            config_json: {
+              ...cfg,
+              biometric_devices: nextDevices
+            }
+          })
+          .eq('id', institutionId);
+      }
+    } else if (rawDevices && typeof rawDevices === 'object') {
+      const entrySn = (rawDevices.sn || rawDevices.id || rawDevices.device_sn || '').toString().trim().toUpperCase();
+      if (entrySn === normSn) {
+        await supabase
+          .from('institutions')
+          .update({
+            config_json: {
+              ...cfg,
+              biometric_devices: buildUpdatedDevice(rawDevices)
+            }
+          })
+          .eq('id', institutionId);
+      }
+    } else if (typeof rawDevices === 'string' && rawDevices.trim().toUpperCase() === normSn) {
+      await supabase
+        .from('institutions')
+        .update({
+          config_json: {
+            ...cfg,
+            biometric_devices: [buildUpdatedDevice(rawDevices)]
+          }
+        })
+        .eq('id', institutionId);
+    }
+
+    // Keep cached device entry in sync
+    if (cachedDeviceList) {
+      const cachedDev = cachedDeviceList.find(d => d.sn === normSn && d.institution_id === institutionId);
+      if (cachedDev) {
+        cachedDev.recent_raw_punches = deviceRecentRawPunches.get(normSn) || mergedMem;
+      }
+    }
+  } catch (diagPersistErr) {
+    console.warn('[ZKteco ADMS] Failed to persist recent_raw_punches:', diagPersistErr);
+  }
+}
+
+function normalizePunchTimestamp(rawTime: string): { date: string; time: string | null; fullTime: string } | null {
+  let norm = String(rawTime || '').trim();
+  if (!norm) return null;
+
+  // Convert 14-digit YYYYMMDDHHmmss to YYYY-MM-DD HH:mm:ss
+  if (/^\d{14}$/.test(norm)) {
+    norm = `${norm.slice(0, 4)}-${norm.slice(4, 6)}-${norm.slice(6, 8)} ${norm.slice(8, 10)}:${norm.slice(10, 12)}:${norm.slice(12, 14)}`;
+  }
+
+  norm = norm.replace('T', ' ').replace(/\//g, '-');
+  const m = norm.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+
+  const year = m[1];
+  const month = m[2].padStart(2, '0');
+  const day = m[3].padStart(2, '0');
+  const date = `${year}-${month}-${day}`;
+
+  if (m[4] !== undefined && m[5] !== undefined) {
+    const hour = m[4].padStart(2, '0');
+    const min = m[5].padStart(2, '0');
+    const sec = m[6] ? m[6].padStart(2, '0') : '00';
+    return {
+      date,
+      time: `${hour}:${min}`,
+      fullTime: `${date} ${hour}:${min}:${sec}`
+    };
+  }
+
+  return {
+    date,
+    time: null,
+    fullTime: date
+  };
+}
+
+interface ParsedPunchLine {
+  userId: string;
+  date: string;
+  time: string | null;
+  fullTime: string;
+  rawLine: string;
+}
+
+function isNonAttendanceMetaLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  return /^(OPLOG|USER|USERPIC|FP|BIODATA|FACE|TEMPLATE|OPTIONS|BIOPHOTO)\b/i.test(trimmed);
+}
+
+function parseSenseFacePunchLine(rawLine: string): ParsedPunchLine | null {
+  const trimmed = rawLine.trim();
+  if (!trimmed || isNonAttendanceMetaLine(trimmed)) return null;
+
+  // Strip leading table prefix like "ATTLOG\t" or "RTLOG\t"
+  const cleanLine = trimmed.replace(/^(ATTLOG|RTLOG)[\t\s]+/i, '').trim();
+  if (!cleanLine || isNonAttendanceMetaLine(cleanLine)) return null;
+
+  let userId = '';
+  let rawCheckTime = '';
+
+  // 1. Key-value format (e.g. SenseFace 2A RTLOG: "time=2026-11-27 18:20:05\tpin=101\t..." or "PIN=101\tTime=2026-11-27 18:20:05")
+  const kvPinMatch = cleanLine.match(/(?:^|[\t,&\s])(?:pin|userid|user_id|enrollid)\s*=\s*([^\t,&\s]+)/i);
+  const kvTimeMatch = cleanLine.match(/(?:^|[\t,&\s])(?:time|checktime|check_time|datetime|verifytime)\s*=\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:[T\s]\d{1,2}:\d{2}(?::\d{2})?)?|\d{14})/i);
+
+  if (kvPinMatch && kvTimeMatch) {
+    userId = kvPinMatch[1].trim();
+    rawCheckTime = kvTimeMatch[1].trim();
+  } else {
+    const isDateToken = (tok: string) => /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(tok) || /^\d{14}$/.test(tok);
+
+    if (cleanLine.includes('\t')) {
+      const parts = cleanLine.split('\t').map(p => p.trim());
+      if (isDateToken(parts[0] || '') && parts[1]) {
+        rawCheckTime = parts[0];
+        userId = parts[1];
+      } else if (parts[0] && isDateToken(parts[1] || '')) {
+        userId = parts[0];
+        rawCheckTime = parts[1];
+      } else {
+        userId = parts[0] || '';
+        rawCheckTime = parts[1] || '';
+      }
+    } else if (cleanLine.includes(',')) {
+      const parts = cleanLine.split(',').map(p => p.trim());
+      if (isDateToken(parts[0] || '') && parts[1]) {
+        rawCheckTime = parts[0];
+        userId = parts[1];
+      } else if (parts[0] && isDateToken(parts[1] || '')) {
+        userId = parts[0];
+        rawCheckTime = parts[1];
+      } else {
+        userId = parts[0] || '';
+        rawCheckTime = parts[1] || '';
+      }
+    } else {
+      const parts = cleanLine.split(/\s+/).filter(Boolean);
+      if (isDateToken(parts[0] || '')) {
+        if (parts.length >= 3 && parts[1].includes(':')) {
+          rawCheckTime = `${parts[0]} ${parts[1]}`;
+          userId = parts[2];
+        } else if (parts.length >= 2) {
+          rawCheckTime = parts[0];
+          userId = parts[1];
+        }
+      } else {
+        userId = parts[0] || '';
+        if (parts.length >= 3 && isDateToken(parts[1] || '') && parts[2].includes(':')) {
+          rawCheckTime = `${parts[1]} ${parts[2]}`;
+        } else {
+          rawCheckTime = parts[1] || '';
+        }
+      }
+    }
+  }
+
+  userId = userId.trim();
+  if (!userId || !rawCheckTime) return null;
+  const upperUser = userId.toUpperCase();
+  if (upperUser === 'USERID' || upperUser === 'PIN' || upperUser === 'TIME') return null;
+
+  const normalizedTs = normalizePunchTimestamp(rawCheckTime);
+  if (!normalizedTs) return null;
+
+  return {
+    userId,
+    date: normalizedTs.date,
+    time: normalizedTs.time,
+    fullTime: normalizedTs.fullTime,
+    rawLine: trimmed
+  };
 }
 
 async function generateAndQueueCommandsForDevice(instId: string, sn: string): Promise<string[]> {
@@ -481,8 +773,15 @@ async function readRawRequestBody(req: any): Promise<string> {
   }
   try {
     const chunks: Buffer[] = [];
+    let totalBytes = 0;
     for await (const chunk of req) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+      totalBytes += buf.length;
+      if (totalBytes > MAX_RAW_BODY_BYTES) {
+        chunks.push(buf.subarray(0, Math.max(0, buf.length - (totalBytes - MAX_RAW_BODY_BYTES))));
+        break;
+      }
+      chunks.push(buf);
     }
     req._cachedRawBody = Buffer.concat(chunks).toString('utf-8');
     return req._cachedRawBody;
@@ -1130,9 +1429,10 @@ export default async function handler(req: any, res: any) {
         await recordDeviceHeartbeat(SN, clientIp);
         const admsOptions = [
           `GET OPTION FROM: ${safeSn}`,
-          'ATTLOGStamp=None',
-          'OPERLOGStamp=9999',
-          'ATTPHOTOStamp=None',
+          'Stamp=0',
+          'ATTLOGStamp=0',
+          'OPERLOGStamp=0',
+          'ATTPHOTOStamp=0',
           'ErrorDelay=30',
           'Delay=10',
           'TransTimes=00:00;14:05',
@@ -1193,8 +1493,9 @@ export default async function handler(req: any, res: any) {
           const targetSnForStatus = matchedDevice?.sn || SN || `PC_AGENT_${instId}`;
           let dbLastSeen: string | null = matchedDevice?.last_seen_at || null;
           let dbIp: string | null = matchedDevice?.ip || null;
+          let dbRecentRawPunches: RawPunchDiagnostic[] = matchedDevice?.recent_raw_punches || [];
 
-          // Fetch fresh config_json so serverless instances always read the latest DB-persisted last_seen_at
+          // Fetch fresh config_json so serverless instances always read the latest DB-persisted last_seen_at & recent_raw_punches
           if (matchedDevice) {
             const { data: freshInst } = await supabase
               .from('institutions')
@@ -1205,10 +1506,15 @@ export default async function handler(req: any, res: any) {
               const freshMeta = findDeviceMetadataInConfig(freshInst.config_json, matchedDevice.sn);
               if (freshMeta.last_seen_at) dbLastSeen = freshMeta.last_seen_at;
               if (freshMeta.ip) dbIp = freshMeta.ip;
+              if (freshMeta.recent_raw_punches.length > 0) dbRecentRawPunches = freshMeta.recent_raw_punches;
             }
           }
 
           const liveStatus = resolveDeviceOnlineStatus(targetSnForStatus, dbLastSeen, dbIp);
+          const recentRawPunches = mergeRecentRawPunches(
+            deviceRecentRawPunches.get(targetSnForStatus.toUpperCase()),
+            dbRecentRawPunches
+          );
           const { students, teachers } = await getInstitutionDirectory(instId);
 
           const { data: recentLogs } = await supabase
@@ -1239,6 +1545,7 @@ export default async function handler(req: any, res: any) {
             biometric_teachers_count: bioTeachers.length,
             pending_commands_in_queue: pendingCommandsCount,
             recent_punches_logged: recentLogs || [],
+            recent_raw_punches: recentRawPunches,
             recommendation: bioStudents.length === 0 
               ? 'সতর্কতা: কোনো শিক্ষার্থীর বায়োমেট্রিক আইডি বা রোল যুক্ত করা হয়নি।'
               : 'প্রস্তুত: বায়োমেট্রিক ডিভাইস সফলভাবে সংযুক্ত এবং হাজিরা গ্রহণের জন্য প্রস্তুত।'
@@ -1251,6 +1558,7 @@ export default async function handler(req: any, res: any) {
             device_sn: SN,
             last_seen_at: null,
             is_online: false,
+            recent_raw_punches: deviceRecentRawPunches.get(SN) || [],
             error: `মেশিনের সিরিয়াল নম্বর "${SN}" কোনো মাদরাসার সাথে রেজিস্টার করা নেই। অনুগ্রহ করে সেটিংস থেকে সিরিয়াল নম্বরটি যুক্ত করুন।`
           });
         }
@@ -1289,10 +1597,50 @@ export default async function handler(req: any, res: any) {
         await recordDeviceHeartbeat(SN, clientIp);
       }
 
-      let rawData = req.body;
+      const tableParam = String(query.table || '').trim().toUpperCase();
+      const eventTimestampIso = new Date().toISOString();
+
+      let rawData: any = req.body;
+      const isEmptyBodyObj = (
+        typeof rawData === 'object' &&
+        rawData !== null &&
+        !Buffer.isBuffer(rawData) &&
+        !Array.isArray(rawData) &&
+        Object.keys(rawData).length === 0
+      );
+
+      // Read raw bytes directly from request stream when req.body is empty, undefined, or {}
+      // (happens when ZKTeco SenseFace 2A sends application/octet-stream or omits Content-Type)
+      if (rawData === undefined || rawData === null || rawData === '' || isEmptyBodyObj) {
+        if (typeof req._cachedRawBody === 'string' && req._cachedRawBody.length > 0) {
+          rawData = req._cachedRawBody;
+        } else {
+          try {
+            const chunks: Buffer[] = [];
+            let totalBytes = 0;
+            for await (const chunk of req) {
+              const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+              totalBytes += buf.length;
+              if (totalBytes > MAX_RAW_BODY_BYTES) {
+                chunks.push(buf.subarray(0, Math.max(0, buf.length - (totalBytes - MAX_RAW_BODY_BYTES))));
+                break;
+              }
+              chunks.push(buf);
+            }
+            rawData = Buffer.concat(chunks).toString('utf-8');
+            req._cachedRawBody = rawData;
+          } catch {
+            rawData = '';
+          }
+        }
+      }
+
       if (Buffer.isBuffer(rawData)) {
         rawData = rawData.toString('utf-8');
       }
+
+      const originalRawString = typeof rawData === 'string' ? rawData : '';
+
       if (typeof rawData === 'string') {
         const trimmed = rawData.trim();
         if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -1304,6 +1652,7 @@ export default async function handler(req: any, res: any) {
         }
       }
       const parsedBodyObj: any = (typeof rawData === 'object' && rawData !== null) ? rawData : null;
+      const effectiveTable = tableParam || String(parsedBodyObj?.table || '').trim().toUpperCase() || 'ATTLOG';
 
       // Handle JSON payload, Array, single-object logs, or form-urlencoded text lines
       if (typeof rawData === 'object' && rawData !== null) {
@@ -1328,28 +1677,28 @@ export default async function handler(req: any, res: any) {
           const uId = rawData.userId || rawData.user_id || rawData.pin || '';
           const cTime = rawData.checkTime || rawData.check_time || rawData.time || rawData.timestamp || '';
           rawData = `${uId}\t${cTime}`;
-        } else if (rawData.table === 'ATTLOG' && rawData.data) {
+        } else if ((rawData.table === 'ATTLOG' || rawData.table === 'RTLOG') && rawData.data) {
           rawData = rawData.data;
         } else {
-          // Express / Vercel form parser turns text lines into object keys
-          const keys = Object.keys(rawData);
-          rawData = keys.join('\n');
+          // Express / Vercel form parser turns text lines or key=value lines into object entries
+          rawData = Object.entries(rawData)
+            .flatMap(([k, v]) => {
+              if (Array.isArray(v)) {
+                return v.map(item => {
+                  const s = (item === undefined || item === null) ? '' : String(item);
+                  return s !== '' ? `${k}=${s}` : k;
+                });
+              }
+              const valStr = (v === undefined || v === null) ? '' : String(v);
+              return [valStr !== '' ? `${k}=${valStr}` : k];
+            })
+            .join('\n');
         }
       }
 
-      if (!rawData || typeof rawData !== 'string') {
-        if (req.headers['content-type']?.includes('application/json')) {
-          return res.status(200).json({ success: true, processed: 0 });
-        }
-        return res.status(200).send('OK');
-      }
+      const rawTextPayload = typeof rawData === 'string' ? rawData : originalRawString;
 
-      const lines = rawData.split(/\r?\n/).filter((line: string) => line.trim().length > 0);
-      if (lines.length === 0) {
-        return res.status(200).send('OK');
-      }
-
-      // Fast match institution via cached device registry
+      // Fast match institution via cached device registry (resolved early so diagnostics persist accurately)
       const registeredDevices = await getRegisteredDevices();
       let matchedDevice: DeviceCacheEntry | undefined;
 
@@ -1376,8 +1725,6 @@ export default async function handler(req: any, res: any) {
       }
 
       // Fallback for Non-ADMS Local PC Sync Agent:
-      // Non-ADMS machines do not register SN in biometric_devices.
-      // Lookup the institution directly by ID or SN prefix:
       if (!matchedDevice) {
         const fallbackInstId = reqInstId || (SN && SN.startsWith('PC_AGENT_') ? SN.replace(/^PC_AGENT_/i, '').trim() : null);
         if (fallbackInstId) {
@@ -1418,8 +1765,88 @@ export default async function handler(req: any, res: any) {
         }
       }
 
+      const diagSn = matchedDevice?.sn || SN || 'UNKNOWN';
+      const diagInstId = matchedDevice?.institution_id || null;
+
+      // Handle OPERLOG or non-attendance table pushes immediately with OK
+      if (effectiveTable === 'OPERLOG') {
+        if (SN && urlPath.includes('/cdata')) {
+          await recordRecentRawPunches(diagInstId, diagSn, [{
+            timestamp: eventTimestampIso,
+            sn: diagSn,
+            table: effectiveTable,
+            raw_preview: makeRawPreview(rawTextPayload || '(empty OPERLOG)'),
+            parsed_pin: null,
+            parsed_time: null,
+            matched_name: null
+          }]);
+        }
+        return res.status(200).send('OK');
+      }
+
+      if (!rawTextPayload || typeof rawTextPayload !== 'string') {
+        if (SN && urlPath.includes('/cdata')) {
+          await recordRecentRawPunches(diagInstId, diagSn, [{
+            timestamp: eventTimestampIso,
+            sn: diagSn,
+            table: effectiveTable,
+            raw_preview: '(empty body)',
+            parsed_pin: null,
+            parsed_time: null,
+            matched_name: null
+          }]);
+        }
+        if (req.headers['content-type']?.includes('application/json')) {
+          return res.status(200).json({ success: true, processed: 0 });
+        }
+        return res.status(200).send('OK');
+      }
+
+      const lines = rawTextPayload.split(/\r?\n/).filter((line: string) => line.trim().length > 0);
+      if (lines.length === 0) {
+        if (SN && urlPath.includes('/cdata')) {
+          await recordRecentRawPunches(diagInstId, diagSn, [{
+            timestamp: eventTimestampIso,
+            sn: diagSn,
+            table: effectiveTable,
+            raw_preview: '(blank payload)',
+            parsed_pin: null,
+            parsed_time: null,
+            matched_name: null
+          }]);
+        }
+        return res.status(200).send('OK');
+      }
+
+      // If every line is a metadata/OPERLOG line (OPLOG / USER / FP / etc.), return OK immediately
+      if (lines.every((l: string) => isNonAttendanceMetaLine(l))) {
+        if (SN && urlPath.includes('/cdata')) {
+          await recordRecentRawPunches(diagInstId, diagSn, [{
+            timestamp: eventTimestampIso,
+            sn: diagSn,
+            table: effectiveTable,
+            raw_preview: makeRawPreview(lines[0]),
+            parsed_pin: null,
+            parsed_time: null,
+            matched_name: null
+          }]);
+        }
+        return res.status(200).send('OK');
+      }
+
       if (!matchedDevice) {
         console.warn(`[ZKteco ADMS Security] Unregistered device SN: "${SN}"`);
+        if (SN && urlPath.includes('/cdata')) {
+          await recordRecentRawPunches(null, SN, [{
+            timestamp: eventTimestampIso,
+            sn: SN,
+            table: effectiveTable,
+            raw_preview: makeRawPreview(lines[0]),
+            parsed_pin: null,
+            parsed_time: null,
+            matched_name: null
+          }]);
+        }
         if (req.headers['content-type']?.includes('application/json') || req.headers?.['accept']?.includes('json')) {
           return res.status(200).json({
             success: false,
@@ -1432,50 +1859,29 @@ export default async function handler(req: any, res: any) {
 
       const matchedInstitutionId = matchedDevice.institution_id;
 
-      // Parse all punch lines in memory
-      interface ParsedPunch {
-        userId: string;
-        date: string;
-        time: string | null;
-      }
-
-      const parsedPunches: ParsedPunch[] = [];
+      // Parse all punch lines in memory (supports SenseFace 2A RTLOG key=value, prefixed ATTLOG/RTLOG, and classic tab/comma/space formats)
+      const parsedPunches: ParsedPunchLine[] = [];
       const targetDates = new Set<string>();
 
       for (const line of lines) {
-        let userId = '';
-        let checkTime = '';
-
-        if (line.includes('\t')) {
-          const parts = line.split('\t');
-          userId = (parts[0] || '').trim();
-          checkTime = (parts[1] || '').trim();
-        } else if (line.includes(',')) {
-          const parts = line.split(',');
-          userId = (parts[0] || '').trim();
-          checkTime = (parts[1] || '').trim();
-        } else {
-          const parts = line.split(/\s+/);
-          userId = (parts[0] || '').trim();
-          if (parts.length >= 3 && parts[1]?.length === 10 && parts[2]?.includes(':')) {
-            checkTime = `${parts[1]} ${parts[2]}`;
-          } else {
-            checkTime = (parts[1] || '').trim();
-          }
-        }
-
-        if (!userId || !checkTime || userId.toUpperCase() === 'USERID' || userId.toUpperCase() === 'PIN') continue;
-
-        const date = checkTime.substring(0, 10);
-        const time = checkTime.length >= 16 ? checkTime.substring(11, 16) : (checkTime.length > 10 ? checkTime.substring(11) : null);
-
-        if (!date || date.length !== 10) continue;
-
-        parsedPunches.push({ userId, date, time });
-        targetDates.add(date);
+        const parsed = parseSenseFacePunchLine(line);
+        if (!parsed) continue;
+        parsedPunches.push(parsed);
+        targetDates.add(parsed.date);
       }
 
       if (parsedPunches.length === 0) {
+        if (urlPath.includes('/cdata') || SN) {
+          await recordRecentRawPunches(matchedInstitutionId, diagSn, [{
+            timestamp: eventTimestampIso,
+            sn: diagSn,
+            table: effectiveTable,
+            raw_preview: makeRawPreview(lines[0]),
+            parsed_pin: null,
+            parsed_time: null,
+            matched_name: null
+          }]);
+        }
         return res.status(200).send('OK');
       }
 
@@ -1512,6 +1918,7 @@ export default async function handler(req: any, res: any) {
       const newStudentAttendanceBatch: any[] = [];
       const updateStudentAttendanceBatch: { id: string; updates: any }[] = [];
       const smsQueueBatch: any[] = [];
+      const rawPunchDiagEntries: RawPunchDiagnostic[] = [];
 
       const processedKeys = new Set<string>();
       let processedCount = 0;
@@ -1519,7 +1926,6 @@ export default async function handler(req: any, res: any) {
       const unmatchedUserIds = new Set<string>();
 
       const settings = instConfig.attendance_settings || {};
-      const graceMinutes = Number(settings.late_grace_minutes ?? 10);
       const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
 
       for (const punch of parsedPunches) {
@@ -1532,6 +1938,20 @@ export default async function handler(req: any, res: any) {
         const teacher = matchTeacherByPin(teachers, userId, numUserId);
         const explicitStudent = matchStudentByExplicitBioId(students, userId, numUserId);
         const student = explicitStudent || (!teacher ? matchStudentByRollFallback(students, userId, numUserId) : undefined);
+
+        const matchedName = student
+          ? (student.student_name || student.name_en || null)
+          : (teacher ? (teacher.teacher_name || null) : null);
+
+        rawPunchDiagEntries.push({
+          timestamp: eventTimestampIso,
+          sn: diagSn,
+          table: effectiveTable,
+          raw_preview: makeRawPreview(punch.rawLine),
+          parsed_pin: userId || punch.userId || null,
+          parsed_time: punch.fullTime || null,
+          matched_name: matchedName
+        });
 
         if (student) {
           const punchKey = `student_${student.id}_${date}`;
@@ -1697,6 +2117,12 @@ export default async function handler(req: any, res: any) {
             console.error('[ZKteco ADMS DB Mutation Error]:', res.reason);
           }
         }
+      }
+
+      // Persist latest 10 raw punch diagnostics after attendance mutations settle so config_json updates never race
+      if (rawPunchDiagEntries.length > 0) {
+        const latestSlice = rawPunchDiagEntries.slice(-MAX_RAW_PUNCH_DIAGNOSTICS).reverse();
+        await recordRecentRawPunches(matchedInstitutionId, diagSn, latestSlice);
       }
 
       console.log(`[ZKteco ADMS] Completed punch batch: ${processedCount} new/updated present records, ${alreadyMarkedCount} already marked for "${matchedDevice.institution_name}".`);
