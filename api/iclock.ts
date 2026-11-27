@@ -610,39 +610,71 @@ function parseSenseFacePunchLine(rawLine: string): ParsedPunchLine | null {
   };
 }
 
+function extractNotesBiometricId(notes: any): string {
+  if (!notes) return '';
+  if (typeof notes === 'object') {
+    return (notes?.biometric_id || '').toString().trim();
+  }
+  const str = String(notes).trim();
+  if (!str) return '';
+  try {
+    const parsed = JSON.parse(str);
+    if (parsed && typeof parsed === 'object' && parsed.biometric_id) {
+      return String(parsed.biometric_id).trim();
+    }
+  } catch {
+    // Try extracting embedded [ADM_EXTRA:{...}] JSON block
+    const admMatch = str.match(/\[ADM_EXTRA:(\{[\s\S]*?\})\]/);
+    if (admMatch) {
+      try {
+        const parsed = JSON.parse(admMatch[1]);
+        if (parsed && typeof parsed === 'object' && parsed.biometric_id) {
+          return String(parsed.biometric_id).trim();
+        }
+      } catch {}
+    }
+  }
+  return '';
+}
+
 async function generateAndQueueCommandsForDevice(instId: string, sn: string): Promise<string[]> {
   const [{ data: students }, { data: teachers }] = await Promise.all([
     supabase
       .from('students')
-      .select('id, student_name, name_en, roll, biometric_id, is_active, notes')
+      .select('id, student_name, name_en, roll, biometric_id, registration_number, is_active, notes')
       .eq('institution_id', instId)
-      .order('roll', { ascending: true }),
+      .order('id', { ascending: true }),
     supabase
       .from('teachers')
       .select('id, teacher_name, mobile, permissions, is_active')
       .eq('institution_id', instId)
+      .order('id', { ascending: true })
   ]);
 
-  const commands: string[] = [];
+  const userEntries: Array<{ pin: string; name: string }> = [];
+  const seenPins = new Set<string>();
+
   (students || []).forEach((st: any) => {
     if (st.is_active === false) return;
-    let rawBio = (st.biometric_id || '').toString().trim();
-    if (!rawBio && st.notes) {
-      try {
-        const parsed = typeof st.notes === 'string' ? JSON.parse(st.notes) : st.notes;
-        rawBio = (parsed?.biometric_id || '').toString().trim();
-      } catch (e) {}
+    const rawCandidates = [
+      st.biometric_id,
+      extractNotesBiometricId(st.notes),
+      st.registration_number,
+      st.roll !== null && st.roll !== undefined ? String(st.roll) : ''
+    ];
+    let cleanBioId = '';
+    for (const candidate of rawCandidates) {
+      const normalized = normalizeBioId(candidate).replace(/\D/g, '');
+      if (normalized) {
+        cleanBioId = normalized;
+        break;
+      }
     }
-    if (!rawBio && st.roll !== null && st.roll !== undefined) {
-      rawBio = String(st.roll).trim();
-    }
-    if (!rawBio) return;
-    const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
-    if (!cleanBioId) return;
+    if (!cleanBioId || seenPins.has(cleanBioId)) return;
+    seenPins.add(cleanBioId);
 
     const cleanName = transliterateBnToEn(st.name_en || st.student_name || 'STUDENT');
-    const cmdId = commands.length + 1;
-    commands.push(`C:${cmdId}:DATA UPDATE USERINFO PIN=${cleanBioId}\tName=${cleanName}\tPri=0\tPasswd=\tCard=\tGrp=1`);
+    userEntries.push({ pin: cleanBioId, name: cleanName });
   });
 
   (teachers || []).forEach((t: any) => {
@@ -653,14 +685,28 @@ async function generateAndQueueCommandsForDevice(instId: string, sn: string): Pr
     } catch {
       perms = {};
     }
-    const rawBio = (perms.biometric_id || perms.teacher_id_number || '').toString().trim();
-    const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
-    if (!cleanBioId) return;
+    const rawBio = perms.biometric_id || perms.teacher_id_number || '';
+    const cleanBioId = normalizeBioId(rawBio).replace(/\D/g, '');
+    if (!cleanBioId || seenPins.has(cleanBioId)) return;
+    seenPins.add(cleanBioId);
 
     const cleanName = transliterateBnToEn(t.teacher_name || 'TEACHER');
-    const cmdId = commands.length + 1;
-    commands.push(`C:${cmdId}:DATA UPDATE USERINFO PIN=${cleanBioId}\tName=${cleanName}\tPri=0\tPasswd=\tCard=\tGrp=1`);
+    userEntries.push({ pin: cleanBioId, name: cleanName });
   });
+
+  const commands: string[] = [];
+  let cmdId = 1;
+
+  // Phase 1: AC Push Protocol (user + userauthorize) for ZKTeco SenseFace 2A / SpeedFace
+  for (const u of userEntries) {
+    commands.push(`C:${cmdId++}:DATA UPDATE user CardNo=\tPin=${u.pin}\tPassword=\tGroup=1\tStartTime=0\tEndTime=0\tName=${u.name}\tPrivilege=0`);
+    commands.push(`C:${cmdId++}:DATA UPDATE userauthorize Pin=${u.pin}\tAuthorizeTimezoneId=1\tAuthorizeDoorId=1`);
+  }
+
+  // Phase 2: Classic ADMS (USERINFO) fallback for K40 / F18 / older T&A terminals
+  for (const u of userEntries) {
+    commands.push(`C:${cmdId++}:DATA UPDATE USERINFO PIN=${u.pin}\tName=${u.name}\tPri=0\tPasswd=\tCard=\tGrp=1`);
+  }
 
   pendingAdmsCommands.set(sn.toUpperCase(), commands);
   return commands;
@@ -1312,8 +1358,9 @@ export default async function handler(req: any, res: any) {
       }
 
       const commands = await generateAndQueueCommandsForDevice(targetInstId, targetSn);
+      const upperTargetSn = targetSn.toUpperCase();
 
-      // Persist pending_adms_sync_sn in institutions.config_json
+      // Persist DB-backed multi-instance sync state (pending_adms_sync with offset) in institutions.config_json
       try {
         const { data: inst } = await supabase
           .from('institutions')
@@ -1328,19 +1375,29 @@ export default async function handler(req: any, res: any) {
             .update({
               config_json: {
                 ...cfg,
-                pending_adms_sync_sn: targetSn.toUpperCase()
+                pending_adms_sync_sn: upperTargetSn,
+                pending_adms_sync: {
+                  sn: upperTargetSn,
+                  offset: 0,
+                  total: commands.length,
+                  updated_at: new Date().toISOString()
+                }
               }
             })
             .eq('id', targetInstId);
         }
       } catch (persistErr) {
-        console.warn('[ZKteco ADMS] Failed to persist pending_adms_sync_sn in DB:', persistErr);
+        console.warn('[ZKteco ADMS] Failed to persist pending_adms_sync in DB:', persistErr);
       }
+
+      // Invalidate in-memory device cache so all subsequent requests read fresh state
+      lastDeviceFetchTime = 0;
+      cachedDeviceList = null;
 
       return res.status(200).json({
         success: true,
         queued: commands.length,
-        device_sn: targetSn,
+        device_sn: upperTargetSn,
         institution_id: targetInstId,
         message: 'সকল শিক্ষার্থীর তথ্য ক্লাউড কিউতে যুক্ত হয়েছে। মেশিনটি অনলাইনে থাকলে কয়েক সেকেন্ডের মধ্যে স্বয়ংক্রিয়ভাবে সিঙ্ক হয়ে যাবে।'
       });
@@ -1364,8 +1421,31 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send('OK');
     }
 
-    // 2. ZKTeco Machine Command Polling: GET /iclock/getrequest
-    if (method === 'GET' && urlPath.includes('/getrequest')) {
+    // 2. Dedicated ZKTeco AC Push Handshake (Both GET and POST): /iclock/push
+    if (urlPath.includes('/push')) {
+      if (SN) {
+        await recordDeviceHeartbeat(SN, clientIp);
+      }
+      const safeSn = sanitizeSnForPlainText(SN) || 'DEVICE';
+      const pushHandshake = [
+        'ServerVersion=3.0.1',
+        'ServerName=ADMS',
+        'PushVersion=3.0.1',
+        'ErrorDelay=30',
+        'RequestDelay=2',
+        'TransTimes=00:00;14:05',
+        'TransInterval=1',
+        'TransTables=User Transaction',
+        'Realtime=1',
+        `SessionID=Deenora_${safeSn}`,
+        'TimeoutSec=10'
+      ].join('\n');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.status(200).send(pushHandshake);
+    }
+
+    // 3. ZKTeco Machine Command Polling: GET /iclock/getrequest (and /service/control)
+    if (method === 'GET' && (urlPath.includes('/getrequest') || urlPath.includes('/service/control'))) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
 
       if (!SN) {
@@ -1374,53 +1454,109 @@ export default async function handler(req: any, res: any) {
 
       await recordDeviceHeartbeat(SN, clientIp);
 
-      let commands = pendingAdmsCommands.get(SN);
-
-      if (!commands || commands.length === 0) {
-        // Fallback: check if DB has pending_adms_sync_sn for this SN
-        try {
-          let devices = await getRegisteredDevices();
-          let dev = devices.find(d => d.sn === SN);
-          if (!dev) {
-            lastDeviceFetchTime = 0;
-            devices = await getRegisteredDevices(true);
-            dev = devices.find(d => d.sn === SN);
-          }
-          if (dev && (dev.config_json?.pending_adms_sync_sn === SN || dev.config_json?.pending_adms_sync?.sn === SN)) {
-            commands = await generateAndQueueCommandsForDevice(dev.institution_id, SN);
-          }
-        } catch (rebuildErr) {
-          console.warn('[ZKteco ADMS] Error checking pending_adms_sync_sn:', rebuildErr);
+      try {
+        let devices = await getRegisteredDevices();
+        let dev = devices.find(d => d.sn === SN);
+        if (!dev) {
+          lastDeviceFetchTime = 0;
+          devices = await getRegisteredDevices(true);
+          dev = devices.find(d => d.sn === SN);
         }
-      }
 
-      if (commands && commands.length > 0) {
-        const toSend = commands.splice(0, 50);
-        if (commands.length === 0) {
-          pendingAdmsCommands.delete(SN);
-          clearPendingAdmsSyncFlag(SN);
+        if (dev) {
+          // Always fetch fresh config_json directly from Supabase for multi-instance serverless consistency
+          const { data: freshInst } = await supabase
+            .from('institutions')
+            .select('config_json')
+            .eq('id', dev.institution_id)
+            .maybeSingle();
+
+          const cfg = (freshInst?.config_json && typeof freshInst.config_json === 'object')
+            ? { ...(freshInst.config_json as any) }
+            : {};
+
+          const pendingSnFromObj = String(cfg.pending_adms_sync?.sn || '').trim().toUpperCase();
+          const pendingSnLegacy = String(cfg.pending_adms_sync_sn || '').trim().toUpperCase();
+          const isSyncActive = pendingSnFromObj === SN || pendingSnLegacy === SN;
+
+          if (isSyncActive) {
+            const allCommands = await generateAndQueueCommandsForDevice(dev.institution_id, SN);
+            const offset = Math.max(0, Number(cfg.pending_adms_sync?.offset || 0));
+            const BATCH_SIZE = 60;
+            const phase2Start = allCommands.findIndex(cmd => cmd.includes('DATA UPDATE USERINFO '));
+            const batchEnd = (phase2Start !== -1 && offset < phase2Start)
+              ? Math.min(offset + BATCH_SIZE, phase2Start)
+              : offset + BATCH_SIZE;
+            const toSend = allCommands.slice(offset, batchEnd);
+            const nextOffset = offset + toSend.length;
+
+            const nextCfg = { ...cfg };
+            if (toSend.length === 0 || nextOffset >= allCommands.length) {
+              delete nextCfg.pending_adms_sync;
+              delete nextCfg.pending_adms_sync_sn;
+              pendingAdmsCommands.delete(SN);
+            } else {
+              nextCfg.pending_adms_sync_sn = SN;
+              nextCfg.pending_adms_sync = {
+                sn: SN,
+                offset: nextOffset,
+                total: allCommands.length,
+                updated_at: new Date().toISOString()
+              };
+              pendingAdmsCommands.set(SN, allCommands.slice(nextOffset));
+            }
+
+            await supabase
+              .from('institutions')
+              .update({ config_json: nextCfg })
+              .eq('id', dev.institution_id);
+
+            await recordRecentRawPunches(dev.institution_id, SN, [{
+              timestamp: new Date().toISOString(),
+              sn: SN,
+              table: 'GETREQUEST',
+              raw_preview: makeRawPreview(`Batch ${offset}..${nextOffset}/${allCommands.length}: ${toSend[0] || 'DONE'}`, 240),
+              parsed_pin: null,
+              parsed_time: null,
+              matched_name: null
+            }]);
+
+            if (toSend.length > 0) {
+              console.log(`[ZKteco ADMS] Sending batch ${offset}..${nextOffset}/${allCommands.length} (${toSend.length} cmds) to SN "${SN}"`);
+              return res.status(200).send(toSend.join('\n'));
+            }
+          }
         }
-        console.log(`[ZKteco ADMS] Sending ${toSend.length} queued commands to machine SN "${SN}" (${commands.length} remaining)`);
-        return res.status(200).send(toSend.join('\n'));
+      } catch (getReqErr) {
+        console.warn('[ZKteco ADMS] Error processing /getrequest pagination:', getReqErr);
       }
 
       return res.status(200).send('OK');
     }
 
-    // 3. Machine Execution Callback: POST /iclock/devicecmd
+    // 4. Machine Execution Callback: POST /iclock/devicecmd
     if (urlPath.includes('/devicecmd')) {
+      const cmdBody = await readRawRequestBody(req);
       if (SN) {
         await recordDeviceHeartbeat(SN, clientIp);
+        const devices = await getRegisteredDevices();
+        const dev = devices.find(d => d.sn === SN);
+        await recordRecentRawPunches(dev?.institution_id || null, SN, [{
+          timestamp: new Date().toISOString(),
+          sn: SN,
+          table: 'DEVICECMD',
+          raw_preview: makeRawPreview(cmdBody || 'ACK', 240),
+          parsed_pin: null,
+          parsed_time: null,
+          matched_name: null
+        }]);
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.status(200).send('OK');
     }
 
-    // 4. Full ZKTeco ADMS Push SDK Handshake: GET /iclock/cdata & GET /iclock/push
-    const isDeviceHandshake = method === 'GET' && (
-      urlPath.includes('/cdata') ||
-      urlPath.includes('/push')
-    );
+    // 5. Full ZKTeco ADMS Push SDK Handshake: GET /iclock/cdata
+    const isDeviceHandshake = method === 'GET' && urlPath.includes('/cdata');
 
     if (isDeviceHandshake) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -1434,7 +1570,8 @@ export default async function handler(req: any, res: any) {
           'OPERLOGStamp=0',
           'ATTPHOTOStamp=0',
           'ErrorDelay=30',
-          'Delay=10',
+          'Delay=2',
+          'RequestDelay=2',
           'TransTimes=00:00;14:05',
           'TransInterval=1',
           'TransFlag=TransData AttLog\tOpLog\tEnrollUser\tChgUser\tEnrollFP\tChgFP\tUserPic',
@@ -1447,7 +1584,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send('OK');
     }
 
-    // 5. Browser / Admin Connection Ping Diagnostic (GET /api/iclock?action=status&sn=... or generic GET)
+    // 6. Browser / Admin Connection Ping Diagnostic (GET /api/iclock?action=status&sn=... or generic GET)
     if (method === 'GET') {
       try {
         let registeredDevices = await getRegisteredDevices(action === 'status');
@@ -1494,14 +1631,16 @@ export default async function handler(req: any, res: any) {
           let dbLastSeen: string | null = matchedDevice?.last_seen_at || null;
           let dbIp: string | null = matchedDevice?.ip || null;
           let dbRecentRawPunches: RawPunchDiagnostic[] = matchedDevice?.recent_raw_punches || [];
+          let freshInst: { config_json: any } | null = null;
 
-          // Fetch fresh config_json so serverless instances always read the latest DB-persisted last_seen_at & recent_raw_punches
+          // Fetch fresh config_json so serverless instances always read the latest DB-persisted last_seen_at, recent_raw_punches & pending_adms_sync
           if (matchedDevice) {
-            const { data: freshInst } = await supabase
+            const { data: freshInstData } = await supabase
               .from('institutions')
               .select('config_json')
               .eq('id', instId)
               .maybeSingle();
+            freshInst = freshInstData || null;
             if (freshInst?.config_json) {
               const freshMeta = findDeviceMetadataInConfig(freshInst.config_json, matchedDevice.sn);
               if (freshMeta.last_seen_at) dbLastSeen = freshMeta.last_seen_at;
@@ -1530,7 +1669,9 @@ export default async function handler(req: any, res: any) {
             try { perms = (typeof t.permissions === 'string' ? JSON.parse(t.permissions) : t.permissions) || {}; } catch {}
             return Boolean(perms.biometric_id || perms.teacher_id_number || t.biometric_id);
           });
-          const pendingCommandsCount = (SN && pendingAdmsCommands.get(SN)?.length) || 0;
+          const pendingCommandsCount = freshInst?.config_json?.pending_adms_sync
+            ? Math.max(0, Number(freshInst.config_json.pending_adms_sync.total || 0) - Number(freshInst.config_json.pending_adms_sync.offset || 0))
+            : ((SN && pendingAdmsCommands.get(SN)?.length) || 0);
 
           return res.status(200).json({
             success: true,
