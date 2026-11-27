@@ -68,6 +68,43 @@ function transliterateBnToEn(text?: string | null): string {
   return (clean ? clean.toUpperCase() : 'STUDENT').slice(0, 23);
 }
 
+const BN_DIGIT_MAP: Record<string, string> = {
+  '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+  '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
+};
+
+function normalizeBioId(val: any): string {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/[০-৯]/g, (d) => BN_DIGIT_MAP[d] ?? d)
+    .trim();
+}
+
+function parseNotesExtra(notes: any): Record<string, any> | null {
+  if (!notes) return null;
+  if (typeof notes === 'object') return notes as Record<string, any>;
+  const str = String(notes).trim();
+  if (!str) return null;
+  if (str.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+  const admMatch = str.match(/\[ADM_EXTRA:(\{[\s\S]*?\})\]/);
+  if (admMatch && admMatch[1]) {
+    try {
+      const parsed = JSON.parse(admMatch[1]);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+  const bioMatch = str.match(/"biometric_id"\s*:\s*"?([^",}\]]+)"?/i) || str.match(/biometric_id\s*:\s*([^\s,}\]]+)/i);
+  if (bioMatch && bioMatch[1]) {
+    return { biometric_id: bioMatch[1] };
+  }
+  return null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -78,12 +115,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const query = req.query || {};
-  const institutionId = (query.institution_id || query.institutionId || query.inst || '').toString().trim();
-  const deviceIp = (query.device_ip || query.deviceIp || '192.168.0.201').toString().trim();
+  const rawInstitutionId = (query.institution_id || query.institutionId || query.inst || '').toString().trim();
+  const institutionId = rawInstitutionId.replace(/[^A-Za-z0-9_-]/g, '');
+  const rawDeviceIp = (query.device_ip || query.deviceIp || '192.168.0.201').toString().trim();
+  const deviceIp = /^[A-Za-z0-9.:-]+$/.test(rawDeviceIp) ? rawDeviceIp : '192.168.0.201';
   const format = (query.format || '').toString().trim().toLowerCase();
   const action = (query.action || '').toString().trim().toLowerCase();
 
-  const serverHost = req.headers.host || 'deenora.app';
+  const rawHost = (req.headers.host || 'deenora.app').toString().trim();
+  const serverHost = /^[A-Za-z0-9.:-]+$/.test(rawHost) ? rawHost : 'deenora.app';
   const protocol = req.headers['x-forwarded-proto'] === 'https' || req.headers.referer?.startsWith('https') ? 'https' : 'http';
   const serverUrl = `${protocol}://${serverHost}`;
 
@@ -107,12 +147,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const { data: students } = await supabase
         .from('students')
-        .select('id, student_name, name_en, roll, biometric_id, registration_number, is_active')
+        .select('id, student_name, name_en, roll, biometric_id, registration_number, is_active, notes, created_at')
         .eq('institution_id', institutionId)
-        .order('roll', { ascending: true });
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
       // ZKTeco K40 internal slot uid MUST be 1..3000 (16-bit safe).
-      // Actual student roll / 6-digit ID goes into user_id (PIN2).
+      // Actual student biometric ID / reg / roll goes into user_id (PIN2).
       const allocatedUids = new Set<number>();
       let autoUid = 1;
       const allocateUid = (): number => {
@@ -123,9 +164,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return autoUid;
       };
 
-      (students || []).forEach((st: any) => {
+      const sortedStudents = (students || []).slice().sort((a: any, b: any) => {
+        const ca = String(a?.created_at || '');
+        const cb = String(b?.created_at || '');
+        if (ca !== cb) return ca.localeCompare(cb);
+        return String(a?.id || '').localeCompare(String(b?.id || ''));
+      });
+
+      sortedStudents.forEach((st: any) => {
         if (st.is_active === false) return;
-        const bioId = (st.biometric_id || st.roll || st.registration_number || '').toString().trim();
+        const parsedNotes = parseNotesExtra(st.notes);
+        const bioId =
+          normalizeBioId(st.biometric_id) ||
+          normalizeBioId(parsedNotes?.biometric_id) ||
+          normalizeBioId(st.registration_number) ||
+          normalizeBioId(st.roll);
         if (!bioId) return;
         const uid = allocateUid();
         const rawName = st.name_en || st.student_name || 'STUDENT';
@@ -141,10 +194,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data: teachers } = await supabase
         .from('teachers')
-        .select('id, teacher_name, mobile, permissions, is_active')
-        .eq('institution_id', institutionId);
+        .select('id, teacher_name, mobile, permissions, is_active, created_at')
+        .eq('institution_id', institutionId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
-      (teachers || []).forEach((t: any) => {
+      const sortedTeachers = (teachers || []).slice().sort((a: any, b: any) => {
+        const ca = String(a?.created_at || '');
+        const cb = String(b?.created_at || '');
+        if (ca !== cb) return ca.localeCompare(cb);
+        return String(a?.id || '').localeCompare(String(b?.id || ''));
+      });
+
+      sortedTeachers.forEach((t: any) => {
         if (t.is_active === false) return;
         let perms: any = {};
         try {
@@ -152,8 +214,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch {
           perms = {};
         }
-        const rawBio = (perms.biometric_id || perms.teacher_id_number || '').toString().trim();
-        const cleanBioId = rawBio.replace(/[০-৯]/g, (d: string) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '') || rawBio;
+        const cleanBioId =
+          normalizeBioId(perms.biometric_id) ||
+          normalizeBioId(t.biometric_id) ||
+          normalizeBioId(perms.teacher_id_number);
         if (cleanBioId) {
           const uid = allocateUid();
           const cleanName = transliterateBnToEn(t.teacher_name || 'TEACHER').substring(0, 23);
@@ -193,8 +257,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const msgUploadingStartB64 = b64('[৩/৪] ZKTeco মেশিনে শিক্ষার্থীদের নাম ও রোল আপলোড শুরু হচ্ছে...');
     const msgRefreshingB64 = b64('[৪/৪] মেশিনের ইন্টারনাল মেমোরি রিফ্রেশ ও সেভ করা হচ্ছে...');
     const msgDoneTitleB64 = b64('Deenora ZKTeco Uploader - সফল');
-    const msgDonePopupB64 = b64('সফলভাবে ZKTeco হাজিরা মেশিনে আপলোড সম্পন্ন হয়েছে! এখন শিক্ষার্থীরা মেশিনে ফিঙ্গারপ্রিন্ট বা কার্ড পাঞ্চ করতে পারবে। মোট আপলোড: ');
+    const msgDonePopupPrefixB64 = b64('সফলভাবে ZKTeco হাজিরা মেশিনে সিঙ্ক সম্পন্ন হয়েছে!\n\n');
+    const msgSummaryNewB64 = b64('নতুন আপলোড: ');
+    const msgSummaryRewriteB64 = b64(' | আইডি আপডেট (Rewrite): ');
+    const msgSummarySkippedB64 = b64(' | আগে থেকেই ছিল (Skipped): ');
     const msgPressEnterB64 = b64('উইন্ডো বন্ধ করতে Enter চাপুন...');
+
+    const safeCacheInstId = institutionId || 'default';
 
     const ps1UploadScript = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
@@ -205,6 +274,7 @@ function Decode-B64([string]$b) {
 
 $instName = Decode-B64 "${instNameB64}"
 $embeddedUsersJson = Decode-B64 "${embeddedUsersB64}"
+$cacheFilePath = Join-Path $env:USERPROFILE ".deenora_zk_synced_${safeCacheInstId}.json"
 
 $msgFetching = Decode-B64 "${msgFetchingB64}"
 $msgCloudLoaded = Decode-B64 "${msgCloudLoadedB64}"
@@ -218,7 +288,10 @@ $msgNoMachineErr = Decode-B64 "${msgNoMachineErrB64}"
 $msgUploadingStart = Decode-B64 "${msgUploadingStartB64}"
 $msgRefreshing = Decode-B64 "${msgRefreshingB64}"
 $msgDoneTitle = Decode-B64 "${msgDoneTitleB64}"
-$msgDonePopup = Decode-B64 "${msgDonePopupB64}"
+$msgDonePopupPrefix = Decode-B64 "${msgDonePopupPrefixB64}"
+$msgSummaryNew = Decode-B64 "${msgSummaryNewB64}"
+$msgSummaryRewrite = Decode-B64 "${msgSummaryRewriteB64}"
+$msgSummarySkipped = Decode-B64 "${msgSummarySkippedB64}"
 $msgPressEnter = Decode-B64 "${msgPressEnterB64}"
 
 function Show-MsgBox([string]$msg, [string]$title, [string]$iconType) {
@@ -299,19 +372,46 @@ function Build-ZKPacket([uint16]$cmd, [uint16]$session, [uint16]$reply, [byte[]]
     return $full
 }
 
+function Convert-BnDigits([string]$text) {
+    if ([string]::IsNullOrEmpty($text)) { return "" }
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($ch in $text.ToCharArray()) {
+        $code = [int][char]$ch
+        if ($code -ge 0x09E6 -and $code -le 0x09EF) {
+            [void]$sb.Append([char](0x0030 + ($code - 0x09E6)))
+        } else {
+            [void]$sb.Append($ch)
+        }
+    }
+    return $sb.ToString()
+}
+
+function Normalize-UserName([string]$name) {
+    $norm = Convert-BnDigits $name
+    $clean = ($norm -replace '[^A-Za-z0-9\\s._-]', '') -replace '\\s+', ' '
+    $clean = $clean.Trim().ToUpper()
+    if ([string]::IsNullOrWhiteSpace($clean)) { $clean = "STUDENT" }
+    if ($clean.Length -gt 24) { $clean = $clean.Substring(0, 24) }
+    return $clean
+}
+
+function Normalize-UserBioId([string]$userId) {
+    $norm = Convert-BnDigits $userId
+    return ($norm -replace '[^A-Za-z0-9._-]', '').Trim()
+}
+
 function Build-UserPayload([uint16]$uid, [string]$name, [string]$userId) {
     $bytes = New-Object byte[] 72
     $uidB = [System.BitConverter]::GetBytes([uint16]$uid)
     $bytes[0] = $uidB[0]
     $bytes[1] = $uidB[1]
     $bytes[2] = 0
-    $cleanName = ($name -replace '[^A-Za-z0-9\\s._-]', '').Trim().ToUpper()
-    if ([string]::IsNullOrWhiteSpace($cleanName)) { $cleanName = "STUDENT" }
+    $cleanName = Normalize-UserName $name
     $nameBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanName)
     $maxName = [Math]::Min($nameBytes.Length, 24)
     [System.Buffer]::BlockCopy($nameBytes, 0, $bytes, 11, $maxName)
     $bytes[40] = 0x31
-    $cleanId = ($userId -replace '[^A-Za-z0-9._-]', '').Trim()
+    $cleanId = Normalize-UserBioId $userId
     if ([string]::IsNullOrWhiteSpace($cleanId)) { $cleanId = "" + $uid }
     $idBytes = [System.Text.Encoding]::ASCII.GetBytes($cleanId)
     $maxId = [Math]::Min($idBytes.Length, 24)
@@ -473,15 +573,141 @@ Write-Host ($msgUploadingStart + " (" + $activeIp + ")") -ForegroundColor White
 $machineEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($activeIp), $port)
 $udpClient.Client.ReceiveTimeout = 2500
 
-$successCount = 0
+# Load local incremental sync cache per machine IP
+$allMachinesCache = @{}
+if (Test-Path $cacheFilePath) {
+    try {
+        $rawCache = [System.IO.File]::ReadAllText($cacheFilePath, [System.Text.Encoding]::UTF8)
+        if (-not [string]::IsNullOrWhiteSpace($rawCache)) {
+            $parsedCache = ConvertFrom-Json $rawCache
+            if ($parsedCache) {
+                foreach ($ipProp in $parsedCache.PSObject.Properties) {
+                    $ipMap = @{}
+                    if ($ipProp.Value) {
+                        foreach ($uProp in $ipProp.Value.PSObject.Properties) {
+                            $ipMap[[string]$uProp.Name] = @{
+                                uid  = [int]($uProp.Value.uid)
+                                name = [string]($uProp.Value.name)
+                            }
+                        }
+                    }
+                    $allMachinesCache[[string]$ipProp.Name] = $ipMap
+                }
+            }
+        }
+    } catch {
+        $allMachinesCache = @{}
+    }
+}
+
+$machineCache = @{}
+if ($allMachinesCache.ContainsKey($activeIp)) {
+    $machineCache = $allMachinesCache[$activeIp]
+} else {
+    $allMachinesCache[$activeIp] = $machineCache
+}
+
+$usedUids = New-Object System.Collections.Generic.HashSet[int]
+$claimedUids = New-Object System.Collections.Generic.HashSet[int]
+$cacheByName = @{}
+$cacheByUid = @{}
+$maxCachedUid = 0
+
+foreach ($k in @($machineCache.Keys)) {
+    $entry = $machineCache[$k]
+    $cUid = [int]$entry.uid
+    $cName = Normalize-UserName ([string]$entry.name)
+    if ($cUid -gt 0) {
+        [void]$usedUids.Add($cUid)
+        $cacheByUid[$cUid] = [string]$k
+        if ($cUid -gt $maxCachedUid) { $maxCachedUid = $cUid }
+    }
+    if (-not $cacheByName.ContainsKey($cName)) {
+        $cacheByName[$cName] = New-Object System.Collections.Generic.List[string]
+    }
+    $cacheByName[$cName].Add([string]$k)
+}
+
+foreach ($u in $users) {
+    $tId = Normalize-UserBioId ([string]$u.user_id)
+    if ($tId -and $machineCache.ContainsKey($tId)) {
+        [void]$claimedUids.Add([int]$machineCache[$tId].uid)
+    }
+}
+
+$newCount = 0
+$rewrittenCount = 0
+$skippedCount = 0
+$failedCount = 0
+$cacheDirty = $false
+
 for ($i = 0; $i -lt $users.Count; $i++) {
     $u = $users[$i]
-    # Always use safe 16-bit sequential slot index (1..3000) for uid so 6-digit IDs like 269596 never overflow UInt16
-    $uidVal = [uint16]($i + 1)
-    $cleanName = [string]($u.name)
-    $userBioId = [string]($u.user_id)
-    if ([string]::IsNullOrWhiteSpace($userBioId)) { $userBioId = "" + $uidVal }
+    $expectedSlot = [int]($i + 1)
+    $cleanName = Normalize-UserName ([string]$u.name)
+    $userBioId = Normalize-UserBioId ([string]$u.user_id)
+    if ([string]::IsNullOrWhiteSpace($userBioId)) { $userBioId = "" + $expectedSlot }
 
+    $opType = "NEW"
+    $targetUidInt = 0
+    $oldCacheKeyToRemove = $null
+
+    # Case A: Already synced with matching user_id
+    if ($machineCache.ContainsKey($userBioId)) {
+        $cached = $machineCache[$userBioId]
+        $cachedName = Normalize-UserName ([string]$cached.name)
+        $cachedUid = [int]$cached.uid
+        if ($cachedName -eq $cleanName -and $cachedUid -gt 0) {
+            $skippedCount++
+            Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [SKIP] Slot: " + $cachedUid + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor DarkGray
+            continue
+        }
+        $opType = "REWRITE"
+        $targetUidInt = if ($cachedUid -gt 0) { $cachedUid } else { $expectedSlot }
+    } else {
+        # Case B: Detect old serial ID (e.g. 1, 2, 3) rewrite by normalized name or unclaimed slot uid
+        $foundOldKey = $null
+        if ($cacheByName.ContainsKey($cleanName)) {
+            foreach ($candKey in $cacheByName[$cleanName]) {
+                if ($machineCache.ContainsKey($candKey)) {
+                    $candUid = [int]$machineCache[$candKey].uid
+                    if (-not $claimedUids.Contains($candUid) -and $candKey -ne $userBioId) {
+                        $foundOldKey = $candKey
+                        break
+                    }
+                }
+            }
+        }
+        if (-not $foundOldKey -and $cacheByUid.ContainsKey($expectedSlot)) {
+            $slotKey = $cacheByUid[$expectedSlot]
+            if ($machineCache.ContainsKey($slotKey)) {
+                $slotUid = [int]$machineCache[$slotKey].uid
+                $slotName = Normalize-UserName ([string]$machineCache[$slotKey].name)
+                if (-not $claimedUids.Contains($slotUid) -and $slotKey -ne $userBioId -and ($slotKey -eq ("" + $slotUid) -or $slotName -eq $cleanName)) {
+                    $foundOldKey = $slotKey
+                }
+            }
+        }
+
+        if ($foundOldKey) {
+            $opType = "REWRITE"
+            $targetUidInt = [int]$machineCache[$foundOldKey].uid
+            $oldCacheKeyToRemove = $foundOldKey
+            [void]$claimedUids.Add($targetUidInt)
+        } else {
+            # Case C: Newly added student/teacher -> next unused sequential uid slot
+            $opType = "NEW"
+            $maxCachedUid++
+            while ($usedUids.Contains($maxCachedUid)) {
+                $maxCachedUid++
+            }
+            $targetUidInt = $maxCachedUid
+            [void]$usedUids.Add($targetUidInt)
+            [void]$claimedUids.Add($targetUidInt)
+        }
+    }
+
+    $uidVal = [uint16]$targetUidInt
     $payload = Build-UserPayload $uidVal $cleanName $userBioId
     # CMD_USER_WRQ = 8
     $pkt = Build-ZKPacket 8 $activeSession $activeReply $payload
@@ -506,23 +732,45 @@ for ($i = 0; $i -lt $users.Count; $i++) {
     }
 
     if ($ackOk) {
-        $successCount++
-        Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [OK] Slot: " + $uidVal + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor Green
+        if ($oldCacheKeyToRemove -and $machineCache.ContainsKey($oldCacheKeyToRemove)) {
+            $machineCache.Remove($oldCacheKeyToRemove)
+        }
+        $machineCache[$userBioId] = @{ uid = $targetUidInt; name = $cleanName }
+        $cacheDirty = $true
+        if ($opType -eq "REWRITE") {
+            $rewrittenCount++
+            $tagInfo = if ($oldCacheKeyToRemove) { $oldCacheKeyToRemove + " -> " + $userBioId } else { $userBioId }
+            Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [REWRITE] Slot: " + $uidVal + " | ID: " + $tagInfo + " | Name: " + $cleanName) -ForegroundColor Cyan
+        } else {
+            $newCount++
+            Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [NEW] Slot: " + $uidVal + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor Green
+        }
     } else {
-        Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [RETRY] Slot: " + $uidVal + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor Yellow
+        $failedCount++
+        Write-Host ("  [" + ($i+1) + "/" + $users.Count + "] [FAIL] Slot: " + $uidVal + " | ID: " + $userBioId.PadRight(8) + " | Name: " + $cleanName) -ForegroundColor Yellow
     }
     Start-Sleep -Milliseconds 20
 }
 
-Write-Host ""
-Write-Host $msgRefreshing -ForegroundColor White
-try {
-    $refreshPkt = Build-ZKPacket 1013 $activeSession $activeReply $null
-    $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
-    $udpClient.Send($refreshPkt, $refreshPkt.Length, $machineEp) | Out-Null
-    $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
-    $udpClient.Receive([ref]$remoteEp) | Out-Null
-} catch {}
+if ($cacheDirty -or (-not (Test-Path $cacheFilePath))) {
+    try {
+        $allMachinesCache[$activeIp] = $machineCache
+        $jsonOut = $allMachinesCache | ConvertTo-Json -Depth 6
+        [System.IO.File]::WriteAllText($cacheFilePath, $jsonOut, (New-Object System.Text.UTF8Encoding($false)))
+    } catch {}
+}
+
+if (($newCount + $rewrittenCount) -gt 0) {
+    Write-Host ""
+    Write-Host $msgRefreshing -ForegroundColor White
+    try {
+        $refreshPkt = Build-ZKPacket 1013 $activeSession $activeReply $null
+        $activeReply = [uint16](([int]$activeReply + 1) -band 0xFFFF)
+        $udpClient.Send($refreshPkt, $refreshPkt.Length, $machineEp) | Out-Null
+        $remoteEp = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+        $udpClient.Receive([ref]$remoteEp) | Out-Null
+    } catch {}
+}
 
 try {
     $exitPkt = Build-ZKPacket 1001 $activeSession $activeReply $null
@@ -530,12 +778,15 @@ try {
 } catch {}
 $udpClient.Close()
 
+$summaryLine = $msgSummaryNew + $newCount + $msgSummaryRewrite + $rewrittenCount + $msgSummarySkipped + $skippedCount
+
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host ("   UPLOAD COMPLETED: " + $successCount + " / " + $users.Count + " STUDENTS UPLOADED TO " + $activeIp) -ForegroundColor Green
+Write-Host ("   " + $summaryLine) -ForegroundColor Green
+Write-Host ("   Machine: " + $activeIp + " | Total Users: " + $users.Count) -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
 
-Show-MsgBox ($msgDonePopup + $successCount + " / " + $users.Count) $msgDoneTitle "Info"
+Show-MsgBox ($msgDonePopupPrefix + $summaryLine) $msgDoneTitle "Info"
 `;
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -1343,10 +1594,17 @@ BN_TO_EN_MAP = {
     'ইসলাম': 'ISLAM', 'হোসেন': 'HOSSAIN', 'খান': 'KHAN', 'শেখ': 'SHEIKH'
 }
 
+BN_DIGIT_TRANS = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+
+def normalize_bio_id_py(val):
+    if val is None:
+        return ''
+    return str(val).translate(BN_DIGIT_TRANS).strip()
+
 def clean_student_name(name):
     if not name:
         return 'STUDENT'
-    s = str(name).strip()
+    s = str(name).translate(BN_DIGIT_TRANS).strip()
     for bn, en in BN_TO_EN_MAP.items():
         s = s.replace(bn, en)
     import re
@@ -1624,28 +1882,136 @@ class DeenoraBiometricApp(tk.Tk):
                 self.ent_ip.insert(0, active_ip)
                 self.pill_machine.config(text=f"🟢 মেশিন: সংযুক্ত ({active_ip})", bg="#065F46", fg="#A7F3D0")
 
-                self.log(f"🚀 ZKTeco মেশিনে {total_users} জন শিক্ষার্থী স্বয়ংক্রিয়ভাবে আপলোড হচ্ছে...")
-                self.lbl_task_title.config(text=f"📥 মেশিনে শিক্ষার্থী আপলোড হচ্ছে ({active_ip})...", fg="#38BDF8")
-                
-                success_count = 0
+                self.log(f"🔍 ZKTeco মেশিনের বর্তমান ব্যবহারকারীদের তালিকা পড়া হচ্ছে...")
+                self.lbl_task_title.config(text=f"📥 স্মার্ট ইনক্রিমেন্টাল আপলোড চলছে ({active_ip})...", fg="#38BDF8")
+
+                try:
+                    existing_users = conn.get_users() or []
+                except Exception as read_err:
+                    self.log(f"⚠️ মেশিনের পুরনো তালিকা পড়া যায়নি ({read_err})। নতুনভাবে আপলোড শুরু হচ্ছে...")
+                    existing_users = []
+
+                self.log(f"মেশিনে পূর্বে সংরক্ষিত ইউজার পাওয়া গেছে: {len(existing_users)} জন।")
+
+                existing_by_user_id = {}
+                existing_by_uid = {}
+                existing_by_name = {}
+                used_uids = set()
+                max_existing_uid = 0
+
+                for eu in existing_users:
+                    eu_uid = int(getattr(eu, 'uid', 0) or 0)
+                    eu_user_id = normalize_bio_id_py(getattr(eu, 'user_id', ''))
+                    eu_name = clean_student_name(getattr(eu, 'name', ''))
+                    if eu_uid > 0:
+                        used_uids.add(eu_uid)
+                        existing_by_uid[eu_uid] = eu
+                        if eu_uid > max_existing_uid:
+                            max_existing_uid = eu_uid
+                    if eu_user_id:
+                        existing_by_user_id[eu_user_id] = eu
+                    if eu_name:
+                        existing_by_name.setdefault(eu_name, []).append(eu)
+
+                claimed_uids = set()
+                for u in users:
+                    uid_str = normalize_bio_id_py(u.get("user_id", ""))
+                    if uid_str and uid_str in existing_by_user_id:
+                        claimed_uids.add(int(existing_by_user_id[uid_str].uid))
+
+                new_uploaded_count = 0
+                rewritten_count = 0
+                skipped_count = 0
+                fail_count = 0
+
                 for idx, u in enumerate(users, 1):
                     raw_name = u.get("name", "STUDENT")
                     clean_name = clean_student_name(raw_name)
-                    # Always use sequential 16-bit slot index (idx) for uid so 6-digit IDs like 269596 never crash struct.pack('<H')
-                    uid_val = idx
-                    user_id_val = str(u.get("user_id", uid_val))
+                    expected_slot_uid = int(u.get("uid", idx) or idx)
+                    user_id_val = normalize_bio_id_py(u.get("user_id", ""))
+                    if not user_id_val:
+                        user_id_val = str(expected_slot_uid)
 
                     try:
-                        conn.set_user(uid=uid_val, name=clean_name, privilege=0, password='', group_id='1', user_id=user_id_val, card=0)
-                        success_count += 1
-                        self.log(f"[{idx}/{total_users}] [OK] রোল/আইডি: {user_id_val:<6} | নাম: {clean_name}")
+                        # Case A: Already exists with matching user_id
+                        matched_user = existing_by_user_id.get(user_id_val)
+                        if matched_user is not None:
+                            existing_uid = int(matched_user.uid)
+                            existing_name = clean_student_name(getattr(matched_user, 'name', ''))
+                            if existing_name == clean_name:
+                                skipped_count += 1
+                            else:
+                                conn.set_user(
+                                    uid=existing_uid,
+                                    name=clean_name,
+                                    privilege=0,
+                                    password=str(getattr(matched_user, 'password', '') or ''),
+                                    group_id='1',
+                                    user_id=user_id_val,
+                                    card=int(getattr(matched_user, 'card', 0) or 0)
+                                )
+                                rewritten_count += 1
+                                self.log(f"[{idx}/{total_users}] [REWRITE] স্লট: {existing_uid} | আইডি: {user_id_val:<6} | নাম: {clean_name}")
+                        else:
+                            # Case B: Old 1, 2, 3 serial rewrite by normalized name or unclaimed slot uid
+                            rewrite_user = None
+                            for cand in existing_by_name.get(clean_name, []):
+                                cand_uid = int(cand.uid)
+                                cand_uid_str = normalize_bio_id_py(getattr(cand, 'user_id', ''))
+                                if cand_uid not in claimed_uids and cand_uid_str != user_id_val:
+                                    rewrite_user = cand
+                                    break
+
+                            if rewrite_user is None and expected_slot_uid in existing_by_uid:
+                                slot_cand = existing_by_uid[expected_slot_uid]
+                                slot_uid = int(slot_cand.uid)
+                                slot_user_id = normalize_bio_id_py(getattr(slot_cand, 'user_id', ''))
+                                slot_name = clean_student_name(getattr(slot_cand, 'name', ''))
+                                if slot_uid not in claimed_uids and slot_user_id != user_id_val and (slot_user_id == str(slot_uid) or slot_name == clean_name):
+                                    rewrite_user = slot_cand
+
+                            if rewrite_user is not None:
+                                existing_uid = int(rewrite_user.uid)
+                                claimed_uids.add(existing_uid)
+                                old_id = normalize_bio_id_py(getattr(rewrite_user, 'user_id', ''))
+                                conn.set_user(
+                                    uid=existing_uid,
+                                    name=clean_name,
+                                    privilege=0,
+                                    password=str(getattr(rewrite_user, 'password', '') or ''),
+                                    group_id='1',
+                                    user_id=user_id_val,
+                                    card=int(getattr(rewrite_user, 'card', 0) or 0)
+                                )
+                                rewritten_count += 1
+                                self.log(f"[{idx}/{total_users}] [REWRITE] স্লট: {existing_uid} | {old_id} -> {user_id_val} | নাম: {clean_name}")
+                            else:
+                                # Case C: Newly added student/teacher -> next unused uid
+                                max_existing_uid += 1
+                                while max_existing_uid in used_uids:
+                                    max_existing_uid += 1
+                                new_uid = max_existing_uid
+                                used_uids.add(new_uid)
+                                claimed_uids.add(new_uid)
+                                conn.set_user(
+                                    uid=new_uid,
+                                    name=clean_name,
+                                    privilege=0,
+                                    password='',
+                                    group_id='1',
+                                    user_id=user_id_val,
+                                    card=0
+                                )
+                                new_uploaded_count += 1
+                                self.log(f"[{idx}/{total_users}] [NEW] স্লট: {new_uid} | আইডি: {user_id_val:<6} | নাম: {clean_name}")
                     except Exception as u_err:
+                        fail_count += 1
                         self.log(f"[{idx}/{total_users}] [ত্রুটি] আইডি: {user_id_val} -> {u_err}")
 
                     pct = int(20 + ((idx / total_users) * 75))
                     self.progress["value"] = pct
-                    self.lbl_counter.config(text=f"আপলোড হচ্ছে: {idx}/{total_users}")
-                    self.lbl_sub_progress.config(text=f"রোল: {user_id_val} - {clean_name} ({pct}%)")
+                    self.lbl_counter.config(text=f"প্রসেস হচ্ছে: {idx}/{total_users}")
+                    self.lbl_sub_progress.config(text=f"আইডি: {user_id_val} - {clean_name} ({pct}%)")
 
                 try:
                     conn.set_time(datetime.now())
@@ -1654,14 +2020,15 @@ class DeenoraBiometricApp(tk.Tk):
 
                 conn.disconnect()
 
+                summary_text = f"নতুন আপলোড: {new_uploaded_count} | আইডি আপডেট (Rewrite): {rewritten_count} | আগে থেকেই ছিল (Skipped): {skipped_count}"
                 self.progress["value"] = 100
-                self.lbl_task_title.config(text="🎉 শিক্ষার্থী আপলোড সফল ও সম্পন্ন!", fg="#34D399")
-                self.lbl_counter.config(text=f"সফল: {success_count}/{total_users}")
-                self.lbl_sub_progress.config(text=f"🎉 সফল! সর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।")
-                self.log(f"🎉 সফল! সর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।")
+                self.lbl_task_title.config(text="🎉 স্মার্ট শিক্ষার্থী সিঙ্ক সফল ও সম্পন্ন!", fg="#34D399")
+                self.lbl_counter.config(text=f"নতুন: {new_uploaded_count} | আপডেট: {rewritten_count} | স্কিপ: {skipped_count}")
+                self.lbl_sub_progress.config(text=summary_text)
+                self.log(f"🎉 {summary_text}")
 
                 try:
-                    messagebox.showinfo("সফল আপলোড", f"🎉 সফল!\\n\\nসর্বমোট {success_count} জন শিক্ষার্থীর তথ্য ZKTeco মেশিনে স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে।\\nএখন লাইভ হাজিরা সিঙ্ক স্বয়ংক্রিয়ভাবে চালু হচ্ছে...")
+                    messagebox.showinfo("সফল আপলোড", f"🎉 সফল!\\n\\n{summary_text}\\n\\nএখন লাইভ হাজিরা সিঙ্ক স্বয়ংক্রিয়ভাবে চালু হচ্ছে...")
                 except Exception:
                     pass
 

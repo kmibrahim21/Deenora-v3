@@ -305,7 +305,22 @@ async function readRawRequestBody(req: any): Promise<string> {
   }
 }
 
+const BN_DIGIT_MAP: Record<string, string> = {
+  '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+  '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
+};
+
+function normalizeBioId(val: any): string {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/[০-৯]/g, (d) => BN_DIGIT_MAP[d] ?? d)
+    .trim();
+}
+
 function matchTeacherByPin(teachers: any[], userId: string, numUserId: number): any | undefined {
+  const normUserId = normalizeBioId(userId);
+  const normNumUserId = !isNaN(numUserId) ? numUserId : Number(normUserId);
+
   return teachers.find((t: any) => {
     if (t.is_active === false) return false;
     let perms: any = {};
@@ -314,47 +329,53 @@ function matchTeacherByPin(teachers: any[], userId: string, numUserId: number): 
     } catch {
       perms = {};
     }
-    const bioId = (perms.biometric_id || t.biometric_id || '').toString().trim();
-    const teachId = (perms.teacher_id_number || t.teacher_id_number || '').toString().trim();
-    const mobile = (t.mobile || '').toString().trim();
+    const bioId = normalizeBioId(perms.biometric_id || t.biometric_id);
+    const teachId = normalizeBioId(perms.teacher_id_number || t.teacher_id_number);
+    const mobile = normalizeBioId(t.mobile);
     const tId = (t.id || '').toString().trim();
 
-    if (bioId && bioId.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === numUserId) return true;
-    if (teachId && teachId.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === numUserId) return true;
-    if (mobile && (mobile === userId || (userId.length >= 6 && mobile.endsWith(userId)))) return true;
-    if (userId.length >= 8 && tId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+    if (bioId && bioId.toLowerCase() === normUserId.toLowerCase()) return true;
+    if (normUserId && !isNaN(normNumUserId) && bioId && !isNaN(Number(bioId)) && Number(bioId) === normNumUserId) return true;
+    if (teachId && teachId.toLowerCase() === normUserId.toLowerCase()) return true;
+    if (normUserId && !isNaN(normNumUserId) && teachId && !isNaN(Number(teachId)) && Number(teachId) === normNumUserId) return true;
+    if (mobile && (mobile === normUserId || (normUserId.length >= 6 && mobile.endsWith(normUserId)))) return true;
+    if (normUserId.length >= 8 && tId.toLowerCase().startsWith(normUserId.toLowerCase())) return true;
     return false;
   });
 }
 
 function matchStudentByExplicitBioId(students: any[], userId: string, numUserId: number): any | undefined {
-  return students.find((s: any) => {
-    const bId = (s.biometric_id || '').toString().trim();
-    const regNo = (s.registration_number || '').toString().trim();
+  const normUserId = normalizeBioId(userId);
+  const normNumUserId = !isNaN(numUserId) ? numUserId : Number(normUserId);
 
-    if (bId && bId.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && bId && !isNaN(Number(bId)) && Number(bId) === numUserId) return true;
-    if (regNo && regNo.toLowerCase() === userId.toLowerCase()) return true;
-    if (!isNaN(numUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === numUserId) return true;
+  return students.find((s: any) => {
+    const bId = normalizeBioId(s.biometric_id);
+    const regNo = normalizeBioId(s.registration_number);
+
+    if (bId && bId.toLowerCase() === normUserId.toLowerCase()) return true;
+    if (normUserId && !isNaN(normNumUserId) && bId && !isNaN(Number(bId)) && Number(bId) === normNumUserId) return true;
+    if (regNo && regNo.toLowerCase() === normUserId.toLowerCase()) return true;
+    if (normUserId && !isNaN(normNumUserId) && regNo && !isNaN(Number(regNo)) && Number(regNo) === normNumUserId) return true;
     if (s.notes) {
-      const notesStr = typeof s.notes === 'string' ? s.notes : JSON.stringify(s.notes);
-      if (notesStr.includes(`"biometric_id":"${userId}"`) || notesStr.includes(`biometric_id:${userId}`)) return true;
-      if (!isNaN(numUserId) && (notesStr.includes(`"biometric_id":${numUserId}`) || notesStr.includes(`"biometric_id":"${numUserId}"`))) return true;
+      const notesStr = normalizeBioId(typeof s.notes === 'string' ? s.notes : JSON.stringify(s.notes));
+      if (notesStr.includes(`"biometric_id":"${normUserId}"`) || notesStr.includes(`biometric_id:${normUserId}`)) return true;
+      if (normUserId && !isNaN(normNumUserId) && (notesStr.includes(`"biometric_id":${normNumUserId}`) || notesStr.includes(`"biometric_id":"${normNumUserId}"`))) return true;
     }
     return false;
   });
 }
 
 function matchStudentByRollFallback(students: any[], userId: string, numUserId: number): any | undefined {
+  const normUserId = normalizeBioId(userId);
+  const normNumUserId = !isNaN(numUserId) ? numUserId : Number(normUserId);
+
   return students.find((s: any) => {
-    const rollNo = (s.roll !== null && s.roll !== undefined) ? s.roll.toString().trim() : '';
+    const rollNo = (s.roll !== null && s.roll !== undefined) ? normalizeBioId(s.roll) : '';
     const sId = (s.id || '').toString().trim();
 
-    if (rollNo && rollNo === userId) return true;
-    if (!isNaN(numUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === numUserId) return true;
-    if (userId.length >= 8 && sId.toLowerCase().startsWith(userId.toLowerCase())) return true;
+    if (rollNo && rollNo === normUserId) return true;
+    if (normUserId && !isNaN(normNumUserId) && rollNo && !isNaN(Number(rollNo)) && Number(rollNo) === normNumUserId) return true;
+    if (normUserId.length >= 8 && sId.toLowerCase().startsWith(normUserId.toLowerCase())) return true;
     return false;
   });
 }
@@ -362,7 +383,7 @@ function matchStudentByRollFallback(students: any[], userId: string, numUserId: 
 async function processPunch(institutionId: string, pin: string, timestampStr: string): Promise<boolean> {
   if (!institutionId || !pin || !timestampStr) return false;
 
-  const userId = String(pin).trim();
+  const userId = normalizeBioId(pin);
   let normTime = String(timestampStr).trim();
 
   // Convert 14-digit YYYYMMDDHHmmss to YYYY-MM-DD HH:mm:ss
@@ -476,8 +497,8 @@ async function processPunch(institutionId: string, pin: string, timestampStr: st
 
   // 2. Process Teacher Match
   if (teacher) {
-    const teacherStartTimeStr = settings.start_time || '08:00';
-    const teacherGraceMinutes = Number(settings.late_grace_minutes ?? 10);
+    const teacherStartTimeStr = settings.teacher_start_time || settings.start_time || '08:00';
+    const teacherGraceMinutes = Number(settings.teacher_late_grace_minutes ?? settings.late_grace_minutes ?? 10);
     let punchStatus: 'present' | 'late' = 'present';
     let lateMinutes = 0;
 
@@ -1236,7 +1257,8 @@ export default async function handler(req: any, res: any) {
       const shouldSendSms = instConfig.student_attendance_sms === true || instConfig.modules?.student_attendance_sms === true;
 
       for (const punch of parsedPunches) {
-        const { userId, date, time } = punch;
+        const userId = normalizeBioId(punch.userId);
+        const { date, time } = punch;
         const numUserId = Number(userId);
 
         // 1. Check Teacher explicit biometric_id / teacher_id_number / mobile AND Student explicit biometric_id / registration_number
@@ -1325,8 +1347,8 @@ export default async function handler(req: any, res: any) {
           if (processedKeys.has(punchKey)) continue;
           processedKeys.add(punchKey);
 
-          const teacherStartTimeStr = settings.start_time || '08:00';
-          const teacherGraceMinutes = Number(settings.late_grace_minutes ?? 10);
+          const teacherStartTimeStr = settings.teacher_start_time || settings.start_time || '08:00';
+          const teacherGraceMinutes = Number(settings.teacher_late_grace_minutes ?? settings.late_grace_minutes ?? 10);
           let punchStatus: 'present' | 'late' = 'present';
           let lateMinutes = 0;
 

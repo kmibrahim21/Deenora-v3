@@ -87,6 +87,9 @@ export interface Institution {
       half_day_time?: string;
       full_day_time?: string;
       late_grace_minutes?: number;
+      teacher_start_time?: string;
+      teacher_end_time?: string;
+      teacher_late_grace_minutes?: number;
       sessions?: { id: string; name: string }[];
       class_sessions?: Record<string, { id: string; name: string }[]>;
       class_times?: Record<string, { start_time?: string; end_time?: string; half_day_time?: string; full_day_time?: string; late_grace_minutes?: number }>;

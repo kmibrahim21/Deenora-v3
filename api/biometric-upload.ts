@@ -131,6 +131,43 @@ export function banglaToEnglishName(name?: string | null): string {
   return (finalName || 'STUDENT').slice(0, 24);
 }
 
+const BN_DIGIT_MAP: Record<string, string> = {
+  '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+  '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
+};
+
+export function normalizeBioId(val: any): string {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/[০-৯]/g, (d) => BN_DIGIT_MAP[d] ?? d)
+    .trim();
+}
+
+function parseNotesExtra(notes: any): Record<string, any> | null {
+  if (!notes) return null;
+  if (typeof notes === 'object') return notes as Record<string, any>;
+  const str = String(notes).trim();
+  if (!str) return null;
+  if (str.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+  const admMatch = str.match(/\[ADM_EXTRA:(\{[\s\S]*?\})\]/);
+  if (admMatch && admMatch[1]) {
+    try {
+      const parsed = JSON.parse(admMatch[1]);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+  const bioMatch = str.match(/"biometric_id"\s*:\s*"?([^",}\]]+)"?/i) || str.match(/biometric_id\s*:\s*([^\s,}\]]+)/i);
+  if (bioMatch && bioMatch[1]) {
+    return { biometric_id: bioMatch[1] };
+  }
+  return null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -141,8 +178,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { query } = req;
     const institutionId = (query.institution_id || query.inst || '').toString().trim();
-    const ip = (query.ip || '192.168.1.201').toString().trim();
-    const port = (query.port || '4370').toString().trim();
+    const rawIp = (query.ip || '192.168.1.201').toString().trim();
+    const ip = /^[A-Za-z0-9.:-]+$/.test(rawIp) ? rawIp : '192.168.1.201';
+    const parsedPort = parseInt((query.port || '4370').toString().trim(), 10);
+    const port = !isNaN(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? String(parsedPort) : '4370';
     const format = (query.format || 'bat').toString().toLowerCase();
 
     if (!institutionId) {
@@ -156,44 +195,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Supabase configuration missing' });
     }
 
-    // Fetch active students
+    // Fetch active students sorted deterministically by created_at, id so existing slots never shift
     const studentRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/students?select=id,student_name,name_en,roll,biometric_id,registration_number,is_active&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&order=roll.asc&limit=3000`,
+      `${SUPABASE_URL}/rest/v1/students?select=id,student_name,name_en,roll,biometric_id,registration_number,is_active,notes,created_at&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&order=created_at.asc,id.asc&limit=3000`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     const students = studentRes.ok ? await studentRes.json() : [];
 
-    // Fetch active teachers
+    // Fetch active teachers sorted deterministically by created_at, id
     const teacherRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/teachers?select=id,teacher_name,permissions,mobile,is_active&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&limit=200`,
+      `${SUPABASE_URL}/rest/v1/teachers?select=id,teacher_name,permissions,mobile,is_active,created_at&institution_id=eq.${encodeURIComponent(institutionId)}&is_active=eq.true&order=created_at.asc,id.asc&limit=200`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     const teachers = teacherRes.ok ? await teacherRes.json() : [];
 
-    // Process Users for ZKTeco K40 (uid, user_id, name)
+    // Process Users for ZKTeco K40 (16-bit safe sequential uid, actual biometric ID in user_id)
     const userList: Array<{ uid: number; user_id: string; name: string; role: string }> = [];
     const usedUids = new Set<number>();
 
     let currentUid = 1;
-    const allocateUid = (preferred?: number): number => {
-      if (preferred && preferred > 0 && !usedUids.has(preferred)) {
-        usedUids.add(preferred);
-        return preferred;
-      }
-      while (usedUids.has(currentUid)) {
+    const allocateUid = (): number => {
+      while (usedUids.has(currentUid) && currentUid < 65000) {
         currentUid++;
       }
       usedUids.add(currentUid);
       return currentUid;
     };
 
-    // 1. Map Students
-    (students || []).forEach((s: any) => {
-      const bioId = (s.biometric_id || s.roll || s.registration_number || '').toString().trim();
+    const sortedStudents = Array.isArray(students)
+      ? [...students].sort((a: any, b: any) => {
+          const ca = String(a?.created_at || '');
+          const cb = String(b?.created_at || '');
+          if (ca !== cb) return ca.localeCompare(cb);
+          return String(a?.id || '').localeCompare(String(b?.id || ''));
+        })
+      : [];
+
+    // 1. Map Students (exact priority: biometric_id -> notes.biometric_id -> registration_number -> roll)
+    sortedStudents.forEach((st: any) => {
+      if (st.is_active === false) return;
+      const parsedNotes = parseNotesExtra(st.notes);
+      const bioId =
+        normalizeBioId(st.biometric_id) ||
+        normalizeBioId(parsedNotes?.biometric_id) ||
+        normalizeBioId(st.registration_number) ||
+        normalizeBioId(st.roll);
       if (!bioId) return;
-      const numBioId = parseInt(bioId, 10);
-      const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
-      const rawName = s.name_en || s.student_name;
+      const uid = allocateUid();
+      const rawName = st.name_en || st.student_name;
       const cleanName = banglaToEnglishName(rawName);
       userList.push({
         uid,
@@ -203,16 +252,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     });
 
+    const sortedTeachers = Array.isArray(teachers)
+      ? [...teachers].sort((a: any, b: any) => {
+          const ca = String(a?.created_at || '');
+          const cb = String(b?.created_at || '');
+          if (ca !== cb) return ca.localeCompare(cb);
+          return String(a?.id || '').localeCompare(String(b?.id || ''));
+        })
+      : [];
+
     // 2. Map Teachers
-    (teachers || []).forEach((t: any) => {
-      const perms = t.permissions || {};
-      const bioId = (perms.biometric_id || t.biometric_id || perms.teacher_id_number || '').toString().trim();
-      const numBioId = parseInt(bioId, 10);
-      const uid = allocateUid(!isNaN(numBioId) && numBioId > 0 ? numBioId : undefined);
+    sortedTeachers.forEach((t: any) => {
+      if (t.is_active === false) return;
+      let perms: any = {};
+      try {
+        perms = (typeof t.permissions === 'string' ? JSON.parse(t.permissions) : t.permissions) || {};
+      } catch {
+        perms = {};
+      }
+      const bioId =
+        normalizeBioId(perms.biometric_id) ||
+        normalizeBioId(t.biometric_id) ||
+        normalizeBioId(perms.teacher_id_number);
+      if (!bioId) return;
+      const uid = allocateUid();
       const cleanName = banglaToEnglishName(t.teacher_name || t.name);
       userList.push({
         uid,
-        user_id: bioId || String(uid),
+        user_id: bioId,
         name: cleanName,
         role: 'teacher'
       });
@@ -222,18 +289,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, count: userList.length, users: userList });
     }
 
-    // Python script to upload users into K40
-    const pyScript = `import sys
+    // Python script to upload users into K40 with smart incremental sync & old serial rewrite
+    const pyScript = `# -*- coding: utf-8 -*-
+import sys
+import re
 import time
 import json
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
 MACHINE_IP = sys.argv[1].strip() if len(sys.argv) > 1 and sys.argv[1].strip() else '${ip}'
 MACHINE_PORT = int(sys.argv[2].strip()) if len(sys.argv) > 2 and sys.argv[2].strip() else ${port}
 
 USERS = ${JSON.stringify(userList)}
 
+BN_DIGIT_TRANS = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+
+def normalize_bio_id(val):
+    if val is None:
+        return ''
+    return str(val).translate(BN_DIGIT_TRANS).strip()
+
+def normalize_name_key(name):
+    s = str(name or 'STUDENT').translate(BN_DIGIT_TRANS)
+    s = re.sub(r'[^A-Za-z0-9\\s._-]', '', s)
+    s = re.sub(r'\\s+', ' ', s).strip().upper()
+    return (s or 'STUDENT')[:24]
+
 print("=" * 64)
-print("DEENORA ZKTECO K40 STUDENT DATA UPLOADER")
+print("DEENORA ZKTECO K40 SMART INCREMENTAL STUDENT UPLOADER")
 print(f"Target Machine IP : {MACHINE_IP}:{MACHINE_PORT}")
 print(f"Total Users Found : {len(USERS)} (Students & Teachers)")
 print("=" * 64)
@@ -274,30 +361,136 @@ if not conn:
     sys.exit(1)
 
 try:
-    print(f"\\n[+] Uploading {len(USERS)} users into K40 memory...")
-    success_count = 0
+    print("\\n[+] Reading existing users from ZKTeco machine...")
+    try:
+        existing_users = conn.get_users() or []
+    except Exception as read_err:
+        print(f"[!] Could not read existing users ({read_err}), continuing with fresh upload...")
+        existing_users = []
+
+    print(f"[OK] Found {len(existing_users)} existing users on machine.")
+
+    existing_by_user_id = {}
+    existing_by_uid = {}
+    existing_by_name = {}
+    used_uids = set()
+    max_existing_uid = 0
+
+    for eu in existing_users:
+        eu_uid = int(getattr(eu, 'uid', 0) or 0)
+        eu_user_id = normalize_bio_id(getattr(eu, 'user_id', ''))
+        eu_name = normalize_name_key(getattr(eu, 'name', ''))
+        if eu_uid > 0:
+            used_uids.add(eu_uid)
+            existing_by_uid[eu_uid] = eu
+            if eu_uid > max_existing_uid:
+                max_existing_uid = eu_uid
+        if eu_user_id:
+            existing_by_user_id[eu_user_id] = eu
+        if eu_name:
+            existing_by_name.setdefault(eu_name, []).append(eu)
+
+    claimed_uids = set()
+    for u in USERS:
+        uid_str = normalize_bio_id(u.get('user_id', ''))
+        if uid_str and uid_str in existing_by_user_id:
+            claimed_uids.add(int(existing_by_user_id[uid_str].uid))
+
+    new_uploaded_count = 0
+    rewritten_count = 0
+    skipped_count = 0
     fail_count = 0
 
     for idx, u in enumerate(USERS, 1):
+        clean_name = normalize_name_key(u.get('name', 'STUDENT'))
+        user_id_val = normalize_bio_id(u.get('user_id', ''))
+        expected_slot_uid = int(u.get('uid', idx) or idx)
+        if not user_id_val:
+            user_id_val = str(expected_slot_uid)
+
         try:
-            # set_user(uid, name, privilege, password, group_id, user_id, card)
+            # Case A: Already exists with matching user_id
+            matched_user = existing_by_user_id.get(user_id_val)
+            if matched_user is not None:
+                existing_uid = int(matched_user.uid)
+                existing_name = normalize_name_key(getattr(matched_user, 'name', ''))
+                if existing_name == clean_name:
+                    skipped_count += 1
+                    print(f"  [{idx}/{len(USERS)}] [SKIP] Slot: {existing_uid:<4} | ID: {user_id_val:<8} | {clean_name}")
+                    continue
+                conn.set_user(
+                    uid=existing_uid,
+                    name=clean_name,
+                    privilege=0,
+                    password=str(getattr(matched_user, 'password', '') or ''),
+                    group_id='1',
+                    user_id=user_id_val,
+                    card=int(getattr(matched_user, 'card', 0) or 0)
+                )
+                rewritten_count += 1
+                print(f"  [{idx}/{len(USERS)}] [REWRITE] Slot: {existing_uid:<4} | ID: {user_id_val:<8} | {clean_name}")
+                continue
+
+            # Case B: Old 1, 2, 3 serial rewrite by normalized name or unclaimed slot uid
+            rewrite_user = None
+            for cand in existing_by_name.get(clean_name, []):
+                cand_uid = int(cand.uid)
+                cand_uid_str = normalize_bio_id(getattr(cand, 'user_id', ''))
+                if cand_uid not in claimed_uids and cand_uid_str != user_id_val:
+                    rewrite_user = cand
+                    break
+
+            if rewrite_user is None and expected_slot_uid in existing_by_uid:
+                slot_cand = existing_by_uid[expected_slot_uid]
+                slot_uid = int(slot_cand.uid)
+                slot_user_id = normalize_bio_id(getattr(slot_cand, 'user_id', ''))
+                slot_name = normalize_name_key(getattr(slot_cand, 'name', ''))
+                if slot_uid not in claimed_uids and slot_user_id != user_id_val and (slot_user_id == str(slot_uid) or slot_name == clean_name):
+                    rewrite_user = slot_cand
+
+            if rewrite_user is not None:
+                existing_uid = int(rewrite_user.uid)
+                claimed_uids.add(existing_uid)
+                old_id = normalize_bio_id(getattr(rewrite_user, 'user_id', ''))
+                conn.set_user(
+                    uid=existing_uid,
+                    name=clean_name,
+                    privilege=0,
+                    password=str(getattr(rewrite_user, 'password', '') or ''),
+                    group_id='1',
+                    user_id=user_id_val,
+                    card=int(getattr(rewrite_user, 'card', 0) or 0)
+                )
+                rewritten_count += 1
+                print(f"  [{idx}/{len(USERS)}] [REWRITE] Slot: {existing_uid:<4} | {old_id} -> {user_id_val:<8} | {clean_name}")
+                continue
+
+            # Case C: Newly added student/teacher -> allocate next unused uid
+            max_existing_uid += 1
+            while max_existing_uid in used_uids:
+                max_existing_uid += 1
+            new_uid = max_existing_uid
+            used_uids.add(new_uid)
+            claimed_uids.add(new_uid)
             conn.set_user(
-                uid=int(u['uid']),
-                name=str(u['name'])[:24],
+                uid=new_uid,
+                name=clean_name,
                 privilege=0,
                 password='',
-                group_id='',
-                user_id=str(u['user_id']),
+                group_id='1',
+                user_id=user_id_val,
                 card=0
             )
-            success_count += 1
-            print(f"  [{idx}/{len(USERS)}] [OK] ID: {u['user_id']:<6} | {u['name']}")
+            new_uploaded_count += 1
+            print(f"  [{idx}/{len(USERS)}] [NEW] Slot: {new_uid:<4} | ID: {user_id_val:<8} | {clean_name}")
         except Exception as u_err:
             fail_count += 1
-            print(f"  [{idx}/{len(USERS)}] [FAIL] ID: {u['user_id']} ({u['name']}) -> {u_err}")
+            print(f"  [{idx}/{len(USERS)}] [FAIL] ID: {user_id_val} ({clean_name}) -> {u_err}")
 
     print("\\n" + "=" * 64)
-    print(f"[COMPLETED] Successfully uploaded: {success_count} | Failed: {fail_count}")
+    print(f"নতুন আপলোড: {new_uploaded_count} | আইডি আপডেট (Rewrite): {rewritten_count} | আগে থেকেই ছিল (Skipped): {skipped_count}")
+    if fail_count > 0:
+        print(f"[!] ব্যর্থ (Failed): {fail_count}")
     print("Students can now register their fingerprints directly on the K40 machine!")
     print("=" * 64)
 except Exception as e:

@@ -267,10 +267,75 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const [teacherAttendance, setTeacherAttendance] = useState<Record<string, any>>({});
   const [teacherArrivalTime, setTeacherArrivalTime] = useState<Record<string, string>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
+
+  // Dedicated Teacher Attendance Time & Late Grace Settings
+  const initialAttSettings = madrasah?.config_json?.attendance_settings || {};
+  const [teacherStartTime, setTeacherStartTime] = useState<string>(
+    initialAttSettings.teacher_start_time || initialAttSettings.start_time || '08:00'
+  );
+  const [teacherEndTime, setTeacherEndTime] = useState<string>(
+    initialAttSettings.teacher_end_time || initialAttSettings.end_time || '14:00'
+  );
+  const [teacherLateGraceMinutes, setTeacherLateGraceMinutes] = useState<number>(
+    Number(initialAttSettings.teacher_late_grace_minutes ?? initialAttSettings.late_grace_minutes ?? 10)
+  );
+  const [showAttendanceSettingsModal, setShowAttendanceSettingsModal] = useState(false);
+  const [draftTeacherStartTime, setDraftTeacherStartTime] = useState<string>(
+    initialAttSettings.teacher_start_time || initialAttSettings.start_time || '08:00'
+  );
+  const [draftTeacherEndTime, setDraftTeacherEndTime] = useState<string>(
+    initialAttSettings.teacher_end_time || initialAttSettings.end_time || '14:00'
+  );
+  const [draftTeacherLateGrace, setDraftTeacherLateGrace] = useState<string>(
+    String(Number(initialAttSettings.teacher_late_grace_minutes ?? initialAttSettings.late_grace_minutes ?? 10))
+  );
+  const [savingAttendanceSettings, setSavingAttendanceSettings] = useState(false);
+  const [attendanceSettingsError, setAttendanceSettingsError] = useState<string | null>(null);
+  const [attendanceSettingsToast, setAttendanceSettingsToast] = useState<string | null>(null);
+
   const [paidSalaries, setPaidSalaries] = useState<Record<string, number>>({});
   const [paymentHistory, setPaymentHistory] = useState<Record<string, any[]>>({});
   const [payingId, setPayingId] = useState<string | null>(null);
   const [paymentModal, setPaymentModal] = useState<{show: boolean, teacher: Teacher | null, amount: string}>({show: false, teacher: null, amount: ""});
+
+  useEffect(() => {
+    const settings = madrasah?.config_json?.attendance_settings || {};
+    setTeacherStartTime(settings.teacher_start_time || settings.start_time || '08:00');
+    setTeacherEndTime(settings.teacher_end_time || settings.end_time || '14:00');
+    setTeacherLateGraceMinutes(Number(settings.teacher_late_grace_minutes ?? settings.late_grace_minutes ?? 10));
+  }, [
+    madrasah?.id,
+    madrasah?.config_json?.attendance_settings?.teacher_start_time,
+    madrasah?.config_json?.attendance_settings?.teacher_end_time,
+    madrasah?.config_json?.attendance_settings?.teacher_late_grace_minutes,
+    madrasah?.config_json?.attendance_settings?.start_time,
+    madrasah?.config_json?.attendance_settings?.end_time,
+    madrasah?.config_json?.attendance_settings?.late_grace_minutes,
+  ]);
+
+  useEffect(() => {
+    if (!madrasah?.id) return;
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('institutions')
+          .select('config_json')
+          .eq('id', madrasah.id)
+          .single();
+        if (!active || !data?.config_json?.attendance_settings) return;
+        const s = data.config_json.attendance_settings;
+        setTeacherStartTime(s.teacher_start_time || s.start_time || '08:00');
+        setTeacherEndTime(s.teacher_end_time || s.end_time || '14:00');
+        setTeacherLateGraceMinutes(Number(s.teacher_late_grace_minutes ?? s.late_grace_minutes ?? 10));
+      } catch {
+        // fallback to prop settings
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [madrasah?.id]);
 
   useEffect(() => {
     fetchTeachers();
@@ -435,13 +500,210 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  const computeLateMins = (arrTime: string | null | undefined) => {
-    const sTime = madrasah?.config_json?.attendance_settings?.start_time || '08:00';
+  const computeLateDiff = (arrTime: string | null | undefined, startTimeOverride?: string) => {
+    const sTime = startTimeOverride || teacherStartTime || '08:00';
     if (!arrTime || !sTime) return 0;
     const [sh, sm] = sTime.split(':').map(Number);
     const [lh, lm] = arrTime.split(':').map(Number);
-    const mins = (lh * 60 + lm) - (sh * 60 + sm);
-    return mins > 0 ? mins : 0;
+    if ([sh, sm, lh, lm].some((n) => Number.isNaN(n))) return 0;
+    return (lh * 60 + lm) - (sh * 60 + sm);
+  };
+
+  const computeLateMins = (
+    arrTime: string | null | undefined,
+    startTimeOverride?: string,
+    graceOverride?: number
+  ) => {
+    const diff = computeLateDiff(arrTime, startTimeOverride);
+    const grace = graceOverride ?? teacherLateGraceMinutes;
+    return diff > grace ? diff : 0;
+  };
+
+  const handleTeacherArrivalTimeChange = (teacherId: string, newArrTime: string) => {
+    setTeacherArrivalTime((prev) => ({ ...prev, [teacherId]: newArrTime }));
+    if (!newArrTime) return;
+    const diff = computeLateDiff(newArrTime);
+    if (diff > teacherLateGraceMinutes) {
+      setTeacherAttendance((prev) => ({
+        ...prev,
+        [teacherId]: {
+          status: 'late',
+          arrival_time: newArrTime,
+          late_minutes: diff,
+        },
+      }));
+    } else {
+      setTeacherAttendance((prev) => ({
+        ...prev,
+        [teacherId]: {
+          status: 'present',
+          arrival_time: newArrTime,
+          late_minutes: 0,
+        },
+      }));
+    }
+  };
+
+  const openAttendanceSettingsModal = () => {
+    setDraftTeacherStartTime(teacherStartTime);
+    setDraftTeacherEndTime(teacherEndTime);
+    setDraftTeacherLateGrace(String(teacherLateGraceMinutes));
+    setAttendanceSettingsError(null);
+    setShowAttendanceSettingsModal(true);
+  };
+
+  const handleSaveTeacherAttendanceSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!madrasah?.id) return;
+
+    const cleanStartTime = (draftTeacherStartTime || '').trim();
+    const cleanEndTime = (draftTeacherEndTime || '').trim();
+    const parsedGrace = Number(draftTeacherLateGrace);
+
+    if (!/^\d{2}:\d{2}$/.test(cleanStartTime)) {
+      setAttendanceSettingsError(
+        lang === 'bn' ? 'সঠিক শুরুর সময় নির্বাচন করুন।' : 'Please enter a valid start time.'
+      );
+      return;
+    }
+    if (!/^\d{2}:\d{2}$/.test(cleanEndTime)) {
+      setAttendanceSettingsError(
+        lang === 'bn' ? 'সঠিক ছুটির সময় নির্বাচন করুন।' : 'Please enter a valid end time.'
+      );
+      return;
+    }
+    if (Number.isNaN(parsedGrace) || parsedGrace < 0 || parsedGrace > 180) {
+      setAttendanceSettingsError(
+        lang === 'bn'
+          ? 'লেট গ্রেস সময় ০ থেকে ১৮০ মিনিটের মধ্যে হতে হবে।'
+          : 'Late grace minutes must be between 0 and 180.'
+      );
+      return;
+    }
+
+    const cleanGraceMinutes = Math.floor(parsedGrace);
+    setSavingAttendanceSettings(true);
+    setAttendanceSettingsError(null);
+
+    try {
+      const { data: instRow, error: fetchErr } = await supabase
+        .from('institutions')
+        .select('config_json')
+        .eq('id', madrasah.id)
+        .single();
+
+      if (fetchErr) throw fetchErr;
+
+      const existingConfig =
+        instRow?.config_json && typeof instRow.config_json === 'object'
+          ? { ...instRow.config_json }
+          : { ...(madrasah.config_json || {}) };
+
+      const existingAttSettings =
+        existingConfig.attendance_settings && typeof existingConfig.attendance_settings === 'object'
+          ? existingConfig.attendance_settings
+          : {};
+
+      const updatedAttendanceSettings = {
+        ...existingAttSettings,
+        teacher_start_time: cleanStartTime,
+        teacher_end_time: cleanEndTime,
+        teacher_late_grace_minutes: cleanGraceMinutes,
+      };
+
+      // Recalculate any teacher entries with arrival_time on attendanceDate
+      const recalcEntry = (rawVal: any, fallbackArrTime?: string) => {
+        const status = typeof rawVal === 'string' ? rawVal : rawVal?.status;
+        const arrTime = fallbackArrTime || (typeof rawVal === 'object' && rawVal !== null ? rawVal.arrival_time : '');
+        if (!arrTime || (status !== 'late' && status !== 'present')) {
+          return rawVal;
+        }
+        const diff = computeLateDiff(arrTime, cleanStartTime);
+        if (diff > cleanGraceMinutes) {
+          return {
+            status: 'late',
+            arrival_time: arrTime,
+            late_minutes: diff,
+          };
+        }
+        return {
+          status: 'present',
+          arrival_time: arrTime,
+          late_minutes: 0,
+        };
+      };
+
+      const existingTeacherAttAll =
+        existingConfig.teacher_attendance && typeof existingConfig.teacher_attendance === 'object'
+          ? { ...existingConfig.teacher_attendance }
+          : null;
+
+      if (existingTeacherAttAll && existingTeacherAttAll[attendanceDate]) {
+        const dayRecord = { ...existingTeacherAttAll[attendanceDate] };
+        let dayChanged = false;
+        Object.keys(dayRecord).forEach((tid) => {
+          const prevVal = dayRecord[tid];
+          const nextVal = recalcEntry(prevVal, teacherArrivalTime[tid]);
+          if (JSON.stringify(prevVal) !== JSON.stringify(nextVal)) {
+            dayRecord[tid] = nextVal;
+            dayChanged = true;
+          }
+        });
+        if (dayChanged) {
+          existingTeacherAttAll[attendanceDate] = dayRecord;
+        }
+      }
+
+      const updatedConfig: Record<string, any> = {
+        ...existingConfig,
+        attendance_settings: updatedAttendanceSettings,
+        ...(existingTeacherAttAll ? { teacher_attendance: existingTeacherAttAll } : {}),
+      };
+
+      const { error: updateErr } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (updateErr) throw updateErr;
+
+      // Update local state immediately
+      setTeacherStartTime(cleanStartTime);
+      setTeacherEndTime(cleanEndTime);
+      setTeacherLateGraceMinutes(cleanGraceMinutes);
+
+      setTeacherAttendance((prev) => {
+        const next: Record<string, any> = { ...prev };
+        Object.keys(next).forEach((tid) => {
+          const arrTime = teacherArrivalTime[tid] || (typeof next[tid] === 'object' ? next[tid]?.arrival_time : '');
+          if (arrTime) {
+            next[tid] = recalcEntry(next[tid], arrTime);
+          }
+        });
+        return next;
+      });
+
+      if (attendanceSubTab === 'report') {
+        fetchAttendanceReport();
+      }
+
+      setShowAttendanceSettingsModal(false);
+      setAttendanceSettingsToast(
+        lang === 'bn'
+          ? 'শিক্ষক হাজিরা সময় ও লেট সেটিংস সংরক্ষণ করা হয়েছে'
+          : 'Teacher attendance settings saved successfully'
+      );
+      window.setTimeout(() => setAttendanceSettingsToast(null), 3500);
+    } catch (err: any) {
+      console.error('Error saving teacher attendance settings:', err);
+      setAttendanceSettingsError(
+        lang === 'bn'
+          ? 'সেটিংস সংরক্ষণ করতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।'
+          : 'Failed to save settings. Please try again.'
+      );
+    } finally {
+      setSavingAttendanceSettings(false);
+    }
   };
 
   const saveTeacherAttendance = async () => {
@@ -449,6 +711,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setSavingAttendance(true);
 
     const finalAttendance: Record<string, any> = {};
+    const recalculatedLocal: Record<string, any> = { ...teacherAttendance };
+
     sortedTeachers.forEach(t => {
       // Exclude teachers who have already left on or before attendanceDate
       if (t.leave_date && attendanceDate > t.leave_date) {
@@ -456,15 +720,31 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       }
       let val = teacherAttendance[t.id];
       if (!val) val = isHoliday ? 'holiday' : 'present';
-      
+
       const status = typeof val === 'string' ? val : val.status;
-      
-      if (status === 'late') {
-        const arrTime = teacherArrivalTime[t.id];
+      const arrTime = teacherArrivalTime[t.id] || (typeof val === 'object' && val !== null ? val.arrival_time : '');
+
+      if (arrTime && (status === 'late' || status === 'present')) {
+        const diff = computeLateDiff(arrTime);
+        if (diff > teacherLateGraceMinutes) {
+          finalAttendance[t.id] = {
+            status: 'late',
+            arrival_time: arrTime,
+            late_minutes: diff,
+          };
+        } else {
+          finalAttendance[t.id] = {
+            status: 'present',
+            arrival_time: arrTime,
+            late_minutes: 0,
+          };
+        }
+        recalculatedLocal[t.id] = finalAttendance[t.id];
+      } else if (status === 'late') {
         finalAttendance[t.id] = {
           status: 'late',
-          arrival_time: arrTime,
-          late_minutes: computeLateMins(arrTime)
+          arrival_time: arrTime || undefined,
+          late_minutes: computeLateMins(arrTime),
         };
       } else {
         finalAttendance[t.id] = status;
@@ -482,7 +762,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         })
       });
       if (!res.ok) throw new Error("Failed to save attendance");
-      alert(lang === 'bn' ? 'হাজিরা সফলভাবে সংরক্ষণ করা হয়েছে' : 'Attendance saved successfully');
+      setTeacherAttendance(recalculatedLocal);
+      setAttendanceSettingsToast(
+        lang === 'bn' ? 'হাজিরা সফলভাবে সংরক্ষণ করা হয়েছে' : 'Attendance saved successfully'
+      );
+      window.setTimeout(() => setAttendanceSettingsToast(null), 3500);
     } catch(err) {
       console.error(err);
       setError("Failed to save attendance");
@@ -1237,21 +1521,46 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </>
       ) : activeTab === 'attendance' ? (
         <div className="space-y-4 animate-in fade-in">
-          {/* Sub-Tabs Switcher */}
-          <div className={`flex p-0.5 rounded-xl border w-fit mx-auto ${isDark ? 'bg-slate-900 border-slate-800 shadow-xl shadow-black/20' : 'bg-slate-100 border-slate-200'}`}>
-            <button 
-              onClick={() => setAttendanceSubTab('take')}
-              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${attendanceSubTab === 'take' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-lg' : 'bg-white text-[#2563EB] shadow-md') : 'text-slate-400'}`}
+          {/* Sub-Tabs Switcher & Settings Button */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className={`flex p-0.5 rounded-xl border w-fit ${isDark ? 'bg-slate-900 border-slate-800 shadow-xl shadow-black/20' : 'bg-slate-100 border-slate-200'}`}>
+              <button 
+                onClick={() => setAttendanceSubTab('take')}
+                className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${attendanceSubTab === 'take' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-lg' : 'bg-white text-[#2563EB] shadow-md') : 'text-slate-400'}`}
+              >
+                {lang === 'bn' ? 'প্রতিদিনের হাজিরা' : 'Daily Attendance'}
+              </button>
+              <button 
+                onClick={() => setAttendanceSubTab('report')}
+                className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${attendanceSubTab === 'report' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-lg' : 'bg-white text-[#2563EB] shadow-md') : 'text-slate-400'}`}
+              >
+                {lang === 'bn' ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={openAttendanceSettingsModal}
+              title={lang === 'bn' ? 'শিক্ষক হাজিরা সময় ও লেট সেটিংস' : 'Teacher Attendance Time & Late Settings'}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-black transition-all active:scale-95 cursor-pointer ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-blue-500/40 hover:text-blue-400 shadow-xl shadow-black/20'
+                  : 'bg-white border-slate-200 text-[#1E3A8A] hover:border-blue-300 hover:bg-blue-50/50 shadow-sm'
+              }`}
             >
-              {lang === 'bn' ? 'প্রতিদিনের হাজিরা' : 'Daily Attendance'}
-            </button>
-            <button 
-              onClick={() => setAttendanceSubTab('report')}
-              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${attendanceSubTab === 'report' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-lg' : 'bg-white text-[#2563EB] shadow-md') : 'text-slate-400'}`}
-            >
-              {lang === 'bn' ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
+              <Settings size={16} className="text-[#2563EB] shrink-0" />
+              <span className="tracking-tight whitespace-nowrap">
+                {teacherStartTime} • {teacherLateGraceMinutes}m
+              </span>
             </button>
           </div>
+
+          {attendanceSettingsToast && (
+            <div className={`max-w-md mx-auto px-4 py-2.5 rounded-xl border text-xs font-bold font-noto flex items-center justify-center gap-2 ${isDark ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+              <CheckCircle2 size={15} className="shrink-0" />
+              <span>{attendanceSettingsToast}</span>
+            </div>
+          )}
 
           {attendanceSubTab === 'take' ? (
             <div className="space-y-3">
@@ -1324,13 +1633,24 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                                   <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={15}/></button>
                                   <button
                                     onClick={() => {
-                                      setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'});
-                                      if (!teacherArrivalTime[teacher.id]) {
+                                      const existingArr = teacherArrivalTime[teacher.id] || (typeof rawVal === 'object' ? rawVal.arrival_time : '');
+                                      let targetArr = existingArr;
+                                      if (!targetArr) {
                                         const now = new Date();
                                         const h = now.getHours().toString().padStart(2, '0');
                                         const m = now.getMinutes().toString().padStart(2, '0');
-                                        setTeacherArrivalTime({...teacherArrivalTime, [teacher.id]: `${h}:${m}`});
+                                        targetArr = `${h}:${m}`;
+                                        setTeacherArrivalTime((prev) => ({ ...prev, [teacher.id]: targetArr }));
                                       }
+                                      const lateMins = computeLateMins(targetArr);
+                                      setTeacherAttendance((prev) => ({
+                                        ...prev,
+                                        [teacher.id]: {
+                                          status: 'late',
+                                          arrival_time: targetArr,
+                                          late_minutes: lateMins,
+                                        },
+                                      }));
                                     }}
                                     className={`w-9 h-8 sm:w-10 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`}
                                     title="Late"
@@ -1345,6 +1665,42 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                                   <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'leave'})} className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center transition-all ${status === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Leave"><Briefcase size={15}/></button>
                                 </div>
                             </div>
+
+                            {(status === 'late' || (status === 'present' && arrival_time)) && (
+                              <div className={`mt-2.5 pt-2.5 border-t flex flex-wrap items-center justify-between gap-2 ${isDark ? 'border-slate-700/70' : 'border-slate-100'}`}>
+                                <div className="flex items-center gap-2">
+                                  <Clock size={13} className={status === 'late' ? 'text-amber-500' : 'text-emerald-500'} />
+                                  <span className="text-[10px] font-bold text-slate-400 font-noto">
+                                    {lang === 'bn' ? 'আগমনের সময়:' : 'Arrival:'}
+                                  </span>
+                                  <input
+                                    type="time"
+                                    value={arrival_time || ''}
+                                    onChange={(e) => handleTeacherArrivalTimeChange(teacher.id, e.target.value)}
+                                    className={`h-7 px-2 rounded-lg border text-[11px] font-black outline-none transition-all ${
+                                      isDark
+                                        ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/50'
+                                        : 'bg-slate-50 border-slate-200 text-[#1E3A8A] focus:border-blue-400'
+                                    }`}
+                                  />
+                                </div>
+                                <span
+                                  className={`text-[10px] font-black px-2 py-0.5 rounded-md font-noto ${
+                                    computeLateMins(arrival_time) > 0
+                                      ? (isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-50 text-amber-700')
+                                      : (isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
+                                  }`}
+                                >
+                                  {computeLateMins(arrival_time) > 0
+                                    ? (lang === 'bn'
+                                        ? `${computeLateMins(arrival_time)} মিনিট দেরি`
+                                        : `${computeLateMins(arrival_time)}m late`)
+                                    : (lang === 'bn'
+                                        ? `সময়মতো (গ্রেস ${teacherLateGraceMinutes} মি.)`
+                                        : `On time (${teacherLateGraceMinutes}m grace)`)}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -2414,6 +2770,154 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                    </div>
                 </div>
              </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Teacher Attendance Time & Late Grace Settings Modal */}
+      <AnimatePresence>
+        {showAttendanceSettingsModal && (
+          <div key="teacher-attendance-settings-modal" className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !savingAttendanceSettings && setShowAttendanceSettingsModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }}
+              className={`w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden flex flex-col z-10 border ${
+                isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
+              }`}
+            >
+              <div className={`px-6 py-5 border-b flex items-center justify-between gap-3 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}>
+                    <Settings size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className={`text-base font-black font-noto leading-snug ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                      {lang === 'bn' ? 'শিক্ষক হাজিরা সময় ও লেট সেটিংস' : 'Teacher Attendance Time & Late Settings'}
+                    </h3>
+                    <p className="text-[11px] font-bold text-slate-400 font-noto">
+                      {lang === 'bn'
+                        ? 'শুধুমাত্র শিক্ষকদের হাজিরা ও বায়োমেট্রিক পাঞ্চের জন্য প্রযোজ্য'
+                        : 'Applies only to teacher attendance & biometric punches'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => !savingAttendanceSettings && setShowAttendanceSettingsModal(false)}
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                    isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveTeacherAttendanceSettings} className="p-6 space-y-4">
+                {attendanceSettingsError && (
+                  <div className={`p-3 rounded-xl border text-xs font-bold font-noto flex items-center gap-2 ${
+                    isDark ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-600'
+                  }`}>
+                    <AlertCircle size={15} className="shrink-0" />
+                    <span>{attendanceSettingsError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className={`block text-xs font-black font-noto mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                    {lang === 'bn' ? 'হাজিরা শুরুর সময় (Start Time)' : 'Start Time'}
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={draftTeacherStartTime}
+                    onChange={(e) => setDraftTeacherStartTime(e.target.value)}
+                    className={`w-full h-11 px-3.5 rounded-xl border-2 text-sm font-black outline-none transition-all ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/60'
+                        : 'bg-slate-50 border-slate-200 text-[#1E3A8A] focus:border-blue-500/50 focus:bg-white'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-black font-noto mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                    {lang === 'bn'
+                      ? 'কত মিনিট পর আসলে লেট গণ্য হবে (Late Grace Minutes)'
+                      : 'Late Grace Minutes'}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    max={180}
+                    value={draftTeacherLateGrace}
+                    onChange={(e) => setDraftTeacherLateGrace(e.target.value)}
+                    className={`w-full h-11 px-3.5 rounded-xl border-2 text-sm font-black outline-none transition-all ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/60'
+                        : 'bg-slate-50 border-slate-200 text-[#1E3A8A] focus:border-blue-500/50 focus:bg-white'
+                    }`}
+                  />
+                  <p className="text-[10px] font-bold text-slate-400 font-noto mt-1">
+                    {lang === 'bn'
+                      ? 'উদাহরণ: শুরুর সময় ০৮:০০ এবং গ্রেস ১০ মিনিট হলে ০৮:১১ বা তার পরে আসলে লেট গণ্য হবে।'
+                      : 'Example: With 08:00 start and 10m grace, arriving at 08:11 or later counts as late.'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-black font-noto mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                    {lang === 'bn' ? 'ছুটির সময় (End Time)' : 'End Time'}
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={draftTeacherEndTime}
+                    onChange={(e) => setDraftTeacherEndTime(e.target.value)}
+                    className={`w-full h-11 px-3.5 rounded-xl border-2 text-sm font-black outline-none transition-all ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/60'
+                        : 'bg-slate-50 border-slate-200 text-[#1E3A8A] focus:border-blue-500/50 focus:bg-white'
+                    }`}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={savingAttendanceSettings}
+                    onClick={() => setShowAttendanceSettingsModal(false)}
+                    className={`flex-1 py-3 font-black rounded-xl text-xs uppercase tracking-widest transition-all ${
+                      isDark
+                        ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingAttendanceSettings}
+                    className="flex-1 py-3 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-60 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    {savingAttendanceSettings ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Save size={16} />
+                    )}
+                    <span>{lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save'}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
