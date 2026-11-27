@@ -519,7 +519,7 @@ export default async function handler(req, res) {
       }
 
       const [studentsRes, classesRes, teachersRes, approvedTransactions, instsData, stockRes, pendingRes] = await Promise.all([
-        supabase.from('students').select('*', { count: 'exact', head: true }),
+        supabase.from('students').select('*', { count: 'exact', head: true }).not('class_id', 'is', null),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('teachers').select('*', { count: 'exact', head: true }),
         fetchAllRows((from, to) =>
@@ -1859,7 +1859,7 @@ export default async function handler(req, res) {
 
       try {
         const [stdRes, clsRes] = await Promise.all([
-          supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', id),
+          supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', id).not('class_id', 'is', null),
           supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', id)
         ]);
 

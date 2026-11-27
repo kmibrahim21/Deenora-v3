@@ -680,7 +680,7 @@ const Account: React.FC<AccountProps> = ({
       }
 
       const [stdRes, clsRes, teacherRes] = await Promise.all([
-        supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id),
+        supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id).not('class_id', 'is', null),
         supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id),
         supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id)
       ]);

@@ -107,12 +107,13 @@ export async function checkStudentLimit(
       targetIds = Array.from(new Set([rootId, ...branchIds]));
     }
 
-    // Count active students in all target institutions
+    // Count active students with a valid class in all target institutions
     const { count, error: countErr } = await supabase
       .from('students')
       .select('*', { count: 'exact', head: true })
       .in('institution_id', targetIds)
-      .neq('is_active', false);
+      .neq('is_active', false)
+      .not('class_id', 'is', null);
 
     const currentCount = (countErr || count === null) ? 0 : count;
     const isLimitReached = currentCount >= limit;

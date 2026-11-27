@@ -6,6 +6,7 @@ import { supabase, offlineApi } from 'supabase';
 import { Class, Student, Language, Institution, Profile } from 'types';
 import { t } from 'translations';
 import { requestManager } from 'services/RequestManager';
+import { CacheService } from 'services/cacheService';
 import { isValidUUID } from 'utils/validation';
 import { filterAndRankStudents } from 'utils/studentSearch';
 import { extractStudentExtraFields } from 'utils/studentExtraFields';
@@ -54,6 +55,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, onStudentClick, lang, m
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<(Class & { student_count?: number }) | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Student[]>([]);
   const [searchingStudents, setSearchingStudents] = useState(false);
@@ -450,54 +452,167 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, onStudentClick, lang, m
   };
 
   const handleDeleteClass = async () => {
-    if (!showDeleteConfirm || !madrasah) return;
+    if (!showDeleteConfirm || !madrasah || !effectiveInstitutionId) return;
 
+    const classId = showDeleteConfirm.id;
     setModalLoading(true);
-    
-    // Invalidate
+    setDeleteError(null);
+
+    // Invalidate class, student, and dashboard caches
     requestManager.invalidatePattern(`classes:${effectiveInstitutionId}`);
+    requestManager.invalidatePattern('fetch:students:');
+    requestManager.invalidatePattern('dashboard_');
+    requestManager.invalidatePattern(`stats:${effectiveInstitutionId}`);
+    requestManager.invalidatePattern(`fees:${effectiveInstitutionId}`);
+
+    const deleteDependentStudentRecords = async (studentIds: string[]) => {
+      if (!studentIds.length) return;
+      const dependentTables = [
+        'attendance',
+        'fees',
+        'student_fee_settings',
+        'exam_marks',
+        'befaq_exam_marks',
+        'befaq_results',
+        'hifz_records',
+        'hostel_allocations',
+        'hostel_leaves',
+        'hostel_meal_logs',
+        'library_issues',
+        'app_notifications',
+      ];
+      const CHUNK_SIZE = 200;
+      for (let i = 0; i < studentIds.length; i += CHUNK_SIZE) {
+        const chunk = studentIds.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          dependentTables.map(async (table) => {
+            try {
+              await supabase.from(table).delete().in('student_id', chunk);
+            } catch {
+              // ignore optional tables
+            }
+          })
+        );
+      }
+    };
 
     try {
       // Optimistic Delete
-      setClasses(prev => prev.filter(c => c.id !== showDeleteConfirm.id));
+      setClasses(prev => prev.filter(c => c.id !== classId));
 
       if (navigator.onLine) {
-        // If there are students associated with this class, unlink them first so foreign key constraint does not block
-        if (showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0) {
-          await supabase.from('students').update({ class_id: null }).eq('class_id', showDeleteConfirm.id);
-        }
+        let deletedViaApi = false;
 
-        const { error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
+        // 1. Fetch all students in this class (across all academic years)
+        const { data: classStudents } = await supabase
+          .from('students')
+          .select('id')
+          .eq('class_id', classId)
+          .eq('institution_id', effectiveInstitutionId);
+
+        const studentIds = (classStudents || []).map((s: any) => s.id).filter(Boolean);
+
+        // 2. Delete dependent attendance/fee/marks records for those students
+        await deleteDependentStudentRecords(studentIds);
+
+        // 3. Delete students belonging to this class
+        const { error: delStudentsError } = await supabase
+          .from('students')
+          .delete()
+          .eq('class_id', classId)
+          .eq('institution_id', effectiveInstitutionId);
+
+        // 4. Delete class-level dependent records
+        await Promise.all(
+          ['attendance', 'sections', 'fee_structures', 'class_routines'].map(async (table) => {
+            try {
+              await supabase.from(table).delete().eq('class_id', classId);
+            } catch {
+              // ignore optional tables
+            }
+          })
+        );
+
+        // 5. Delete the class itself
+        const { error } = delStudentsError
+          ? { error: delStudentsError }
+          : await supabase.from('classes').delete().eq('id', classId).eq('institution_id', effectiveInstitutionId);
+
         if (error) {
-          // Fallback to API serverless endpoint
+          // Fallback to serverless API endpoint (uses service role to complete cascade cleanly)
+          const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          const accessToken = sessionData?.session?.access_token;
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
           const apiRes = await fetch('/api/classes', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               action: 'delete',
-              id: showDeleteConfirm.id
+              id: classId,
+              institution_id: effectiveInstitutionId
             })
           });
 
           if (!apiRes.ok) {
             const errJson = await apiRes.json().catch(() => ({}));
             if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
-              throw new Error(lang === 'bn' 
-                ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত।' 
+              throw new Error(lang === 'bn'
+                ? 'এই শ্রেণিটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ফি আদায়, পরীক্ষা, বা রুটিন) সাথে যুক্ত।'
                 : 'This class cannot be deleted because it is linked to other records (e.g. fees, exams, routine).');
             } else {
               throw new Error(errJson.error || error.message);
             }
           }
+          deletedViaApi = true;
+        }
+
+        // 6. If all classes are now deleted, clean up any legacy orphaned students (class_id IS NULL)
+        if (!deletedViaApi) {
+          const { count: remainingClasses } = await supabase
+            .from('classes')
+            .select('id', { count: 'exact', head: true })
+            .eq('institution_id', effectiveInstitutionId);
+
+          if (remainingClasses === 0) {
+            const { data: orphanStudents } = await supabase
+              .from('students')
+              .select('id')
+              .eq('institution_id', effectiveInstitutionId)
+              .is('class_id', null);
+            const orphanIds = (orphanStudents || []).map((s: any) => s.id).filter(Boolean);
+            if (orphanIds.length > 0) {
+              await deleteDependentStudentRecords(orphanIds);
+              await supabase
+                .from('students')
+                .delete()
+                .eq('institution_id', effectiveInstitutionId)
+                .is('class_id', null);
+            }
+          }
+        }
+
+        // Update local IndexedDB student cache to remove deleted class students & orphans
+        try {
+          const cached = await CacheService.getCachedData('students', effectiveInstitutionId);
+          if (Array.isArray(cached)) {
+            const updated = cached.filter((s: any) => s.class_id && s.class_id !== classId);
+            await CacheService.cacheData('students', effectiveInstitutionId, updated);
+          }
+        } catch {
+          // ignore local cache update errors
         }
       } else {
         // Offline check (limited)
-        offlineApi.queueAction('classes', 'DELETE', { id: showDeleteConfirm.id });
+        offlineApi.queueAction('classes', 'DELETE', { id: classId });
       }
+
       setShowDeleteConfirm(null);
+      setDeleteError(null);
       triggerRefresh();
-    } catch (err: any) { 
-      alert(err.message); 
+    } catch (err: any) {
+      setDeleteError(err.message || (lang === 'bn' ? 'শ্রেণি ডিলিট করতে সমস্যা হয়েছে।' : 'Failed to delete class.'));
       fetchClasses(); // Revert on failure
     } finally { setModalLoading(false); }
   };
@@ -766,19 +881,26 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, onStudentClick, lang, m
                     ? `"${showDeleteConfirm.class_name}" শ্রেণিটি স্থায়ীভাবে মুছে ফেলা হবে।`
                     : `"${showDeleteConfirm.class_name}" class will be permanently deleted.`}
                 </p>
-                {showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0 ? (
-                  <p className="text-[11px] font-bold text-red-500 dark:text-red-400 mt-2 bg-red-50 dark:bg-red-950/40 p-3 rounded-2xl border border-red-100 dark:border-red-900/40 font-noto">
-                    {lang === "bn"
-                      ? `সতর্কতা: এই শ্রেণিতে বর্তমানে ${showDeleteConfirm.student_count} জন শিক্ষার্থী যুক্ত রয়েছে।`
-                      : `Warning: This class currently has ${showDeleteConfirm.student_count} active students.`}
+                <p className="text-[11px] font-bold text-red-500 dark:text-red-400 mt-2.5 bg-red-50 dark:bg-red-950/40 p-3 rounded-2xl border border-red-100 dark:border-red-900/40 font-noto leading-relaxed">
+                  {showDeleteConfirm.student_count && showDeleteConfirm.student_count > 0
+                    ? (lang === "bn"
+                        ? `সতর্কতা: এই শ্রেণিতে বর্তমানে ${showDeleteConfirm.student_count} জন শিক্ষার্থী রয়েছে। শ্রেণিটি ডিলিট করলে এই শ্রেণির সকল শিক্ষার্থী এবং তাদের হাজিরা ও ফি-এর তথ্যও স্থায়ীভাবে মুছে যাবে!`
+                        : `Warning: This class currently has ${showDeleteConfirm.student_count} students. Deleting this class will permanently delete all students in this class along with their attendance and fee records!`)
+                    : (lang === "bn"
+                        ? `সতর্কতা: শ্রেণিটি ডিলিট করলে এই শ্রেণির সাথে যুক্ত সকল শিক্ষার্থী এবং তাদের হাজিরা ও ফি-এর তথ্যও স্থায়ীভাবে মুছে যাবে।`
+                        : `Warning: Deleting this class will also permanently delete all students linked to this class along with their attendance and fee records.`)}
+                </p>
+                {deleteError && (
+                  <p className="text-[11px] font-bold text-red-600 dark:text-red-300 mt-2 bg-red-100/70 dark:bg-red-900/40 p-2.5 rounded-xl font-noto">
+                    {deleteError}
                   </p>
-                ) : null}
+                )}
              </div>
              <div className="flex flex-col gap-3 pt-2">
                 <button onClick={handleDeleteClass} disabled={modalLoading} className="w-full py-5 bg-red-600 hover:bg-red-700 text-white font-black rounded-full shadow-xl shadow-red-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center text-md font-noto">
-                  {modalLoading ? <Loader2 className="animate-spin" size={22} /> : (lang === "bn" ? "ডিলিট করুন" : "Delete Class")}
+                  {modalLoading ? <Loader2 className="animate-spin" size={22} /> : (lang === "bn" ? "শ্রেণি ও শিক্ষার্থী ডিলিট করুন" : "Delete Class & Students")}
                 </button>
-                <button onClick={() => setShowDeleteConfirm(null)} className={`w-full py-4 ${isDark ? "bg-[#1E293B] text-slate-400" : "bg-slate-50 text-slate-400"} font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest`}>
+                <button onClick={() => { setShowDeleteConfirm(null); setDeleteError(null); }} className={`w-full py-4 ${isDark ? "bg-[#1E293B] text-slate-400" : "bg-slate-50 text-slate-400"} font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest`}>
                   {lang === "bn" ? "বাতিল" : "Cancel"}
                 </button>
              </div>

@@ -157,7 +157,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const stdProm = requestManager.cachedFetch(
         'students',
         (q) => {
-          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId).eq('is_active', true).range(0, 9999);
+          let query = q.select('id, class_id', { count: 'exact' }).eq('institution_id', institutionId).eq('is_active', true).not('class_id', 'is', null).range(0, 9999);
           if (activeYearId) {
             if (isAdvanceOrHistoricalYear) {
               query = query.eq('academic_year_id', activeYearId);
@@ -239,8 +239,9 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
       ]);
 
-      const allStudents: Array<{ id: string; class_id: string }> = Array.isArray(stdRes.data) ? stdRes.data : [];
-      let totalStudents = stdRes.count || allStudents.length;
+      const allClasses = Array.isArray(clsRes.data) ? clsRes.data : [];
+      const allStudents: Array<{ id: string; class_id: string }> = (Array.isArray(stdRes.data) ? stdRes.data : []).filter((s: any) => Boolean(s.class_id));
+      let totalStudents = (!clsRes.error && allClasses.length === 0) ? 0 : (stdRes.count ?? allStudents.length);
 
       let attendanceTodayCount = 0;
       let attendanceTodayStrictCount = 0;
@@ -249,7 +250,6 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       let attendanceTodayAbsentCount = 0;
       let pendingClassesCount = 0;
 
-      const allClasses = Array.isArray(clsRes.data) ? clsRes.data : [];
       const attData = attRes?.data;
 
       if (totalStudents > 0) {
